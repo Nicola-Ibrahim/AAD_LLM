@@ -3,7 +3,7 @@ from typing import Any, List, Optional, Tuple
 import numpy as np
 from func_timeout import func_timeout, FunctionTimedOut
 from llamea import Solution
-from aad_llm.noisy_bbob import get_noisy_bbob
+from aad_llm.noisy_bbob import BBOBProblem
 
 class Evaluator:
     """
@@ -17,37 +17,27 @@ class Evaluator:
     """
 
     def __init__(
-        self, 
-        problem_id: int, 
-        dim: int, 
-        noise_std: float = 0.05, 
+        self,
+        problem: BBOBProblem,
         budget: int = 1000,
-        instance_id: int = 1,
-        timeout_seconds: float = 10.0
+        timeout_seconds: float = 10.0,
     ):
         """
         Initialize the evaluator.
 
         Parameters
         ----------
-        problem_id : int
-            The BBOB problem suite function ID (1 to 24).
-        dim : int
-            Dimensionality of the optimization search space.
-        noise_std : float, optional
-            Standard deviation of the additive Gaussian noise, by default 0.05.
+        problem : BBOBProblem
+            Fully-configured BBOB problem instance. Its `reset()` method is
+            called before each candidate evaluation to clear the history.
         budget : int, optional
             Maximum allowed objective function evaluations, by default 1000.
-        instance_id : int, optional
-            Specific instance ID of the BBOB problem, by default 1.
         timeout_seconds : float, optional
-            Maximum wall-clock execution time allowed for one algorithm run, by default 10.0.
+            Maximum wall-clock execution time allowed for one algorithm run,
+            by default 10.0.
         """
-        self.problem_id = problem_id
-        self.dim = dim
-        self.noise_std = noise_std
+        self.problem = problem
         self.budget = budget
-        self.instance_id = instance_id
         self.timeout_seconds = timeout_seconds
 
     def _compute_aocc(self, best_clean_values: List[float], true_optimum: float) -> float:
@@ -127,7 +117,7 @@ class Evaluator:
 
         # Inject search space dimensionality if the algorithm class expects it
         if hasattr(algorithm, 'dim'):
-            algorithm.dim = self.dim
+            algorithm.dim = self.problem.dim
             
         return algorithm
 
@@ -149,23 +139,23 @@ class Evaluator:
             
         return float(best_found_y)
 
-    def _evaluate_and_format(self, noisy_func: Any, best_found_y: float) -> Tuple[float, str]:
+    def _evaluate_and_format(self, best_found_y: float) -> Tuple[float, str]:
         """
         Compute AOCC score and format feedback information.
         """
-        true_optimum = noisy_func.true_optimum
+        true_optimum = self.problem.true_optimum
         
         # Compute anytime AOCC score using clean best history
-        aocc_score = self._compute_aocc(noisy_func.best_clean_values, true_optimum)
+        aocc_score = self._compute_aocc(self.problem.best_clean_values, true_optimum)
         
         # Find the best clean value encountered and compute final error
-        final_clean_y = noisy_func.best_clean_values[-1] if noisy_func.best_clean_values else float('inf')
+        final_clean_y = self.problem.best_clean_values[-1] if self.problem.best_clean_values else float('inf')
         final_error = abs(final_clean_y - true_optimum)
         
         feedback = (
             f"The algorithm achieved an anytime AOCC score of {aocc_score:.4f} (where 1.0 is best) "
             f"and a final clean error of {final_error:.4f} from the true optimum ({true_optimum:.4f}) "
-            f"on BBOB Problem {self.problem_id} (additive noise std: {self.noise_std}). "
+            f"on BBOB Problem {self.problem.problem_id} (additive noise std: {self.problem.noise_std}). "
             "Improve convergence speed and noise resilience to maximize the AOCC score."
         )
         
@@ -187,23 +177,18 @@ class Evaluator:
         solution : Solution
             The modified solution object populated with fitness scores and feedback.
         """
-        # --- 1. Initialize fresh BBOB problem wrapper ---
-        noisy_func = get_noisy_bbob(
-            problem_id=self.problem_id,
-            instance_id=self.instance_id,
-            dim=self.dim,
-            noise_std=self.noise_std
-        )
+        # --- 1. Reset problem history for a fresh evaluation run ---
+        self.problem.reset()
 
         try:
             # --- 2. Safely execute candidate code & instantiate class ---
             algorithm = self._instantiate_algorithm(solution.code, solution.name)
 
             # --- 3. Execute candidate run with timeout protection ---
-            best_found_y = self._run_algorithm(algorithm, noisy_func)
+            best_found_y = self._run_algorithm(algorithm, self.problem)
             
             # --- 4. Calculate anytime AOCC metric from clean history ---
-            fitness_score, feedback = self._evaluate_and_format(noisy_func, best_found_y)
+            fitness_score, feedback = self._evaluate_and_format(best_found_y)
 
         except FunctionTimedOut:
             fitness_score = float('-inf')

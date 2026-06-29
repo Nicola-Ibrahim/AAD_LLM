@@ -5,14 +5,13 @@ Runner script executing the LLaMEA evolution loop across BBOB problem IDs.
 import os
 from llamea import LLaMEA
 
+from aad_llm.noisy_bbob import BBOBProblem
 from aad_llm.prompts import TASK_PROMPT_TEMPLATE, EXAMPLE_PROMPT, FORMAT_PROMPT
 from aad_llm.evaluator import Evaluator
 
 def run_evolution_for_problem(
-    problem_id: int,
+    problem: BBOBProblem,
     llm,
-    dim: int = 3,
-    noise_std: float = 0.05,
     budget: int = 1000,
     iterations: int = 30,
     output_dir: str = "generated_algorithms",
@@ -21,21 +20,21 @@ def run_evolution_for_problem(
     """
     Run LLaMEA optimization algorithm evolution for a single BBOB problem.
     """
+    problem_id = problem.problem_id
     # 1. Create target directories if they don't exist
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(os.path.join(log_dir, f"bbob_{problem_id}"), exist_ok=True)
 
-    print(f"--- Starting evolution for BBOB Problem {problem_id} (DIM={dim}) ---")
+    print(f"--- Starting evolution for BBOB Problem {problem_id} (DIM={problem.dim}) ---")
 
     # 3. Instantiate the custom evaluator
     evaluator = Evaluator(
-        problem_id=problem_id,
-        dim=dim,
-        noise_std=noise_std,
-        budget=budget,
-        instance_id=1
+        problem=problem,
+        budget=budget
     )
 
+
+    # ! improtant to be solved if should be on all problems or each one on its own
     # 4. Initialize LLaMEA
     optimizer = LLaMEA(
         f=evaluator,
@@ -58,38 +57,6 @@ def run_evolution_for_problem(
     with open(output_path, "w") as f:
         f.write(best_solution.code)
 
-    print(f"--- Completed BBOB Problem {problem_id}! Best Score (Fitness): {best_solution.score:.4f} ---")
+    print(f"--- Completed BBOB Problem {problem_id}! Best Score (Fitness): {best_solution.fitness:.4f} ---")
     print(f"Saved algorithm to: {output_path}\n")
     return best_solution
-
-def run_all_problems(
-    llm,
-    dim: int = 3,
-    noise_std: float = 0.05,
-    budget: int = 1000,
-    iterations: int = 30,
-    output_dir: str = "generated_algorithms",
-    log_dir: str = "logs"
-):
-    """
-    Sequentially run the evolution loop for BBOB problems 1 through 24.
-    """
-    results = {}
-    for problem_id in range(1, 25):
-        try:
-            best_sol = run_evolution_for_problem(
-                problem_id=problem_id,
-                llm=llm,
-                dim=dim,
-                noise_std=noise_std,
-                budget=budget,
-                iterations=iterations,
-                output_dir=output_dir,
-                log_dir=log_dir
-            )
-            results[problem_id] = best_sol.score
-        except Exception as e:
-            print(f"Error evolving algorithm for problem {problem_id}: {e}")
-            results[problem_id] = None
-            
-    return results

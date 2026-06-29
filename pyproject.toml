@@ -10,6 +10,8 @@ dependencies = [
     "openai>=1.0.0",
     "func-timeout>=4.3.5",
     "numpy>=1.26.0",
+    "python-dotenv>=1.2.2",
+    "rich>=15.0.0",
 ]
 
 [project.scripts]
