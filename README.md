@@ -15,11 +15,23 @@ uv sync --all-extras
 
 ## Running the Notebooks
 
-Launch Jupyter Notebook locally:
+Launch Jupyter Notebook:
 ```bash
 uv run jupyter notebook
 ```
-Then navigate to `notebooks/01_llamea_bbob.ipynb` to configure and prototype your setup.
+Then navigate to [server/notebooks/01_interactive_workspace.ipynb](server/notebooks/01_interactive_workspace.ipynb) to configure, verify, and prototype your setup interactively.
+
+## Starting the Local Model Server
+
+To run the optimization pipeline locally without relying on external tools like LMStudio, this project includes a built-in automated LLM server (powered by `llama.cpp` and `huggingface_hub`).
+
+To install all dependencies, automatically download the configured model, and start the local server in the background, simply run:
+```bash
+./start_llm.sh
+```
+
+**Changing the Model**: By default, the system uses the `Qwen2.5-Coder-7B-Instruct-GGUF` model. To use a different model (e.g., the smaller 1.5B version for fast local testing), you only need to edit the variables in your `.env` file. 
+For a complete explanation of the configuration variables and ready-to-use model presets, please refer to the detailed guide at [server/docs/MODEL_CONFIGURATION.md](server/docs/MODEL_CONFIGURATION.md).
 
 ## Project Structure
 
@@ -29,9 +41,14 @@ Then navigate to `notebooks/01_llamea_bbob.ipynb` to configure and prototype you
   - `noisy_bbob.py` — Additive Gaussian noise wrapper around BBOB problems.
   - `evaluator.py` — Evaluation hook that executes LLM-generated code safely within a sandbox.
   - `runner.py` — Definition of helper functions to execute LLaMEA iterations.
-  - `main.py` — Command-line entrypoint for execution.
+  - `main_experiment.py` — Multi-repetition experiment loop with resumption checkpointing.
+- `server/` — Deployment files for the UPB Jupyter Server and HPC SLURM cluster:
+  - `README.md` — Complete step-by-step setup guide for the server environment.
+  - `docs/MODEL_CONFIGURATION.md` — Guide to configuring custom models and quantizations.
+  - `notebooks/` — Interactive workspace and thesis stats results dashboard.
+  - `scripts/` — Model installation, download, serving, and SLURM submission scripts.
 - `generated_algorithms/` — Evolved python scripts containing the best optimization algorithms found.
-- `logs/` — Directory containing experiment logs of LLaMEA evolution history.
+- `logs/` — Directory containing logs of LLaMEA evolution history and model server outputs.
 
 ## Running the Command Line Script
 

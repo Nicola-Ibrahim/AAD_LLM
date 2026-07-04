@@ -1,0 +1,158 @@
+"""
+BBOB problem wrapper with validation and noise injection.
+"""
+
+import numpy as np
+from ioh import get_problem, ProblemClass
+
+
+class BBOBProblem:
+    """
+    Stateless BBOB problem descriptor.
+
+    Loads the clean IOH problem instance once, stores the global optimum
+    and problem parameters, and provides clean and noisy evaluation methods.
+
+    Parameters
+    ----------
+    problem_id : int
+        The BBOB function ID. Must be an integer in [1, 24].
+    dim : int
+        The search space dimensionality.
+    instance_id : int, optional
+        The BBOB instance ID, by default 1.
+
+    Raises
+    ------
+    ValueError
+        If ``problem_id`` is not in the range [1, 24].
+
+    Examples
+    --------
+    >>> problem = BBOBProblem(problem_id=1, dim=3)
+    >>> import numpy as np
+    >>> y_clean = problem(np.zeros(3))                       # clean float
+    >>> y_dict = problem(np.zeros(3), noise_std=0.05)       # dict: {0.0: clean, 0.05: noisy}
+    >>> problem.true_optimum                                 # float: global minimum
+    """
+
+    VALID_IDS: range = range(1, 25)  # Valid BBOB problem IDs: 1 to 24 inclusive
+
+    def __init__(
+        self,
+        problem_id: int,
+        dim: int,
+        instance_id: int = 1,
+    ):
+        if problem_id not in self.VALID_IDS:
+            raise ValueError(
+                f"Invalid BBOB problem_id={problem_id!r}. "
+                f"Must be an integer in [1, 24]."
+            )
+        self.problem_id = problem_id
+        self.dim = dim
+        self.instance_id = instance_id
+
+        # Load the underlying clean IOH problem once
+        self._clean_problem = get_problem(problem_id, instance_id, dim, ProblemClass.BBOB)
+        self.true_optimum: float = float(self._clean_problem.optimum.y)
+
+
+    def add_noise(self, true_value: float, noise_std: float) -> float:
+        """Inject additive Gaussian noise N(0, noise_std^2) to a true value."""
+        if noise_std <= 0.0:
+            return true_value
+        return true_value + np.random.normal(0.0, noise_std)
+
+    def __call__(
+        self, 
+        x: np.ndarray, 
+        noise_std: float | list[float] | None = None
+    ) -> float | dict[float, float]:
+        """
+        Evaluate the objective function at point ``x``.
+
+        Parameters
+        ----------
+        x : np.ndarray
+            The candidate search point vector.
+        noise_std : float | list[float] | None, optional
+            If None, returns the clean objective value as a float.
+            If a float or list of floats is passed, returns a dictionary mapping
+            noise standard deviations (including 0.0 for clean) to their evaluated fitness values.
+
+        Returns
+        -------
+        float | dict[float, float]
+            Evaluated fitness float or dictionary of noise_std -> fitness value.
+        """
+        f_clean = self._clean_problem(x.tolist())
+        if noise_std is None:
+            return f_clean
+
+        if isinstance(noise_std, (int, float)):
+            stds = [noise_std]
+        else:
+            stds = [s for s in noise_std]
+
+        results: dict[float, float] = {0.0: f_clean}
+        for std in stds:
+            results[std] = self.add_noise(f_clean, std)
+        return results
+
+    def __repr__(self) -> str:
+        return (
+            f"BBOBProblem(problem_id={self.problem_id}, dim={self.dim}, "
+            f"instance_id={self.instance_id})"
+        )
+
+    def reset(self):
+        """Reset the IOH problem state (call counter) for reuse across runs."""
+        self._clean_problem.reset()
+
+    @property
+    def bounds(self):
+        """Return the problem bounds object from IOH."""
+        return self._clean_problem.bounds
+
+    @property
+    def lb(self) -> np.ndarray:
+        """Return the lower bounds vector for the search space."""
+        return np.array(self._clean_problem.bounds.lb, dtype=float)
+
+    @property
+    def ub(self) -> np.ndarray:
+        """Return the upper bounds vector for the search space."""
+        return np.array(self._clean_problem.bounds.ub, dtype=float)
+
+    @property
+    def lower_bound(self) -> float | np.ndarray:
+        """Return lower bound (scalar float if uniform across dimensions, otherwise array)."""
+        lb_vec = self.lb
+        return float(lb_vec[0]) if np.all(lb_vec == lb_vec[0]) else lb_vec
+
+    @property
+    def upper_bound(self) -> float | np.ndarray:
+        """Return upper bound (scalar float if uniform across dimensions, otherwise array)."""
+        ub_vec = self.ub
+        return float(ub_vec[0]) if np.all(ub_vec == ub_vec[0]) else ub_vec
+
+    @property
+    def name(self) -> str:
+        """Return the BBOB function name (e.g. 'BentCigar', 'Sphere')."""
+        return self._clean_problem.meta_data.name
+
+    @property
+    def meta_str(self) -> str:
+        """Return formatted metadata string e.g. 'bbob f₁₂, 2-D, inst. 4'."""
+        subscripts = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
+        f_sub = str(self.problem_id).translate(subscripts)
+        return f"bbob f{f_sub}, {self.dim}-D, inst. {self.instance_id}"
+
+    @property
+    def full_meta_str(self) -> str:
+        """Return full formatted metadata string with function name e.g. 'BentCigar (bbob f₁₂, 2-D, inst. 4)'."""
+        subscripts = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
+        f_sub = str(self.problem_id).translate(subscripts)
+        return f"{self.name} (bbob f{f_sub}, {self.dim}-D, inst. {self.instance_id})"
+

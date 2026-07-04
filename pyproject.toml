@@ -3,7 +3,7 @@ name = "aad-llm"
 version = "0.1.0"
 description = "LLaMEA-driven evolution of black-box optimization algorithms for noisy BBOB functions"
 readme = "README.md"
-requires-python = ">=3.11,<4"
+requires-python = ">=3.13,<4"
 dependencies = [
     "llamea>=0.1.0",
     "ioh>=0.3.14",
@@ -11,7 +11,7 @@ dependencies = [
     "func-timeout>=4.3.5",
     "numpy>=1.26.0",
     "python-dotenv>=1.2.2",
-    "rich>=15.0.0",
+    "plotly>=6.8.0",
 ]
 
 [project.scripts]
@@ -26,6 +26,7 @@ notebook = [
     "ipykernel>=6.29.0",
     "matplotlib>=3.8.0",
     "pandas>=2.2.0",
+    "tqdm>=4.66.0",
 ]
 
 [tool.uv]
