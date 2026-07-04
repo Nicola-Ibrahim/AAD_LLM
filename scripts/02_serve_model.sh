@@ -8,7 +8,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="$PROJECT_ROOT/logs"
 PID_FILE="$LOG_DIR/server.pid"
 PORT=8080
@@ -20,7 +20,7 @@ export PATH="$HOME/bin:$PATH"
 load_env_var() {
     local var_name=$1
     local default_val=${2:-""}
-    local env_file="$PROJECT_ROOT/server/.env"
+    local env_file="$PROJECT_ROOT/.env"
     if [ -f "$env_file" ]; then
         local val
         val=$(grep -E "^${var_name}=" "$env_file" | head -n 1 | cut -d'=' -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
@@ -33,9 +33,9 @@ load_env_var() {
 }
 
 # Setup .env file if it doesn't exist
-if [ ! -f "$PROJECT_ROOT/server/.env" ]; then
-    echo "  [INFO] .env not found. Copying server/.env.server.example to .env..."
-    cp "$PROJECT_ROOT/server/.env.server.example" "$PROJECT_ROOT/server/.env"
+if [ ! -f "$PROJECT_ROOT/.env" ]; then
+    echo "  [INFO] .env not found. Copying .env.example to .env..."
+    cp "$PROJECT_ROOT/.env.example" "$PROJECT_ROOT/.env"
 fi
 
 MODEL_FILE=$(load_env_var "HF_FILE" "qwen2.5-coder-7b-instruct-q4_k_m.gguf")
@@ -95,7 +95,7 @@ for i in {1..30}; do
         echo "  [OK] Server is ready and responsive!"
         curl -s http://localhost:$PORT/v1/models | grep -o '"id":[^,]*' || true
         echo "========================================================"
-        echo "  Next: bash server/scripts/03_run_experiment.sh"
+        echo "  Next: bash scripts/03_run_experiment.sh"
         echo "========================================================"
         exit 0
     fi

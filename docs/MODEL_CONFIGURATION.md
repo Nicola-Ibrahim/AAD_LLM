@@ -6,7 +6,7 @@ Our scripts and environment templates are fully decoupled from hardcoded models.
 
 ## 🛠️ Environment Variables Explained
 
-All configurations are read from the project root `server/.env` file. To change the active model, open your `server/.env` file and modify these three variables:
+All configurations are read from the project root `.env` file. To change the active model, open your `.env` file and modify these three variables:
 
 | Variable | Description | Example |
 | :--- | :--- | :--- |
@@ -18,7 +18,7 @@ All configurations are read from the project root `server/.env` file. To change 
 
 ## 📋 Ready-to-Use Model Presets (Small to Medium)
 
-Here are 6 ready-to-use configurations from small to medium sizes. Simply copy and paste any of these blocks into your `server/.env` file.
+Here are 6 ready-to-use configurations from small to medium sizes. Simply copy and paste any of these blocks into your `.env` file.
 
 ### ─── QWEN CODER MODELS ───
 

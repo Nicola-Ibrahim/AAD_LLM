@@ -9,7 +9,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INSTALL_DIR="$HOME/bin"
 LLAMACPP_RELEASE_URL="https://github.com/ggml-org/llama.cpp/releases/latest/download/llama-server-linux-x86_64"
 
@@ -67,5 +67,5 @@ fi
 echo ""
 echo "  All dependencies satisfied."
 echo "========================================================"
-echo "  Next: bash server/scripts/01_download_model.sh"
+echo "  Next: bash scripts/01_download_model.sh"
 echo "========================================================"

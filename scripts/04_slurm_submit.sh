@@ -7,7 +7,7 @@
 # ============================================================
 #
 # Submit to queue:
-#   sbatch server/scripts/04_slurm_submit.sh
+#   sbatch scripts/04_slurm_submit.sh
 #
 # Check job status:
 #   squeue --me
@@ -29,7 +29,7 @@ echo "Running on node: $(hostname)"
 echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
 echo "Allocated memory: 32G"
 
-PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 PORT=8080
@@ -39,15 +39,15 @@ PORT=8080
 
 # 2. Check if .env file exists, copy example if missing
 if [ ! -f ".env" ]; then
-    echo "Creating default .env from server template..."
-    cp server/.env.server.example .env
+    echo "Creating default .env from template..."
+    cp .env.example .env
 fi
 
 # Function to load a variable from .env
 load_env_var() {
     local var_name=$1
     local default_val=${2:-""}
-    local env_file="$PROJECT_ROOT/server/.env"
+    local env_file="$PROJECT_ROOT/.env"
     if [ -f "$env_file" ]; then
         local val
         val=$(grep -E "^${var_name}=" "$env_file" | head -n 1 | cut -d'=' -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
@@ -66,7 +66,7 @@ MODEL_PATH="$HOME/models/$MODEL_FILE"
 if [ ! -f "$MODEL_PATH" ]; then
     echo "  [INFO] Model file not found at: $MODEL_PATH"
     echo "  [INFO] Triggering automatic download on compute node..."
-    bash server/scripts/01_download_model.sh
+    bash scripts/01_download_model.sh
 fi
 
 # 4. Start local llama-server on the allocated compute node

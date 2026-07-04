@@ -16,13 +16,13 @@ export HF_HUB_DISABLE_XET=1
 export PYTHONWARNINGS="ignore"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Function to load a variable from .env
 load_env_var() {
     local var_name=$1
     local default_val=${2:-""}
-    local env_file="$PROJECT_ROOT/server/.env"
+    local env_file="$PROJECT_ROOT/.env"
     if [ -f "$env_file" ]; then
         local val
         val=$(grep -E "^${var_name}=" "$env_file" | head -n 1 | cut -d'=' -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
@@ -35,9 +35,9 @@ load_env_var() {
 }
 
 # If no .env exists yet, copy the example
-if [ ! -f "$PROJECT_ROOT/server/.env" ]; then
-    echo "  [INFO] .env not found. Copying server/.env.server.example to .env..."
-    cp "$PROJECT_ROOT/server/.env.server.example" "$PROJECT_ROOT/server/.env"
+if [ ! -f "$PROJECT_ROOT/.env" ]; then
+    echo "  [INFO] .env not found. Copying .env.example to .env..."
+    cp "$PROJECT_ROOT/.env.example" "$PROJECT_ROOT/.env"
 fi
 
 MODEL_REPO=$(load_env_var "HF_REPO" "Qwen/Qwen2.5-Coder-7B-Instruct-GGUF")
@@ -93,5 +93,5 @@ fi
 
 echo "  Model location: $TARGET_PATH"
 echo "========================================================"
-echo "  Next: bash server/scripts/02_serve_model.sh"
+echo "  Next: bash scripts/02_serve_model.sh"
 echo "========================================================"
