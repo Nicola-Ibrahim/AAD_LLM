@@ -8,10 +8,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
+from llamea import LLM
 
+from problems.bbob import BBOBProblem
 import core.runner as runner
 from analysis.results import save_summary, print_experiment_summary
-from llm.providers import Provider, build_llm
+from llm.providers import build_llm
 
 # Load environment variables from .env if present
 load_dotenv()
@@ -44,9 +46,7 @@ class ExperimentConfig:
     log: bool = False
 
     # LLM provider to request solutions from (pulled from environment variable)
-    llm_provider: str = field(
-        default_factory=lambda: os.environ.get("LLM_PROVIDER", "")
-    )
+    llm_provider: str = field(default_factory=lambda: os.environ.get("LLM_PROVIDER", ""))
 
     # Target model name (automatically populated during initialization)
     llm_model: str = "N/A"
@@ -78,7 +78,7 @@ class ExperimentConfig:
         return "\n".join(lines)
 
 
-def initialize_llm(provider: str):
+def initialize_llm(provider: str) -> LLM:
     """Initialize the LLM provider, exiting if it fails."""
     try:
         return build_llm(provider)
@@ -87,7 +87,7 @@ def initialize_llm(provider: str):
         sys.exit(1)
 
 
-def run_evolution(config: ExperimentConfig, llm) -> list[Path]:
+def run_evolution(config: ExperimentConfig, llm: LLM) -> list[Path]:
     """Run LLaMEA evolution across BBOB problem IDs and save summaries."""
     print(
         f"Starting evolution across problem(s): {config.problems} (DIM={config.dim}, max_evaluations={config.max_evaluations})..."
@@ -97,9 +97,10 @@ def run_evolution(config: ExperimentConfig, llm) -> list[Path]:
     Path(config.output_dir).mkdir(parents=True, exist_ok=True)
     Path(config.log_dir).mkdir(parents=True, exist_ok=True)
 
+    problem_instances = [BBOBProblem(problem_id=pid, dim=config.dim) for pid in config.problems]
+
     evolution_results = runner.run_evolution_for_problems(
-        problems=config.problems,
-        dim=config.dim,
+        problems=problem_instances,
         noise_std=config.noise_std,
         llm=llm,
         max_evaluations=config.max_evaluations,

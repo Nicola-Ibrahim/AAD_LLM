@@ -10,9 +10,13 @@ All configurations are read from the project root `.env` file. To change the act
 
 | Variable | Description | Example |
 | :--- | :--- | :--- |
-| `HF_REPO` | The Hugging Face repository path. | `Qwen/Qwen2.5-Coder-7B-Instruct-GGUF` |
-| `HF_FILE` | The exact GGUF file name inside that repository to download. | `qwen2.5-coder-7b-instruct-q4_k_m.gguf` |
-| `LLM_STUDIO_MODEL` | The model name string LLaMEA will use in API requests. **Note:** For `llama.cpp` servers, this must match the GGUF file name without the `.gguf` extension. | `qwen2.5-coder-7b-instruct-q4_k_m` |
+| `HF_REPO` | The Hugging Face repository path. | `Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF` |
+| `HF_FILE` | The exact GGUF file name inside that repository to download. | `qwen2.5-coder-1.5b-instruct-q4_k_m.gguf` |
+| `LOCAL_LLM_MODEL` | The model name string LLaMEA will use in API requests. | `qwen2.5-coder-1.5b-instruct-q4_k_m` |
+| `LLM_SERVER_HOST` | Local server network interface host IP. | `0.0.0.0` |
+| `LLM_SERVER_PORT` | Local server network port. | `1234` |
+| `LLM_SERVER_N_CTX` | Context window token size for candidate algorithm evolution. | `8192` |
+| `LLM_SERVER_N_THREADS` | Number of CPU threads assigned to model inference. | `8` |
 
 ---
 
@@ -26,36 +30,36 @@ Here are 6 ready-to-use configurations from small to medium sizes. Simply copy a
 *Size: ~1.6 GB | Recommended RAM: >= 4 GB*
 *Best for fast local smoke-tests to verify pipeline logic without waiting for heavy inference.*
 ```ini
-LLM_PROVIDER=lmstudio
+LLM_PROVIDER=local
 HF_REPO=Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF
 HF_FILE=qwen2.5-coder-1.5b-instruct-q4_k_m.gguf
-LLM_STUDIO_MODEL=qwen2.5-coder-1.5b-instruct-q4_k_m
-LLM_STUDIO_BASE_URL=http://localhost:8080/v1
-LLM_STUDIO_API_KEY=not-needed
+LOCAL_LLM_MODEL=qwen2.5-coder-1.5b-instruct-q4_k_m
+LOCAL_LLM_BASE_URL=http://localhost:8080/v1
+LOCAL_LLM_API_KEY=not-needed
 ```
 
 #### 2. Qwen2.5-Coder-3B-Instruct (Small-Medium / Balanced Performance)
 *Size: ~3.2 GB | Recommended RAM: >= 6 GB*
 *A sweet spot for slightly better reasoning than 1.5B while staying extremely fast and lightweight.*
 ```ini
-LLM_PROVIDER=lmstudio
+LLM_PROVIDER=local
 HF_REPO=Qwen/Qwen2.5-Coder-3B-Instruct-GGUF
 HF_FILE=qwen2.5-coder-3b-instruct-q4_k_m.gguf
-LLM_STUDIO_MODEL=qwen2.5-coder-3b-instruct-q4_k_m
-LLM_STUDIO_BASE_URL=http://localhost:8080/v1
-LLM_STUDIO_API_KEY=not-needed
+LOCAL_LLM_MODEL=qwen2.5-coder-3b-instruct-q4_k_m
+LOCAL_LLM_BASE_URL=http://localhost:8080/v1
+LOCAL_LLM_API_KEY=not-needed
 ```
 
 #### 3. Qwen2.5-Coder-7B-Instruct (Medium / Default Recommendation)
 *Size: ~4.8 GB | Recommended RAM: >= 8 GB (M-series Mac or GPU recommended)*
 *Excellent coding capability and the standard baseline for LLaMEA optimization.*
 ```ini
-LLM_PROVIDER=lmstudio
+LLM_PROVIDER=local
 HF_REPO=Qwen/Qwen2.5-Coder-7B-Instruct-GGUF
 HF_FILE=qwen2.5-coder-7b-instruct-q4_k_m.gguf
-LLM_STUDIO_MODEL=qwen2.5-coder-7b-instruct-q4_k_m
-LLM_STUDIO_BASE_URL=http://localhost:8080/v1
-LLM_STUDIO_API_KEY=not-needed
+LOCAL_LLM_MODEL=qwen2.5-coder-7b-instruct-q4_k_m
+LOCAL_LLM_BASE_URL=http://localhost:8080/v1
+LOCAL_LLM_API_KEY=not-needed
 ```
 
 ---
@@ -66,36 +70,36 @@ LLM_STUDIO_API_KEY=not-needed
 *Size: ~1.6 GB | Recommended RAM: >= 4 GB*
 *DeepSeek's highly optimized lightweight model for code generation tasks.*
 ```ini
-LLM_PROVIDER=lmstudio
+LLM_PROVIDER=local
 HF_REPO=DeepSeek-Coder-1.5B-Instruct-GGUF
 HF_FILE=deepseek-coder-1.5b-instruct-q4_k_m.gguf
-LLM_STUDIO_MODEL=deepseek-coder-1.5b-instruct-q4_k_m
-LLM_STUDIO_BASE_URL=http://localhost:8080/v1
-LLM_STUDIO_API_KEY=not-needed
+LOCAL_LLM_MODEL=deepseek-coder-1.5b-instruct-q4_k_m
+LOCAL_LLM_BASE_URL=http://localhost:8080/v1
+LOCAL_LLM_API_KEY=not-needed
 ```
 
 #### 5. DeepSeek-Coder-6.7B-Instruct (Medium Alternative / Strong Coding Benchmarks)
 *Size: ~4.8 GB | Recommended RAM: >= 8 GB*
 *A very strong open-source alternative to Qwen-7B with a deep understanding of complex code structures.*
 ```ini
-LLM_PROVIDER=lmstudio
+LLM_PROVIDER=local
 HF_REPO=DeepSeek-Coder-6.7B-Instruct-GGUF
 HF_FILE=deepseek-coder-6.7b-instruct-q4_k_m.gguf
-LLM_STUDIO_MODEL=deepseek-coder-6.7b-instruct-q4_k_m
-LLM_STUDIO_BASE_URL=http://localhost:8080/v1
-LLM_STUDIO_API_KEY=not-needed
+LOCAL_LLM_MODEL=deepseek-coder-6.7b-instruct-q4_k_m
+LOCAL_LLM_BASE_URL=http://localhost:8080/v1
+LOCAL_LLM_API_KEY=not-needed
 ```
 
 #### 6. Meta-Llama-3.1-8B-Instruct (Medium Alternative / General Purpose Reasoner)
 *Size: ~4.9 GB | Recommended RAM: >= 8 GB*
 *The Llama-3.1 architecture. Excellent general reasoning, instruction following, and logical code generation.*
 ```ini
-LLM_PROVIDER=lmstudio
+LLM_PROVIDER=local
 HF_REPO=QuantFactory/Meta-Llama-3.1-8B-Instruct-GGUF
 HF_FILE=Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf
-LLM_STUDIO_MODEL=Meta-Llama-3.1-8B-Instruct.Q4_K_M
-LLM_STUDIO_BASE_URL=http://localhost:8080/v1
-LLM_STUDIO_API_KEY=not-needed
+LOCAL_LLM_MODEL=Meta-Llama-3.1-8B-Instruct.Q4_K_M
+LOCAL_LLM_BASE_URL=http://localhost:8080/v1
+LOCAL_LLM_API_KEY=not-needed
 ```
 
 ---

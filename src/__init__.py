@@ -1,4 +1,8 @@
-from core.runner import run_evolution_for_problem, run_evolution_for_problems, ProblemEvolutionResult
+from core.runner import (
+    run_evolution_for_problem,
+    run_evolution_for_problems,
+    ProblemEvolutionResult,
+)
 from problems.bbob import BBOBProblem
 from llm.providers import build_llm, Provider
 from core.evaluator import Evaluator

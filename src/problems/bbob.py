@@ -46,8 +46,7 @@ class BBOBProblem:
     ):
         if problem_id not in self.VALID_IDS:
             raise ValueError(
-                f"Invalid BBOB problem_id={problem_id!r}. "
-                f"Must be an integer in [1, 24]."
+                f"Invalid BBOB problem_id={problem_id!r}. Must be an integer in [1, 24]."
             )
         self.problem_id = problem_id
         self.dim = dim
@@ -57,7 +56,6 @@ class BBOBProblem:
         self._clean_problem = get_problem(problem_id, instance_id, dim, ProblemClass.BBOB)
         self.true_optimum: float = float(self._clean_problem.optimum.y)
 
-
     def add_noise(self, true_value: float, noise_std: float) -> float:
         """Inject additive Gaussian noise N(0, noise_std^2) to a true value."""
         if noise_std <= 0.0:
@@ -65,9 +63,7 @@ class BBOBProblem:
         return true_value + np.random.normal(0.0, noise_std)
 
     def __call__(
-        self, 
-        x: np.ndarray, 
-        noise_std: float | list[float] | None = None
+        self, x: np.ndarray, noise_std: float | list[float] | None = None
     ) -> float | dict[float, float]:
         """
         Evaluate the objective function at point ``x``.
@@ -155,4 +151,3 @@ class BBOBProblem:
         subscripts = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
         f_sub = str(self.problem_id).translate(subscripts)
         return f"{self.name} (bbob f{f_sub}, {self.dim}-D, inst. {self.instance_id})"
-

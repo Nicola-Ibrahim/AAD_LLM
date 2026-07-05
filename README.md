@@ -28,20 +28,24 @@ Run this code inside any notebook cell to generate `.env` automatically:
 ```python
 # Copy and run in Jupyter Notebook cell:
 with open(".env", "w") as f:
-    f.write("LLM_PROVIDER=lmstudio\n")
+    f.write("LLM_PROVIDER=local\n")
     f.write("HF_REPO=Qwen/Qwen2.5-Coder-7B-Instruct-GGUF\n")
     f.write("HF_FILE=qwen2.5-coder-7b-instruct-q4_k_m.gguf\n")
-    f.write("LLM_STUDIO_MODEL=qwen2.5-coder-7b-instruct-q4_k_m\n")
-    f.write("LLM_STUDIO_BASE_URL=http://localhost:8080/v1\n")
+    f.write("LOCAL_LLM_MODEL=qwen2.5-coder-7b-instruct-q4_k_m\n")
+    f.write("LOCAL_LLM_BASE_URL=http://localhost:8080/v1\n")
+    f.write("LOCAL_LLM_API_KEY=not-needed\n")
 ```
 
 ### Jupyter Terminal Shell Command
 Paste into your terminal session to export environment variables directly:
 ```bash
 # Copy and run in Terminal:
-export LLM_PROVIDER="lmstudio"
+export LLM_PROVIDER="local"
 export HF_REPO="Qwen/Qwen2.5-Coder-7B-Instruct-GGUF"
 export HF_FILE="qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+export LOCAL_LLM_MODEL="qwen2.5-coder-7b-instruct-q4_k_m"
+export LOCAL_LLM_BASE_URL="http://localhost:8080/v1"
+export LOCAL_LLM_API_KEY="not-needed"
 ```
 
 ## Running the Notebooks
@@ -56,16 +60,20 @@ Then navigate to [notebooks/01_noise_analysis.ipynb](notebooks/01_noise_analysis
 
 To run the optimization pipeline locally without relying on external APIs or tools like LMStudio, this project includes a built-in automated LLM server (powered by `llama.cpp` and `huggingface_hub`).
 
-1. **Install Server Dependencies**:
+1. **Load Environment**:
    ```bash
-   bash scripts/00_install_llamacpp.sh
+   source scripts/00_load_env.sh
    ```
-2. **Download & Start the Server**:
+2. **Install Dependencies**:
    ```bash
-   bash scripts/02_serve_model.sh
+   bash scripts/01_install_dependencies.sh
+   ```
+3. **Start the Server**:
+   ```bash
+   bash scripts/03_serve_model.sh
    ```
 
-**Changing the Model**: By default, the system uses the `Qwen2.5-Coder-7B-Instruct-GGUF` model. To use a different model (e.g., the smaller 1.5B version for fast local testing), edit the variables in your `.env` file. 
+**Changing the Model**: By default, the system uses the `qwen2.5-coder-1.5b-instruct-q4_k_m.gguf` model. To use a different model, edit the variables in your `.env` file or set environment variables via `scripts/00_load_env.sh`. 
 For a complete explanation of configuration variables and ready-to-use presets, refer to [docs/MODEL_CONFIGURATION.md](docs/MODEL_CONFIGURATION.md).
 
 ## Running Experiments
@@ -79,7 +87,7 @@ uv run aad-llm
 ### HPC SLURM Cluster Execution
 To submit a batch job on a SLURM cluster:
 ```bash
-sbatch scripts/03_slurm_submit.sh
+sbatch scripts/04_slurm_submit.sh
 ```
 
 ## Project Structure
@@ -90,16 +98,19 @@ sbatch scripts/03_slurm_submit.sh
 - `docs/` — Documentation:
   - [MODEL_CONFIGURATION.md](docs/MODEL_CONFIGURATION.md) — Guide to configuring custom models and quantizations.
 - `notebooks/` — Jupyter notebooks:
+  - `00_model_test.ipynb` — Quick diagnostic test for local model server connection and response latency.
   - `01_noise_analysis.ipynb` — Noise injection & interactive analysis notebook.
   - `02_llamea_analysis.ipynb` — Single-problem LLaMEA evolution & verification notebook.
   - `03_batch_llamea_experiment.ipynb` — Multi-problem batch LLaMEA evolution notebook.
   - `04_results_dashboard.ipynb` — Stats builder, boxplots, and results dashboard.
 - `scripts/` — Execution and orchestration scripts:
-  - `00_install_llamacpp.sh` — Compiles/installs llama-server & huggingface-cli.
-  - `01_download_model.sh` — Downloads GGUF model files from Hugging Face.
-  - `02_serve_model.sh` — Starts the local model server.
-  - `03_slurm_submit.sh` — Batch job script for SLURM cluster execution.
+  - `00_load_env.sh` — Exports environment variables explicitly.
+  - `01_install_dependencies.sh` — Installs llama-cpp-python & huggingface-hub.
+  - `02_download_model.sh` — Downloads GGUF model files from Hugging Face.
+  - `03_serve_model.sh` — Starts the local model server.
+  - `04_slurm_submit.sh` — Batch job script for SLURM cluster execution.
   - `cleanup_models.sh` — Utility to list and interactively delete cached/downloaded models.
+  - `stop_server.sh` — Utility to stop running model server instances.
 - `src/` — Source code library:
   - `llm/` — LLM provider bindings (`providers.py`) and prompt constants (`prompts.py`).
   - `problems/` — Additive Gaussian noise wrapper around BBOB functions (`bbob.py`).
