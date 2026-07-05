@@ -1,0 +1,107 @@
+%% Thesis master file
+% !TeX spellcheck = en_US
+% !TeX encoding  = utf-8
+% !TeX program   = xelatex
+% !BIB program   = bibtex
+
+%-------------------------------------------------------------------------------
+% Document class and basic options
+%-------------------------------------------------------------------------------
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[
+    a4paper,
+    12pt,
+    oneside,
+    final,
+    numbers=noenddot,
+    toc=bibliography,
+    toc=listof
+]{scrbook}
+
+%-------------------------------------------------------------------------------
+% Language and encoding
+%-------------------------------------------------------------------------------
+\usepackage[english]{babel}
+
+
+\usepackage[a-3b]{pdfx} % Load PDF/A-3b support (loads hyperref automatically)
+
+
+% If not already loaded by your style file:
+\usepackage{ifthen}
+
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{calc,arrows.meta,positioning,fit,backgrounds,shadows, shapes.geometric}
+\usepackage{adjustbox} % for max width=\linewidth scaling
+\usepackage{xltabular}
+
+%-------------------------------------------------------------------------------
+% Style file and packages
+%-------------------------------------------------------------------------------
+\input{style/ntthesis.tex}
+
+%-------------------------------------------------------------------------------
+% Metadata definitions
+%-------------------------------------------------------------------------------
+\newcommand{\WorkType}{Master Thesis Proposal}
+
+% --- Title (single-line and line-broken variants) ---
+\newcommand{\Titel}{Automated Algorithm Design: Evolving Noise-Resilient Optimization Heuristics using Large Language Models}
+\newcommand{\TitelWithLineBreaks}{%
+  Automated Algorithm Design: \\
+  Evolving Noise-Resilient Optimization Heuristics using Large Language Models
+}
+
+% --- Author / IDs ---
+\def\authorlist {Nicola Ibrahim}
+\def\matrikellist {4014384}
+
+% --- Supervisor(s): keep one line if only primary; add second with \\ ---
+\newcommand{\Supervisor}{Dr.\ Moritz Seiler}
+
+% --- Dates / numbers ---
+\newcommand{\SubmissionDate}{\today}
+\newcommand{\SubmissionNumber}{\today}
+
+% --- Confidentiality flag (print clause if true) ---
+\setboolean{WorkIsConfidential}{false}
+\newcommand{\CompanyName}{ }
+\newcommand{\CompanyAddress}{ }
+
+% Macros
+\input{macros.tex}
+\input{chapters/macros.tex}
+
+%-------------------------------------------------------------------------------
+% Hyperref setup
+%-------------------------------------------------------------------------------
+% \hypersetup{
+%     pdftitle   = {\WorkType: \Titel},
+%     pdfauthor  = {\authorlist},
+%     pdfkeywords= {inverse design, multi-objective optimization, surrogate modeling, inverse mapping, decision-space exploration, Pareto front, Bayesian modeling},
+%     pdfsubject = {\Titel, \SubmissionDate},
+%     pdfstartview={FitH}
+% }
+
+
+
+%-------------------------------------------------------------------------------
+% Begin of the document
+%-------------------------------------------------------------------------------
+\begin{document}
+    \frontmatter
+    \input{style/titlepage}
+    \ifthenelse{\boolean{WorkIsConfidential}}{\input{style/confidentiality}}{}
+    \input{chapters/01_abstract}
+    \tableofcontents
+
+    \mainmatter
+    \input{chapters/02_introduction}
+    \input{chapters/04_current_state}
+    % \input{chapters/04_methodology}
+    \input{chapters/05_objectives}
+
+   
+    \printbibliography
+\end{document}
