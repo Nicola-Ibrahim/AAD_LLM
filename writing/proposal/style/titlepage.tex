@@ -1,0 +1,94 @@
+% !TeX spellcheck = de_DE
+%% !TeX spellcheck = en_US
+% !TeX encoding = utf-8
+% !TeX root = ../thesis.tex
+% !TeX program = pdflatex
+%
+\newcounter{cAuthorList}
+\newcounter{cMatrList}
+\setcounter{cMatrList}{0}
+
+%───────────────────────────────────────────────────────────────────────────────
+% Title page (restructured order):
+% 1) Logo  →  2) Title  →  3) Author(s)  →  4) Degree statement
+%  →  5) Faculty, Department & University  →  6) Filing date
+%───────────────────────────────────────────────────────────────────────────────
+\begin{titlepage}
+\begin{center}
+
+  % 1) Logo
+  \begin{figure}\vspace{-1.2cm}
+    \IfLanguageName{ngerman}{
+      \includegraphics[height=2.2cm]{style/UPBDE}
+    }{
+      \includegraphics[height=2.2cm]{style/UPB.pdf}
+    }
+  \end{figure}
+
+  % 2) Title Section
+  \vspace{0.8cm}
+  \Large{\textsf{\WorkType}}\\[0.8cm]
+  \LARGE{\textbf{\textsf{\TitelWithLineBreaks}}}
+  
+  \vspace{1.5cm} 
+
+  % 3) Author(s)
+  \large{\IfLanguageName{ngerman}{von}{by}}\\[0.3cm]
+  \foreach \n in \authorlist {
+    \addtocounter{cAuthorList}{1}
+    \setcounter{cMatrList}{0}
+    \foreach \m in \matrikellist {
+      \addtocounter{cMatrList}{1}
+      \ifnum\value{cMatrList} = \value{cAuthorList}
+        \Large \n \\[0.1cm]
+        \normalsize \IfLanguageName{ngerman}{Matr.-Nr.}{Matr.-No.}: \m
+        \par\vspace{0.8cm}
+      \fi
+    }
+  }
+
+  % % 4) Degree statement
+  % \vspace{0.5cm}
+  % \normalsize
+  % \IfLanguageName{ngerman}{
+  %   \textit{Diese Arbeit wird vorgelegt zur Erlangung des akademischen Grades}\\
+  %   \textbf{Master of Science (M.\,Sc.) \,–\, Computer Engineering}\\[0.1cm]
+  %   \textit{Schwerpunkt: Signalverarbeitung}
+  % }{
+  %   \textit{A thesis presented in partial fulfillment of the requirements for the degree of}\\
+  %   \textbf{Master of Science (M.Sc.) \,–\, Computer Engineering}\\[0.1cm]
+  %   \textit{Specialisation: Signal Processing}
+  % }
+
+  % 5) Faculty, Department & University
+  \vspace{1.0cm}
+  \normalsize
+  \IfLanguageName{ngerman}{
+    Fakultät für Elektrotechnik, Informatik und Mathematik\\[0.1cm]
+    Institut für Elektrotechnik und Informationstechnik
+  }{
+    Faculty of Electrical Engineering, Computer Science and Mathematics\\[0.1cm]
+    Department of Electrical Engineering and Information Technology
+  }\\
+  \IfLanguageName{ngerman}{Universität Paderborn}{Paderborn University}
+
+  % Pushes content to the bottom
+  \vfill 
+
+  % 5.1) Supervisors
+  \normalsize
+  \begin{tabular}{c}
+    \IfLanguageName{ngerman}{Gutachter}{Supervisors}: \\[0.1cm]
+    \begin{tabular}{>{\bfseries}c} \Supervisor \end{tabular}
+  \end{tabular}
+
+  % 6) Filing date
+  \vspace{2.0cm} 
+
+  \begin{flushleft}
+    \large{\IfLanguageName{ngerman}{Abgabetermin}{Filing date}: \SubmissionDate}
+  \end{flushleft}
+
+  \renewcommand{\baselinestretch}{1}\normalsize
+\end{center}
+\end{titlepage}
