@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INSTALL_DIR="$HOME/bin"
 LLAMACPP_RELEASE_URL="https://github.com/ggml-org/llama.cpp/releases/latest/download/llama-server-linux-x86_64"
@@ -46,21 +46,29 @@ else
 fi
 
 # ---- 2. huggingface CLI (hf / huggingface-cli) ------------------
+PYTHON_CMD=""
+if [ -f "$PROJECT_ROOT/.venv/bin/python" ]; then
+    PYTHON_CMD="$PROJECT_ROOT/.venv/bin/python"
+elif command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
+elif command -v python &> /dev/null; then
+    PYTHON_CMD="python"
+fi
+
 if command -v hf &> /dev/null; then
     echo "  [OK] hf CLI already on PATH"
 elif command -v huggingface-cli &> /dev/null; then
     echo "  [OK] huggingface-cli already on PATH"
+elif [ -n "$PYTHON_CMD" ] && "$PYTHON_CMD" -c "import huggingface_hub" &> /dev/null; then
+    echo "  [OK] huggingface_hub is available in Python environment ($PYTHON_CMD)."
 else
-    echo "  [INFO] Hugging Face CLI not found on PATH. Checking .venv..."
-    if [ -f "$PROJECT_ROOT/.venv/bin/hf" ] || [ -f "$PROJECT_ROOT/.venv/bin/huggingface-cli" ]; then
-        echo "  [OK] Hugging Face CLI found in .venv."
+    echo "  [INFO] Hugging Face CLI not found. Installing into active Python environment..."
+    if command -v uv &> /dev/null && [ -d "$PROJECT_ROOT/.venv" ]; then
+        cd "$PROJECT_ROOT" && uv pip install "huggingface_hub[cli]"
+    elif [ -n "$PYTHON_CMD" ]; then
+        "$PYTHON_CMD" -m pip install "huggingface_hub[cli]"
     else
-        echo "  [INFO] Installing Hugging Face CLI into virtual environment via uv..."
-        if command -v uv &> /dev/null; then
-            cd "$PROJECT_ROOT" && uv pip install "huggingface_hub[cli]"
-        else
-            echo "WARNING: 'uv' not found on PATH. Please install manually."
-        fi
+        echo "WARNING: Python/uv not found on PATH. Please install huggingface_hub manually."
     fi
 fi
 

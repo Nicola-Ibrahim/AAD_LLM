@@ -1,13 +1,13 @@
 #!/bin/bash
 # ============================================================
-# 04_slurm_submit.sh
+# 03_slurm_submit.sh
 # SLURM Job Submission Script for HPC Clusters.
 # Automatically spins up the local inference server, runs the
 # experiment, and cleans up the server upon completion.
 # ============================================================
 #
 # Submit to queue:
-#   sbatch scripts/04_slurm_submit.sh
+#   sbatch scripts/03_slurm_submit.sh
 #
 # Check job status:
 #   squeue --me
@@ -29,7 +29,7 @@ echo "Running on node: $(hostname)"
 echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
 echo "Allocated memory: 32G"
 
-PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 PORT=8080
@@ -37,16 +37,18 @@ PORT=8080
 # 1. Load any system modules if needed (e.g. if the cluster uses modules)
 # module load python || true
 
-# 2. Check if .env file exists, copy example if missing
-if [ ! -f ".env" ]; then
-    echo "Creating default .env from template..."
-    cp .env.example .env
-fi
 
-# Function to load a variable from .env
+
+# Function to load a variable from environment or .env
 load_env_var() {
     local var_name=$1
     local default_val=${2:-""}
+
+    if [ -n "${!var_name:-}" ]; then
+        echo "${!var_name}"
+        return
+    fi
+
     local env_file="$PROJECT_ROOT/.env"
     if [ -f "$env_file" ]; then
         local val
@@ -104,6 +106,6 @@ for i in {1..30}; do
 done
 
 # 6. Run the experiment synchronously within the SLURM job allocation
-python -m aad_llm.main_experiment
+python src/main_experiment.py
 
 echo "LLaMEA experiment run completed successfully!"

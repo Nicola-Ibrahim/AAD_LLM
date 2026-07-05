@@ -1,0 +1,24 @@
+# ============================================================
+# AAD_LLM Project Requirements
+# Install with: pip install -r requirements.txt
+# ============================================================
+
+# Core Algorithm Evolution & LLM Dependencies
+llamea>=0.1.0
+ioh>=0.3.14
+openai>=1.0.0
+func-timeout>=4.3.5
+numpy>=1.26.0
+python-dotenv>=1.2.2
+plotly>=6.8.0
+huggingface_hub>=0.20.0
+
+# Optional Provider & Notebook Support
+google-genai>=0.8.0
+jupyter>=1.0.0
+ipykernel>=6.29.0
+matplotlib>=3.8.0
+pandas>=2.2.0
+tqdm>=4.66.0
+
+

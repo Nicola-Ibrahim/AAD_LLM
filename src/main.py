@@ -9,8 +9,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-import aad_llm.core.runner as runner
-from aad_llm.llm.providers import Provider, build_llm
+import core.runner as runner
+from llm.providers import Provider, build_llm
 
 # Load environment variables from .env if present
 load_dotenv()

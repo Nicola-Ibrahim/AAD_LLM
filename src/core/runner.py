@@ -8,10 +8,10 @@ from typing import Any
 from llamea import LLaMEA, LLM
 from llamea.loggers import ExperimentLogger
 
-from aad_llm.problems.bbob import BBOBProblem
-from aad_llm.llm.prompts import TASK_PROMPT_CLEAN, TASK_PROMPT_NOISY, EXAMPLE_PROMPT, FORMAT_PROMPT
-from aad_llm.core.evaluator import Evaluator
-from aad_llm.analysis.results import save_summary
+from problems.bbob import BBOBProblem
+from llm.prompts import TASK_PROMPT_CLEAN, TASK_PROMPT_NOISY, EXAMPLE_PROMPT, FORMAT_PROMPT
+from core.evaluator import Evaluator
+from analysis.results import save_summary
 
 
 class ProblemLogger(ExperimentLogger):
@@ -216,7 +216,7 @@ def run_cross_evaluation(code: str, name: str, problem: BBOBProblem, budget: int
     Cross-evaluate an already generated algorithm code against a problem environment
     (clean or noisy).
     """
-    from aad_llm.core.executor import AlgorithmExecutor
+    from core.executor import AlgorithmExecutor
     
     executor = AlgorithmExecutor()
     problem.reset()

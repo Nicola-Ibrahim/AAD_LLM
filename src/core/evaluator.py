@@ -1,8 +1,8 @@
 import traceback
 from typing import Any
 from llamea import Solution
-from aad_llm.problems.bbob import BBOBProblem
-from aad_llm.core.executor import AlgorithmExecutor
+from problems.bbob import BBOBProblem
+from core.executor import AlgorithmExecutor
 
 
 class Evaluator:
