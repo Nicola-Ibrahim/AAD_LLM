@@ -1,0 +1,8 @@
+%-------------------------------------------------------------------------------
+% Abstract
+%-------------------------------------------------------------------------------
+
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+The rapid advancement of Large Language Models (LLMs) has given rise to Automated Algorithm Design (AAD)---an emerging paradigm where AI autonomously invents, tests, and refines executable code. This thesis applies AAD to a notoriously difficult computational domain: continuous black-box optimization in highly stochastic environments. Traditional human-engineered algorithms (such as Adam or CMA-ES) frequently fail when traversing noisy landscapes corrupted by real-world sensor inaccuracies, as they easily become trapped by false gradients. To overcome this, this research leverages the Large Language Model Evolutionary Algorithm (LLaMEA) framework to build an automated execution pipeline that forces an LLM to evolve bespoke, problem-specific optimization heuristics. Using the continuous Black-Box Optimization Benchmark (BBOB) suite wrapped in additive Gaussian noise, the system iterates over 30 generations within a strictly controlled evaluation sandbox. The final contribution will empirically benchmark these autonomously designed, noise-specialized algorithms against both traditional baselines and pre-existing LLM heuristics trained strictly on clean data, thereby quantifying the capability of LLMs to independently solve complex, stochastic engineering challenges.

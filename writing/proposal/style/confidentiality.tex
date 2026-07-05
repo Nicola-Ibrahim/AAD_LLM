@@ -1,0 +1,35 @@
+% !TeX spellcheck = de_DE
+%% !TeX spellcheck = en_US
+% !TeX encoding = utf-8
+% !TeX root = ../thesis.tex
+% !TeX program = pdflatex
+%
+\newcounter{cAuthorListConfidentially}
+\newcounter{cAuthorListLastElement}
+\setcounter{cAuthorListConfidentially}{0}
+\setcounter{cAuthorListLastElement}{0}
+\foreach \n in \authorlist {
+  \addtocounter{cAuthorListLastElement}{1}
+}
+%%%%%%%%%%%%%%%%%%
+\chapter{Sperrvermerk}
+
+Die vorliegende \WorkType\xspace mit dem Titel ``\Titel'' von
+\foreach \n in \authorlist {%
+\addtocounter{cAuthorListConfidentially}{1}%
+\ifnum\value{cAuthorListConfidentially}>1%
+\ifnum\value{cAuthorListLastElement}=\value{cAuthorListConfidentially}%
+ \xspace und \n \else , \n \fi \else \n \fi }
+beinhaltet vertrauliche Informationen und Daten des Unternehmens \textit{\CompanyName}. 
+Diese \WorkType\xspace darf nur vom Erst- und
+Zweitgutachter sowie von berechtigten Mitgliedern des
+Prüfungsausschusses eingesehen werden. Eine Veröffentlichung der
+\WorkType\xspace ist nicht erlaubt. Dritten darf die \WorkType\xspace nur mit
+der ausdrücklichen Genehmigung des Unternehmens \textit{\CompanyName}\xspace zugänglich gemacht werden.
+
+\vspace{1cm}
+Paderborn, \SubmissionDate
+
+\vspace*{\fill}
+\CompanyName \\
+\CompanyAddress
