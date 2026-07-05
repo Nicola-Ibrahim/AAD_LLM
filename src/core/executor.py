@@ -1,5 +1,133 @@
+import ast
+import builtins
 from typing import Any, Callable
+
 from func_timeout import func_timeout
+
+import collections
+import functools
+import itertools
+import math
+import random
+import numpy as np
+import scipy
+import scipy.optimize
+import scipy.stats
+
+
+
+
+def _sanitize_code(code: str) -> str:
+    """
+    Sanitize LLM-generated code by inserting 'pass' into empty method/function bodies
+    where a function definition ('def ...:') is followed by another definition or end of block
+    without an indented statement body.
+    """
+    lines = code.splitlines()
+    sanitized_lines = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        sanitized_lines.append(line)
+        stripped = line.strip()
+        if stripped.startswith("def ") and stripped.endswith(":"):
+            indent = len(line) - len(line.lstrip())
+            j = i + 1
+            is_empty_body = True
+            while j < len(lines):
+                next_line = lines[j]
+                if next_line.strip():
+                    next_indent = len(next_line) - len(next_line.lstrip())
+                    if next_indent > indent and not next_line.strip().startswith(("def ", "class ")):
+                        is_empty_body = False
+                    break
+                j += 1
+            if is_empty_body:
+                sanitized_lines.append(" " * (indent + 4) + "pass")
+        i += 1
+    return "\n".join(sanitized_lines)
+
+
+def _find_class_names_in_code(code: str) -> list[str]:
+    """
+    Use AST parsing to reliably extract all top-level class names defined
+    in the algorithm source code (not from imports).
+    """
+    code = _sanitize_code(code)
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return []
+    return [node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
+
+
+class CodeValidationError(Exception):
+    """Raised when LLM-generated code fails structural or syntax validation."""
+
+    pass
+
+
+def _validate_code(code: str, isolated_globals: dict[str, Any]) -> type:
+    """
+    Validate LLM-generated code through four stages:
+      1. AST syntax check (catches IndentationError, SyntaxError)
+      2. Execution into isolated namespace
+      3. Class resolution (finding the top-level algorithm class)
+      4. Instantiation check (verifying no-arg constructor or dim parameter)
+
+    Returns the resolved algorithm class if valid.
+    Raises CodeValidationError with a descriptive message if invalid.
+    """
+    # Stage 1: AST syntax check
+    try:
+        ast.parse(code)
+    except SyntaxError as e:
+        raise CodeValidationError(
+            f"Generated code has a Python syntax error:\n"
+            f"  Line {e.lineno}: {e.msg}\n\n"
+            f"Fix: ensure all method bodies are non-empty (use `pass` if needed), "
+            f"and all variables are defined before use."
+        ) from e
+
+    # Stage 2: Execute into isolated namespace
+    try:
+        exec(code, isolated_globals)  # noqa: S102
+    except Exception as e:
+        raise CodeValidationError(
+            f"Generated code raised an error during compilation:\n"
+            f"  {type(e).__name__}: {e}\n\n"
+            f"Fix: check for undefined names, import errors, or invalid statements."
+        ) from e
+
+    # Stage 3: Class resolution
+    class_names = _find_class_names_in_code(code)
+    algorithm_cls: type | None = None
+    for cls_name in class_names:
+        candidate = isolated_globals.get(cls_name)
+        if candidate is not None and isinstance(candidate, type):
+            algorithm_cls = candidate
+            break
+
+    if algorithm_cls is None:
+        raise CodeValidationError(
+            f"No callable class found in generated code. "
+            f"Detected class names: {class_names}. "
+            f"Ensure the code contains a class with a `__call__(self, problem, budget)` method."
+        )
+
+    # Stage 4: Instantiation check
+    try:
+        _ = algorithm_cls()
+    except TypeError:
+        try:
+            _ = algorithm_cls(dim=3)
+        except Exception as err:
+            raise CodeValidationError(
+                f"Algorithm class `{algorithm_cls.__name__}.__init__` failed to instantiate: {err}.\n"
+                f"Fix: `__init__` must accept only `self` with no extra required parameters."
+            ) from err
+
+    return algorithm_cls
 
 
 class AlgorithmExecutor:
@@ -24,38 +152,55 @@ class AlgorithmExecutor:
             The raw python code of the optimization algorithm.
         name : str
             The class name of the optimization algorithm to instantiate.
+            If the class is not found by name, the first class defined in the
+            code (via AST analysis) is used as a fallback.
         dim : int
             The dimensionality of the search space, to be injected into the algorithm.
         problem : Callable
             The objective function to be minimized.
         budget : int
-            The maximum number of evaluations allowed.
+            Stopping criterion given to the algorithm (equivalent to a convergence
+            threshold in gradient descent). The algorithm uses this to limit its `problem(x)`
+            calls and return its best found float value.
 
         Returns
         -------
         algorithm_returned_fitness : float
             The best fitness value reported by the candidate algorithm.
         """
-        # --- 1. Compile candidate code & instantiate algorithm class ---
-        # Execute the candidate code in a fresh local dictionary to avoid polluting globals
-        local_scope: dict[str, Any] = {}
-        exec(code, globals(), local_scope)
+        # --- 1. Compile candidate code in an isolated namespace ---
+        isolated_globals: dict[str, Any] = {
+            "__builtins__": builtins,
+            "np": np,
+            "numpy": np,
+            "math": math,
+            "random": random,
+            "collections": collections,
+            "itertools": itertools,
+            "functools": functools,
+        }
+        if scipy is not None:
+            isolated_globals["scipy"] = scipy
 
-        # Verify the algorithm class exists in the execution scope
-        if name not in local_scope:
-            raise KeyError(
-                f"Algorithm class '{name}' was not found after execution. "
-                "Make sure the class name in your code exactly matches your proposed name."
-            )
+        code = _sanitize_code(code)
 
-        algorithm_cls = local_scope[name]
-        algorithm = algorithm_cls()
+        # --- 2. Validate code structure and resolve algorithm class ---
+        algorithm_cls = _validate_code(code, isolated_globals)
 
-        # Inject search space dimensionality if the algorithm class expects it
+        try:
+            algorithm = algorithm_cls()
+        except TypeError:
+            algorithm = algorithm_cls(dim)
+
+        # Inject search space dimensionality if the algorithm class defines it
         if hasattr(algorithm, "dim"):
             algorithm.dim = dim
 
-        # --- 2. Execute candidate run with timeout protection ---
+        # Ensure algorithm instance has a __name__ attribute for func_timeout error formatting
+        if not hasattr(algorithm, "__name__"):
+            algorithm.__name__ = getattr(algorithm_cls, "__name__", name)
+
+        # --- 3. Execute candidate run with wall-clock timeout protection ---
         algorithm_returned_fitness = func_timeout(
             self.timeout_seconds, algorithm, args=(problem, budget)
         )
@@ -67,3 +212,4 @@ class AlgorithmExecutor:
             )
 
         return float(algorithm_returned_fitness)
+

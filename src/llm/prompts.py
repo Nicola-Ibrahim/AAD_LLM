@@ -31,43 +31,58 @@ Your goal is to find and return the lowest possible value of `problem(x)` within
 """
 
 EXAMPLE_PROMPT = """
-An example code structure for a simple Random Search algorithm is as follows:
-```python
-import numpy as np
+Your algorithm will be instantiated and called as follows:
+    optimizer = AlgorithmName()
+    best_y = optimizer(problem, budget)
 
-class AlgorithmName:
-    "Template for a BBOB optimization algorithm"
+You MUST use the following class skeleton — fill in your algorithm logic in the marked section only.
+Do NOT change the class structure, method signatures, or return statement:
 
-    def __init__(self):
-        pass
+    import numpy as np
 
-    def __call__(self, problem, budget):
-        # Fetch search space bounds directly from the problem object
-        lb = getattr(problem, 'lower_bound', -5.0)
-        ub = getattr(problem, 'upper_bound', 5.0)
-        dim = getattr(problem, 'dim', 3)
-        best_y = float('inf')
-        
-        for _ in range(budget):
-            # Sample a random point within the problem domain bounds
-            x = np.random.uniform(lb, ub, dim)
-            
-            # Evaluate the function
-            y = problem(x)
-            
-            # Keep track of the best minimum found
-            if y < best_y:
-                best_y = y
-                
-        return best_y
-```
+    class AlgorithmName:
+        def __init__(self):
+            pass  # Add initialization state here if your algorithm needs it
+
+        def __call__(self, problem, budget):
+            lb = getattr(problem, 'lower_bound', -5.0)
+            ub = getattr(problem, 'upper_bound', 5.0)
+            dim = getattr(problem, 'dim', 3)
+
+            # Always start with a random initial point
+            best_x = np.random.uniform(lb, ub, dim)
+            best_y = problem(best_x)
+            evaluations = 1
+
+            # --- YOUR ALGORITHM LOGIC BELOW ---
+            # Use `evaluations` to track calls. Stop when evaluations >= budget.
+            # Always call `y = problem(x)` where x is a 1D numpy array of shape (dim,).
+            # Compare only scalar floats: `if y < best_y:` (not arrays).
+            # Update best_x and best_y when you find improvement.
+            # --- YOUR ALGORITHM LOGIC ABOVE ---
+
+            return float(best_y)  # MUST return a float scalar
 """
 
 FORMAT_PROMPT = """
-Write your output as:
-Feedback: <thought process / explanation of changes>
+Respond with EXACTLY the following format — no extra code blocks:
+
+Feedback: <your reasoning and description of the algorithm>
 Code:
 ```python
-<code block containing the complete Python class>
+<import numpy as np first, then your complete class>
 ```
+
+STRICT Rules — violating any rule will cause execution failure:
+- There must be exactly ONE ```python ... ``` block in your response.
+- The class MUST be named exactly one word (e.g., `class MyOptimizer:`).
+- `__init__(self)` MUST take NO extra arguments beyond `self`.
+- `__init__(self)` MUST have a non-empty body (use `pass` if nothing to initialize).
+- The class MUST have a `__call__(self, problem, budget)` method.
+- `__call__` MUST return `float(best_y)` — a scalar Python float, NOT a numpy array.
+- Every variable you use MUST be defined before use. Never reference undefined names.
+- Do NOT store `problem` or `budget` in `__init__` — they are provided to `__call__` directly.
+- `x` is a 1D numpy array of shape `(dim,)`. Never use bare `if x < value:` — use `np.all()`, `np.any()`, or `np.clip(x, lb, ub)`.
+- The `import numpy as np` statement MUST appear at the top of your code block.
+- Do NOT include `if __name__ == '__main__':` blocks.
 """

@@ -32,7 +32,9 @@ class Evaluator:
         problem : BBOBProblem
             Fully-configured BBOB problem instance.
         budget : int, optional
-            Maximum allowed objective function evaluations, by default 1000.
+            Maximum allowed objective function evaluations passed to the algorithm
+            as a stopping criterion (analogous to a convergence threshold in gradient
+            descent), by default 1000. It is NOT used for multi-run comparison or luck checking.
         timeout_seconds : float, optional
             Maximum wall-clock execution time allowed for one algorithm run,
             by default 10.0.
@@ -79,11 +81,25 @@ class Evaluator:
         return fitness_score, feedback, metadata
 
     def _noisy_problem_fn(self, x: np.ndarray) -> float:
-        """Helper method to wrap noise evaluation without unpicklable lambda functions."""
+        """Wrap the problem call to inject noise, returning only the noisy scalar.
+
+        BBOBProblem.__call__(x, noise_std=s) returns a dict like
+        {0.0: clean_val, s: noisy_val}. We extract the noisy value by
+        looking up `noise_std` as the key; if there's any float precision
+        drift we fall back to the first non-zero-key value in the dict.
+        """
         res = self.problem(x, noise_std=self.noise_std)
         if isinstance(res, dict):
-            return res.get(self.noise_std, float("inf"))
-        return res
+            # Primary lookup: exact key match
+            if self.noise_std in res:
+                return res[self.noise_std]
+            # Fallback: return the value for the first non-clean (non-zero) key
+            for k, v in res.items():
+                if k != 0.0:
+                    return v
+            # Last resort: return clean value
+            return res.get(0.0, float("inf"))
+        return float(res)
 
     def __call__(self, solution: Solution, explogger: Any | None = None) -> Solution:
         """
