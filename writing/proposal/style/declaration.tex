@@ -1,0 +1,38 @@
+% !TeX spellcheck = de_DE
+%% !TeX spellcheck = en_US
+% !TeX encoding = utf-8
+% !TeX root = ../thesis.tex
+% !TeX program = pdflatex
+
+\chapter*{\IfLanguageName{ngerman}{Eidesstattliche Erklärung}{Declaration}}
+
+\IfLanguageName{ngerman}{
+Ich erkläre hiermit an Eides statt, dass ich die vorliegende \WorkType\ mit dem Titel 
+``\Titel'' 
+selbstständig und ohne unzulässige fremde Hilfe angefertigt habe. 
+
+Ich versichere, dass ich keine anderen als die angegebenen Quellen und Hilfsmittel benutzt habe. Dies gilt auch für den Einsatz von KI-basierten Softwaretools, deren Nutzung vollständig dokumentiert und als solche kenntlich gemacht wurde. Alle Stellen, die wörtlich oder sinngemäß aus fremden Werken übernommen wurden, sind als solche gekennzeichnet.
+
+Die Arbeit wurde in dieser oder ähnlicher Form noch keiner anderen Prüfungsbehörde vorgelegt und bisher nicht veröffentlicht.
+}{
+I hereby declare under oath that I have produced this \WorkType\ entitled 
+``\Titel'' 
+independently and without unauthorized assistance. 
+
+I certify that I have used no sources or aids other than those indicated. This also applies to the use of AI-based software tools, the use of which has been fully documented and identified as such. Any material taken directly or indirectly from other works is clearly identified.
+
+This thesis has not been submitted, in whole or in part, to any other examination authority and has not been published previously.
+}
+
+\vspace{2.5cm} 
+
+\foreach \n in \authorlist {
+    \noindent
+    \begin{tabular}{@{}l @{\extracolsep{\fill}} c@{}}
+        % Row 1: Place/Date on the left, Signature Line on the right
+        Paderborn, \SubmissionDate \hspace{2cm} & \rule{6.5cm}{0.4pt} \\
+        % Row 2: Empty space on left, Name centered under the line
+        & \small (\n) \\
+    \end{tabular}
+    \vspace{1.5cm} 
+}

@@ -1,0 +1,15 @@
+
+
+\chapter{Methodology}\label{chap:methodology}
+
+The implementation treats the open-source LLaMEA library as the orchestration engine, focusing our engineering efforts on a highly defensive evaluation domain.
+
+\begin{itemize}
+    \item \textbf{Stage 1: Dynamic Prompting \& Alteration:} The system initializes a clean \texttt{ioh} BBOB landscape and immediately wraps it in an additive Gaussian noise layer. The LLM is then prompted dynamically with the specific BBOB Problem ID, forcing it to specialize its strategy.
+    
+    \item \textbf{Stage 2: The \texttt{evaluate()} Sandbox:} The core engineering contribution. The pipeline extracts the LLM's raw Python generation and compiles it (using \texttt{exec}) within a strictly controlled sandbox.
+    
+    \item \textbf{Stage 3: Robustness \& Crash Defenses:} To prevent ``lucky'' evaluations caused by landscape noise, the algorithm is forced to run 5 independent times. The mean absolute error across these runs determines the fitness score. Infinite loops are caught via a 10-second \texttt{func\_timeout}, and runtime exceptions generate Python Tracebacks that are fed directly back to the LLM to facilitate self-debugging.
+    
+    \item \textbf{Stage 4: Evolution \& Artifact Generation:} LLaMEA natively handles a 1+1 Evolution loop for 30 generations per problem. Upon completion, the pipeline logs the generation metadata and saves the final champion solver as an independent Python artifact.
+\end{itemize}
