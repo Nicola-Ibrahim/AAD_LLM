@@ -69,3 +69,48 @@ def save_summary(
     summary_file.write_text(json.dumps(summary_data, indent=4), encoding="utf-8")
         
     return summary_file
+
+
+def load_summaries(target_dir: str | Path) -> list[dict[str, Any]]:
+    """
+    Scans target_dir recursively for summary.json artifact files and loads them into a list.
+    """
+    path = Path(target_dir)
+    summaries: list[dict[str, Any]] = []
+    if path.exists():
+        for summary_file in path.glob("**/summary.json"):
+            try:
+                data = json.loads(summary_file.read_text(encoding="utf-8"))
+                summaries.append(data)
+            except Exception:
+                pass
+    summaries.sort(key=lambda x: x.get("problem_id", 0))
+    return summaries
+
+
+def print_experiment_summary(target_dir: str | Path) -> None:
+    """
+    Scans target_dir for saved summary.json artifacts and prints a formatted summary table.
+    """
+    summaries = load_summaries(target_dir)
+    if not summaries:
+        print(f"No experiment summaries found in '{target_dir}'.")
+        return
+
+    lines = [
+        "==========================================================================================",
+        "Experiment Results - Collected Summaries from Artifacts",
+        "==========================================================================================",
+        f"{'Problem ID':<10} | {'Dim':<5} | {'Mode':<8} | {'Best Error':<12} | {'Best Algorithm'}",
+        "-----------|-------|----------|--------------|--------------------------------------------",
+    ]
+    for s in summaries:
+        pid = s.get("problem_id", "N/A")
+        dim = s.get("dim", "N/A")
+        mode = s.get("mode", "N/A")
+        best_err = s.get("best_final_error")
+        best_err_str = f"{best_err:.4f}" if isinstance(best_err, (int, float)) and best_err != float('inf') else "FAILED"
+        best_algo = s.get("best_algorithm") or "N/A"
+        lines.append(f"{pid:<10} | {dim:<5} | {mode:<8} | {best_err_str:<12} | {best_algo}")
+    lines.append("==========================================================================================")
+    print("\n".join(lines))

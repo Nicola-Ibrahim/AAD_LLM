@@ -16,7 +16,7 @@ class AlgorithmExecutor:
         code: str, 
         name: str, 
         dim: int, 
-        problem: Callable[[Any], float], 
+        problem: Callable[..., float], 
         budget: int
     ) -> float:
         """

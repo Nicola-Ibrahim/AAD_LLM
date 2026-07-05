@@ -91,8 +91,9 @@ sbatch scripts/03_slurm_submit.sh
   - [MODEL_CONFIGURATION.md](docs/MODEL_CONFIGURATION.md) — Guide to configuring custom models and quantizations.
 - `notebooks/` — Jupyter notebooks:
   - `01_noise_analysis.ipynb` — Noise injection & interactive analysis notebook.
-  - `02_llamea_analysis.ipynb` — Analysis & prototyping notebook.
-  - `03_results_dashboard.ipynb` — Stats builder, boxplots, and results dashboard.
+  - `02_llamea_analysis.ipynb` — Single-problem LLaMEA evolution & verification notebook.
+  - `03_batch_llamea_experiment.ipynb` — Multi-problem batch LLaMEA evolution notebook.
+  - `04_results_dashboard.ipynb` — Stats builder, boxplots, and results dashboard.
 - `scripts/` — Execution and orchestration scripts:
   - `00_install_llamacpp.sh` — Compiles/installs llama-server & huggingface-cli.
   - `01_download_model.sh` — Downloads GGUF model files from Hugging Face.

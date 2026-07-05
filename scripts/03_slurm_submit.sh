@@ -61,7 +61,7 @@ load_env_var() {
     echo "$default_val"
 }
 
-MODEL_FILE=$(load_env_var "HF_FILE" "qwen2.5-coder-7b-instruct-q4_k_m.gguf")
+MODEL_FILE=$(load_env_var "HF_FILE" "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf")
 MODEL_PATH="$HOME/models/$MODEL_FILE"
 
 # 3. Verify model file exists; if not, automatically download it

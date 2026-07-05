@@ -2,6 +2,7 @@
 Runner script executing the LLaMEA evolution loop across BBOB problem IDs.
 """
 
+from dataclasses import dataclass, field
 import sys
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,21 @@ from llamea.loggers import ExperimentLogger
 from problems.bbob import BBOBProblem
 from llm.prompts import TASK_PROMPT_CLEAN, TASK_PROMPT_NOISY, EXAMPLE_PROMPT, FORMAT_PROMPT
 from core.evaluator import Evaluator
-from analysis.results import save_summary
+
+
+@dataclass
+class ProblemEvolutionResult:
+    """
+    Immutable contract returned per-problem by run_evolution_for_problems.
+    """
+    problem_id: int
+    dim: int
+    mode: str
+    noise_std: float
+    best_error: float | None
+    run_history: list[Any] = field(default_factory=list)
+    experiment_name: str = ""
+    error_msg: str | None = None
 
 
 class ProblemLogger(ExperimentLogger):
@@ -59,12 +74,11 @@ def run_evolution_for_problem(
     """
     problem_id = problem.problem_id
     dim = problem.dim
-    effective_noise_std = noise_std if noise_std > 0.0 else getattr(problem, "noise_std", 0.0)
-    effective_mode = mode if mode is not None else ("noisy" if effective_noise_std > 0.0 else "clean")
+    mode = mode or ("noisy" if noise_std > 0.0 else "clean")
     
     # 1. Setup Prompt
     task_prompt = (
-        TASK_PROMPT_NOISY if effective_mode == "noisy" else TASK_PROMPT_CLEAN
+        TASK_PROMPT_NOISY if mode == "noisy" else TASK_PROMPT_CLEAN
     ).format(
         problem_id=problem_id,
         dim=dim,
@@ -72,13 +86,13 @@ def run_evolution_for_problem(
         upper_bound=problem.upper_bound
     )
         
-    print(f"\n--- Starting LLaMEA Evolution for BBOB-{problem_id} (Dim {dim}, Mode {effective_mode}) ---")
+    print(f"\n--- Starting LLaMEA Evolution for BBOB-{problem_id} (Dim {dim}, Mode {mode}) ---")
     
     # 2. Setup Evaluator
-    evaluator = Evaluator(problem=problem, budget=budget, noise_std=effective_noise_std)
+    evaluator = Evaluator(problem=problem, budget=budget, noise_std=noise_std)
 
     # 3. Initialize LLaMEA
-    experiment_name = f"bbob_{problem_id}_dim{dim}_{effective_mode}"
+    experiment_name = f"bbob_{problem_id}_dim{dim}_{mode}"
     optimizer = LLaMEA(
         f=evaluator,
         llm=llm,
@@ -113,15 +127,15 @@ def run_evolution_for_problems(
     llm: LLM = None,
     max_evaluations: int = 1000,
     iterations: int = 10,
-    output_dir: str | Path = "generated_algorithms",
-    log_dir: str | Path = "logs",
     verbose: bool = True,
     log: bool = False,
     mode: str | None = None,
     budget: int | None = None
-) -> dict[int, float | None]:
+) -> list[ProblemEvolutionResult]:
     """
     Run LLaMEA optimization algorithm evolution across a list of BBOB problem IDs or pre-built BBOBProblem instances.
+
+    Returns a list of ProblemEvolutionResult contracts containing run history and metrics.
 
     Parameters
     ----------
@@ -137,22 +151,18 @@ def run_evolution_for_problems(
         Maximum evaluation budget per candidate algorithm run, by default 1000.
     iterations : int, optional
         Number of LLaMEA evolution steps, by default 10.
-    output_dir : str | Path, optional
-        Directory to store results summaries, by default "generated_algorithms".
-    log_dir : str | Path, optional
-        Directory for logs, by default "logs".
     verbose : bool, optional
         Print progress messages, by default True.
     log : bool, optional
         Enable detailed logging, by default False.
     mode : str | None, optional
-        Experiment mode ("clean" or "noisy"). If None, auto-derived from problem.is_noisy.
+        Experiment mode ("clean" or "noisy"). If None, auto-derived from noise_std.
     budget : int | None, optional
         Alias for max_evaluations.
     """
     eval_budget = budget if budget is not None else max_evaluations
 
-    results: dict[int, float | None] = {}
+    results: list[ProblemEvolutionResult] = []
     for item in problems:
         if isinstance(item, int):
             problem = BBOBProblem(
@@ -164,19 +174,18 @@ def run_evolution_for_problems(
             problem = item
 
         problem_id = problem.problem_id
-        effective_noise_std = noise_std if noise_std > 0.0 else getattr(problem, "noise_std", 0.0)
-        effective_mode = mode if mode is not None else ("noisy" if effective_noise_std > 0.0 else "clean")
+        mode_str = mode or ("noisy" if noise_std > 0.0 else "clean")
 
         if verbose:
-            print(f"\n>>> Evolving algorithm for BBOB Problem {problem_id} (noise_std={effective_noise_std})...")
+            print(f"\n>>> Evolving algorithm for BBOB Problem {problem_id} (noise_std={noise_std})...")
         try:
             optimizer = run_evolution_for_problem(
                 problem=problem,
                 llm=llm,
                 budget=eval_budget,
                 iterations=iterations,
-                mode=effective_mode,
-                noise_std=effective_noise_std,
+                mode=mode_str,
+                noise_std=noise_std,
                 log=log
             )
             
@@ -184,62 +193,39 @@ def run_evolution_for_problems(
             problem.reset()
             
             best_sol = optimizer.best_so_far
-            
-            # Save the summary of all runs
-            experiment_name = f"bbob_{problem_id}_dim{problem.dim}_{effective_mode}"
-            target_base = Path(log_dir) if log else Path(output_dir)
-            problem_dir = target_base / experiment_name
-                
-            summary_path = save_summary(
-                history=optimizer.run_history,
-                problem_id=problem_id,
-                dim=dim,
-                output_dir=problem_dir,
-                mode=mode
-            )
-                
             best_error = getattr(best_sol, 'metadata', {}).get("final_error", float('inf'))
-            results[problem_id] = best_error
+            experiment_name = f"bbob_{problem_id}_dim{problem.dim}_{mode_str}"
+            
+            results.append(
+                ProblemEvolutionResult(
+                    problem_id=problem_id,
+                    dim=problem.dim,
+                    mode=mode_str,
+                    noise_std=noise_std,
+                    best_error=best_error,
+                    run_history=optimizer.run_history,
+                    experiment_name=experiment_name,
+                    error_msg=None,
+                )
+            )
             
             if verbose:
                 print(f"--- Completed BBOB Problem {problem_id}! Best Final Error: {best_error:.4f} ---")
-                print(f"Saved summary to: {summary_path}\n")
         except Exception as e:
             if verbose:
                 print(f"Error evolving algorithm for problem {problem_id}: {e}", file=sys.stderr)
-            results[problem_id] = None
+            results.append(
+                ProblemEvolutionResult(
+                    problem_id=problem_id,
+                    dim=problem.dim,
+                    mode=mode_str,
+                    noise_std=noise_std,
+                    best_error=None,
+                    run_history=[],
+                    experiment_name=f"bbob_{problem_id}_dim{problem.dim}_{mode_str}",
+                    error_msg=str(e),
+                )
+            )
     return results
 
 
-def run_cross_evaluation(code: str, name: str, problem: BBOBProblem, budget: int = 1000, noise_std: float = 0.0) -> dict[str, Any]:
-    """
-    Cross-evaluate an already generated algorithm code against a problem environment
-    (clean or noisy).
-    """
-    from core.executor import AlgorithmExecutor
-    
-    executor = AlgorithmExecutor()
-    problem.reset()
-    eval_func = (lambda x: problem(x, noise_std=noise_std)[noise_std]) if noise_std > 0.0 else problem
-    try:
-        returned_fitness = executor.execute_algorithm(
-            code=code, 
-            name=name, 
-            dim=problem.dim, 
-            problem=eval_func, 
-            budget=budget
-        )
-        true_optimum = problem.true_optimum
-        final_error = abs(returned_fitness - true_optimum)
-        return {
-            "success": True,
-            "final_error": final_error,
-            "algorithm_returned_fitness": returned_fitness,
-            "true_optimum": true_optimum,
-            "noise_std": noise_std
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }

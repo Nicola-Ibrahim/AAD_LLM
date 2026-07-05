@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="$PROJECT_ROOT/logs"
 PID_FILE="$LOG_DIR/server.pid"
-PORT=8080
+PORT=1234
 
 # Ensure local bin is in PATH
 export PATH="$HOME/bin:$PATH"
@@ -40,7 +40,7 @@ load_env_var() {
 
 
 
-MODEL_FILE=$(load_env_var "HF_FILE" "qwen2.5-coder-7b-instruct-q4_k_m.gguf")
+MODEL_FILE=$(load_env_var "HF_FILE" "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf")
 MODEL_PATH="$HOME/models/$MODEL_FILE"
 
 echo "========================================================"

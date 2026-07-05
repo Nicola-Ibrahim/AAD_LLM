@@ -1,8 +1,10 @@
 import traceback
 from typing import Any
+import numpy as np
 from llamea import Solution
 from problems.bbob import BBOBProblem
 from core.executor import AlgorithmExecutor
+
 
 
 class Evaluator:
@@ -41,7 +43,7 @@ class Evaluator:
         self.problem = problem
         self.budget = budget
         self.timeout_seconds = timeout_seconds
-        self.noise_std = getattr(problem, "noise_std", noise_std)
+        self.noise_std = noise_std
         self.executor = AlgorithmExecutor(timeout_seconds=self.timeout_seconds)
 
     def _compute_metrics_and_feedback(
@@ -79,6 +81,13 @@ class Evaluator:
         
         return fitness_score, feedback, metadata
 
+    def _noisy_problem_fn(self, x: np.ndarray) -> float:
+        """Helper method to wrap noise evaluation without unpicklable lambda functions."""
+        res = self.problem(x, noise_std=self.noise_std)
+        if isinstance(res, dict):
+            return res.get(self.noise_std, float('inf'))
+        return res
+
     def __call__(self, solution: Solution, explogger: Any | None = None) -> Solution:
         """
         Execute and score a candidate optimization algorithm solution.
@@ -97,7 +106,7 @@ class Evaluator:
         """
         try:
             # --- 1. Compile & Execute candidate run with timeout protection ---
-            problem_fn = (lambda x: self.problem(x, noise_std=self.noise_std)[self.noise_std]) if self.noise_std > 0.0 else self.problem
+            problem_fn = self._noisy_problem_fn if self.noise_std > 0.0 else self.problem
             algorithm_returned_fitness = self.executor.execute_algorithm(
                 code=solution.code, 
                 name=solution.name, 

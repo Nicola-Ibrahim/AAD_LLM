@@ -42,8 +42,8 @@ load_env_var() {
 
 
 
-MODEL_REPO="${1:-$(load_env_var "HF_REPO" "Qwen/Qwen2.5-Coder-7B-Instruct-GGUF")}"
-MODEL_FILE="${2:-$(load_env_var "HF_FILE" "qwen2.5-coder-7b-instruct-q4_k_m.gguf")}"
+MODEL_REPO="${1:-$(load_env_var "HF_REPO" "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF")}"
+MODEL_FILE="${2:-$(load_env_var "HF_FILE" "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf")}"
 TARGET_DIR="$HOME/models"
 TARGET_PATH="$TARGET_DIR/$MODEL_FILE"
 

@@ -10,6 +10,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 import core.runner as runner
+from analysis.results import save_summary, print_experiment_summary
 from llm.providers import Provider, build_llm
 
 # Load environment variables from .env if present
@@ -44,7 +45,7 @@ class ExperimentConfig:
 
     # LLM provider to request solutions from (pulled from environment variable)
     llm_provider: str = field(
-        default_factory=lambda: os.environ.get("LLM_PROVIDER", Provider.GEMINI)
+        default_factory=lambda: os.environ.get("LLM_PROVIDER", "")
     )
 
     # Target model name (automatically populated during initialization)
@@ -77,25 +78,6 @@ class ExperimentConfig:
         return "\n".join(lines)
 
 
-@dataclass
-class ExperimentResults:
-    results: dict[int, float | None] = field(default_factory=dict)
-
-    def __str__(self) -> str:
-        lines = [
-            "==================================================",
-            "Experiment Results - Final Scores",
-            "==================================================",
-            "Problem ID | Score (Fitness)",
-            "-----------|----------------",
-        ]
-        for pid, score in self.results.items():
-            score_str = f"{score:.4f}" if score is not None else "FAILED"
-            lines.append(f"{pid:<10} | {score_str}")
-        lines.append("==================================================")
-        return "\n".join(lines)
-
-
 def initialize_llm(provider: str):
     """Initialize the LLM provider, exiting if it fails."""
     try:
@@ -105,8 +87,8 @@ def initialize_llm(provider: str):
         sys.exit(1)
 
 
-def run_evolution(config: ExperimentConfig, llm) -> ExperimentResults:
-    """Run LLaMEA evolution across BBOB problem IDs."""
+def run_evolution(config: ExperimentConfig, llm) -> list[Path]:
+    """Run LLaMEA evolution across BBOB problem IDs and save summaries."""
     print(
         f"Starting evolution across problem(s): {config.problems} (DIM={config.dim}, max_evaluations={config.max_evaluations})..."
     )
@@ -114,23 +96,37 @@ def run_evolution(config: ExperimentConfig, llm) -> ExperimentResults:
     # Create target directories using pathlib
     Path(config.output_dir).mkdir(parents=True, exist_ok=True)
     Path(config.log_dir).mkdir(parents=True, exist_ok=True)
-    for problem_id in config.problems:
-        (Path(config.log_dir) / f"bbob_{problem_id}").mkdir(parents=True, exist_ok=True)
 
-    raw_results = runner.run_evolution_for_problems(
+    evolution_results = runner.run_evolution_for_problems(
         problems=config.problems,
         dim=config.dim,
         noise_std=config.noise_std,
         llm=llm,
         max_evaluations=config.max_evaluations,
         iterations=config.iterations,
-        output_dir=config.output_dir,
-        log_dir=config.log_dir,
         verbose=True,
         log=config.log,
     )
 
-    return ExperimentResults(results=raw_results)
+    saved_summary_paths: list[Path] = []
+    target_base = Path(config.log_dir) if config.log else Path(config.output_dir)
+
+    for res in evolution_results:
+        if res.error_msg is None:
+            problem_dir = target_base / res.experiment_name
+            summary_path = save_summary(
+                history=res.run_history,
+                problem_id=res.problem_id,
+                dim=res.dim,
+                output_dir=problem_dir,
+                mode=res.mode,
+            )
+            print(f"Saved summary for Problem {res.problem_id} to: {summary_path}")
+            saved_summary_paths.append(summary_path)
+        else:
+            print(f"Problem {res.problem_id} failed: {res.error_msg}", file=sys.stderr)
+
+    return saved_summary_paths
 
 
 def main():
@@ -145,9 +141,13 @@ def main():
     print(config)
     print()
 
-    # 3. Run and print results
-    results = run_evolution(config, llm)
-    print(results)
+    # 3. Run evolution (executes & saves summary.json artifacts)
+    run_evolution(config, llm)
+    print()
+
+    # 4. Collect and display saved artifact summaries
+    target_dir = Path(config.log_dir) if config.log else Path(config.output_dir)
+    print_experiment_summary(target_dir)
 
 
 if __name__ == "__main__":
