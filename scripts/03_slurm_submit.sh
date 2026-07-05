@@ -32,7 +32,7 @@ echo "Allocated memory: 32G"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-PORT=8080
+PORT=1234
 
 # 1. Load any system modules if needed (e.g. if the cluster uses modules)
 # module load python || true
@@ -71,15 +71,29 @@ if [ ! -f "$MODEL_PATH" ]; then
     bash scripts/01_download_model.sh
 fi
 
-# 4. Start local llama-server on the allocated compute node
-echo "Starting llama.cpp server in the background..."
+# Resolve Python command (prefer .venv, fallback to active Python)
+PYTHON_CMD=""
+if [ -f "$PROJECT_ROOT/.venv/bin/python" ]; then
+    PYTHON_CMD="$PROJECT_ROOT/.venv/bin/python"
+elif command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
+elif command -v python &> /dev/null; then
+    PYTHON_CMD="python"
+else
+    echo "ERROR: Python interpreter not found."
+    exit 1
+fi
+
+# 4. Start local inference server on the allocated compute node
+# Uses llama-cpp-python (pure Python) — no compiled C++ binary required
+echo "Starting llama-cpp-python server in the background..."
 mkdir -p logs
 
-llama-server \
-    -m "$MODEL_PATH" \
+"$PYTHON_CMD" -m llama_cpp.server \
+    --model "$MODEL_PATH" \
     --port "$PORT" \
-    -c 8192 \
-    --threads "$SLURM_CPUS_PER_TASK" \
+    --n_ctx 8192 \
+    --n_threads "${SLURM_CPUS_PER_TASK:-8}" \
     > logs/model_server_slurm.log 2>&1 &
 
 SERVER_PID=$!
@@ -106,6 +120,6 @@ for i in {1..30}; do
 done
 
 # 6. Run the experiment synchronously within the SLURM job allocation
-python src/main_experiment.py
+"$PYTHON_CMD" src/main_experiment.py
 
 echo "LLaMEA experiment run completed successfully!"

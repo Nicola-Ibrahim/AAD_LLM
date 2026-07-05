@@ -69,19 +69,33 @@ if lsof -i :$PORT &>/dev/null; then
     fi
 fi
 
+# Resolve Python command (prefer .venv, fallback to active Python)
+PYTHON_CMD=""
+if [ -f "$PROJECT_ROOT/.venv/bin/python" ]; then
+    PYTHON_CMD="$PROJECT_ROOT/.venv/bin/python"
+elif command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
+elif command -v python &> /dev/null; then
+    PYTHON_CMD="python"
+else
+    echo "ERROR: Python interpreter not found."
+    exit 1
+fi
+
 # 3. Start llama-server in the background
-echo "  [INFO] Starting llama-server on port $PORT..."
+echo "  [INFO] Starting llama-server on port $PORT using $PYTHON_CMD..."
 echo "  Model: $MODEL_PATH"
 echo "  Log:   $LOG_DIR/model_server.log"
 echo ""
 
-# Start the server with standard context size of 8192 for LLaMEA optimization
-# --threads auto will use available CPU cores
-nohup llama-server \
-    -m "$MODEL_PATH" \
+# Start the server using llama-cpp-python (pure Python, no compiled binary needed)
+# --n_ctx: context size for LLaMEA optimization
+# --n_threads: CPU threads to use
+nohup "$PYTHON_CMD" -m llama_cpp.server \
+    --model "$MODEL_PATH" \
     --port "$PORT" \
-    -c 8192 \
-    --threads 8 \
+    --n_ctx 8192 \
+    --n_threads 8 \
     > "$LOG_DIR/model_server.log" 2>&1 &
 
 SERVER_PID=$!
