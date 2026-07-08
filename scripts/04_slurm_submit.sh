@@ -11,8 +11,8 @@
 # ============================================================
 
 #SBATCH --job-name=llamea_bbob
-#SBATCH --output=logs/slurm_%j.log
-#SBATCH --error=logs/slurm_%j.log
+#SBATCH --output=slurm_%j.log
+#SBATCH --error=slurm_%j.log
 #SBATCH --time=24:00:00
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=16
@@ -23,8 +23,12 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-# Auto-load environment variables
-source "$PROJECT_ROOT/scripts/00_load_env.sh" 2>/dev/null || true
+# Auto-load environment variables from .env if present
+if [ -r "$PROJECT_ROOT/.env" ]; then
+    set -a
+    source "$PROJECT_ROOT/.env"
+    set +a
+fi
 
 MODEL_FILE="${HF_FILE:-qwen2.5-coder-1.5b-instruct-q4_k_m.gguf}"
 MODEL_PATH="$HOME/models/$MODEL_FILE"
@@ -57,15 +61,13 @@ else
 fi
 
 echo "Starting llama-cpp-python server on $HOST:$PORT (n_ctx=$N_CTX, n_threads=$N_THREADS)..."
-mkdir -p logs
-
 "$PYTHON_CMD" -m llama_cpp.server \
     --model "$MODEL_PATH" \
     --host "$HOST" \
     --port "$PORT" \
     --n_ctx "$N_CTX" \
     --n_threads "$N_THREADS" \
-    > logs/model_server_slurm.log 2>&1 &
+    > model_server_slurm.log 2>&1 &
 
 SERVER_PID=$!
 echo "Server started with PID: $SERVER_PID"

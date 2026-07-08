@@ -39,9 +39,6 @@ class ExperimentConfig:
     # Output directory where the final generated Python algorithms will be saved
     output_dir: str = "experiments"
 
-    # Output directory for LLaMEA optimizer logs
-    log_dir: str = "logs"
-
     # Whether LLaMEA writes local execution/prompt log folders
     log: bool = False
 
@@ -93,9 +90,8 @@ def run_evolution(config: ExperimentConfig, llm: LLM) -> list[Path]:
         f"Starting evolution across problem(s): {config.problems} (DIM={config.dim}, max_evaluations={config.max_evaluations})..."
     )
 
-    # Create target directories using pathlib
+    # Create target directory using pathlib
     Path(config.output_dir).mkdir(parents=True, exist_ok=True)
-    Path(config.log_dir).mkdir(parents=True, exist_ok=True)
 
     problem_instances = [BBOBProblem(problem_id=pid, dim=config.dim) for pid in config.problems]
 

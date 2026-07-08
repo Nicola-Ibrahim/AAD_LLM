@@ -8,7 +8,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-PID_FILE="$PROJECT_ROOT/logs/server.pid"
+PID_FILE="$PROJECT_ROOT/.server.pid"
 
 # Function to load a variable from environment or .env
 load_env_var() {
