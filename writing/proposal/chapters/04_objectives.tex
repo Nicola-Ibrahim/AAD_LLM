@@ -1,0 +1,61 @@
+%-------------------------------------------------------------------------------
+% Core Research Objectives
+%-------------------------------------------------------------------------------
+
+\chapter{Research Objectives}\label{chap:objectives}
+
+The primary aim of this thesis is to evaluate the capacity of Large Language Models (LLMs) to autonomously synthesize problem-specific optimization algorithms that are mathematically resilient to stochastic environments. To systematically bridge the gap between existing deterministic Automated Algorithm Design (AAD) frameworks and noisy, real-world applications, this research is driven by three core objectives and their corresponding research questions:
+
+% ==============================================================================
+% OBJECTIVE 1
+% ==============================================================================
+\section*{Objective 1: Formulating a Stochastic Evaluation Sandbox}
+To test the adaptive limits of an LLM, the execution environment must accurately reflect real-world industrial conditions. Currently, most AAD frameworks evaluate generated code strictly against deterministic mathematical landscapes. This objective seeks to answer the following foundational question:
+
+\begin{quote}
+\textbf{RQ1: How can controlled statistical noise be systematically injected into standard optimization functions to best simulate real-world physical uncertainty?}
+\end{quote}
+
+To address this challenge, this objective centers on the methodological design and mathematical formulation of a non-deterministic benchmark suite. A critical primary goal is to systematically investigate and identify the most appropriate statistical noise distributions capable of distorting continuous landscapes without destroying underlying topological features. While Additive Gaussian Noise ($f_{noisy}(x) = f_{clean}(x) + \epsilon$, where $\epsilon \sim \mathcal{N}(0, \sigma^2)$) serves as the leading mathematical model for representing ubiquitous sensor and thermal interference, we will evaluate the exact parameters required to establish a mathematically sound and persistent ``noise floor.'' The desired outcome of this phase is to establish a rigorous evaluation paradigm that effectively masks exact gradients and forces any evaluating agent to navigate corrupted fitness values, thereby laying the groundwork to test for genuine stochastic adaptation.
+
+% PLACEHOLDER: Under Objective 1 (Pipeline/Sandbox Setup):
+% - Detail the explicit baseline configurations.
+% - Specify the termination conditions strictly (e.g., bounded to a strict computational budget like 100n or 1000n total function evaluations).
+
+
+% ==============================================================================
+% OBJECTIVE 2
+% ==============================================================================
+\section*{Objective 2: Autonomous Synthesis of Noise-Resilient Heuristics}
+While recent literature confirms that the LLaMEA framework can generate highly competitive algorithms for clean, noiseless functions, it remains an open theoretical boundary whether these models can adapt to stochastic disruption. Consequently, this objective addresses the core generative question of the thesis:
+
+\begin{quote}
+\textbf{RQ2: Can Large Language Models autonomously design specialized, problem-specific optimization algorithms that are resilient to noise?}
+\end{quote}
+
+To evaluate this capability, the generative pipeline will be systematically deployed across a representative subset of mathematical landscapes selected from the 24 functions provided by the BBOB suite. Rather than manually hard-coding statistical interventions or filtering mechanisms for the generative model, this objective focuses on evaluating the LLM's capacity to autonomously transition from deterministic logic to noise-aware strategies solely through closed-loop empirical evaluations. The desired outcome is to establish whether the evolutionary pressures of a stochastic environment can drive an LLM to independently discover and implement robust uncertainty-handling mathematical structures—such as dynamic smoothing, momentum tracking, or adaptive sampling—thereby yielding programmatic Python classes capable of achieving strong optimization convergence despite operating within severe noise floors.
+
+
+% PLACEHOLDER: Under Objective 2 (Autonomous Generation):
+% - Outline the strict behavioral expectations of the mutant generations.
+% - Discuss the possibility of mixed results or complete failure (e.g., if an evolved heuristic degrades performance on certain multi-modal topological profiles, how the feedback analyzer intercepts this behavior).
+
+
+% ==============================================================================
+% OBJECTIVE 3
+% ==============================================================================
+\section*{Objective 3: Empirical Benchmarking and White-Box Analysis}
+It is critical to formally prove not only that these LLM-generated algorithms function reliably under uncertainty, but to isolate the exact structural properties that dictate their robustness across varied conditions. This evaluation drives the final comparative question:
+
+\begin{quote}
+\textbf{RQ3: How does the cross-environment robustness of optimization heuristics evolved in heavily noisy landscapes compare against identical algorithmic architectures trained exclusively on deterministic, clean functions?}
+\end{quote}
+
+To validate the significance of noise-aware evolution, we will establish a rigorous comparative benchmarking framework that evaluates runtime convergence rates and solution quality within a corrupted environment. The primary control group will consist of state-of-the-art heuristics synthesized by equivalent automated code-generation pipelines operating under clean, noiseless conditions. Testing both suites in identical stochastic environments allows this objective to systematically measure the exact performance differential yielded by exposing the generative model to persistent uncertainty during its training loop. Finally, this phase will culminate in a white-box code inspection of the champion code bases to document the unique, self-directed mathematical adjustments the AI generated to protect its search trajectory from stochastic deception.
+
+% PLACEHOLDER: Under Objective 3 (Comparative Benchmarking Framework):
+% - Map out the exact baseline evaluation matrix under varying noise coefficients.
+% - Document the cross-validation strategy on different landscape classes to satisfy generalizability constraints without introducing early overfitting metrics.
+% PLACEHOLDER: Under Objective 3 (Comparative Benchmarking Framework):
+% - Map out the exact baseline tournament suite.
+% - Document the cross-validation strategy on different landscape classes (e.g., testing structural resilience on highly correlated vs. concave topologies to satisfy No Free Lunch theorems).
