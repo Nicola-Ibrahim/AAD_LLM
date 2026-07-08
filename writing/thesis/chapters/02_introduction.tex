@@ -1,0 +1,120 @@
+%-------------------------------------------------------------------------------
+% Chapter 1: Introduction
+%-------------------------------------------------------------------------------
+
+
+% The Introduction (The "Movie Trailer")
+% In the Introduction, you only cite papers to prove that the problem is real and that your proposed tool exists. You do not explain how the papers work here; you just name-drop them to back up your claims.
+% The high-level executive pitch (the broad trend, the motivation, the research questions).
+
+
+\chapter{Introduction}\label{chap:intro}
+
+To properly contextualize the operational envelope of this research, it is necessary to chart the evolution of optimization methodologies alongside recent breakthroughs in artificial intelligence. Continuous optimization serves as an invisible backbone across physics, financial forecasting, computer vision, and systems engineering. Historically, finding numerical minima or maximizing efficiency thresholds required human experts to construct rigid, hand-crafted mathematical shortcuts over years of trial and error. 
+
+However, as industrial applications increase in structural complexity, this manual loop faces severe scalability limitations. This thesis addresses the intersection of Automated Algorithm Design (AAD) and Large Language Models (LLMs) to fundamentally alter this paradigm, evaluating how autonomous code-generation engines can independently synthesize robust optimization mechanics to solve non-deterministic real-world tasks.
+
+%-------------------------------------------------------------------------------
+\section{Background and the Paradigm Shift in Optimization}\label{sec:intro_bg}
+
+% %-----------------------------------------------------------------------------
+% % THESIS EXPANSION NOTE (Target Length: 1.5 - 2 Pages)
+% % - Subsection 1.1.1: Trace the progression from classic operations research 
+% %   to modern evolutionary heuristics. Emphasize that these systems rely on fixed 
+% %   structures designed by humans.
+% % - Subsection 1.1.2: Formally introduce "AI for Science". Define how LLMs are 
+% %   transitioning from text/dialogue prediction to programmatic logic generation.
+% %-----------------------------------------------------------------------------
+
+Historically, the creation of efficient continuous optimization algorithms required rigid mathematical derivations crafted by human experts over years of trial and error. The field is currently experiencing a paradigm shift towards Automated Algorithm Design (AAD), a methodology that transforms Large Language Models (LLMs) into autonomous algorithmic inventors. Recent high-profile literature has definitively proven that LLMs, when structured within a rigorous evolutionary loop, possess the semantic and mathematical reasoning necessary to discover novel programmatic solutions that can rival or surpass human-engineered methodologies \cite{Romera2023}. Instead of prompting an AI to output a static answer, modern AAD architectures construct an automated ``discovery loop.'' The system prompts the LLM to write executable Python code for a novel optimization solver, which is then executed in a secure sandbox and scored against a target empirical metric.
+
+To operationalize this discovery loop, this research leverages the recent Large Language Model Evolutionary Algorithm (LLaMEA) framework \cite{LLaMEA2024}. The quantitative results of the sandbox evaluations---alongside any runtime errors or performance penalties---are fed directly back to the LLM via LLaMEA's architecture. This iterative feedback loop allows the AI to autonomously debug, mutate, and evolve its own mathematical logic. 
+
+%-------------------------------------------------------------------------------
+\section{Industrial Motivation: Parameter Extraction under Uncertainty}\label{sec:intro_motivation}
+
+% %-----------------------------------------------------------------------------
+% % THESIS EXPANSION NOTE (Target Length: 1.5 - 2 Pages)
+% % - Detail the real-world mathematical bottleneck of black-box situations.
+% %   Explain why gradients cannot be extracted analytically from physical hardware.
+% % - Insert a highly technical paragraph outlining battery sensor constraints,
+% %   thermal shifts, or quantization limitations to make the EV case study 
+% %   academically concrete.
+% %-----------------------------------------------------------------------------
+
+While AAD frameworks like LLaMEA show immense promise, their application to unpredictable, real-world stochastic environments remains a critical open challenge. This thesis directs this LLM-driven pipeline at a major industrial bottleneck: discovering physical parameters from noisy sensor data. Consider Electric Vehicle (EV) manufacturing, where engineers rely on continuous black-box optimization to extract exact physical parameters (e.g., internal electrical resistance) from battery sensor data. Real-world sensors are cheap and prone to electrical interference, producing highly stochastic data that renders the mathematical search space incredibly jagged and deceptive.
+
+Traditional optimization heuristics, such as the widely utilized Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001}, are overwhelmingly designed for deterministic, clean landscapes. When applied to heavily noisy environments, these traditional algorithms frequently break down---chasing false statistical spikes and failing to converge without extensive, manually engineered statistical interventions \cite{Hansen2009Noisy}. Manually designing a robust mathematical algorithm to handle this uncertainty is notoriously labor-intensive. This thesis bypasses the human bottleneck entirely. By applying the LLaMEA framework to heavily stochastic, simulated landscapes, we task an LLM with autonomously generating, testing, and discovering the specific mathematical mechanisms (e.g., dynamic smoothing, momentum, adaptive step sizes) required to cut through real-world sensor noise.
+
+%-------------------------------------------------------------------------------
+\section{The Core Research Gap}\label{sec:intro_gap}
+
+% %-----------------------------------------------------------------------------
+% % THESIS EXPANSION NOTE (Target Length: 1 Page)
+% % - Explicitly highlight the limitation of existing AAD literature. 
+% %   Namely: Every breakthrough (FunSearch, EoH, LLaMEA 2024) was validated 
+% %   strictly on deterministic formulas.
+% % - Argue why this boundary is problematic: True engineering problems are rarely 
+% %   noiseless, meaning current LLM-generated solvers remain fragile lab theories.
+% %-----------------------------------------------------------------------------
+
+The definitive boundary line in modern code-generating hyper-heuristics lies in their reliance on complete determinism. While foundational studies prove that LLMs can look at clean evaluation metrics and optimize code structure to master a theoretical equation, there is an absence of research evaluating how these models perform when their feedback information is actively distorted. Real-world engineering cannot afford to assume noiseless landscapes. Consequently, testing the limits of LLM-driven adaptation by introducing persistent, stochastic interference to the optimization sandbox represents an critical, unaddressed research gap.
+
+%-------------------------------------------------------------------------------
+\section{Research Objectives and Questions}\label{sec:intro_objectives}
+
+The primary aim of this thesis is to evaluate the capacity of Large Language Models (LLMs) to autonomously synthesize problem-specific optimization algorithms that are mathematically resilient to stochastic environments. To systematically bridge the gap between existing deterministic Automated Algorithm Design (AAD) frameworks and noisy, real-world applications, this research is driven by three core objectives and their corresponding research questions:
+
+\subsection*{Objective 1: Formulating a Stochastic Evaluation Sandbox}
+To test the adaptive limits of an LLM, the execution environment must accurately reflect real-world industrial conditions. Currently, most AAD frameworks evaluate generated code strictly against deterministic mathematical landscapes. This objective seeks to answer the following foundational question:
+\begin{quote}
+\textbf{RQ1: How can controlled statistical noise be systematically injected into standard optimization functions to best simulate real-world physical uncertainty?}
+\end{quote}
+To address this challenge, this objective centers on the methodological design and mathematical formulation of a non-deterministic benchmark suite. A critical primary goal is to systematically investigate and identify the most appropriate statistical noise distributions capable of distorting continuous landscapes without destroying underlying topological features. While Additive Gaussian Noise serves as the leading mathematical model for representing ubiquitous sensor interference, we will evaluate the exact parameters required to establish a mathematically sound and persistent floor, laying the groundwork to test for genuine stochastic adaptation.
+
+\subsection*{Objective 2: Autonomous Synthesis of Noise-Resilient Heuristics}
+While recent literature confirms that the LLaMEA framework can generate highly competitive algorithms for clean, noiseless functions, it remains an open theoretical boundary whether these models can adapt to stochastic disruption. Consequently, this objective addresses the core generative question of the thesis:
+\begin{quote}
+\textbf{RQ2: Can Large Language Models autonomously design specialized, problem-specific optimization algorithms that are resilient to noise?}
+\end{quote}
+To evaluate this capability, the generative pipeline will be systematically deployed across a representative subset of mathematical landscapes selected from the 24 functions provided by the BBOB suite. Rather than manually hard-coding statistical interventions or filtering mechanisms for the generative model, this objective focuses on evaluating the LLM's capacity to autonomously transition from deterministic logic to noise-aware strategies solely through closed-loop empirical evaluations. The desired outcome is to establish whether the evolutionary pressures of a non-deterministic environment can drive an LLM to independently discover and implement robust uncertainty-handling mathematical structures.
+
+\subsection*{Objective 3: Empirical Benchmarking and White-Box Analysis}
+It is critical to formally prove not only that these LLM-generated algorithms function reliably under uncertainty, but to isolate the exact structural properties that dictate their robustness across varied conditions. This evaluation drives the final comparative question:
+\begin{quote}
+\textbf{RQ3: How does the cross-environment robustness of optimization heuristics evolved in heavily noisy landscapes compare against identical algorithmic architectures trained exclusively on deterministic, clean functions?}
+\end{quote}
+To validate the significance of noise-aware evolution, we will establish a rigorous comparative benchmarking framework that evaluates runtime convergence rates and solution quality within a corrupted environment. The primary control group will consist of state-of-the-art heuristics synthesized by equivalent automated code-generation pipelines operating under clean, noiseless conditions. Finally, this phase will culminate in a white-box code inspection of the champion code bases to document the unique, self-directed mathematical adjustments the AI generated to protect its search trajectory from stochastic deception.
+
+%-------------------------------------------------------------------------------
+\section{Summary of Key Contributions}\label{sec:intro_contributions}
+
+% %-----------------------------------------------------------------------------
+% % THESIS EXPANSION NOTE (Target Length: 1 - 1.5 Pages)
+% % - Use clear, professional phrasing to list your three primary outputs.
+% % - Contribution 1: Design of a stochastic wrapper/paradigm over the BBOB suite.
+% % - Contribution 2: Empirical creation of noise-robust metaheuristic Python classes.
+% % - Contribution 3: The Cross-Environment analysis (Apples-to-apples validation 
+% %   of noisy-evolved vs. clean-evolved models to test generalizability limits).
+% %-----------------------------------------------------------------------------
+
+To systematically resolve this gap, this thesis implements a complete automated framework designed to generate and isolate noise-resilient metaheuristics. The core contributions of this work are summarized as follows:
+\begin{enumerate}
+    \item \textbf{Stochastic Benchmark Sandbox:} The development of a non-deterministic evaluation layer that systematically injects parameter-controlled statistical noise into continuous functions, creating a rigorous testing playground for evaluating stochastic resilience.
+    \item \textbf{Autonomous Generation of Heuristics:} The deployment of a closed-loop evolutionary system that prompts an LLM to generate fully functional Python optimization classes under non-deterministic pressure, forcing it to independently discover noise-mitigation mechanics.
+    \item \textbf{Cross-Environment Performance Report:} A comparative, white-box evaluation matching our noise-evolved agents against baseline metaheuristics trained strictly under noiseless conditions, explicitly isolating the architectural changes needed to handle uncertainty.
+\end{enumerate}
+
+%-------------------------------------------------------------------------------
+\section{Thesis Outline}\label{sec:intro_outline}
+
+% %-----------------------------------------------------------------------------
+% % THESIS EXPANSION NOTE (Target Length: 0.5 Pages)
+% % - Provide standard academic signposting. Write 1 sentence explaining the 
+% %   contents of Chapter 2, Chapter 3, Chapter 4, and Chapter 5.
+% %-----------------------------------------------------------------------------
+The remainder of this thesis is organized as follows: 
+Chapter~\ref{chap:research} conducts an exhaustive review of continuous black-box optimization, statistical noise configurations, and modern large language model optimization architectures. 
+Chapter~3 outlines the comprehensive methodology, software orchestration pipeline, and the mathematical parameters governing the non-deterministic sandbox. 
+Chapter~4 delivers the quantitative empirical results, convergence curves, and cross-environment validations. 
+Finally, Chapter~5 summarizes our conclusions, discusses cost and economic limitations, and highlights potential trajectories for future research.
