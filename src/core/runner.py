@@ -65,7 +65,7 @@ def run_evolution_for_problem(
     iterations: int = 10,
     noise_std: float = 0.0,
     log: bool = False,
-    output_dir: str | Path = "generated_algorithms",
+    output_dir: str | Path = "experiments",
 ) -> LLaMEA:
     """
     Run LLaMEA evolution to synthesize an optimization algorithm for a single BBOB problem.
@@ -169,7 +169,7 @@ def run_evolution_for_problems(
     verbose: bool = True,
     log: bool = False,
     budget: int | None = None,
-    output_dir: str | Path = "generated_algorithms",
+    output_dir: str | Path = "experiments",
 ) -> list[ProblemEvolutionResult]:
     """
     Run LLaMEA optimization algorithm evolution across a list of pre-built BBOBProblem instances.

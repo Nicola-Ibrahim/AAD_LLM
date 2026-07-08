@@ -117,7 +117,7 @@ sbatch scripts/04_slurm_submit.sh
   - `core/` — Sandbox execution (`evaluator.py`, `executor.py`) and evolutionary runner (`runner.py`).
   - `analysis/` — Results processing and summary logging (`results.py`).
   - `main.py` & `main_experiment.py` — Execution entrypoints.
-- `generated_algorithms/` — Evolved python scripts containing the best optimization algorithms.
+- `experiments/` — Evolved python scripts containing the best optimization algorithms, conversation history, and evaluation results.
 - `logs/` — Execution logs and model server outputs.
 
 ## Running the Command Line Script

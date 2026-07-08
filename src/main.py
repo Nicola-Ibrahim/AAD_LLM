@@ -37,7 +37,7 @@ class ExperimentConfig:
     iterations: int = 5
 
     # Output directory where the final generated Python algorithms will be saved
-    output_dir: str = "generated_algorithms"
+    output_dir: str = "experiments"
 
     # Output directory for LLaMEA optimizer logs
     log_dir: str = "logs"
