@@ -9,8 +9,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LOG_DIR="$PROJECT_ROOT"
-PID_FILE="$PROJECT_ROOT/.server.pid"
+LOG_DIR="$PROJECT_ROOT/logs"
+PID_FILE="$LOG_DIR/server.pid"
 
 # Auto-load environment variables from .env if present
 if [ -r "$PROJECT_ROOT/.env" ]; then

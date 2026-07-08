@@ -11,8 +11,8 @@
 # ============================================================
 
 #SBATCH --job-name=llamea_bbob
-#SBATCH --output=slurm_%j.log
-#SBATCH --error=slurm_%j.log
+#SBATCH --output=logs/slurm_%j.log
+#SBATCH --error=logs/slurm_%j.log
 #SBATCH --time=24:00:00
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=16
@@ -61,13 +61,15 @@ else
 fi
 
 echo "Starting llama-cpp-python server on $HOST:$PORT (n_ctx=$N_CTX, n_threads=$N_THREADS)..."
+mkdir -p logs
+
 "$PYTHON_CMD" -m llama_cpp.server \
     --model "$MODEL_PATH" \
     --host "$HOST" \
     --port "$PORT" \
     --n_ctx "$N_CTX" \
     --n_threads "$N_THREADS" \
-    > model_server_slurm.log 2>&1 &
+    > logs/model_server_slurm.log 2>&1 &
 
 SERVER_PID=$!
 echo "Server started with PID: $SERVER_PID"
