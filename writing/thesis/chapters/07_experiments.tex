@@ -1,0 +1,53 @@
+%-------------------------------------------------------------------------------
+% Chapter 5: Experiments and Results
+%-------------------------------------------------------------------------------
+
+\chapter{Experiments and Results}\label{chap:experiments}
+
+This chapter establishes the empirical framework used to evaluate the capabilities of noise-resilient Automated Algorithm Design (AAD) loops and delivers a comprehensive performance analysis of the evolved heuristics. To systematically assess the influence of environmental stochasticity on language model code generation, we outline a series of highly controlled optimization tournaments matching our noise-evolved agents against clean-evolved control models. The evaluation trajectory moves from tracking generation-by-generation progression inside the evolutionary loop to validating the final champion codes across previously unseen landscapes, testing both generalizability limits and structural scalability boundaries. Through rigorous statistical evaluation of global minima convergence rates paired with a white-box qualitative autopsy of the final program source files, this chapter provides a direct, quantifiable baseline indicating under which precise conditions an LLM can independently formulate robust metaheuristics capable of cutting through deceptive noise floors.
+
+% ==============================================================================
+% EXPERIMENTAL SETUP & RESULTS EXPANSION ROADMAP (TO BE CODED AS CONTENT LATER)
+% ==============================================================================
+%
+% % FUTURE SECTION 5.1: Experimental Environment and Parameter Configurations
+% % - Placeholder to define the hyperparameter choices governing the entire loop execution:
+% %   Specify the precise foundation model utilized for generation, temperature settings, 
+% %   context token allocation caps, and budget rules designed to prevent runaway API fees.
+% % - Detail the exact instance train-test division mapping: document how the parallel training 
+% %   loops are strictly isolated to independent BBOB instances (e.g., Instances 1, 2, and 3) 
+% %   under precise noise scaling values ($\sigma^2$) to simulate predictable, jagged sensor interference.
+% % - Placeholder to specify the rigid computational budget granted to evaluating heuristics 
+% %   (e.g., bounding search evaluations to a standard terminal limit of 100n function calls).
+%
+% % FUTURE SECTION 5.2: Evolutionary Trajectory and Fitness Metrics
+% % - Placeholder to provide a comprehensive look at the learning dynamics over 30 generations.
+% %   Detail how generation fitness progresses, measuring compile success rates vs. optimization success.
+% % - Insert a dual-axis line chart mockup comment tracing the optimization penalty/fitness dropping 
+% %   simultaneously with cumulative token expenditures over the course of the execution runs.
+% % - Document the system behavior when encountering severe early landscape failures: discuss how the 
+% %   feedback loop processes tracebacks when a mutant candidate crashes or traps its tracking paths.
+%
+% % FUTURE SECTION 5.3: Comparative Tournament Benchmarks (Clean vs. Noisy Evolution)
+% % - Placeholder to present the primary empirical data comparing noise-trained champions 
+% %   against equivalents synthesized under deterministic conditions.
+% % - Construct a large comparative data table layout: Columns: [Function ID | Dimensional Class | Clean-Trained Best Score | Noise-Trained Best Score | Statistical Confidence p-value].
+% % - Detail how the clean-trained reference models immediately drop in search efficiency, falling 
+% %   prey to false statistical spikes, whereas the noise-trained variations maintain path stability.
+%
+% % FUTURE SECTION 5.4: Cross-Validation and Cross-Environment Generalizability
+% % - Placeholder to execute a strict cross-validation challenge to satisfy No Free Lunch concerns.
+% % - Document the performance of the generated champions when deployed against entirely unseen 
+% %   testing instances (e.g., Instances 4 and 5) and higher dimensional vectors (scaling from 5-D to 10-D).
+% % - Prove mathematically that the LLM has synthesized generic, robust metaheuristic strategies 
+% %   rather than simply over-fitting code statements to memorize a single static landscape map.
+%
+% % FUTURE SECTION 5.5: White-Box Code Inspection and Algorithmic Autopsy
+% % - Placeholder to transition from automated quantitative profiling to qualitative analysis.
+% % - Conduct a structural line-by-line inspection of the champion Python files, isolating 
+% %   the exact code adjustments the generative model added to maintain trajectory direction.
+% % - Highlight the independent discovery of advanced principles: document instances where the AI 
+% %   independently implemented sliding window history tracking, localized noise-smoothing buffers, 
+% %   or dynamic step-size reductions to neutralize Gaussian deviation footprints.
+%
+% ==============================================================================
