@@ -107,10 +107,11 @@ def run_evolution(config: ExperimentConfig, llm: LLM) -> list[Path]:
         iterations=config.iterations,
         verbose=True,
         log=config.log,
+        output_dir=config.output_dir,
     )
 
     saved_summary_paths: list[Path] = []
-    target_base = Path(config.log_dir) if config.log else Path(config.output_dir)
+    target_base = Path(config.output_dir)
 
     for res in evolution_results:
         if res.error_msg is None:
@@ -147,7 +148,7 @@ def main():
     print()
 
     # 4. Collect and display saved artifact summaries
-    target_dir = Path(config.log_dir) if config.log else Path(config.output_dir)
+    target_dir = Path(config.output_dir)
     print_experiment_summary(target_dir)
 
 

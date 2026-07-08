@@ -10,6 +10,7 @@ import time
 import json
 import urllib.request
 from pathlib import Path
+from dotenv import load_dotenv
 
 # ANSI colors
 GREEN = "\033[92m"
@@ -63,10 +64,12 @@ def run_diagnostics(exit_on_failure: bool = True) -> bool:
 
     # 3. Environment Variables Resolution
     print(f"{BOLD}Stage 2: Environment Variables Check{RESET}")
+    # Load defaults from .env if present
+    load_dotenv()
     # Load defaults if not set, matching notebooks / runners behavior
     os.environ.setdefault("LLM_PROVIDER", "local")
     os.environ.setdefault("LOCAL_LLM_BASE_URL", "http://localhost:1234/v1")
-    os.environ.setdefault("LOCAL_LLM_MODEL", "qwen2.5-coder-1.5b-instruct-q4_k_m")
+    os.environ.setdefault("LOCAL_LLM_MODEL", "qwen2.5-coder-7b-instruct-q4_k_m")
     os.environ.setdefault("LOCAL_LLM_API_KEY", "not-needed")
 
     provider = os.environ.get("LLM_PROVIDER")

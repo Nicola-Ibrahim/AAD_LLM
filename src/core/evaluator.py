@@ -248,3 +248,17 @@ class Evaluator:
         solution.metadata = metadata
 
         return solution
+
+    def __getstate__(self):
+        # Exclude unpicklable C++ object wrappers (ioh problem, executor) for joblib/pickle state logging
+        state = self.__dict__.copy()
+        state["problem"] = None
+        state["executor"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        # Re-initialize the executor if needed
+        from core.executor import AlgorithmExecutor
+
+        self.executor = AlgorithmExecutor(timeout_seconds=self.timeout_seconds)

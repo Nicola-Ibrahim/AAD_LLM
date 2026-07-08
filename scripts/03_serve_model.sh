@@ -12,10 +12,14 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="$PROJECT_ROOT/logs"
 PID_FILE="$LOG_DIR/server.pid"
 
-# Auto-load environment variables
-source "$SCRIPT_DIR/00_load_env.sh" 2>/dev/null || true
+# Auto-load environment variables from .env if present
+if [ -r "$PROJECT_ROOT/.env" ]; then
+    set -a
+    source "$PROJECT_ROOT/.env"
+    set +a
+fi
 
-MODEL_FILE="${HF_FILE:-qwen2.5-coder-1.5b-instruct-q4_k_m.gguf}"
+MODEL_FILE="${HF_FILE:-qwen2.5-coder-7b-instruct-q4_k_m.gguf}"
 MODEL_PATH="$HOME/models/$MODEL_FILE"
 
 HOST="${LLM_SERVER_HOST:-0.0.0.0}"

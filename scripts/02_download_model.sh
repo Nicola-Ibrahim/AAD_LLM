@@ -10,11 +10,15 @@ export PYTHONWARNINGS="ignore"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Auto-load environment variables
-source "$SCRIPT_DIR/00_load_env.sh" 2>/dev/null || true
+# Auto-load environment variables from .env if present
+if [ -r "$PROJECT_ROOT/.env" ]; then
+    set -a
+    source "$PROJECT_ROOT/.env"
+    set +a
+fi
 
-MODEL_REPO="${1:-${HF_REPO:-Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF}}"
-MODEL_FILE="${2:-${HF_FILE:-qwen2.5-coder-1.5b-instruct-q4_k_m.gguf}}"
+MODEL_REPO="${1:-${HF_REPO:-Qwen/Qwen2.5-Coder-7B-Instruct-GGUF}}"
+MODEL_FILE="${2:-${HF_FILE:-qwen2.5-coder-7b-instruct-q4_k_m.gguf}}"
 TARGET_DIR="$HOME/models"
 TARGET_PATH="$TARGET_DIR/$MODEL_FILE"
 

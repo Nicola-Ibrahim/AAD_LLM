@@ -65,6 +65,7 @@ def run_evolution_for_problem(
     iterations: int = 10,
     noise_std: float = 0.0,
     log: bool = False,
+    output_dir: str | Path = "generated_algorithms",
 ) -> LLaMEA:
     """
     Run LLaMEA evolution to synthesize an optimization algorithm for a single BBOB problem.
@@ -114,14 +115,15 @@ def run_evolution_for_problem(
         output_format_prompt=FORMAT_PROMPT,
         experiment_name=experiment_name,
         elitism=True,
-        log=log,
+        log=False,  # Set log=False initially to prevent default exp-* folder creation
     )
 
     # 4. Inject custom logger to keep outputs organized
     if log:
-        base_dir = Path("logs") / experiment_name
+        base_dir = Path(output_dir) / experiment_name
         optimizer.logger = ProblemLogger(base_dir=base_dir, name=experiment_name)
         optimizer.llm.set_logger(optimizer.logger)
+        optimizer.log = True
 
     # 5. Run the evolution loop
     optimizer.run()
@@ -167,6 +169,7 @@ def run_evolution_for_problems(
     verbose: bool = True,
     log: bool = False,
     budget: int | None = None,
+    output_dir: str | Path = "generated_algorithms",
 ) -> list[ProblemEvolutionResult]:
     """
     Run LLaMEA optimization algorithm evolution across a list of pre-built BBOBProblem instances.
@@ -211,6 +214,7 @@ def run_evolution_for_problems(
                 iterations=iterations,
                 noise_std=noise_std,
                 log=log,
+                output_dir=output_dir,
             )
 
             best_sol = optimizer.best_so_far
