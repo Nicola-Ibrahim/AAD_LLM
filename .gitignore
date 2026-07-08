@@ -85,3 +85,9 @@ celerybeat.pid
 /.agent/
 /.specify/
 /.devops/
+
+# Experiments & Server Logs
+/experiments/*
+!/experiments/.gitkeep
+/logs/*
+!/logs/.gitkeep
