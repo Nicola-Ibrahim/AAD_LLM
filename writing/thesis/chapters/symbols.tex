@@ -1,0 +1,63 @@
+%-------------------------------------------------------------------------------
+% List of symbols
+%-------------------------------------------------------------------------------
+
+% This chapter lists the mathematical symbols used throughout the thesis.
+
+\chapter{List of Symbols}\label{chap:symbols}
+
+\begin{flushleft}
+  \rarray{1.3}
+  \begin{longtable}{L{4.0cm}L{10.0cm}}
+    \multicolumn{2}{l}{\textbf{Spaces and Dimensions}} \\
+    $\calX$ & Decision space (feasible region of design variables)\\
+    $\calY$ & Objective space\\
+    $\R^n$ & $n$-dimensional Euclidean space\\
+    $n, D$ & Dimension of the decision space\\
+    $m$ & Number of objectives\\
+    \addlinespace[10pt]
+
+    \multicolumn{2}{l}{\textbf{Decisions and Objectives}} \\
+    $\vect{x}$ & Decision vector in the decision space $\calX$\\
+    $\vect{y}$ & Objective vector $\vect{f}(\vect{x})$ in the objective space $\calY$\\
+    $\vect{y}^{\star}$ & User‑specified target objective vector\\
+    $\vect{f}(\vect{x})$ & Vector of objective functions evaluated at $\vect{x}$\\
+    $\mathcal{E}$ & Outcome evaluator (true operator or physical simulator)\\
+    $g_j(\vect{x}), h_k(\vect{x})$ & Inequality and equality constraint functions\\
+    $\preceq$ & Pareto dominance operator\\
+    \addlinespace[10pt]
+
+    \multicolumn{2}{l}{\textbf{Inverse Modeling and Generation}} \\
+    $q_{\theta}(\vect{x}\mid \vect{y})$ & Learned conditional proposal distribution\\
+    $\widehat{\vect{x}}^{(k)}$ & $k$-th candidate decision predicted by the inverse model\\
+    $K$ & Number of candidate decisions generated (candidate budget)\\
+    $\vect{z}$ & Latent variable in generative models\\
+    $d_z$ & Latent dimensionality\\
+    $p(\vect{z})$ & Prior distribution over latent variables\\
+    $\pi_k, \boldsymbol{\mu}_k, \boldsymbol{\Sigma}_k$ & Parameters of the $k$-th mixture component (MDN)\\
+    $\alpha$ & Dirichlet concentration parameter or PIT rank threshold\\
+    $\theta, \phi$ & Parameters of the proposal and inference models\\
+    $\lambda, \beta$ & Regularization and KL-weighting coefficients\\
+    $\eta$ & Learning rate for parametric models\\
+    $\tau$ & Dynamic Coherence Threshold (safety limit for interpolation)\\
+    $\delta$ & Trust-region radius for bounded optimization\\
+    $\Omega$ & Robust search boundary or regularization functional\\
+    $T, T_x, T_y$ & Normalization maps and bijective transformations\\
+    \addlinespace[10pt]
+
+    \multicolumn{2}{l}{\textbf{Evaluation and Assessment}} \\
+    $\mathcal{D}$ & Dataset of sampled pairs $(\vect{x}_i,\vect{y}_i)$\\
+    $N$ & Number of samples in the archive\\
+    $\mathcal{L}(\cdot, \cdot), d(\cdot, \cdot)$ & Deployment discrepancy and distance functions\\
+    $\vect{r}^{(k)}$ & Residual vector for the $k$-th candidate ($\widehat{\vect{y}}^{(k)} - \vect{y}^{\star}$)\\
+    $\bar{\vect{r}}$ & Mean residual vector of a candidate cloud\\
+    $s^{(k)}, s_{\min}$ & Individual and best-shot attainment scores\\
+    $\widehat{F}(t)$ & Empirical CDF of scores (Attainment ECDF)\\
+    $\widehat{G}(t)$ & Empirical CDF of PIT ranks (Calibration Curve)\\
+    $z_{i,d}$ & Probability Integral Transform (PIT) value\\
+    $\mathrm{MACE}$ & Mean Absolute Calibration Error (reliability diagnostic)\\
+    $\mathrm{CRPS}$ & Continuous Ranked Probability Score (probabilistic accuracy)\\
+    $\mathrm{MAE}, \mathrm{MD}$ & Accuracy and dispersion components of CRPS\\
+    $\sigma$ & Standard deviation or model-specific bandwidth\\
+  \end{longtable}
+\end{flushleft}

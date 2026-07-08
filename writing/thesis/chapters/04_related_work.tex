@@ -1,0 +1,50 @@
+%-------------------------------------------------------------------------------
+% Chapter 3: Related Work
+%-------------------------------------------------------------------------------
+
+\chapter{Related Work}\label{chap:research}
+
+% 1- This paragraph introduces continuous black-box optimization and establishes BBOB and CMA-ES as the standard deterministic benchmarks.
+To properly contextualize the operational environment of this thesis, it is necessary to examine the fundamental domain of continuous black-box optimization, the algorithmic vulnerabilities exposed by stochastic noise, and the recent conceptual shift toward Automated Algorithm Design. Continuous black-box optimization focuses on identifying the global minimum of a function $f: \mathbb{R}^D \rightarrow \mathbb{R}$ where the analytical gradient is unavailable. In standard literature, algorithms designed for these problems are rigorously evaluated against the deterministic Black-Box Optimization Benchmark (BBOB) suite \cite{Hansen2010}. Crucially, the BBOB framework standardized the use of empirical cumulative distribution functions (ECDFs) to characterize algorithm performance, measuring runtime by the number of function evaluations required to achieve a specific target precision ($\Delta f_t$). Over recent decades, human engineering has yielded robust heuristics to navigate these deterministic spaces, most notably the Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001} and the Nelder-Mead simplex algorithm \cite{Nelder1965}.
+
+% 2- This paragraph explains the impact of Additive Gaussian and other noise profiles on traditional optimization and the human-authored limitations of existing stochastic mitigations.
+While human-engineered algorithms excel on deterministic functions, practical industrial applications---such as extracting parameters from physical hardware---are inherently stochastic. Objective evaluations in these environments are frequently corrupted by sensor inaccuracies, which are systematically modeled in continuous optimization testbeds, most notably the BBOB-noisy suite \cite{Hansen2009Noisy}, through distinct statistical distributions. As established in foundational surveys on uncertain environments \cite{Jin2005}, the three most prevalent noise profiles utilized in optimization literature include: Uniform Noise, which simulates digital quantization or truncation errors; Cauchy Noise (a heavy-tailed distribution), which mimics rare but extreme anomalies like sudden sensor failures; and Additive Gaussian Noise, which represents the continuous, ubiquitous thermal and electrical interference found in physical hardware. In these turbulent environments, traditional optimization heuristics frequently collapse, as a fundamentally poor candidate solution may temporarily yield a high fitness score purely due to a favorable statistical anomaly, causing algorithms to chase false gradients.
+
+% 3- This paragraph covers the transition to Automated Algorithm Design, detailing the foundational success of FunSearch in program-based mathematical discovery.
+To eliminate this human bottleneck, the field is currently experiencing a paradigm shift towards Automated Algorithm Design (AAD). While early AAD frameworks relied on Genetic Programming \cite{Burke2013} or modular human-authored spaces \cite{vanRijn2016}, the immense size of the search spaces or strict boundaries frequently constrained discovery. This barrier has been recently overcome by the integration of Large Language Models, which were validated for strict mathematical discovery by Romera-Paredes et al. \cite{Romera2023}. Their framework, FunSearch, addresses the inherent tendency of LLMs toward hallucination by pairing the model with a systematic, closed-loop evaluator. By constraining the LLM to evolve the critical logical components of a program skeleton---rather than attempting to generate raw numerical solutions---the authors demonstrated that the model could synthesize novel, verifiable algorithmic constructions that surpass human-engineered baselines. 
+
+% 4- This paragraph surveys alternative LLM-optimization modalities and justifies the need for self-debugging and reflective feedback loops.
+Following this breakthrough, subsequent literature explored alternative modalities for utilizing LLMs in optimization pipelines. For instance, the EvoLLM framework \cite{Lange2024} established that an LLM can act directly as an evolutionary numerical sampler to predict coordinate distributions; however, this architecture lacks the interpretability of reusable code and incurs heavy prompt-token footprints. Conversely, frameworks such as the Evolution of Heuristics (EoH) \cite{Liu2024} and Algorithm Evolution using LLMs (AEL) \cite{AEL2024} isolate the LLM's generative role to writing reusable code blocks, but their validations remain fundamentally confined to discrete, combinatorial tasks (such as the Traveling Salesperson Problem). Parallel advancements in language model multi-agent structures, most notably Reflexion \cite{Shinn2023} and automated self-debugging architectures \cite{Chen2023}, have confirmed that the introduction of text-based execution traces and explicit code tracebacks back to the generator model drastically improves code execution success rates by allowing the language model to reflexively intercept runtime flaws.
+
+% 5- This paragraph introduces the LLaMEA framework and states the thesis's novel contribution in applying it to stochastic, noise-heavy environments.
+Building directly upon this proven capacity for executable code generation and automated self-correction, this thesis extends the Large Language Model Evolutionary Algorithm (LLaMEA) framework \cite{LLaMEA2024}. Engineered specifically to automate the discovery of continuous black-box optimization heuristics, LLaMEA operationalizes this closed-loop concept by structuring an LLM within a $1+1$ Evolution Strategy. The framework iteratively prompts the model to generate complete, reusable Python classes, executes that code against target mathematical problems via the IOHexperimenter benchmarking suite, and subsequently feeds both runtime error tracebacks and aggregated performance metrics---specifically the Area Over the Convergence Curve (AOCC)---back into the LLM's context window to drive self-debugging and refinement. While prior studies have successfully demonstrated that LLaMEA-generated algorithms can outcompete vanilla CMA-ES on the deterministic BBOB suite, existing applications of the framework are strictly bounded to clean, noiseless functions. By systematically injecting Additive Gaussian Noise into the execution sandbox, this thesis pioneers a novel application of the LLaMEA paradigm, directly addressing the underexplored challenge of automating heuristic design for heavily stochastic, real-world simulated environments.
+
+
+% ==============================================================================
+% EXPANSION ROADMAP FOR THE 10+ PAGE DEEP DIVE (TO BE CODED AS CONTENT LATER)
+% ==============================================================================
+%
+% % FUTURE SECTION 1: Deep Dive on Traditional Paradigms (To expand Para 1)
+% % - Placeholder for formal mathematical definitions of the continuous problem f(x).
+% % - Placeholder for a LaTeX table mapping out the 24 BBOB functions grouped into their 5 landscape classes.
+% % - Placeholder for a sub-section on ECDF aggregation physics and target precision math.
+%
+% % FUTURE SECTION 2: Mathematical Analysis of Stochastic Interference (To expand Para 2)
+% % - Placeholder to insert LaTeX math blocks with full PDFs (Probability Density Functions) for Uniform, Gaussian, and Cauchy distributions.
+% % - Placeholder to detail the math of Hessian corruption and gradient-chasing failures in CMA-ES.
+% % - Placeholder for an evaluation of standard human mitigations (e.g., re-sampling coefficients, margin thresholds).
+%
+% % FUTURE SECTION 3: The Mechanical Evolution of Early AAD Frameworks (To expand Para 3)
+% % - Placeholder to contrast Genetic Programming syntax constraints (AST bloat) with LLM programmatic generations.
+% % - Placeholder to analyze the FunSearch database structure and "Program Skeleton" parsing constraints.
+%
+% % FUTURE SECTION 4: Comparative Breakdown of Alternative Modalities (To expand Para 4)
+% % - Placeholder for a comprehensive comparison matrix table matching: EvoLLM vs. EoH vs. AEL vs. LLaMEA.
+% % - Placeholder to map out token economics and runtime black-box costs of numerical sampling methods.
+% % - Placeholder to break down Reflexion multi-agent tracking schemas and AST validation loops.
+%
+% % FUTURE SECTION 5: Operational Limits and Boundaries of LLaMEA 2024 (To expand Para 5)
+% % - Placeholder for formal LaTeX pseudocode explaining LLaMEA's (1+1) Evolution Strategy parent-child swapping criteria.
+% % - Placeholder to explicitly document the "Deterministic Ceiling" gap, justifying why clean-trained models fail when dropped into non-zero noise levels.
+%
+% ==============================================================================
