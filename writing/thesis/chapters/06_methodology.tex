@@ -1,0 +1,52 @@
+%-------------------------------------------------------------------------------
+% Chapter 4: Methodology
+%-------------------------------------------------------------------------------
+
+\chapter{Methodology}\label{chap:methodology}
+
+This chapter details the architectural synthesis, software orchestration, and mathematical formulation of the non-deterministic automated algorithm design pipeline implemented in this thesis. To isolate the direct impact of stochastic pressure on language model-driven heuristic synthesis, our framework tightly couples the generation capabilities of foundational language models with a rigid, noise-injected execution sandbox. The system operates as a closed-loop evolutionary cycle designed to transition Python source-code structures from deterministic assumptions to noise-resilient behaviors. The subsequent methodology outlines our environmental wrapper implementation, the multi-tiered assessment strategy designed to mitigate runaway API overhead, the database tracking layers used to capture structural code mutations, and the formal runtime security containment protocols.
+
+% ==============================================================================
+% METHODOLOGY EXPANSION ROADMAP (TO BE CODED AS CONTENT LATER)
+% ==============================================================================
+%
+% % FUTURE SECTION 4.1: Architecture of the Closed-Loop Orchestrator
+% % - Placeholder to write a flowing explanation of the three-block system:
+% %   The Generator Block (managing system prompts and LLM context state via standard APIs),
+% %   The Assessor Block (operating the execution environment), and 
+% %   The Feedback Block (translating raw compiler errors and optimization metrics into mutation cues).
+% % - Placeholder for a detailed flowchart diagram tracing the programmatic control path:
+% %   [Prompt Configuration] -> [LLM Synthesis] -> [Syntax Validation] -> [Noisy Sandbox Sandbox Evaluation] -> [SQL State Update] -> [Reflective Feedback Prompts].
+%
+% % FUTURE SECTION 4.2: Stochastic Layer Engineering and Wrapper Design
+% % - Placeholder to explain how you intercept standard function evaluations inside IOHexperimenter.
+% % - Detail the software logic of the stochastic wrapper: how it receives a candidate array 'x', 
+% %   requests the clean baseline objective evaluation f(x), samples from a randomized 
+% %   distribution seed, and applies the parameter-controlled Additive Gaussian deviation factor.
+% % - Placeholder to define how the seed state is locked or systematically rotated across iterations 
+% %   to prevent the LLM from simply overfitting to a single static noise signature.
+%
+% % FUTURE SECTION 4.3: The Representative Gauntlet (Multi-Tiered Assessment)
+% % - Placeholder to detail your token-saving strategy and cost optimization logic.
+% % - Explain the two-phase validation structure: 
+% %   Phase 1: Evolving mutations against a compressed, representative subset of functions 
+% %   representing the primary topological classes (Separable, Moderate, High, Multi-modal).
+% %   Phase 2: Post-evolution scaling, where the finalized champion candidate undergoes deep, 
+% %   expensive validation across the broad spectrum of functions, dimensional limits, and instances.
+%
+% % FUTURE SECTION 4.4: Evolutionary Database Schemas and State Tracking
+% % - Placeholder to formalize the backend persistence layer. Detail your local SQLite layout.
+% % - Provide the exact database schema definitions. Document the tracking table columns: 
+% %   Generation ID, Evolved Source Code String, Execution Convergence Scores, and Prompt Payload Logs.
+% % - Explain how this historical tracking mechanism enables behavioral tracking and code analysis 
+% %   across 30 distinct generations, allowing for white-box structural inspection later.
+%
+% % FUTURE SECTION 4.5: Sandbox Security Containment and Runtime Safeguards
+% % - Placeholder to discuss risk management regarding executing unverified, LLM-generated Python scripts.
+% % - Detail the isolation layer architecture: running evaluation sandboxes inside constrained subprocess 
+% %   wrappers or lightweight container utilities.
+% % - Document the automatic execution recovery logic: how the orchestrator catches infinite loops, 
+% %   wasting of system resource allocations, or segmentation faults, intercepts the traceback dump, 
+% %   and securely routes it back to the feedback block as a severe penalty payload.
+%
+% ==============================================================================

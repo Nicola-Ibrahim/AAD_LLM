@@ -1,0 +1,61 @@
+%-------------------------------------------------------------------------------
+% Background
+%-------------------------------------------------------------------------------
+
+
+% The fundamental tools, mathematics, and libraries that are already industry standards. The reader must understand this before they can read the literature.
+
+
+\chapter{Background}\label{chap:Background}
+
+
+
+This chapter provides the mathematical definitions, standard benchmarks, and architectural frameworks necessary to establish the foundation of this research. It formalizes the principles of continuous black-box optimization, details the mathematical construction of stochastic noise profiles, and introduces the underlying mechanisms of language model-driven evolutionary algorithms.
+
+%-------------------------------------------------------------------------------
+\section{Continuous Black-Box Optimization and Benchmarking}\label{sec:bg_optimization}
+
+% %-----------------------------------------------------------------------------
+% % THESIS EXPANSION NOTE (Target Length: 2 - 3 Pages)
+% % - Subsection 2.1.1: Provide the formal math definition for minimizing f(x).
+% %   State that gradients are mathematically unavailable or too expensive.
+% % - Subsection 2.1.2: Formally introduce the BBOB suite. Explain how it divides 
+% %   the 24 functions into 5 classes (Separable, Moderate, High, Multimodal global,
+% %   Multimodal local structure). 
+% % - Add a LaTeX table mapping out these 5 BBOB function classes.
+% %-----------------------------------------------------------------------------
+
+Continuous black-box optimization focuses on identifying the global minimum of a function $f: \mathbb{R}^D \rightarrow \mathbb{R}$ where the analytical gradient is unavailable or computationally prohibitive to extract. In standardized literature, optimization heuristics designed for these spaces are rigorously evaluated against the Black-Box Optimization Benchmark (BBOB) suite \cite{Hansen2010}. Crucially, the benchmark standardizes the use of empirical cumulative distribution functions (ECDFs) to characterize algorithm runtime by measuring the total number of function evaluations required to achieve a specific target precision ($\Delta f_t$). Traditional human engineering has yielded standard heuristics to navigate these spaces, ranging from local search rules like the Nelder-Mead simplex algorithm \cite{Nelder1965} to highly sophisticated statistical adaptation loops like the Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001}.
+
+%-------------------------------------------------------------------------------
+\section{Mathematical Formulations of Stochastic Noise}\label{sec:bg_noise}
+
+% %-----------------------------------------------------------------------------
+% % THESIS EXPANSION NOTE (Target Length: 2 - 3 Pages)
+% % - Write down the full probability density functions (PDFs) for Uniform, 
+% %   Gaussian, and Cauchy noise distributions using formal LaTeX math blocks.
+% % - Detail how noise scales. Define what a persistent "noise floor" means 
+% %   versus signal-dependent noise.
+% %-----------------------------------------------------------------------------
+
+While standard continuous testbeds evaluate heuristics within deterministic limits, real-world industrial environments are fundamentally non-deterministic. Objective evaluations are frequently corrupted by operational anomalies, systematically modeled through distinct statistical distributions in optimization literature \cite{Jin2005}. The three most prevalent noise profiles include: Uniform Noise, which simulates digital quantization or truncation limits; Cauchy Noise, a heavy-tailed distribution that mimics severe anomalies like immediate sensor failures; and Additive Gaussian Noise, represented as:
+\begin{equation}\label{eq:gaussian_noise}
+    f_{noisy}(x) = f_{clean}(x) + \epsilon, \quad \text{where } \epsilon \sim \mathcal{N}(0, \sigma^2)
+\end{equation}
+Equation~\ref{eq:gaussian_noise} models the continuous background thermal and electrical interference that persists independently of a signal's true magnitude. In these environments, traditional search rules frequently collapse because a poorly positioned candidate solution can score a false high fitness value purely through a favorable statistical anomaly, misleading the tracking path.
+
+%-------------------------------------------------------------------------------
+\section{Automated Algorithm Design and Language Models}\label{sec:bg_aad_llms}
+
+% %-----------------------------------------------------------------------------
+% % THESIS EXPANSION NOTE (Target Length: 2 - 3 Pages)
+% % - Explain the evolutionary computing framework of "hyper-heuristics".
+% %   Contrast this with normal heuristics (tuning numbers vs generating logic).
+% % - Subsection 2.3.1: Define the LLaMEA architecture's base configuration.
+% %   Detail how it structures code generation as a (1+1) Evolution Strategy 
+% %   composed of a clear Parent algorithm and an evolving Child mutant.
+% %-----------------------------------------------------------------------------
+
+To bypass the intensive labor required by human experts to manually code custom statistical defenses for every noisy landscape, the field utilizes Automated Algorithm Design (AAD). Modern AAD architectures have moved past historical genetic programming limits by directly harnessing Large Language Models (LLMs) to synthesize complete, reusable source code structures. 
+
+This thesis relies specifically on the Large Language Model Evolutionary Algorithm (LLaMEA) framework \cite{LLaMEA2024}. Operationalized as a $(1+1)$ Evolution Strategy, the framework functions by managing a closed-loop system where an LLM acts as the generator, outputting complete Python classes containing heuristic search logic. These generated programs are executed against a target problem suite, and the resulting performance metrics and any execution runtime flaws are gathered and formatted back into the language model's context window. This architecture enables a completely automated loop capable of debugging, expanding, and optimizing structural code traits without human intervention.
