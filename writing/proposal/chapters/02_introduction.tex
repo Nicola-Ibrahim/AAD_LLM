@@ -4,38 +4,14 @@
 
 \chapter{Introduction and Motivation}\label{chap:intro}
 
-% [EXPANSION ROADMAP: THE BROAD CONTEXT]
-% FUTURE CONTENT: Elaborate on the "AI for Science" paradigm. Discuss the transition from 
-% AI as a tool for text/image generation to AI as a foundational researcher capable of 
-% scientific discovery. This justifies the "Autonomous" nature of your proposed pipeline.
-
-
 Historically, the creation of efficient continuous optimization algorithms required rigid mathematical derivations crafted by human experts over years of trial and error. The field is currently experiencing a paradigm shift towards Automated Algorithm Design (AAD), a methodology that transforms Large Language Models (LLMs) into autonomous algorithmic inventors. Recent high-profile literature has definitively proven that LLMs, when structured within a rigorous evolutionary loop, possess the semantic and mathematical reasoning necessary to discover novel programmatic solutions that can rival or surpass human-engineered methodologies \cite{Romera2023}. Instead of prompting an AI to output a static answer, modern AAD architectures construct an automated ``discovery loop.'' The system prompts the LLM to write executable Python code for a novel optimization solver, which is then executed in a secure sandbox and scored against a target empirical metric. 
-
-
-% [EXPANSION ROADMAP: THE FRAMEWORK ENGINE]
-% FUTURE CONTENT: Add a formal description of the LLaMEA architecture. 
-% Briefly explain: (1) The Generation Prompt, (2) The Sandbox Evaluator, and (3) The Feedback Loop.
-% This primes the reader for the technical details in Chapter 3.
 
 To operationalize this discovery loop, this research leverages the recent Large Language Model Evolutionary Algorithm (LLaMEA) framework \cite{LLaMEA2024}. The quantitative results of the sandbox evaluations---alongside any runtime errors or performance penalties---are fed directly back to the LLM via LLaMEA's architecture. This iterative feedback loop allows the AI to autonomously debug, mutate, and evolve its own mathematical logic. While AAD frameworks like LLaMEA show immense promise, their application to unpredictable, real-world stochastic environments remains a critical open challenge. This thesis directs this LLM-driven pipeline at a major industrial bottleneck: discovering physical parameters from noisy sensor data. Consider Electric Vehicle (EV) manufacturing, where engineers rely on continuous black-box optimization to extract exact physical parameters (e.g., internal electrical resistance) from battery sensor data. Real-world sensors are cheap and prone to electrical interference, producing highly stochastic data that renders the mathematical search space incredibly jagged and deceptive.
 
+To fully comprehend the depth of this industrial bottleneck, it is necessary to examine the underlying behavior of Battery Management Systems (BMS) in automotive environments. During rapid charging and discharging cycles, cheap embedded hardware sensors must capture transient current and thermal signals to dynamically predict state-of-charge curves. Because these physical signals are continuously corrupted by electromagnetic interference from the vehicle's powertrain and quantization rounding constraints within the microcontroller, the resulting empirical fitness landscape loses all smoothness. Traditional analytical calculus paths or deterministic assumptions cannot calculate reliable directional paths across these jagged surfaces, as the true global parameters are masked by severe statistical shifts that vary unpredictably depending on real-time operational temperatures.
 
-% [EXPANSION ROADMAP: THE INDUSTRIAL CASE STUDY]
-% FUTURE CONTENT: Dedicate a section to the "EV Battery Parameter Extraction" use case. 
-% Explain why real-world sensor data is "jagged" and why gradients are impossible to compute analytically.
+Traditional optimization heuristics, such as the widely utilized Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001}, are overwhelmingly designed for deterministic, clean landscapes. When applied to heavily noisy environments, these traditional algorithms frequently break down---chasing false statistical spikes and failing to converge without extensive, manually engineered statistical interventions \cite{Hansen2009Noisy}. Manually designing a robust mathematical algorithm to handle this uncertainty is notoriously labor-intensive. This thesis bypasses the human bottleneck entirely. By applying the LLaMEA framework to heavily stochastic, simulated landscapes, we task an LLM with autonomously generating, testing, and discovering the specific mathematical mechanisms (e.g., dynamic smoothing, momentum, adaptive step sizes) required to cut through real-world sensor noise.
 
-% [EXPANSION ROADMAP: THE GAP AND CONTRIBUTIONS]
-% FUTURE CONTENT: Clearly define your "Thesis Contribution." 
-% List: (1) The Additive Gaussian Noise Sandbox, (2) The evaluation of LLM robustness, 
-% and (3) The discovery of noise-resilient metaheuristic mechanisms.
+Consequently, the core contribution of this thesis is divided into three distinct methodological phases designed to establish a clear indicator of language model adaptability under severe uncertainty. First, we establish a robust non-deterministic execution playground by building a dynamic layer capable of embedding controlled statistical profiles onto standard benchmark problems. Second, we evaluate the generative model's capacity to modify Python-based metaheuristic class structures when exposed exclusively to these corrupted landscapes over multiple evolutionary cycles. Finally, this research maps out a rigorous cross-environment robustness test, validating our noise-trained champion models directly against equivalents evolved under clean, deterministic criteria to isolate the structural logic an AI independently invents to protect its search path from deception.
 
-
-Traditional optimization heuristics, such as the widely utilized Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001}, are overwhelmingly designed for deterministic, clean landscapes. When applied to heavily noisy environments, these traditional algorithms frequently break down---chasing false statistical spikes and failing to converge without extensive, manually engineered statistical interventions \cite{Hansen2009}. Manually designing a robust mathematical algorithm to handle this uncertainty is notoriously labor-intensive. This thesis bypasses the human bottleneck entirely. By applying the LLaMEA framework to heavily stochastic, simulated landscapes, we task an LLM with autonomously generating, testing, and discovering the specific mathematical mechanisms (e.g., dynamic smoothing, momentum, adaptive step sizes) required to cut through real-world sensor noise.
-
-
-
-% [EXPANSION ROADMAP: THESIS ROADMAP]
-% FUTURE CONTENT: Add the "Signposting" paragraph.
-% Structure: "Chapter 2 reviews the state of research... Chapter 3 details the methodology...
-% Chapter 4 presents the experimental results... Chapter 5 concludes."
+The remainder of this thesis proposal is organized as follows. Chapter \ref{chap:research} presents an exhaustive review of current black-box optimization domains, stochastic mitigation baselines, and the state of generative code architectures. Chapter \ref{chap:objectives} outlines our core research questions and formalizes our three experimental milestones, while subsequent blocks detail the software pipeline architecture, scoping limits, and provisional timeline for final implementation.
