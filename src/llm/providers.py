@@ -17,7 +17,7 @@ class Provider(StrEnum):
     LMSTUDIO = "lmstudio"
 
 
-def build_llm(provider: Provider | str, **kwargs):
+def get_llm_client(provider: Provider | str, **kwargs):
     """
     Factory: returns a native LLaMEA LLM instance for the given provider name.
     Automatically retrieves configuration and keys from environment variables.
@@ -65,4 +65,4 @@ def build_llm(provider: Provider | str, **kwargs):
             raise ValueError(f"Unknown provider '{provider}'. Choose from: {list(Provider)}")
 
 
-__all__ = ["build_llm", "Provider"]
+__all__ = ["get_llm_client", "Provider"]

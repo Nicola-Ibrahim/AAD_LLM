@@ -1,8 +1,10 @@
+import time
 import traceback
 from typing import Any
 import numpy as np
 from llamea import Solution
 from problems.bbob import BBOBProblem
+from func_timeout import FunctionTimedOut
 from core.executor import AlgorithmExecutor
 
 
@@ -48,7 +50,13 @@ class Evaluator:
         self.executor = AlgorithmExecutor(timeout_seconds=self.timeout_seconds)
 
     def _compute_metrics_and_feedback(
-        self, algorithm_returned_fitness: float, algorithm_name: str
+        self,
+        algorithm_returned_fitness: float,
+        algorithm_name: str,
+        runtime_seconds: float,
+        evaluations_used: int,
+        code_lines: int,
+        code_length: int,
     ) -> tuple[float, str, dict[str, Any]]:
         """
         Compute final error, fitness score, feedback message, and metadata dictionary.
@@ -62,16 +70,34 @@ class Evaluator:
             "Improve convergence speed and resilience to minimize the final error."
         )
 
+        budget_consumed_pct = (evaluations_used / self.budget * 100) if self.budget > 0 else 0.0
+        relative_error = (final_error / abs(true_optimum)) if true_optimum != 0.0 else final_error
+        evals_per_second = (evaluations_used / runtime_seconds) if runtime_seconds > 0.0 else 0.0
+        error_per_evaluation = (
+            (final_error / evaluations_used) if evaluations_used > 0 else float("inf")
+        )
+        converged = final_error < 1e-6
+
         metadata = {
             "problem_id": self.problem.problem_id,
             "dim": self.problem.dim,
             "noise_std": self.noise_std,
             "instance_id": self.problem.instance_id,
             "true_optimum": true_optimum,
-            "algorithm_returned_fitness": algorithm_returned_fitness,
+            "raw_fitness": algorithm_returned_fitness,
             "final_error": final_error,
             "algorithm_name": algorithm_name,
             "timed_out": False,
+            "runtime_seconds": runtime_seconds,
+            "evaluations_used": evaluations_used,
+            "budget_consumed_pct": budget_consumed_pct,
+            "relative_error": relative_error,
+            "evals_per_second": evals_per_second,
+            "error_per_evaluation": error_per_evaluation,
+            "converged": converged,
+            "convergence_threshold": 1e-6,
+            "code_lines": code_lines,
+            "code_length": code_length,
         }
 
         # LLaMEA expects a fitness score where higher is better.
@@ -117,6 +143,13 @@ class Evaluator:
         solution : Solution
             The modified solution object populated with fitness scores and feedback.
         """
+        # Compute static code complexity metrics
+        code_lines = len(solution.code.splitlines())
+        code_length = len(solution.code)
+
+        # Reset evaluations counter to ensure we start at 0 for this candidate algorithm run
+        self.problem.reset()
+        start_time = time.perf_counter()
         try:
             # --- 1. Compile & Execute candidate run with timeout protection ---
             problem_fn = self._noisy_problem_fn if self.noise_std > 0.0 else self.problem
@@ -127,14 +160,26 @@ class Evaluator:
                 problem=problem_fn,
                 budget=self.budget,
             )
+            elapsed_time = time.perf_counter() - start_time
+            evals_used = self.problem._clean_problem.state.evaluations
 
             # --- 2. Calculate metrics, feedback, and metadata ---
             fitness_score, feedback, metadata = self._compute_metrics_and_feedback(
-                algorithm_returned_fitness, solution.name
+                algorithm_returned_fitness,
+                solution.name,
+                elapsed_time,
+                evals_used,
+                code_lines,
+                code_length,
             )
 
-        except Exception as e:
-            if type(e).__name__ == "FunctionTimedOut":
+        except (Exception, FunctionTimedOut) as e:
+            elapsed_time = time.perf_counter() - start_time
+            evals_used = self.problem._clean_problem.state.evaluations
+            budget_consumed_pct = (evals_used / self.budget * 100) if self.budget > 0 else 0.0
+            evals_per_second = (evals_used / elapsed_time) if elapsed_time > 0.0 else 0.0
+
+            if isinstance(e, FunctionTimedOut):
                 fitness_score = float("-inf")
                 feedback = (
                     f"Execution failed: Your algorithm exceeded the {self.timeout_seconds}-second time limit. "
@@ -146,10 +191,23 @@ class Evaluator:
                     "noise_std": self.noise_std,
                     "instance_id": self.problem.instance_id,
                     "true_optimum": self.problem.true_optimum,
-                    "algorithm_returned_fitness": float("inf"),
+                    "raw_fitness": float("inf"),
                     "final_error": float("inf"),
                     "algorithm_name": solution.name,
                     "timed_out": True,
+                    "runtime_seconds": elapsed_time,
+                    "evaluations_used": evals_used,
+                    "budget_consumed_pct": budget_consumed_pct,
+                    "relative_error": float("inf"),
+                    "evals_per_second": evals_per_second,
+                    "error_per_evaluation": float("inf"),
+                    "converged": False,
+                    "convergence_threshold": 1e-6,
+                    "code_lines": code_lines,
+                    "code_length": code_length,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "error_traceback": None,
                 }
             else:
                 fitness_score = float("-inf")
@@ -164,10 +222,23 @@ class Evaluator:
                     "noise_std": self.noise_std,
                     "instance_id": self.problem.instance_id,
                     "true_optimum": self.problem.true_optimum,
-                    "algorithm_returned_fitness": float("inf"),
+                    "raw_fitness": float("inf"),
                     "final_error": float("inf"),
                     "algorithm_name": solution.name,
                     "timed_out": False,
+                    "runtime_seconds": elapsed_time,
+                    "evaluations_used": evals_used,
+                    "budget_consumed_pct": budget_consumed_pct,
+                    "relative_error": float("inf"),
+                    "evals_per_second": evals_per_second,
+                    "error_per_evaluation": float("inf"),
+                    "converged": False,
+                    "convergence_threshold": 1e-6,
+                    "code_lines": code_lines,
+                    "code_length": code_length,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "error_traceback": traceback.format_exc(),
                 }
 
         # Set evaluation outcomes on the solution object

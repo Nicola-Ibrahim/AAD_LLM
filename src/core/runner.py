@@ -13,10 +13,16 @@ from problems.bbob import BBOBProblem
 from llm.prompts import TASK_PROMPT_CLEAN, TASK_PROMPT_NOISY, EXAMPLE_PROMPT, FORMAT_PROMPT
 from core.evaluator import Evaluator
 
+
 # Improve Solution object string formatting to avoid raw memory addresses in logs
 def _solution_repr(self: Solution) -> str:
-    fit_str = f"{self.fitness:.6e}" if hasattr(self, "fitness") and isinstance(self.fitness, (int, float)) else "N/A"
+    fit_str = (
+        f"{self.fitness:.6e}"
+        if hasattr(self, "fitness") and isinstance(self.fitness, (int, float))
+        else "N/A"
+    )
     return f"Solution(name='{self.name}', fitness={fit_str})"
+
 
 Solution.__repr__ = _solution_repr
 Solution.__str__ = _solution_repr
@@ -124,14 +130,20 @@ def run_evolution_for_problem(
     best_sol = optimizer.best_so_far
     if best_sol is not None:
         meta = getattr(best_sol, "metadata", {})
-        returned_val = meta.get("algorithm_returned_fitness", "N/A")
+        returned_val = meta.get("raw_fitness", "N/A")
         true_opt = meta.get("true_optimum", "N/A")
         final_err = meta.get("final_error", getattr(best_sol, "fitness", "N/A"))
 
         err_str = f"{final_err:.6e}" if isinstance(final_err, (int, float)) else str(final_err)
-        val_str = f"{returned_val:.6f}" if isinstance(returned_val, (int, float)) else str(returned_val)
+        val_str = (
+            f"{returned_val:.6f}" if isinstance(returned_val, (int, float)) else str(returned_val)
+        )
         opt_str = f"{true_opt:.6f}" if isinstance(true_opt, (int, float)) else str(true_opt)
-        fit_str = f"{best_sol.fitness:.6e}" if hasattr(best_sol, "fitness") and isinstance(best_sol.fitness, (int, float)) else "N/A"
+        fit_str = (
+            f"{best_sol.fitness:.6e}"
+            if hasattr(best_sol, "fitness") and isinstance(best_sol.fitness, (int, float))
+            else "N/A"
+        )
 
         print("\n" + "=" * 65)
         print(f"=== BBOB-{problem_id} Evolution Best Solution Summary ({mode.upper()}) ===")
@@ -139,7 +151,7 @@ def run_evolution_for_problem(
         print(f"  Returned Objective Value:  {val_str}")
         print(f"  True Global Optimum:       {opt_str}")
         print(f"  Final Absolute Error:       {err_str} (Target = 0.0)")
-        print(f"  LLaMEA Maximization Score: {fit_str} (Fitness = -Error)")
+        print(f"  Negated Error (LLaMEA Fitness): {fit_str} [= -|error|, higher is better]")
         print("=" * 65 + "\n")
 
     # Return the optimizer instance so the caller can access optimizer.run_history and optimizer.best_so_far
@@ -200,9 +212,6 @@ def run_evolution_for_problems(
                 noise_std=noise_std,
                 log=log,
             )
-
-            # Reset the problem so it can accept more evaluations in the future
-            problem.reset()
 
             best_sol = optimizer.best_so_far
             best_error = getattr(best_sol, "metadata", {}).get("final_error", float("inf"))

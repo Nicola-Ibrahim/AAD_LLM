@@ -13,7 +13,7 @@ from llamea import LLM
 from problems.bbob import BBOBProblem
 import core.runner as runner
 from analysis.results import save_summary, print_experiment_summary
-from llm.providers import build_llm
+from llm.providers import get_llm_client
 
 # Load environment variables from .env if present
 load_dotenv()
@@ -81,7 +81,7 @@ class ExperimentConfig:
 def initialize_llm(provider: str) -> LLM:
     """Initialize the LLM provider, exiting if it fails."""
     try:
-        return build_llm(provider)
+        return get_llm_client(provider)
     except Exception as e:
         print(f"Failed to initialize LLM provider '{provider}': {e}", file=sys.stderr)
         sys.exit(1)

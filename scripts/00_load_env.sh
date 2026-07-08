@@ -22,9 +22,9 @@ fi
 
 # 1. Local LLaMA Server Configuration
 export LLM_PROVIDER="local"
-export HF_REPO="Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF"
-export HF_FILE="qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
-export LOCAL_LLM_MODEL="qwen2.5-coder-1.5b-instruct-q4_k_m"
+export HF_REPO="Qwen/Qwen2.5-Coder-7B-Instruct-GGUF"
+export HF_FILE="qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+export LOCAL_LLM_MODEL="qwen2.5-coder-7b-instruct-q4_k_m"
 export LOCAL_LLM_BASE_URL="http://localhost:1234/v1"
 export LOCAL_LLM_API_KEY="not-needed"
 

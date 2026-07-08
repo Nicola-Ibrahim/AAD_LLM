@@ -15,8 +15,6 @@ import scipy.optimize
 import scipy.stats
 
 
-
-
 def _sanitize_code(code: str) -> str:
     """
     Sanitize LLM-generated code by inserting 'pass' into empty method/function bodies
@@ -38,7 +36,9 @@ def _sanitize_code(code: str) -> str:
                 next_line = lines[j]
                 if next_line.strip():
                     next_indent = len(next_line) - len(next_line.lstrip())
-                    if next_indent > indent and not next_line.strip().startswith(("def ", "class ")):
+                    if next_indent > indent and not next_line.strip().startswith(
+                        ("def ", "class ")
+                    ):
                         is_empty_body = False
                     break
                 j += 1
@@ -212,4 +212,3 @@ class AlgorithmExecutor:
             )
 
         return float(algorithm_returned_fitness)
-

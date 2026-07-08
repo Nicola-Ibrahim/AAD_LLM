@@ -22,15 +22,36 @@ def save_summary(
         # If execution failed completely, meta might be missing,
         # but we attached it in evaluator's try-except block so it should be there.
         final_error = meta.get("final_error", float("inf"))
-        returned_fitness = meta.get("algorithm_returned_fitness", float("inf"))
+        raw_fitness = meta.get("raw_fitness", meta.get("algorithm_returned_fitness", float("inf")))
         algo_name = meta.get("algorithm_name", solution.name)
 
         iteration_entry = {
             "iteration": iteration_num,
             "algorithm": algo_name,
-            "algorithm_returned_fitness": returned_fitness,
+            "raw_fitness": raw_fitness,
             "final_error": final_error,
             "timed_out": meta.get("timed_out", False),
+            "runtime_seconds": meta.get("runtime_seconds", 0.0),
+            "evaluations_used": meta.get("evaluations_used", 0),
+            "budget_consumed_pct": meta.get(
+                "budget_consumed_pct", meta.get("budget_utilization_pct", 0.0)
+            ),
+            "relative_error": meta.get(
+                "relative_error", meta.get("normalized_error", float("inf"))
+            ),
+            "evals_per_second": meta.get("evals_per_second", 0.0),
+            "error_per_evaluation": meta.get(
+                "error_per_evaluation", meta.get("error_per_eval", float("inf"))
+            ),
+            "converged": meta.get("converged", False),
+            "convergence_threshold": meta.get(
+                "convergence_threshold", meta.get("convergence_target", 1e-6)
+            ),
+            "code_lines": meta.get("code_lines", 0),
+            "code_length": meta.get("code_length", meta.get("code_chars", 0)),
+            "error_type": meta.get("error_type", None),
+            "error_message": meta.get("error_message", None),
+            "error_traceback": meta.get("error_traceback", None),
         }
         iterations_data.append(iteration_entry)
 
