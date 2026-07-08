@@ -1,0 +1,166 @@
+%% some booleans 
+\newboolean{WorkIsConfidential}
+
+
+% % % % Language and encoding
+
+% Allow the complete utf8 character set. Be careful so save all files in utf8 encoding. This is especially important for German umlauts.
+% \usepackage[utf8]{inputenc}
+
+% Allows to add conditional text based on language
+\usepackage{iflang}
+
+% KOMA-Script offers scrhack to fix certain well-known problems with a list of packages.
+% https://tex.stackexchange.com/q/73248/7396
+\usepackage{scrhack}
+
+
+% % % % Page layout related features
+
+% Headers and footers should now be created with scrlayer-scrpage. It superseeds scrpage2 which superseeds fancyhdr.
+% See page 237 of the following documentation:
+% http://ftp.fau.de/ctan/macros/latex/contrib/koma-script/doc/scrguien.pdf
+\usepackage{scrlayer-scrpage}
+
+% Delete predefined header and footer
+\clearpairofpagestyles
+
+% When this two commands are not used, the header in the appendix shoes "Inhaltsverzeichnis" instead of "Appendix".
+% It is still unclear, why this happens.
+\renewcommand{\chaptermark}[1]{\markboth{#1}{}}
+\renewcommand{\sectionmark}[1]{\markright{-~#1}{}}
+
+\ihead{\leftmark}
+\KOMAoption{headsepline}{0.4pt}
+\cfoot[\pagemark]{}
+\ohead[]{\pagemark}
+
+% Disables header and footer in italic
+\setkomafont{pageheadfoot}{\normalfont}
+
+\usepackage[top=3.0cm, bottom=3.0cm, left=2.5cm, right=2.0cm]{geometry} %optional: includefoot
+
+
+% % % % Text layout related features
+
+% Subliminal refinements towards typographical perfection
+\usepackage{microtype}
+
+\usepackage{xspace}
+\usepackage{rotating}
+
+% It provides \textcolor{<color>}{<text>} as well as \color{<color>} to switch the color for some give text or until the end of the group/environment. You can get different shades of gray by using black!x as a color where x is a number from 0 to 100, taken as a percentage.
+\usepackage{xcolor}
+\newcommand{\inred}[1]{\xspace{\color{red} #1}\xspace} % Use this command to make annotations, which will be removed in the final document.
+
+
+% % % % Math related features
+
+% Added by Schmalenstroer. Still unclear what both packages do.
+\usepackage[italic]{mathastext}
+\usepackage{isomath}
+
+% The bm package is loaded, but you should still use \mathbf and \boldsymbol to remain compatible with MathJax.
+\usepackage{amssymb, amsmath, bm}
+
+% This package is the current package for units and outperforms siunits and similar packages
+\usepackage[output-decimal-marker=comma, exponent-product=times]{siunitx} % German notation
+% \usepackage[exponent-product=times]{siunitx} % American notation
+
+
+% % % % Source code related features
+
+% Put in source code into your document, this especially allows inline source code with \lstinline!example!, where "!" can be exchanged by any delimiter
+\usepackage{listings}
+\lstset{
+    basicstyle=\ttfamily
+}
+
+% Pseudo code
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+% Allow one-line if conditions
+\newcommand{\LineIf}[3]{ \State \algorithmicif\ {#1}\ \algorithmicthen\ {#2} \algorithmicend\ \algorithmicif }
+
+
+% % % % Image and plot related features
+
+% Use TikZ to draw images
+\usepackage{pgfplots} % Import der Plots aus Matlab
+\newlength\fheight % Plots aus Matlab immer gleich gross
+\newlength\fwidth % Plots aus Matlab immer gleich gross
+\usepackage{tikz}
+\pgfplotsset{compat=1.9}
+
+% Precompile TikZ pictures for speedup, this does not seem to work in Poolroom yet
+\usetikzlibrary{external}
+% \tikzexternalize % Activate, works only with pdflatex
+
+% Subfigure is deprecaded and subfig is the new version of subfigure
+% Subcaption works with hyperref whereas subfigure is reported to be broken
+\usepackage{caption}
+\usepackage{subcaption}
+
+% Use this package to import Inkscape generated pdfs with pdf_tex files
+\usepackage{import}
+
+% Macros to adjust position text in Inkscape files. Place the anchor exactly in the middle of the position where the text should appear
+% Use \adjTxtPos{multiline\\text}
+% or \adjTxtPosRot{lorem\\ipsum}
+\newlength{\myheight}
+\newcommand{\adjTxtPos}[1]{\settoheight{\myheight}{Fg}{\parbox[c]{\textheight}{\centering \vspace{\myheight}\phantom{F} #1 \\ \phantom{g} }}}
+\newcommand{\adjTxtPosRot}[1]{\begin{rotate}{90}\hspace{-0.5\textheight}\adjTxtPos{#1}\end{rotate}}
+
+
+% % % % Table related features
+
+% Define new column types to allow centering and width of each cell
+\usepackage{array}
+\newcolumntype{L}[1]{>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+\newcolumntype{C}[1]{>{\centering\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+\newcolumntype{R}[1]{>{\raggedleft\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
+
+% Tables according to Chicago Manual of Style
+\usepackage{tabularx, etoolbox, booktabs}
+\usepackage{multirow} % Allows rowspan
+\newcommand{\rarray}[1]{\renewcommand{\arraystretch}{#1}} % Slightly enlarged cells
+\captionsetup{belowskip=12pt,aboveskip=4pt} % Correct table caption distance
+
+
+% % % % Links and references setup
+%% URL handling
+% Allow URLs and other links to be clickable
+% Removes borders according to: texdoc hyperref page 4
+\hypersetup{colorlinks=false, pdfborder={0 0 0}}
+
+% Allow URLs to break at hyphens
+% (url package is handled via PassOptionsToPackage in thesis.tex)
+\usepackage{url}
+\urlstyle{same}
+
+% Command for breaking urls into two parts
+\newcommand*{\brokenurl}[2]{\href{#1#2}{#1}\par\nopagebreak\href{#1#2}{#2}}
+
+
+
+\usepackage{csquotes} % texdoc biblatex: If this package is available, biblatex will use its language sensitive quotation facilities to enclose certain titles in quotation marks.
+\usepackage[backend=bibtex, bibencoding=utf8, style=alphabetic, giveninits=true, maxbibnames=99]{biblatex}
+% \usepackage[backend=biber, style=ieee]{biblatex} % Alternative
+\bibliography{literature}
+
+% According to the glossaries manual, this package should be loaded after hyperref, the toc option makes the glossaries appear in the table of contents
+\usepackage[acronym, toc, nonumberlist]{glossaries}
+\input{chapters/glossaries}
+% Add this after all new glossary entries
+\makeglossaries
+
+% Small font size for captions
+\addtokomafont{caption}{\small}
+
+% Serif font for headlines
+% https://tex.stackexchange.com/a/25850/7396
+\addtokomafont{disposition}{\rmfamily}
+
+% Lines above and below chapter headline
+\renewcommand*\chapterheadstartvskip{\noindent\rule{\linewidth}{1pt}\par\vspace{\baselineskip}}
+\renewcommand*\chapterheadendvskip{\vspace{\baselineskip}\noindent\rule{\linewidth}{1pt}\par\vspace{\baselineskip}}

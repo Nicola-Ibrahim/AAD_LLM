@@ -1,0 +1,45 @@
+%% Global macros for the inverse decision thesis
+%
+% This file defines shorthand notations and symbols that are used across
+% multiple chapters of the thesis.  Defining frequently used constructs
+% here allows you to adjust notation centrally.  The following macros are
+% deliberately minimal; feel free to extend them as needed.
+
+% Common sets
+\newcommand{\R}{\mathbb{R}}          % Real numbers
+\newcommand{\N}{\mathbb{N}}          % Natural numbers
+\newcommand{\E}{\mathbb{E}}          % Expectation operator
+
+% Bold vectors and matrices
+\newcommand{\vect}[1]{\mathbf{#1}}    % Bold vector
+\newcommand{\mat}[1]{\mathbf{#1}}     % Bold matrix
+
+% Calligraphic symbols
+\newcommand{\calX}{\mathcal{X}}      % Decision space
+\newcommand{\calY}{\mathcal{Y}}      % Objective space
+
+% Operators
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+% Distance shorthand
+\newcommand{\dist}{d} % Generic distance function in objective space
+
+% Placeholder figure environment
+% Use \placeholderfigure{caption} to insert a framed box in place of an
+% illustration.  When you have an actual image, replace the contents of
+% this macro with \includegraphics.
+\newcommand{\placeholderfigure}[1]{%
+  \begin{figure}[t]
+    \centering
+    \fbox{\parbox[c][6cm][c]{10cm}{\centering #1}}
+    \caption{#1}
+  \end{figure}
+}
+
+% Nice colors and a tiny helper for bold math in nodes
+\definecolor{ink}{RGB}{15,23,42}      % deep blue/gray
+\definecolor{ink2}{RGB}{24,36,66}
+\definecolor{accent}{RGB}{59,130,246} % blue
+\definecolor{paper}{RGB}{250,251,255}
+\definecolor{note}{RGB}{99,102,114}   % muted text
