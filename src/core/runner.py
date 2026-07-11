@@ -104,10 +104,19 @@ def run_evolution_for_problem(
     best_sol = optimizer.best_so_far
     best_error = float("inf")
     if best_sol is not None:
-        meta = getattr(best_sol, "metadata", {})
-        returned_val = meta.get("raw_fitness", "N/A")
-        true_opt = meta.get("true_optimum", "N/A")
-        final_err = meta.get("final_error", getattr(best_sol, "fitness", "N/A"))
+        meta: Any = getattr(best_sol, "metadata", None)
+        try:
+            # Access assuming best_sol.metadata is an IterationMetadata model
+            returned_val = meta.fitness.raw_fitness
+            true_opt = problem.true_optimum
+            final_err = meta.fitness.final_error
+        except AttributeError:
+            # Fallback for dictionaries or legacy structures
+            meta = getattr(best_sol, "metadata", {})
+            returned_val = meta.get("raw_fitness", "N/A")
+            true_opt = meta.get("true_optimum", "N/A")
+            final_err = meta.get("final_error", getattr(best_sol, "fitness", "N/A"))
+
         if isinstance(final_err, (int, float)):
             best_error = final_err
 
@@ -180,6 +189,9 @@ def run_evolution_for_problems(
     budget : int | None, optional
         Alias for max_evaluations.
     """
+    if llm is None:
+        raise ValueError("LLM client must be provided to run evolution.")
+
     eval_budget = budget if budget is not None else max_evaluations
     llm_name = getattr(llm, "model", "unknown") if llm else "unknown"
 

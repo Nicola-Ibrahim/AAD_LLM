@@ -93,6 +93,9 @@ if [[ ! "$DB_PATH" = /* ]]; then
     DB_PATH="$PROJECT_ROOT/$DB_PATH"
 fi
 
+# Ensure the database parent directory exists
+mkdir -p "$(dirname "$DB_PATH")"
+
 # Locate the Alembic CLI runner
 ALEMBIC_CMD="alembic"
 if [ -f "$PROJECT_ROOT/.venv/bin/alembic" ]; then
@@ -122,12 +125,6 @@ elif [[ "$COMMAND" == "both" || "$COMMAND" == "revision-upgrade" ]]; then
     echo "Database migrations applied successfully!"
 else
     echo "Running database migrations for: $DB_PATH"
-    export PREVENT_EMPTY_MIGRATIONS="True"
-    
-    echo "Checking for database schema changes..."
-    # Suppress output of revision generation; env.py will prevent empty file creation
-    (cd "$PROJECT_ROOT" && $ALEMBIC_CMD revision --autogenerate -m "auto_migration" > /dev/null)
-    
     echo "Applying migrations..."
     (cd "$PROJECT_ROOT" && $ALEMBIC_CMD upgrade head)
     echo "Database migrations applied successfully!"

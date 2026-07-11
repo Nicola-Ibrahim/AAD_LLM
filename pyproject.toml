@@ -53,6 +53,14 @@ pythonpath = ["src"]
 [tool.pyright]
 extraPaths = ["src"]
 
+[[tool.uv.index]]
+name = "abetlen"
+url = "https://abetlen.github.io/llama-cpp-python/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+llama-cpp-python = { index = "abetlen" }
+
 # ====================================================================================
 # Poe tasks
 # ====================================================================================

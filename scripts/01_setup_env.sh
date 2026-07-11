@@ -64,7 +64,7 @@ else
     echo "  [WARNING] uv not found. Falling back to pip installation..."
     # Fallback to standard pip setup
     "$PYTHON_CMD" -m pip install --upgrade pip
-    "$PYTHON_CMD" -m pip install -e "$PROJECT_ROOT[gemini,notebook]"
+    "$PYTHON_CMD" -m pip install -e "$PROJECT_ROOT[gemini,notebook]" --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
     echo "  [OK] Dependencies installed successfully via pip."
 fi
 
