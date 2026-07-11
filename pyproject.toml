@@ -14,6 +14,8 @@ dependencies = [
     "plotly>=6.8.0",
     "sqlalchemy>=2.0.51",
     "alembic>=1.13.0",
+    "huggingface-hub>=0.20.0",
+    "llama-cpp-python[server]>=0.3.0",
 ]
 
 [project.optional-dependencies]
@@ -80,15 +82,5 @@ sequence = ["lint", "format"]
 ignore_fail = false
 help = "CHECK: Run linting and formatting checks. Usage: poe check"
 
-[tool.poe.tasks.migrate]
-cmd = "python scripts/migrate.py"
-help = "MIGRATE: Run database migrations. Usage: poe migrate"
 
-[tool.poe.tasks.migration-make]
-cmd = "alembic revision --autogenerate"
-help = "MIGRATION MAKE: Generate a new migration revision. Usage: poe migration-make -m 'migration message'"
-
-[tool.poe.tasks.rollback]
-cmd = "alembic downgrade -1"
-help = "ROLLBACK: Roll back the last database migration. Usage: poe rollback"
 

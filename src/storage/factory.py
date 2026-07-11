@@ -1,20 +1,26 @@
 from pathlib import Path
 
-from storage.base import ExperimentStore
-from storage.json_store import JsonStore
-from storage.sqlite_store import SQLiteStore
+from storage.json import JsonStore
+from storage.sqlite import SQLiteStore
+from storage.manager import ExperimentManager
 
 
-def get_store(backend: str, path: str | Path) -> ExperimentStore:
-    """Factory for selecting a storage backend.
+def get_store(backend: str, path: str | Path) -> ExperimentManager:
+    """Factory for selecting a storage backend, wrapped in an ExperimentManager facade.
 
     Parameters
     ----------
     backend : "json" or "sqlite"
     path    : base directory (json) or db file path (sqlite)
     """
+    path_obj = Path(path)
     if backend == "json":
-        return JsonStore(base_dir=path)
+        store = JsonStore(base_dir=path_obj)
+        base_dir = path_obj
     elif backend == "sqlite":
-        return SQLiteStore(db_path=path)
-    raise ValueError(f"Unknown backend: {backend!r}. Choose 'json' or 'sqlite'.")
+        store = SQLiteStore(db_path=path_obj)
+        base_dir = path_obj.parent
+    else:
+        raise ValueError(f"Unknown backend: {backend!r}. Choose 'json' or 'sqlite'.")
+
+    return ExperimentManager(store=store, base_dir=base_dir)

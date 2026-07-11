@@ -3,36 +3,34 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 
-class IterationMetadata(BaseModel):
-    """Structured result of one algorithm evaluation by the Evaluator."""
+class ExecutionProfile(BaseModel):
+    timed_out: bool = Field(
+        description="True if the candidate algorithm exceeded the CPU time limit during execution.",
+        examples=[False, True],
+    )
+    runtime_seconds: float = Field(
+        description="Wall-clock runtime of the candidate algorithm execution in seconds.",
+        examples=[0.45],
+    )
+    llm_generation_time: float | None = Field(
+        default=None,
+        description="Time taken by the LLM to generate the candidate algorithm source code in seconds.",
+        examples=[4.5, None],
+    )
+    evaluations_used: int = Field(
+        description="Number of clean objective function evaluations consumed by the algorithm before stopping.",
+        examples=[1000],
+    )
+    budget_consumed_pct: float = Field(
+        description="Percentage of the evaluation budget consumed during execution.",
+        examples=[100.0],
+    )
+    evals_per_second: float = Field(
+        description="Execution throughput measured in evaluations per second.", examples=[2222.2]
+    )
 
-    problem_id: int = Field(
-        description="The BBOB problem ID representing the objective function.", examples=[1, 14, 24]
-    )
-    iteration: int | None = Field(
-        default=None,
-        description="The 1-based index representing the generation or iteration of the evolution loop.",
-        examples=[1, 5, 10],
-    )
-    dim: int = Field(
-        description="Dimension of the search space of the BBOB problem.", examples=[2, 5, 10, 20]
-    )
-    noise_std: float = Field(
-        description="Standard deviation of the Gaussian noise added to the clean evaluations.",
-        examples=[0.0, 0.1, 1.0],
-    )
-    instance_id: int = Field(
-        description="The BBOB instance ID chosen for this problem execution run.", examples=[1, 5]
-    )
-    true_optimum: float | None = Field(
-        default=None,
-        description="The actual clean theoretical optimum value of the objective function (if known).",
-        examples=[79.48],
-    )
-    algorithm_name: str = Field(
-        description="Name of the generated algorithm candidate.",
-        examples=["NoisyHillClimber", "RandomSearchAlgorithm"],
-    )
+
+class FitnessMetrics(BaseModel):
     raw_fitness: float | None = Field(
         default=None,
         description="The raw objective function score returned by the executed algorithm (with noise included).",
@@ -43,43 +41,32 @@ class IterationMetadata(BaseModel):
         description="The absolute difference between the true optimum and the best clean fitness achieved.",
         examples=[0.64, None],
     )
-    timed_out: bool = Field(
-        description="True if the candidate algorithm exceeded the CPU time limit during execution.",
-        examples=[False, True],
-    )
-    runtime_seconds: float = Field(
-        description="Wall-clock runtime of the candidate algorithm execution in seconds.",
-        examples=[0.45],
-    )
-    evaluations_used: int = Field(
-        description="Number of clean objective function evaluations consumed by the algorithm before stopping.",
-        examples=[1000],
-    )
-    budget_consumed_pct: float = Field(
-        description="Percentage of the evaluation budget consumed during execution.",
-        examples=[100.0],
-    )
     relative_error: float | None = Field(
         default=None,
         description="Relative error ratio computed as final_error / true_optimum.",
         examples=[0.008, None],
-    )
-    evals_per_second: float = Field(
-        description="Execution throughput measured in evaluations per second.", examples=[2222.2]
     )
     error_per_evaluation: float | None = Field(
         default=None,
         description="The average error rate per evaluation (final_error / evaluations_used).",
         examples=[0.00064, None],
     )
-    converged: bool = Field(
-        description="True if the algorithm achieved a final error lower than the convergence threshold.",
-        examples=[False, True],
+
+    @field_validator(
+        "raw_fitness",
+        "final_error",
+        "relative_error",
+        "error_per_evaluation",
+        mode="before",
     )
-    convergence_threshold: float = Field(
-        description="The target error difference threshold needed to consider a run converged.",
-        examples=[1e-06],
-    )
+    @classmethod
+    def sanitize_non_finite_floats(cls, v: Any) -> Any:
+        if isinstance(v, float) and (math.isinf(v) or math.isnan(v)):
+            return None
+        return v
+
+
+class CodeMetrics(BaseModel):
     code_lines: int = Field(
         description="The number of line breaks in the candidate algorithm source code.",
         examples=[42],
@@ -92,6 +79,9 @@ class IterationMetadata(BaseModel):
         description="Path to the file containing the generated candidate algorithm source code.",
         examples=["experiments/code/bbob_1_dim5_noisy/iter_1.py", None],
     )
+
+
+class ErrorProfile(BaseModel):
     error_type: str | None = Field(
         default=None,
         description="Class name of the Python exception raised if evaluation failed.",
@@ -108,18 +98,67 @@ class IterationMetadata(BaseModel):
         examples=['Traceback (most recent call last):\n  File "...", line 15, in...', None],
     )
 
-    @field_validator(
-        "raw_fitness",
-        "final_error",
-        "relative_error",
-        "error_per_evaluation",
-        mode="before",
+
+class ConvergenceProfile(BaseModel):
+    converged: bool = Field(
+        description="True if the algorithm achieved a final error lower than the convergence threshold.",
+        examples=[False, True],
     )
-    @classmethod
-    def sanitize_non_finite_floats(cls, v: Any) -> Any:
-        if isinstance(v, float) and (math.isinf(v) or math.isnan(v)):
-            return None
-        return v
+    convergence_threshold: float = Field(
+        description="The target error difference threshold needed to consider a run converged.",
+        examples=[1e-06],
+    )
+
+
+class ProblemProfile(BaseModel):
+    problem_id: int = Field(
+        description="The BBOB problem ID representing the objective function.", examples=[1, 14, 24]
+    )
+    dim: int = Field(
+        description="Dimension of the search space of the BBOB problem.", examples=[2, 5, 10, 20]
+    )
+    noise_std: float = Field(
+        description="Standard deviation of the Gaussian noise added to the clean evaluations.",
+        examples=[0.0, 0.1, 1.0],
+    )
+    instance_id: int = Field(
+        description="The BBOB instance ID chosen for this problem execution run.", examples=[1, 5]
+    )
+    true_optimum: float | None = Field(
+        default=None,
+        description="The actual clean theoretical optimum value of the objective function (if known).",
+        examples=[79.48],
+    )
+
+
+class IterationMetadata(BaseModel):
+    """Structured result of one algorithm evaluation by the Evaluator."""
+
+    iteration: int | None = Field(
+        default=None,
+        description="The 1-based index representing the generation or iteration of the evolution loop.",
+        examples=[1, 5, 10],
+    )
+    algorithm_name: str = Field(
+        description="Name of the generated algorithm candidate.",
+        examples=["NoisyHillClimber", "RandomSearchAlgorithm"],
+    )
+
+    execution: ExecutionProfile = Field(
+        description="Timing and throughput metrics for the iteration's execution run."
+    )
+    fitness: FitnessMetrics = Field(
+        description="Fitness metrics and errors achieved by the candidate algorithm."
+    )
+    code: CodeMetrics = Field(
+        description="Attributes and metadata about the candidate algorithm code."
+    )
+    error: ErrorProfile = Field(
+        description="Traceback and exception info if the candidate algorithm failed."
+    )
+    convergence: ConvergenceProfile = Field(
+        description="Details about convergence of the execution run."
+    )
 
     def to_json_dict(self) -> dict[str, Any]:
         """Return a plain dict safe for JSON serialization."""
@@ -129,26 +168,13 @@ class IterationMetadata(BaseModel):
 class ExperimentSummary(BaseModel):
     """Aggregated result of a full LLaMEA evolution run."""
 
-    problem_id: int = Field(
-        description="The BBOB problem ID representing the objective function.", examples=[1, 14, 24]
-    )
-    dim: int = Field(
-        description="Dimension of the search space of the BBOB problem.", examples=[2, 5, 10, 20]
-    )
     mode: str = Field(description="Experiment running mode.", examples=["noisy", "clean"])
     llm_name: str = Field(
         description="Name of the LLM used to generate algorithm candidates.",
         examples=["qwen2.5-coder-7b-instruct-q4_k_m", "gpt-4o-mini"],
     )
-    noise_std: float | None = Field(
-        default=None,
-        description="Standard deviation of the Gaussian noise applied to BBOB evaluations.",
-        examples=[0.0, 0.1, 1.0],
-    )
-    true_optimum: float | None = Field(
-        default=None,
-        description="The actual clean theoretical optimum value of the objective function (if known).",
-        examples=[79.48],
+    problem: ProblemProfile = Field(
+        description="Configuration of the BBOB problem for this execution run."
     )
     best_iteration: int | None = Field(
         default=None,

@@ -10,7 +10,7 @@ from alembic import context
 # Add src to python path to import storage models
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from storage.sqlite_store import Base
+from storage.sqlite.models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -31,6 +31,19 @@ target_metadata = Base.metadata
 # ... etc.
 
 
+def process_revision_directives(context, revision, directives):
+    """Callback to prevent generating empty migration files when no changes are detected."""
+    import os
+
+    prevent_empty = (
+        config.get_main_option("prevent_empty_migrations") == "True"
+        or os.environ.get("PREVENT_EMPTY_MIGRATIONS") == "True"
+    )
+    if prevent_empty:
+        if directives and directives[0].upgrade_ops.is_empty():
+            directives[:] = []
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
@@ -43,13 +56,16 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    import os
+
+    url = os.environ.get("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         render_as_batch=True,
+        process_revision_directives=process_revision_directives,
     )
 
     with context.begin_transaction():
@@ -63,8 +79,15 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    import os
+
+    settings = config.get_section(config.config_ini_section, {})
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url:
+        settings["sqlalchemy.url"] = db_url
+
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        settings,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
@@ -74,6 +97,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             render_as_batch=True,
+            process_revision_directives=process_revision_directives,
         )
 
         with context.begin_transaction():

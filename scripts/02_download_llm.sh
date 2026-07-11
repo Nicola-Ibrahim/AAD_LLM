@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# 02_download_model.sh
+# 02_download_llm.sh
 # Downloads configured GGUF model from Hugging Face.
 # ============================================================
 
@@ -44,8 +44,8 @@ else
     fi
 
     if ! "$PYTHON_CMD" -c "import huggingface_hub" &> /dev/null; then
-        echo "  [INFO] huggingface_hub not found. Running 01_install_dependencies.sh..."
-        bash "$SCRIPT_DIR/01_install_dependencies.sh"
+        echo "  [INFO] huggingface_hub not found. Running 01_setup_env.sh..."
+        bash "$SCRIPT_DIR/01_setup_env.sh"
     fi
 
     echo "  [INFO] Downloading model..."
@@ -67,5 +67,5 @@ fi
 
 echo "  Model location: $TARGET_PATH"
 echo "========================================================"
-echo "  Next: bash scripts/03_serve_model.sh"
+echo "  Next: bash scripts/03_serve_llm.sh"
 echo "========================================================"

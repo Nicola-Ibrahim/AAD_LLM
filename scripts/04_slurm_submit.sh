@@ -45,7 +45,7 @@ echo "CPUs allocated: ${SLURM_CPUS_PER_TASK:-16}"
 if [ ! -f "$MODEL_PATH" ]; then
     echo "  [INFO] Model file not found at: $MODEL_PATH"
     echo "  [INFO] Triggering automatic download on compute node..."
-    bash scripts/02_download_model.sh
+    bash scripts/02_download_llm.sh
 fi
 
 PYTHON_CMD=""

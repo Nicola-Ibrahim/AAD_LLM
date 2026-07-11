@@ -32,9 +32,9 @@ Use this track if you are running locally and have [uv](https://github.com/astra
 Use this track if you are running on a remote Jupyter Server, custom Conda environment, or don't use `uv`.
 
 1. **Install Dependencies & Configure Environment:**
-   Run the dedicated script which automatically checks/creates your `.env` configuration file, resolves dependencies from `requirements.txt`, and installs all packages using your active environment's `pip`:
+   Run the dedicated script which automatically checks/creates your `.env` configuration file, checks/syncs dependencies, and installs all packages using your active environment's `pip` or `uv`:
    ```bash
-   bash scripts/01_install_dependencies.sh
+   bash scripts/01_setup_env.sh
    ```
 2. **Run Jupyter Notebook:**
    ```bash
@@ -46,8 +46,8 @@ Use this track if you are running on a remote Jupyter Server, custom Conda envir
 ## Running the Notebooks
 Open your Jupyter interface and navigate to the `notebooks/` directory to run code:
 * [notebooks/00_model_test.ipynb](notebooks/00_model_test.ipynb) — Verify connection to your LLM provider.
-* [notebooks/02_llamea_analysis.ipynb](notebooks/02_llamea_analysis.ipynb) — Run a single-problem LLaMEA evolution.
-* [notebooks/03_batch_llamea_experiment.ipynb](notebooks/03_batch_llamea_experiment.ipynb) — Run multi-problem batch search.
+* [notebooks/02_llamea_evolution.ipynb](notebooks/02_llamea_evolution.ipynb) — Run single-problem or multi-problem batch LLaMEA evolution.
+* [notebooks/03_results_analysis.ipynb](notebooks/03_results_analysis.ipynb) — Query the SQLite database, analyze stats, and plot results.
 
 
 ## Starting the Local Model Server
@@ -56,11 +56,11 @@ To run the optimization pipeline locally without relying on external APIs or too
 
 1. **Install Dependencies**:
    ```bash
-   bash scripts/01_install_dependencies.sh
+   bash scripts/01_setup_env.sh
    ```
 2. **Start the Server**:
    ```bash
-   bash scripts/03_serve_model.sh
+   bash scripts/03_serve_llm.sh
    ```
 
 **Changing the Model**: By default, the system uses the `qwen2.5-coder-1.5b-instruct-q4_k_m.gguf` model. To use a different model, edit the variables in your `.env` file. 
@@ -98,24 +98,22 @@ poe migrate --db-path path/to/your/custom_database.db
 ## Project Structure
 
 - `pyproject.toml` — Dependency and packaging configuration.
-- `requirements.txt` — Standard pip requirements file.
 - `.env` — Local environment variables and model configuration.
 - `docs/` — Documentation:
   - [MODEL_CONFIGURATION.md](docs/MODEL_CONFIGURATION.md) — Guide to configuring custom models and quantizations.
 - `notebooks/` — Jupyter notebooks:
   - `00_model_test.ipynb` — Quick diagnostic test for local model server connection and response latency.
   - `01_noise_analysis.ipynb` — Noise injection & interactive analysis notebook.
-  - `02_llamea_analysis.ipynb` — Single-problem LLaMEA evolution & verification notebook.
-  - `03_batch_llamea_experiment.ipynb` — Multi-problem batch LLaMEA evolution notebook.
-  - `04_results_dashboard.ipynb` — Stats builder, boxplots, and results dashboard.
+  - `02_llamea_evolution.ipynb` — Single and batch multi-problem LLaMEA evolutionary search pipeline.
+  - `03_results_analysis.ipynb` — Comprehensive database analysis dashboard, stats builder, and interactive plots.
 - `scripts/` — Execution and orchestration scripts:
-  - `01_install_dependencies.sh` — Installs project dependencies, llama-cpp-python & huggingface-hub.
-  - `02_download_model.sh` — Downloads GGUF model files from Hugging Face.
-  - `03_serve_model.sh` — Starts the local model server.
+  - `01_setup_env.sh` — Initializes environment, checks env vars, and syncs dependencies via uv.
+  - `02_download_llm.sh` — Downloads GGUF model files from Hugging Face.
+  - `03_serve_llm.sh` — Starts the local model server.
   - `04_slurm_submit.sh` — Batch job script for SLURM cluster execution.
   - `cleanup_models.sh` — Utility to list and interactively delete cached/downloaded models.
   - `stop_server.sh` — Utility to stop running model server instances.
-  - `migrate.py` — Utility script to initialize and migrate the SQLite database.
+  - `migrate.sh` — Utility script to check schema and run database migrations.
 - `src/` — Source code library:
   - `llm/` — LLM provider bindings (`providers.py`) and prompt constants (`prompts.py`).
   - `problems/` — Additive Gaussian noise wrapper around BBOB functions (`bbob.py`).

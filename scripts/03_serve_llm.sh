@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# 03_serve_model.sh
+# 03_serve_llm.sh
 # Starts llama-cpp-python server in the foreground.
 # Press Ctrl+C at any time to stop the server.
 # ============================================================
@@ -36,7 +36,7 @@ mkdir -p "$LOG_DIR"
 if [ ! -f "$MODEL_PATH" ]; then
     echo "  [INFO] Model file not found at: $MODEL_PATH"
     echo "  [INFO] Triggering automatic download..."
-    bash "$SCRIPT_DIR/02_download_model.sh"
+    bash "$SCRIPT_DIR/02_download_llm.sh"
 fi
 
 if lsof -i :$PORT &>/dev/null; then
