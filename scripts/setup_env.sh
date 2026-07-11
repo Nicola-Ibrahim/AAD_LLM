@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# 01_setup_env.sh
+# setup_env.sh
 # Initializes the environment, checks environment variables, and installs dependencies.
 # ============================================================
 
@@ -79,5 +79,5 @@ fi
 echo ""
 echo "  All dependencies satisfied."
 echo "========================================================"
-echo "  Next: bash scripts/02_download_llm.sh"
+echo "  Next: bash scripts/llm_manage.sh"
 echo "========================================================"

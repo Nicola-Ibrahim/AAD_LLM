@@ -1,13 +1,13 @@
 #!/bin/bash
 # ============================================================
-# 04_slurm_submit.sh
+# slurm_submit.sh
 # SLURM Job Submission Script for HPC Clusters.
 # Automatically spins up the local inference server, runs the
 # experiment, and cleans up the server upon completion.
 # ============================================================
 #
 # Submit to queue:
-#   sbatch scripts/04_slurm_submit.sh
+#   sbatch scripts/slurm_submit.sh
 # ============================================================
 
 #SBATCH --job-name=llamea_bbob
@@ -44,8 +44,7 @@ echo "CPUs allocated: ${SLURM_CPUS_PER_TASK:-16}"
 
 if [ ! -f "$MODEL_PATH" ]; then
     echo "  [INFO] Model file not found at: $MODEL_PATH"
-    echo "  [INFO] Triggering automatic download on compute node..."
-    bash scripts/02_download_llm.sh
+    bash scripts/llm_manage.sh download
 fi
 
 PYTHON_CMD=""

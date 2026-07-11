@@ -1,10 +1,10 @@
 #!/bin/bash
 # ============================================================
-# migrate.sh
+# db.sh
 # Database management and migration CLI for experiments SQLite database.
 #
 # Usage:
-#   bash scripts/migrate.sh [command] [options]
+#   bash scripts/db.sh [command] [options]
 #
 # Commands:
 #   upgrade          Apply all pending migrations (default)

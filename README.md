@@ -56,11 +56,11 @@ To run the optimization pipeline locally without relying on external APIs or too
 
 1. **Install Dependencies**:
    ```bash
-   bash scripts/01_setup_env.sh
-   ```
-2. **Start the Server**:
-   ```bash
-   bash scripts/03_serve_llm.sh
+    bash scripts/setup_env.sh
+    ```
+ 2. **Start the Server**:
+    ```bash
+    bash scripts/llm_server.sh
    ```
 
 **Changing the Model**: By default, the system uses the `qwen2.5-coder-1.5b-instruct-q4_k_m.gguf` model. To use a different model, edit the variables in your `.env` file. 
@@ -80,7 +80,7 @@ All experiment execution and analysis are driven interactively from Jupyter Note
 ### HPC SLURM Cluster Execution
 To submit a batch job on a SLURM cluster:
 ```bash
-sbatch scripts/04_slurm_submit.sh
+sbatch scripts/slurm_submit.sh
 ```
 
 ## Database Migrations
@@ -107,13 +107,11 @@ poe migrate --db-path path/to/your/custom_database.db
   - `02_llamea_evolution.ipynb` — Single and batch multi-problem LLaMEA evolutionary search pipeline.
   - `03_results_analysis.ipynb` — Comprehensive database analysis dashboard, stats builder, and interactive plots.
 - `scripts/` — Execution and orchestration scripts:
-  - `01_setup_env.sh` — Initializes environment, checks env vars, and syncs dependencies via uv.
-  - `02_download_llm.sh` — Downloads GGUF model files from Hugging Face.
-  - `03_serve_llm.sh` — Starts the local model server.
-  - `04_slurm_submit.sh` — Batch job script for SLURM cluster execution.
-  - `cleanup_models.sh` — Utility to list and interactively delete cached/downloaded models.
-  - `stop_server.sh` — Utility to stop running model server instances.
-  - `migrate.sh` — Utility script to check schema and run database migrations.
+  - `setup_env.sh` — Initializes environment, checks env vars, and syncs dependencies via uv.
+  - `llm_manage.sh` — Interactive CLI to download configured GGUF model, list cached models, or delete them.
+  - `llm_server.sh` — Interactive CLI to start, stop, restart, or check the status of the local model server.
+  - `slurm_submit.sh` — Batch job script for SLURM cluster execution.
+  - `db.sh` — Interactive CLI to manage database migrations, clear table data, reset DB, and show stats.
 - `src/` — Source code library:
   - `llm/` — LLM provider bindings (`providers.py`) and prompt constants (`prompts.py`).
   - `problems/` — Additive Gaussian noise wrapper around BBOB functions (`bbob.py`).
