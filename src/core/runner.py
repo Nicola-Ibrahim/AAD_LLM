@@ -4,8 +4,11 @@ Runner script executing the LLaMEA evolution loop across BBOB problem IDs.
 
 from dataclasses import dataclass, field
 import sys
+import math
+import os
 from pathlib import Path
 from typing import Any
+import jsonlines
 from llamea import LLaMEA, LLM, Solution
 from llamea.loggers import ExperimentLogger
 
@@ -44,6 +47,21 @@ class ProblemEvolutionResult:
     error_msg: str | None = None
 
 
+def sanitize_non_finite_floats(obj: Any) -> Any:
+    """
+    Recursively replaces float('inf'), float('-inf'), and float('nan') with None (null in JSON).
+    """
+    if isinstance(obj, float):
+        if math.isinf(obj) or math.isnan(obj):
+            return None
+        return obj
+    elif isinstance(obj, dict):
+        return {k: sanitize_non_finite_floats(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_non_finite_floats(v) for v in obj]
+    return obj
+
+
 class ProblemLogger(ExperimentLogger):
     def __init__(self, base_dir: str | Path, name: str = ""):
         self._base_dir = str(base_dir)
@@ -56,6 +74,21 @@ class ProblemLogger(ExperimentLogger):
         (base_path / "configspace").mkdir(parents=True, exist_ok=True)
         (base_path / "code").mkdir(parents=True, exist_ok=True)
         return str(base_path)
+
+    def log_individual(self, individual: Any) -> None:
+        from llamea.loggers import convert_to_serializable
+
+        ind_dict = individual.to_dict()
+        clean_dict = sanitize_non_finite_floats(convert_to_serializable(ind_dict))
+        with jsonlines.open(f"{self.dirname}/log.jsonl", "a") as file:
+            file.write(clean_dict)
+
+    def log_solution(self, solution: Any, sol_data: Any) -> None:
+        with jsonlines.open(os.path.join(self.dirname, "solutions.jsonl"), "a") as writer:
+            if solution.code and not math.isnan(solution.fitness) and sol_data:
+                clean_fitness = sanitize_non_finite_floats(solution.fitness)
+                clean_data = sanitize_non_finite_floats(sol_data)
+                writer.write({"id": solution.id, "fitness": clean_fitness, "output": clean_data})
 
 
 def run_evolution_for_problem(

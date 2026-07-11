@@ -1,6 +1,22 @@
 import json
+import math
 from pathlib import Path
 from typing import Any
+
+
+def sanitize_non_finite_floats(obj: Any) -> Any:
+    """
+    Recursively replaces float('inf'), float('-inf'), and float('nan') with None (null in JSON).
+    """
+    if isinstance(obj, float):
+        if math.isinf(obj) or math.isnan(obj):
+            return None
+        return obj
+    elif isinstance(obj, dict):
+        return {k: sanitize_non_finite_floats(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_non_finite_floats(v) for v in obj]
+    return obj
 
 
 def save_summary(
@@ -83,7 +99,8 @@ def save_summary(
     out_path.mkdir(parents=True, exist_ok=True)
     summary_file = out_path / "summary.json"
 
-    summary_file.write_text(json.dumps(summary_data, indent=4), encoding="utf-8")
+    clean_summary_data = sanitize_non_finite_floats(summary_data)
+    summary_file.write_text(json.dumps(clean_summary_data, indent=4), encoding="utf-8")
 
     return summary_file
 
