@@ -4,90 +4,95 @@ This repository implements a framework to automatically evolve novel, continuous
 
 The evolution experiments run either locally or on remote HPC cluster environments, using a unified definition of task prompts, noise injection layers, and evaluation routines.
 
-## Installation
+## Installation & Setup
 
-This project is managed with [uv](https://github.com/astral-sh/uv). 
+We support two tracks for environment setup and execution: **Local Development (with `uv`)** and **Jupyter Server / Standard Python (with shell scripts)**.
 
-To install the project and its dependencies using `uv` (recommended):
-```bash
-uv sync --all-extras
-```
+---
 
-Or using standard `pip` (Conda / Jupyter Server):
-```bash
-# Make sure you are inside the project folder
-pip install -r requirements.txt
-```
+### Track A: Local Development (with `uv`)
+Use this track if you are running locally and have [uv](https://github.com/astral-sh/uv) installed.
 
-## Environment Configuration (Jupyter Server)
+1. **Install Dependencies:**
+   ```bash
+   uv sync --all-extras
+   ```
+2. **Run Jupyter Notebook:**
+   ```bash
+   uv run jupyter notebook
+   ```
+3. **Trigger database migrations (if needed):**
+   ```bash
+   poe migrate
+   ```
 
-On Jupyter servers, `.env` files are hidden by default in the file browser. Creating a `.env` file is **optional** (all scripts use sensible defaults), but if you wish to set custom variables, you can copy & paste either snippet below:
+---
 
-### Jupyter Notebook Python Cell
-Run this code inside any notebook cell to generate `.env` automatically:
-```python
-# Copy and run in Jupyter Notebook cell:
-with open(".env", "w") as f:
-    f.write("LLM_PROVIDER=local\n")
-    f.write("HF_REPO=Qwen/Qwen2.5-Coder-7B-Instruct-GGUF\n")
-    f.write("HF_FILE=qwen2.5-coder-7b-instruct-q4_k_m.gguf\n")
-    f.write("LOCAL_LLM_MODEL=qwen2.5-coder-7b-instruct-q4_k_m\n")
-    f.write("LOCAL_LLM_BASE_URL=http://localhost:8080/v1\n")
-    f.write("LOCAL_LLM_API_KEY=not-needed\n")
-```
+### Track B: Jupyter Server / Standard Python (with shell scripts)
+Use this track if you are running on a remote Jupyter Server, custom Conda environment, or don't use `uv`.
 
-### Jupyter Terminal Shell Command
-Paste into your terminal session to export environment variables directly:
-```bash
-# Copy and run in Terminal:
-export LLM_PROVIDER="local"
-export HF_REPO="Qwen/Qwen2.5-Coder-7B-Instruct-GGUF"
-export HF_FILE="qwen2.5-coder-7b-instruct-q4_k_m.gguf"
-export LOCAL_LLM_MODEL="qwen2.5-coder-7b-instruct-q4_k_m"
-export LOCAL_LLM_BASE_URL="http://localhost:8080/v1"
-export LOCAL_LLM_API_KEY="not-needed"
-```
+1. **Install Dependencies & Configure Environment:**
+   Run the dedicated script which automatically checks/creates your `.env` configuration file, resolves dependencies from `requirements.txt`, and installs all packages using your active environment's `pip`:
+   ```bash
+   bash scripts/01_install_dependencies.sh
+   ```
+2. **Run Jupyter Notebook:**
+   ```bash
+   jupyter notebook
+   ```
+
+---
 
 ## Running the Notebooks
+Open your Jupyter interface and navigate to the `notebooks/` directory to run code:
+* [notebooks/00_model_test.ipynb](notebooks/00_model_test.ipynb) — Verify connection to your LLM provider.
+* [notebooks/02_llamea_analysis.ipynb](notebooks/02_llamea_analysis.ipynb) — Run a single-problem LLaMEA evolution.
+* [notebooks/03_batch_llamea_experiment.ipynb](notebooks/03_batch_llamea_experiment.ipynb) — Run multi-problem batch search.
 
-Launch Jupyter Notebook:
-```bash
-uv run jupyter notebook
-```
-Then navigate to [notebooks/01_noise_analysis.ipynb](notebooks/01_noise_analysis.ipynb) to configure, verify, and prototype your setup interactively.
 
 ## Starting the Local Model Server
 
 To run the optimization pipeline locally without relying on external APIs or tools like LMStudio, this project includes a built-in automated LLM server (powered by `llama.cpp` and `huggingface_hub`).
 
-1. **Load Environment**:
-   ```bash
-   source scripts/00_load_env.sh
-   ```
-2. **Install Dependencies**:
+1. **Install Dependencies**:
    ```bash
    bash scripts/01_install_dependencies.sh
    ```
-3. **Start the Server**:
+2. **Start the Server**:
    ```bash
    bash scripts/03_serve_model.sh
    ```
 
-**Changing the Model**: By default, the system uses the `qwen2.5-coder-1.5b-instruct-q4_k_m.gguf` model. To use a different model, edit the variables in your `.env` file or set environment variables via `scripts/00_load_env.sh`. 
+**Changing the Model**: By default, the system uses the `qwen2.5-coder-1.5b-instruct-q4_k_m.gguf` model. To use a different model, edit the variables in your `.env` file. 
 For a complete explanation of configuration variables and ready-to-use presets, refer to [docs/MODEL_CONFIGURATION.md](docs/MODEL_CONFIGURATION.md).
 
 ## Running Experiments
 
-### Local Execution
-Execute via `uv`:
-```bash
-uv run aad-llm
-```
+### Notebook-Driven Execution
+All experiment execution and analysis are driven interactively from Jupyter Notebooks. The legacy command-line script entrypoint (`src/main.py`) has been removed. 
+
+1. Launch Jupyter Notebook:
+   ```bash
+   uv run jupyter notebook
+   ```
+2. Open and run the evolution notebooks sequentially in `notebooks/`.
 
 ### HPC SLURM Cluster Execution
 To submit a batch job on a SLURM cluster:
 ```bash
 sbatch scripts/04_slurm_submit.sh
+```
+
+## Database Migrations
+We use a relational SQLite database schema with a split-storage strategy (storing lightweight metadata in SQLite and saving heavy Python code files as disk blobs). 
+
+If you make modifications to the data schemas, you can trigger database initialization or schema migrations directly from the command line:
+```bash
+# Run migrations on the default database (experiments/results.db)
+poe migrate
+
+# Or target a custom database file
+poe migrate --db-path path/to/your/custom_database.db
 ```
 
 ## Project Structure
@@ -104,38 +109,19 @@ sbatch scripts/04_slurm_submit.sh
   - `03_batch_llamea_experiment.ipynb` — Multi-problem batch LLaMEA evolution notebook.
   - `04_results_dashboard.ipynb` — Stats builder, boxplots, and results dashboard.
 - `scripts/` — Execution and orchestration scripts:
-  - `00_load_env.sh` — Exports environment variables explicitly.
-  - `01_install_dependencies.sh` — Installs llama-cpp-python & huggingface-hub.
+  - `01_install_dependencies.sh` — Installs project dependencies, llama-cpp-python & huggingface-hub.
   - `02_download_model.sh` — Downloads GGUF model files from Hugging Face.
   - `03_serve_model.sh` — Starts the local model server.
   - `04_slurm_submit.sh` — Batch job script for SLURM cluster execution.
   - `cleanup_models.sh` — Utility to list and interactively delete cached/downloaded models.
   - `stop_server.sh` — Utility to stop running model server instances.
+  - `migrate.py` — Utility script to initialize and migrate the SQLite database.
 - `src/` — Source code library:
   - `llm/` — LLM provider bindings (`providers.py`) and prompt constants (`prompts.py`).
   - `problems/` — Additive Gaussian noise wrapper around BBOB functions (`bbob.py`).
   - `core/` — Sandbox execution (`evaluator.py`, `executor.py`) and evolutionary runner (`runner.py`).
-  - `analysis/` — Results processing and summary logging (`results.py`).
-  - `main.py` & `main_experiment.py` — Execution entrypoints.
+  - `schema/` — Pydantic models and data schemas.
+  - `storage/` — Results summary persistence/loading, SQLite relational mapper, and code blob writer.
 - `experiments/` — Evolved python scripts containing the best optimization algorithms, conversation history, and evaluation results.
 - `logs/` — Execution logs and model server outputs.
 
-## Running the Command Line Script
-
-After executing `uv sync --all-extras`, configure variables in `src/main.py`:
-
-```python
-RUN_ALL_PROBLEMS = False  # Set to True to evolve all 24 problems sequentially
-PROBLEM_ID = 1            # BBOB Problem ID (1-24) to run when RUN_ALL_PROBLEMS is False
-DIM = 3                   # Search space dimensionality (e.g. 3 or 5)
-```
-
-Trigger execution:
-```bash
-uv run aad-llm
-```
-
-Or execute directly:
-```bash
-uv run python src/main.py
-```

@@ -4,37 +4,19 @@ Runner script executing the LLaMEA evolution loop across BBOB problem IDs.
 
 from dataclasses import dataclass, field
 import sys
-import math
-import os
 from pathlib import Path
 from typing import Any
-import jsonlines
-from llamea import LLaMEA, LLM, Solution
-from llamea.loggers import ExperimentLogger
+from llamea import LLaMEA, LLM
 
 from problems.bbob import BBOBProblem
 from llm.prompts import TASK_PROMPT_CLEAN, TASK_PROMPT_NOISY, EXAMPLE_PROMPT, FORMAT_PROMPT
 from core.evaluator import Evaluator
 
 
-# Improve Solution object string formatting to avoid raw memory addresses in logs
-def _solution_repr(self: Solution) -> str:
-    fit_str = (
-        f"{self.fitness:.6e}"
-        if hasattr(self, "fitness") and isinstance(self.fitness, (int, float))
-        else "N/A"
-    )
-    return f"Solution(name='{self.name}', fitness={fit_str})"
-
-
-Solution.__repr__ = _solution_repr
-Solution.__str__ = _solution_repr
-
-
 @dataclass
 class ProblemEvolutionResult:
     """
-    Immutable contract returned per-problem by run_evolution_for_problems.
+    Immutable contract returned per-problem by run_evolution_for_problems and run_evolution_for_problem.
     """
 
     problem_id: int
@@ -44,51 +26,14 @@ class ProblemEvolutionResult:
     best_error: float | None
     run_history: list[Any] = field(default_factory=list)
     experiment_name: str = ""
+    llm_name: str = ""
     error_msg: str | None = None
+    best_solution: Any = None
 
-
-def sanitize_non_finite_floats(obj: Any) -> Any:
-    """
-    Recursively replaces float('inf'), float('-inf'), and float('nan') with None (null in JSON).
-    """
-    if isinstance(obj, float):
-        if math.isinf(obj) or math.isnan(obj):
-            return None
-        return obj
-    elif isinstance(obj, dict):
-        return {k: sanitize_non_finite_floats(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [sanitize_non_finite_floats(v) for v in obj]
-    return obj
-
-
-class ProblemLogger(ExperimentLogger):
-    def __init__(self, base_dir: str | Path, name: str = ""):
-        self._base_dir = str(base_dir)
-        # Calling super().__init__(name) creates the directory structure
-        super().__init__(name)
-
-    def create_log_dir(self, name: str = "") -> str:
-        base_path = Path(self._base_dir)
-        base_path.mkdir(parents=True, exist_ok=True)
-        (base_path / "configspace").mkdir(parents=True, exist_ok=True)
-        (base_path / "code").mkdir(parents=True, exist_ok=True)
-        return str(base_path)
-
-    def log_individual(self, individual: Any) -> None:
-        from llamea.loggers import convert_to_serializable
-
-        ind_dict = individual.to_dict()
-        clean_dict = sanitize_non_finite_floats(convert_to_serializable(ind_dict))
-        with jsonlines.open(f"{self.dirname}/log.jsonl", "a") as file:
-            file.write(clean_dict)
-
-    def log_solution(self, solution: Any, sol_data: Any) -> None:
-        with jsonlines.open(os.path.join(self.dirname, "solutions.jsonl"), "a") as writer:
-            if solution.code and not math.isnan(solution.fitness) and sol_data:
-                clean_fitness = sanitize_non_finite_floats(solution.fitness)
-                clean_data = sanitize_non_finite_floats(sol_data)
-                writer.write({"id": solution.id, "fitness": clean_fitness, "output": clean_data})
+    @property
+    def best_so_far(self) -> Any:
+        """Keeps backward compatibility with the optimizer.best_so_far property."""
+        return self.best_solution
 
 
 def run_evolution_for_problem(
@@ -97,9 +42,10 @@ def run_evolution_for_problem(
     budget: int = 1000,
     iterations: int = 10,
     noise_std: float = 0.0,
-    log: bool = False,
+    log: bool = True,
     output_dir: str | Path = "experiments",
-) -> LLaMEA:
+    llm_name: str = "unknown",
+) -> ProblemEvolutionResult:
     """
     Run LLaMEA evolution to synthesize an optimization algorithm for a single BBOB problem.
 
@@ -151,23 +97,19 @@ def run_evolution_for_problem(
         log=False,  # Set log=False initially to prevent default exp-* folder creation
     )
 
-    # 4. Inject custom logger to keep outputs organized
-    if log:
-        base_dir = Path(output_dir) / experiment_name
-        optimizer.logger = ProblemLogger(base_dir=base_dir, name=experiment_name)
-        optimizer.llm.set_logger(optimizer.logger)
-        optimizer.log = True
-
-    # 5. Run the evolution loop
+    # 4. Run the evolution loop
     optimizer.run()
 
-    # 6. Display human-readable evolution summary
+    # 5. Display human-readable evolution summary
     best_sol = optimizer.best_so_far
+    best_error = float("inf")
     if best_sol is not None:
         meta = getattr(best_sol, "metadata", {})
         returned_val = meta.get("raw_fitness", "N/A")
         true_opt = meta.get("true_optimum", "N/A")
         final_err = meta.get("final_error", getattr(best_sol, "fitness", "N/A"))
+        if isinstance(final_err, (int, float)):
+            best_error = final_err
 
         err_str = f"{final_err:.6e}" if isinstance(final_err, (int, float)) else str(final_err)
         val_str = (
@@ -189,8 +131,18 @@ def run_evolution_for_problem(
         print(f"  Negated Error (LLaMEA Fitness): {fit_str} [= -|error|, higher is better]")
         print("=" * 65 + "\n")
 
-    # Return the optimizer instance so the caller can access optimizer.run_history and optimizer.best_so_far
-    return optimizer
+    return ProblemEvolutionResult(
+        problem_id=problem_id,
+        dim=dim,
+        mode=mode,
+        noise_std=noise_std,
+        best_error=best_error if best_error != float("inf") else None,
+        run_history=optimizer.run_history,
+        experiment_name=experiment_name,
+        llm_name=llm_name,
+        best_solution=best_sol,
+        error_msg=None,
+    )
 
 
 def run_evolution_for_problems(
@@ -229,6 +181,7 @@ def run_evolution_for_problems(
         Alias for max_evaluations.
     """
     eval_budget = budget if budget is not None else max_evaluations
+    llm_name = getattr(llm, "model", "unknown") if llm else "unknown"
 
     results: list[ProblemEvolutionResult] = []
     for problem in problems:
@@ -240,7 +193,7 @@ def run_evolution_for_problems(
                 f"\n>>> Evolving algorithm for BBOB Problem {problem_id} (noise_std={noise_std})..."
             )
         try:
-            optimizer = run_evolution_for_problem(
+            result = run_evolution_for_problem(
                 problem=problem,
                 llm=llm,
                 budget=eval_budget,
@@ -248,28 +201,13 @@ def run_evolution_for_problems(
                 noise_std=noise_std,
                 log=log,
                 output_dir=output_dir,
+                llm_name=llm_name,
             )
-
-            best_sol = optimizer.best_so_far
-            best_error = getattr(best_sol, "metadata", {}).get("final_error", float("inf"))
-            experiment_name = f"bbob_{problem_id}_dim{problem.dim}_{mode_str}"
-
-            results.append(
-                ProblemEvolutionResult(
-                    problem_id=problem_id,
-                    dim=problem.dim,
-                    mode=mode_str,
-                    noise_std=noise_std,
-                    best_error=best_error,
-                    run_history=optimizer.run_history,
-                    experiment_name=experiment_name,
-                    error_msg=None,
-                )
-            )
+            results.append(result)
 
             if verbose:
                 print(
-                    f"--- Completed BBOB Problem {problem_id}! Best Final Error: {best_error:.4f} ---"
+                    f"--- Completed BBOB Problem {problem_id}! Best Final Error: {result.best_error:.4f} ---"
                 )
         except Exception as e:
             if verbose:
@@ -283,6 +221,7 @@ def run_evolution_for_problems(
                     best_error=None,
                     run_history=[],
                     experiment_name=f"bbob_{problem_id}_dim{problem.dim}_{mode_str}",
+                    llm_name=llm_name,
                     error_msg=str(e),
                 )
             )

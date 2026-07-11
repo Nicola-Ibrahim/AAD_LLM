@@ -6,6 +6,7 @@ from llamea import Solution
 from problems.bbob import BBOBProblem
 from func_timeout import FunctionTimedOut
 from core.executor import AlgorithmExecutor
+from schema import IterationMetadata
 
 
 class Evaluator:
@@ -57,9 +58,9 @@ class Evaluator:
         evaluations_used: int,
         code_lines: int,
         code_length: int,
-    ) -> tuple[float, str, dict[str, Any]]:
+    ) -> tuple[float, str, IterationMetadata]:
         """
-        Compute final error, fitness score, feedback message, and metadata dictionary.
+        Compute final error, fitness score, feedback message, and metadata object.
         """
         true_optimum = self.problem.true_optimum
         final_error = abs(algorithm_returned_fitness - true_optimum)
@@ -73,32 +74,30 @@ class Evaluator:
         budget_consumed_pct = (evaluations_used / self.budget * 100) if self.budget > 0 else 0.0
         relative_error = (final_error / abs(true_optimum)) if true_optimum != 0.0 else final_error
         evals_per_second = (evaluations_used / runtime_seconds) if runtime_seconds > 0.0 else 0.0
-        error_per_evaluation = (
-            (final_error / evaluations_used) if evaluations_used > 0 else float("inf")
-        )
+        error_per_evaluation = (final_error / evaluations_used) if evaluations_used > 0 else None
         converged = final_error < 1e-6
 
-        metadata = {
-            "problem_id": self.problem.problem_id,
-            "dim": self.problem.dim,
-            "noise_std": self.noise_std,
-            "instance_id": self.problem.instance_id,
-            "true_optimum": true_optimum,
-            "raw_fitness": algorithm_returned_fitness,
-            "final_error": final_error,
-            "algorithm_name": algorithm_name,
-            "timed_out": False,
-            "runtime_seconds": runtime_seconds,
-            "evaluations_used": evaluations_used,
-            "budget_consumed_pct": budget_consumed_pct,
-            "relative_error": relative_error,
-            "evals_per_second": evals_per_second,
-            "error_per_evaluation": error_per_evaluation,
-            "converged": converged,
-            "convergence_threshold": 1e-6,
-            "code_lines": code_lines,
-            "code_length": code_length,
-        }
+        metadata = IterationMetadata(
+            problem_id=self.problem.problem_id,
+            dim=self.problem.dim,
+            noise_std=self.noise_std,
+            instance_id=self.problem.instance_id,
+            true_optimum=true_optimum,
+            raw_fitness=algorithm_returned_fitness,
+            final_error=final_error,
+            algorithm_name=algorithm_name,
+            timed_out=False,
+            runtime_seconds=runtime_seconds,
+            evaluations_used=evaluations_used,
+            budget_consumed_pct=budget_consumed_pct,
+            relative_error=relative_error,
+            evals_per_second=evals_per_second,
+            error_per_evaluation=error_per_evaluation,
+            converged=converged,
+            convergence_threshold=1e-6,
+            code_lines=code_lines,
+            code_length=code_length,
+        )
 
         # LLaMEA expects a fitness score where higher is better.
         # We negate the final_error so that an error of 0 is the max (0.0), and larger errors are more negative.
@@ -185,30 +184,30 @@ class Evaluator:
                     f"Execution failed: Your algorithm exceeded the {self.timeout_seconds}-second time limit. "
                     "Please optimize your loops and make the code more efficient."
                 )
-                metadata = {
-                    "problem_id": self.problem.problem_id,
-                    "dim": self.problem.dim,
-                    "noise_std": self.noise_std,
-                    "instance_id": self.problem.instance_id,
-                    "true_optimum": self.problem.true_optimum,
-                    "raw_fitness": float("inf"),
-                    "final_error": float("inf"),
-                    "algorithm_name": solution.name,
-                    "timed_out": True,
-                    "runtime_seconds": elapsed_time,
-                    "evaluations_used": evals_used,
-                    "budget_consumed_pct": budget_consumed_pct,
-                    "relative_error": float("inf"),
-                    "evals_per_second": evals_per_second,
-                    "error_per_evaluation": float("inf"),
-                    "converged": False,
-                    "convergence_threshold": 1e-6,
-                    "code_lines": code_lines,
-                    "code_length": code_length,
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                    "error_traceback": None,
-                }
+                metadata = IterationMetadata(
+                    problem_id=self.problem.problem_id,
+                    dim=self.problem.dim,
+                    noise_std=self.noise_std,
+                    instance_id=self.problem.instance_id,
+                    true_optimum=self.problem.true_optimum,
+                    raw_fitness=None,
+                    final_error=None,
+                    algorithm_name=solution.name,
+                    timed_out=True,
+                    runtime_seconds=elapsed_time,
+                    evaluations_used=evals_used,
+                    budget_consumed_pct=budget_consumed_pct,
+                    relative_error=None,
+                    evals_per_second=evals_per_second,
+                    error_per_evaluation=None,
+                    converged=False,
+                    convergence_threshold=1e-6,
+                    code_lines=code_lines,
+                    code_length=code_length,
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    error_traceback=None,
+                )
             else:
                 fitness_score = float("-inf")
                 feedback = (
@@ -216,30 +215,30 @@ class Evaluator:
                     f"{traceback.format_exc()}\n"
                     "Please fix the bugs."
                 )
-                metadata = {
-                    "problem_id": self.problem.problem_id,
-                    "dim": self.problem.dim,
-                    "noise_std": self.noise_std,
-                    "instance_id": self.problem.instance_id,
-                    "true_optimum": self.problem.true_optimum,
-                    "raw_fitness": float("inf"),
-                    "final_error": float("inf"),
-                    "algorithm_name": solution.name,
-                    "timed_out": False,
-                    "runtime_seconds": elapsed_time,
-                    "evaluations_used": evals_used,
-                    "budget_consumed_pct": budget_consumed_pct,
-                    "relative_error": float("inf"),
-                    "evals_per_second": evals_per_second,
-                    "error_per_evaluation": float("inf"),
-                    "converged": False,
-                    "convergence_threshold": 1e-6,
-                    "code_lines": code_lines,
-                    "code_length": code_length,
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                    "error_traceback": traceback.format_exc(),
-                }
+                metadata = IterationMetadata(
+                    problem_id=self.problem.problem_id,
+                    dim=self.problem.dim,
+                    noise_std=self.noise_std,
+                    instance_id=self.problem.instance_id,
+                    true_optimum=self.problem.true_optimum,
+                    raw_fitness=None,
+                    final_error=None,
+                    algorithm_name=solution.name,
+                    timed_out=False,
+                    runtime_seconds=elapsed_time,
+                    evaluations_used=evals_used,
+                    budget_consumed_pct=budget_consumed_pct,
+                    relative_error=None,
+                    evals_per_second=evals_per_second,
+                    error_per_evaluation=None,
+                    converged=False,
+                    convergence_threshold=1e-6,
+                    code_lines=code_lines,
+                    code_length=code_length,
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    error_traceback=traceback.format_exc(),
+                )
 
         # Set evaluation outcomes on the solution object
         solution.set_scores(fitness_score, feedback)
