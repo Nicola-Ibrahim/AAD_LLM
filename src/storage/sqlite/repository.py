@@ -1,38 +1,15 @@
-from pathlib import Path
-from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from schema import ExperimentSummary, IterationMetadata, ProblemProfile
-from storage.base import ExperimentStore
-from storage.sqlite.models import Base, ExperimentORM, IterationORM
+from storage.repository import ExperimentRepository
+from storage.sqlite.models import ExperimentORM, IterationORM
 
 
-class SQLiteStore(ExperimentStore):
-    """SQLite-based storage backend for LLaMEA experiment summaries using SQLAlchemy ORM."""
+class SQLiteExperimentRepository(ExperimentRepository):
+    """SQLite-based repository for LLaMEA experiment summaries using SQLAlchemy ORM."""
 
-    def __init__(self, db_path: str | Path):
-        self.db_path = Path(db_path)
-
-        # Ensure parent directories exist
-        if self.db_path.parent:
-            self.db_path.parent.mkdir(parents=True, exist_ok=True)
-
-        self.engine = create_engine(f"sqlite:///{self.db_path}", echo=False)
-        self.SessionLocal = sessionmaker(bind=self.engine)
-        self._init_db()
-
-    def _init_db(self) -> None:
-        """Initializes database schema and indexes."""
-
-        # SQLite foreign keys must be enabled on every connection
-        @event.listens_for(self.engine, "connect")
-        def set_sqlite_pragma(dbapi_connection, connection_record):
-            cursor = dbapi_connection.cursor()
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.close()
-
-        # Create tables if they do not exist
-        Base.metadata.create_all(self.engine)
+    def __init__(self, session_factory: sessionmaker):
+        self.SessionLocal = session_factory
 
     def save(self, summary: ExperimentSummary) -> None:
         """Saves or updates an ExperimentSummary in the SQLite database using SQLAlchemy."""
@@ -191,5 +168,3 @@ class SQLiteStore(ExperimentStore):
                     )
                 )
         return summaries
-
-

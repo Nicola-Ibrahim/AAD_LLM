@@ -88,7 +88,7 @@ We use a relational SQLite database schema with a split-storage strategy (storin
 
 If you make modifications to the data schemas, you can trigger database initialization or schema migrations directly from the command line:
 ```bash
-# Run migrations on the default database (experiments/results.db)
+# Run migrations on the default database (data/db.sqlite3)
 poe migrate
 
 # Or target a custom database file

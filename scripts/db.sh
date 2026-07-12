@@ -130,7 +130,7 @@ if [[ -z "$COMMAND" ]]; then
 fi
 
 # ─── Resolve Database Path ─────────────────────────────────
-DB_PATH="${DATABASE_URL:-$PROJECT_ROOT/experiments/results.db}"
+DB_PATH="${DATABASE_URL:-$PROJECT_ROOT/data/db.sqlite3}"
 DB_PATH="${DB_PATH#sqlite:///}"
 
 if [[ ! "$DB_PATH" = /* ]]; then

@@ -1,8 +1,7 @@
 from pathlib import Path
 from typing import Any
 
-from schema import ExperimentSummary, ProblemProfile
-from storage.base import ExperimentStore
+from storage.repository import ExperimentRepository
 from storage.blob import CodeBlobSaver
 from storage.mapper import build_experiment_summary
 
@@ -13,7 +12,7 @@ class ExperimentManager:
     Acts as the entry door/bouncer for the storage layer.
     """
 
-    def __init__(self, store: ExperimentStore, base_dir: str | Path = "experiments"):
+    def __init__(self, store: ExperimentRepository, base_dir: str | Path = "experiments"):
         self.store = store
         self.base_dir = Path(base_dir)
         self.blob_saver = CodeBlobSaver(self.base_dir)

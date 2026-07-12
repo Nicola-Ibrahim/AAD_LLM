@@ -1,3 +1,3 @@
-from storage.sqlite.store import SQLiteStore
+from storage.sqlite.repository import SQLiteExperimentRepository
 
-__all__ = ["SQLiteStore"]
+__all__ = ["SQLiteExperimentRepository"]

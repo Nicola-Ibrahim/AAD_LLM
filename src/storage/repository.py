@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 from schema import ExperimentSummary
 
 
-class ExperimentStore(ABC):
-    """Abstract base class representing a storage backend for experiment results metadata."""
+class ExperimentRepository(ABC):
+    """Abstract base class representing a repository interface for experiment results metadata."""
 
     @abstractmethod
     def save(self, summary: ExperimentSummary) -> None:
@@ -20,5 +20,3 @@ class ExperimentStore(ABC):
     ) -> list[ExperimentSummary]:
         """Loads and filters stored ExperimentSummary objects."""
         pass
-
-
