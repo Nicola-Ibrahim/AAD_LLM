@@ -22,6 +22,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# ─── Load Environment ──────────────────────────────────────
+ENV_FILE="$PROJECT_ROOT/.env"
+if [ -r "$ENV_FILE" ]; then
+    set -a
+    source "$ENV_FILE"
+    set +a
+fi
+
 # ─── Colors ────────────────────────────────────────────────
 RED='\033[0;31m'
 YELLOW='\033[1;33m'

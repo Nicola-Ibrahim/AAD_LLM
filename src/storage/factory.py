@@ -21,8 +21,7 @@ def initialize_storage(backend: str, path: str | Path) -> ExperimentManager:
     session_factory = build_session_factory(engine)
     store = SQLiteExperimentRepository(session_factory=session_factory)
 
-    # Keep code blobs in the gitignored experiments/ directory
-    project_root = path_obj.resolve().parent.parent
-    base_dir = project_root / "experiments"
+    # Keep code blobs in the gitignored data/ directory
+    base_dir = path_obj.resolve().parent
 
     return ExperimentManager(store=store, base_dir=base_dir)

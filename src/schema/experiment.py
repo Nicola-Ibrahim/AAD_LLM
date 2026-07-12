@@ -77,7 +77,7 @@ class CodeMetrics(BaseModel):
     code_path: str | None = Field(
         default=None,
         description="Path to the file containing the generated candidate algorithm source code.",
-        examples=["experiments/code/bbob_1_dim5_noisy/iter_1.py", None],
+        examples=["data/code/bbob_1_dim5_noisy/iter_1.py", None],
     )
 
 

@@ -1,0 +1,50 @@
+[Qwen]
+description = "Qwen Coder Models"
+
+[[Qwen.llms]]
+name = "Qwen2.5-Coder-1.5B-Instruct"
+description = "1.6 GB, Small / Fast CPU"
+repo = "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF"
+file = "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
+model = "qwen2.5-coder-1.5b-instruct-q4_k_m"
+
+[[Qwen.llms]]
+name = "Qwen2.5-Coder-3B-Instruct"
+description = "3.2 GB, Balanced Performance"
+repo = "Qwen/Qwen2.5-Coder-3B-Instruct-GGUF"
+file = "qwen2.5-coder-3b-instruct-q4_k_m.gguf"
+model = "qwen2.5-coder-3b-instruct-q4_k_m"
+
+[[Qwen.llms]]
+name = "Qwen2.5-Coder-7B-Instruct"
+description = "4.8 GB, Medium / Default Recommendation"
+repo = "Qwen/Qwen2.5-Coder-7B-Instruct-GGUF"
+file = "qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+model = "qwen2.5-coder-7b-instruct-q4_k_m"
+
+[DeepSeek]
+description = "DeepSeek Coder Models"
+
+[[DeepSeek.llms]]
+name = "DeepSeek-Coder-1.5B-Instruct"
+description = "1.6 GB, Small Alternative"
+repo = "DeepSeek-Coder-1.5B-Instruct-GGUF"
+file = "deepseek-coder-1.5b-instruct-q4_k_m.gguf"
+model = "deepseek-coder-1.5b-instruct-q4_k_m"
+
+[[DeepSeek.llms]]
+name = "DeepSeek-Coder-6.7B-Instruct"
+description = "4.8 GB, Medium Alternative"
+repo = "DeepSeek-Coder-6.7B-Instruct-GGUF"
+file = "deepseek-coder-6.7b-instruct-q4_k_m.gguf"
+model = "deepseek-coder-6.7b-instruct-q4_k_m"
+
+[Llama]
+description = "Llama Models"
+
+[[Llama.llms]]
+name = "Meta-Llama-3.1-8B-Instruct"
+description = "4.9 GB, Medium Alternative"
+repo = "QuantFactory/Meta-Llama-3.1-8B-Instruct-GGUF"
+file = "Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf"
+model = "Meta-Llama-3.1-8B-Instruct.Q4_K_M"

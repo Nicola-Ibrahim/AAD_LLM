@@ -88,7 +88,5 @@ celerybeat.pid
 /.devops/
 
 # Experiments & Server Logs
-/experiments/*
-!/experiments/.gitkeep
 /logs/*
 !/logs/.gitkeep

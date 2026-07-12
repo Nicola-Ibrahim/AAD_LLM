@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Any
 
+from schema import ExperimentSummary
 from storage.repository import ExperimentRepository
 from storage.blob import CodeBlobSaver
 from storage.mapper import build_experiment_summary
@@ -96,4 +97,3 @@ class ExperimentManager:
             dim=dim,
             mode=mode,
         )
-

@@ -88,11 +88,11 @@ We use a relational SQLite database schema with a split-storage strategy (storin
 
 If you make modifications to the data schemas, you can trigger database initialization or schema migrations directly from the command line:
 ```bash
-# Run migrations on the default database (data/db.sqlite3)
-poe migrate
+# Run the interactive database management CLI
+bash scripts/db.sh
 
-# Or target a custom database file
-poe migrate --db-path path/to/your/custom_database.db
+# Or execute a command directly (e.g. upgrade, status, reset)
+bash scripts/db.sh upgrade
 ```
 
 ## Project Structure
@@ -118,6 +118,8 @@ poe migrate --db-path path/to/your/custom_database.db
   - `core/` — Sandbox execution (`evaluator.py`, `executor.py`) and evolutionary runner (`runner.py`).
   - `schema/` — Pydantic models and data schemas.
   - `storage/` — Results summary persistence/loading, SQLite relational mapper, and code blob writer.
-- `experiments/` — Evolved python scripts containing the best optimization algorithms, conversation history, and evaluation results.
+- `data/` — Storage folder for runtime files:
+  - `db.sqlite3` — The relational SQLite database file storing experiment metrics.
+  - `code/` — Evolved python scripts containing the generated optimization algorithms.
 - `logs/` — Execution logs and model server outputs.
 

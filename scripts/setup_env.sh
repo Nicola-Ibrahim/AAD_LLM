@@ -17,6 +17,7 @@ if [ ! -f "$PROJECT_ROOT/.env" ]; then
         "# Local LLaMA.cpp Server / LM Studio Configuration" \
         "# ---------------------------------------------------------------------" \
         "LLM_PROVIDER=local" \
+        "DATABASE_URL=sqlite:///data/db.sqlite3" \
         "HF_REPO=Qwen/Qwen2.5-Coder-7B-Instruct-GGUF" \
         "HF_FILE=qwen2.5-coder-7b-instruct-q4_k_m.gguf" \
         "LOCAL_LLM_MODEL=qwen2.5-coder-7b-instruct-q4_k_m" \

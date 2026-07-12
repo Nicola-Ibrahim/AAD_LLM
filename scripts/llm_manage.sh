@@ -43,6 +43,14 @@ DEFAULT_FILE="qwen2.5-coder-7b-instruct-q4_k_m.gguf"
 
 MODEL_REPO="${HF_REPO:-}"
 MODEL_FILE="${HF_FILE:-}"
+ENV_INDICATOR="default"
+
+if [ -n "$MODEL_REPO" ] && [ -n "$MODEL_FILE" ]; then
+    ENV_INDICATOR="env"
+else
+    MODEL_REPO="$DEFAULT_REPO"
+    MODEL_FILE="$DEFAULT_FILE"
+fi
 
 TARGET_DIR="$HOME/models"
 HF_CACHE_DIR="$HOME/.cache/huggingface/hub"
@@ -73,7 +81,8 @@ if [[ -z "$COMMAND" ]]; then
         echo "  Select an operation:"
         echo ""
         options=(
-            "Download configured model      (download)"
+            "Download configured model ($MODEL_FILE) ($ENV_INDICATOR)"
+            "Select and download a model preset"
             "Delete downloaded models       (cleanup)"
             "List local cached models       (list)"
             "Exit"
@@ -86,10 +95,269 @@ if [[ -z "$COMMAND" ]]; then
             fi
             case $REPLY in
                 1) COMMAND="download"; break ;;
-                2) COMMAND="cleanup";  break ;;
-                3) COMMAND="list";     break ;;
-                4) echo "Exiting."; exit 0 ;;
-                *) echo -e "  ${RED}Invalid option. Please choose 1–4.${NC}" ;;
+                2)
+                    # Find correct python interpreter
+                    PYTHON_CMD="python3"
+                    if [ -f "$PROJECT_ROOT/.venv/bin/python" ]; then
+                        PYTHON_CMD="$PROJECT_ROOT/.venv/bin/python"
+                    elif command -v uv &> /dev/null; then
+                        PYTHON_CMD="uv run python"
+                    fi
+
+                    # Interactive Preset Submenu
+                    TOML_FILE="$PROJECT_ROOT/scripts/llms.toml"
+                    if [ ! -f "$TOML_FILE" ]; then
+                        echo -e "  ${RED}✗ ERROR: Preset file not found: $TOML_FILE${NC}"
+                        exit 1
+                    fi
+
+                    # Loop to support Back/Cancel actions
+                    while true; do
+                        print_header
+                        echo "  Loading model presets from scripts/llms.toml..."
+                        
+                        # Load categories dynamically using Python
+                        CATEGORIES_JSON=$("$PYTHON_CMD" -c "
+import json
+path = '$TOML_FILE'
+
+def parse_toml_fallback(content):
+    data = {}
+    current_section = None
+    current_obj = None
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        if line.startswith('[[') and line.endswith(']]'):
+            header = line[2:-2].strip()
+            parts = header.split('.')
+            section = parts[0]
+            if section not in data:
+                data[section] = {'llms': []}
+            current_obj = {}
+            data[section]['llms'].append(current_obj)
+            current_section = None
+        elif line.startswith('[') and line.endswith(']'):
+            header = line[1:-1].strip()
+            if header not in data:
+                data[header] = {'llms': []}
+            current_section = header
+            current_obj = None
+        elif '=' in line:
+            k, v = line.split('=', 1)
+            k = k.strip()
+            v = v.strip().strip('\"').strip('\'')
+            if current_obj is not None:
+                current_obj[k] = v
+            elif current_section is not None:
+                data[current_section][k] = v
+    return data
+
+try:
+    import tomllib
+    with open(path, 'rb') as f:
+        data = tomllib.load(f)
+except ImportError:
+    with open(path, 'r', encoding='utf-8') as f:
+        data = parse_toml_fallback(f.read())
+
+# Keep track of categories and their descriptions
+categories = []
+for cat_name, cat_data in data.items():
+    desc = cat_data.get('description', '')
+    categories.append({'name': cat_name, 'description': desc})
+print(json.dumps(categories))
+")
+
+                        CAT_COUNT=$("$PYTHON_CMD" -c "import json; print(len(json.loads('''$CATEGORIES_JSON''')))")
+                        if [ "$CAT_COUNT" -eq 0 ]; then
+                            echo -e "  ${RED}✗ ERROR: No model categories found in: $TOML_FILE${NC}"
+                            exit 1
+                        fi
+
+                        echo "  Select a model family/category:"
+                        echo ""
+                        cat_options=()
+                        for ((i=0; i<CAT_COUNT; i++)); do
+                            cat_name=$("$PYTHON_CMD" -c "import json; print(json.loads('''$CATEGORIES_JSON''')[$i]['name'])")
+                            cat_desc=$("$PYTHON_CMD" -c "import json; print(json.loads('''$CATEGORIES_JSON''')[$i]['description'])")
+                            cat_options+=("$cat_name   ($cat_desc)")
+                        done
+                        cat_options+=("Cancel")
+
+                        SELECTED_CAT=""
+                        select cat_opt in "${cat_options[@]}"; do
+                            if [[ -z "$cat_opt" && -z "$REPLY" ]]; then
+                                echo "Cancelled."
+                                exit 0
+                            fi
+                            if [ "$REPLY" -eq "$((CAT_COUNT + 1))" ]; then
+                                echo "Cancelled."
+                                exit 0
+                            fi
+                            if [ "$REPLY" -ge 1 ] && [ "$REPLY" -le "$CAT_COUNT" ]; then
+                                SELECTED_CAT=$("$PYTHON_CMD" -c "import json; print(json.loads('''$CATEGORIES_JSON''')[$((REPLY - 1))]['name'])")
+                                break
+                            else
+                                echo -e "  ${RED}Invalid option. Please choose 1–$((CAT_COUNT + 1)).${NC}"
+                            fi
+                        done
+
+                        # Fetch filtered models for the chosen category
+                        FILTERED_MODELS=$("$PYTHON_CMD" -c "
+import json
+path = '$TOML_FILE'
+
+def parse_toml_fallback(content):
+    data = {}
+    current_section = None
+    current_obj = None
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        if line.startswith('[[') and line.endswith(']]'):
+            header = line[2:-2].strip()
+            parts = header.split('.')
+            section = parts[0]
+            if section not in data:
+                data[section] = {'llms': []}
+            current_obj = {}
+            data[section]['llms'].append(current_obj)
+            current_section = None
+        elif line.startswith('[') and line.endswith(']'):
+            header = line[1:-1].strip()
+            if header not in data:
+                data[header] = {'llms': []}
+            current_section = header
+            current_obj = None
+        elif '=' in line:
+            k, v = line.split('=', 1)
+            k = k.strip()
+            v = v.strip().strip('\"').strip('\'')
+            if current_obj is not None:
+                current_obj[k] = v
+            elif current_section is not None:
+                data[current_section][k] = v
+    return data
+
+try:
+    import tomllib
+    with open(path, 'rb') as f:
+        data = tomllib.load(f)
+except ImportError:
+    with open(path, 'r', encoding='utf-8') as f:
+        data = parse_toml_fallback(f.read())
+
+selected_cat = '$SELECTED_CAT'
+filtered = data.get(selected_cat, {}).get('llms', [])
+print(json.dumps(filtered))
+")
+
+                        MODEL_COUNT=$("$PYTHON_CMD" -c "import json; print(len(json.loads('''$FILTERED_MODELS''')))")
+
+                        print_header
+                        echo "  Select a model from family '$SELECTED_CAT' to download and set as active in .env:"
+                        echo ""
+                        
+                        presets=()
+                        for ((i=0; i<MODEL_COUNT; i++)); do
+                            name=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$i]; print(m.get('name', ''))")
+                            desc=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$i]; print(m.get('description', ''))")
+                            presets+=("$name   ($desc)")
+                        done
+                        presets+=("Go Back to Category List")
+                        presets+=("Cancel")
+
+                        CHOSEN_MODEL_INDEX=""
+                        GO_BACK=false
+                        select preset_opt in "${presets[@]}"; do
+                            if [[ -z "$preset_opt" && -z "$REPLY" ]]; then
+                                echo "Cancelled."
+                                exit 0
+                            fi
+                            if [ "$REPLY" -eq "$((MODEL_COUNT + 1))" ]; then
+                                GO_BACK=true
+                                break
+                            fi
+                            if [ "$REPLY" -eq "$((MODEL_COUNT + 2))" ]; then
+                                echo "Cancelled."
+                                exit 0
+                            fi
+                            if [ "$REPLY" -ge 1 ] && [ "$REPLY" -le "$MODEL_COUNT" ]; then
+                                CHOSEN_MODEL_INDEX=$((REPLY - 1))
+                                break
+                            else
+                                echo -e "  ${RED}Invalid option. Please choose 1–$((MODEL_COUNT + 2)).${NC}"
+                            fi
+                        done
+
+                        if [ "$GO_BACK" = true ]; then
+                            continue
+                        fi
+
+                        # If we have a chosen model, read its details and break the main loop
+                        SELECTED_REPO=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$CHOSEN_MODEL_INDEX]; print(m.get('repo', ''))")
+                        SELECTED_FILE=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$CHOSEN_MODEL_INDEX]; print(m.get('file', ''))")
+                        SELECTED_MODEL=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$CHOSEN_MODEL_INDEX]; print(m.get('model', ''))")
+                        break
+                    done
+
+                    # Update .env file using Python helper
+                    echo -e "\n  ${CYAN}[i] Updating configuration in .env file...${NC}"
+                    touch "$ENV_FILE"
+
+                    "$PYTHON_CMD" -c "
+import os
+path = '$ENV_FILE'
+keys = {
+    'HF_REPO': '$SELECTED_REPO',
+    'HF_FILE': '$SELECTED_FILE',
+    'LOCAL_LLM_MODEL': '$SELECTED_MODEL'
+}
+lines = []
+if os.path.exists(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+else:
+    lines = [f'{k}={v}\n' for k, v in keys.items()]
+    
+new_lines = []
+updated = set()
+for line in lines:
+    stripped = line.strip()
+    if '=' in stripped and not stripped.startswith('#'):
+        k = stripped.split('=', 1)[0].strip()
+        if k in keys:
+            new_lines.append(f'{k}={keys[k]}\n')
+            updated.add(k)
+            continue
+    new_lines.append(line)
+    
+for k, v in keys.items():
+    if k not in updated:
+        new_lines.append(f'{k}={v}\n')
+        
+with open(path, 'w', encoding='utf-8') as f:
+    f.writelines(new_lines)
+"
+                    echo -e "  ${GREEN}✓ .env file updated successfully!${NC}"
+                    echo -e "    ${BOLD}HF_REPO:${NC}          $SELECTED_REPO"
+                    echo -e "    ${BOLD}HF_FILE:${NC}          $SELECTED_FILE"
+                    echo -e "    ${BOLD}LOCAL_LLM_MODEL:${NC}  $SELECTED_MODEL"
+                    echo ""
+
+                    # Set parameters for the download case execution
+                    MODEL_REPO="$SELECTED_REPO"
+                    MODEL_FILE="$SELECTED_FILE"
+                    COMMAND="download"
+                    break
+                    ;;
+                3) COMMAND="cleanup";  break ;;
+                4) COMMAND="list";     break ;;
+                5) echo "Exiting."; exit 0 ;;
+                *) echo -e "  ${RED}Invalid option. Please choose 1–5.${NC}" ;;
             esac
         done
     else

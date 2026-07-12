@@ -2,6 +2,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 
+
 def build_engine(db_path: str | Path, echo: bool = False):
     """Creates and configures a SQLite SQLAlchemy engine.
     - Creates parent directories if they don't exist.
