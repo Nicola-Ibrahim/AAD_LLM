@@ -168,66 +168,126 @@ stop_server() {
 start_server() {
     mkdir -p "$LOG_DIR"
 
-    # 1. Scan TARGET_DIR (~/models) for GGUF files
     local TARGET_DIR="$HOME/models"
+    local HF_CACHE_DIR="$HOME/.cache/huggingface/hub"
+    
     LOCAL_MODELS=()
     LOCAL_PATHS=()
     LOCAL_SIZES=()
+
+    # Helper function to register local model
+    register_local_model() {
+        local file=$1
+        local path=$2
+        local size=$3
+        
+        local i
+        for ((i=0; i<${#LOCAL_MODELS[@]}; i++)); do
+            if [ "${LOCAL_MODELS[i]}" = "$file" ]; then
+                return
+            fi
+        done
+        
+        LOCAL_MODELS+=("$file")
+        LOCAL_PATHS+=("$path")
+        LOCAL_SIZES+=("$size")
+    }
+
+    # 1. Scan TARGET_DIR (~/models) for GGUF files
     if [ -d "$TARGET_DIR" ]; then
         while IFS= read -r item; do
             [ -z "$item" ] && continue
-            LOCAL_PATHS+=("$item")
-            LOCAL_MODELS+=("$(basename "$item")")
-            LOCAL_SIZES+=("$(du -sh "$item" 2>/dev/null | cut -f1)")
+            register_local_model "$(basename "$item")" "$item" "$(du -sh "$item" 2>/dev/null | cut -f1)"
         done < <(find "$TARGET_DIR" -mindepth 1 -maxdepth 1 -name "*.gguf" 2>/dev/null || true)
+    fi
+
+    # 2. Scan Hugging Face cache recursively for GGUF files
+    if [ -d "$HF_CACHE_DIR" ]; then
+        while IFS= read -r item; do
+            [ -z "$item" ] && continue
+            register_local_model "$(basename "$item")" "$item" "$(du -sh "$item" 2>/dev/null | cut -f1)"
+        done < <(find "$HF_CACHE_DIR" -name "*.gguf" 2>/dev/null || true)
     fi
 
     local total_count=${#LOCAL_MODELS[@]}
     local selected_model=""
+    local selected_path=""
 
-    # Resolve selected model: HF_FILE env var, interactive select, first model, or fallback default
-    if [ -n "${HF_FILE:-}" ]; then
-        selected_model="$HF_FILE"
-    elif [[ -t 0 ]] && [ "$total_count" -gt 0 ]; then
-        print_header
-        echo -e "  ${CYAN}[i] Found $total_count model(s) in cache:${NC}"
-        echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
-        for i in "${!LOCAL_MODELS[@]}"; do
-            num=$((i + 1))
-            printf "    ${BOLD}%2d)${NC} %-52s [${YELLOW}%s${NC}]\n" "$num" "${LOCAL_MODELS[$i]}" "${LOCAL_SIZES[$i]}"
-            echo -e "        ${BOLD}Path:${NC} ${LOCAL_PATHS[$i]}"
-        done
-        echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
-        echo ""
-        echo -e "  ${BOLD}Options:${NC}"
-        echo -e "    - Type the number of the model to serve (e.g. ${CYAN}'1'${NC})."
-        echo -e "    - Press ${YELLOW}Enter${NC} or type ${YELLOW}'q'${NC} to cancel."
-        echo ""
-        
-        while true; do
-            read -rp "$(echo -e "  ${BOLD}Your choice:${NC} ")" choice
-            choice=$(echo "$choice" | tr '[:upper:]' '[:lower:]' | xargs)
+    # Resolve selected model: HF_FILE env var, interactive select, or error
+    if [[ -t 0 ]]; then
+        # Interactive mode
+        if [ "$total_count" -gt 0 ]; then
+            print_header
+            echo -e "  ${CYAN}[i] Available LLM Models:${NC}"
+            echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
+            local i
+            for ((i=0; i<${#LOCAL_MODELS[@]}; i++)); do
+                num=$((i + 1))
+                printf "    ${BOLD}%2d)${NC} %-52s [${YELLOW}%s${NC}]\n" "$num" "${LOCAL_MODELS[i]}" "${LOCAL_SIZES[i]}"
+                echo -e "        ${BOLD}Path:${NC} ${LOCAL_PATHS[i]}"
+            done
+            echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
+            echo ""
+            echo -e "  ${BOLD}Options:${NC}"
+            echo -e "    - Type the number of the model to serve (e.g. ${CYAN}'1'${NC})."
+            echo -e "    - Press ${YELLOW}Enter${NC} or type ${YELLOW}'q'${NC} to cancel."
+            echo ""
             
-            if [ -z "$choice" ] || [ "$choice" = "q" ] || [ "$choice" = "quit" ] || [ "$choice" = "exit" ]; then
-                echo -e "  ${YELLOW}Cancelled. No model was started.${NC}"
-                echo ""
-                exit 0
-            fi
-            
-            if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$total_count" ]; then
-                selected_model="${LOCAL_MODELS[$((choice - 1))]}"
-                break
-            else
-                echo -e "  ${RED}✗ ERROR: Invalid choice. Please choose a number between 1 and $total_count.${NC}"
-            fi
-        done
+            while true; do
+                read -rp "$(echo -e "  ${BOLD}Your choice:${NC} ")" choice
+                choice=$(echo "$choice" | tr '[:upper:]' '[:lower:]' | xargs)
+                
+                if [ -z "$choice" ] || [ "$choice" = "q" ] || [ "$choice" = "quit" ] || [ "$choice" = "exit" ]; then
+                    echo -e "  ${YELLOW}Cancelled. No model was started.${NC}"
+                    echo ""
+                    exit 0
+                fi
+                
+                if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$total_count" ]; then
+                    selected_model="${LOCAL_MODELS[$((choice - 1))]}"
+                    selected_path="${LOCAL_PATHS[$((choice - 1))]}"
+                    break
+                else
+                    echo -e "  ${RED}✗ ERROR: Invalid choice. Please choose a number between 1 and $total_count.${NC}"
+                fi
+            done
+        else
+            echo -e "  ${RED}✗ ERROR: No GGUF model files found.${NC}"
+            echo -e "  Scanned locations:"
+            echo -e "    • ${BOLD}$TARGET_DIR${NC}"
+            echo -e "    • ${BOLD}$HF_CACHE_DIR${NC}"
+            echo -e ""
+            echo -e "  Please download a model first using scripts/llm_manage.sh."
+            exit 1
+        fi
     else
-        echo -e "  ${RED}✗ ERROR: No active LLM model selected or available.${NC}"
-        echo -e "  Please download a model to $TARGET_DIR first."
-        exit 1
+        # Non-interactive mode
+        if [ -n "${HF_FILE:-}" ]; then
+            selected_model="$HF_FILE"
+            local i
+            for ((i=0; i<${#LOCAL_MODELS[@]}; i++)); do
+                if [ "${LOCAL_MODELS[i]}" = "$selected_model" ]; then
+                    selected_path="${LOCAL_PATHS[i]}"
+                    break
+                fi
+            done
+            if [ -z "$selected_path" ]; then
+                selected_path="$TARGET_DIR/$selected_model"
+            fi
+        elif [ "$total_count" -gt 0 ]; then
+            selected_model="${LOCAL_MODELS[0]}"
+            selected_path="${LOCAL_PATHS[0]}"
+            echo -e "  ${CYAN}[i] Non-interactive mode: Automatically selecting first available model: $selected_model${NC}"
+        else
+            echo -e "  ${RED}✗ ERROR: No GGUF model files found and no model specified in non-interactive mode.${NC}"
+            echo -e "  Scanned locations:"
+            echo -e "    • ${BOLD}$TARGET_DIR${NC}"
+            echo -e "    • ${BOLD}$HF_CACHE_DIR${NC}"
+            exit 1
+        fi
     fi
 
-    MODEL_PATH="$TARGET_DIR/$selected_model"
+    MODEL_PATH="$selected_path"
 
     if [ ! -f "$MODEL_PATH" ]; then
         echo -e "  ${RED}✗ ERROR: Model file not found at: $MODEL_PATH${NC}"

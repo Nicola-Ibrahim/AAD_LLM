@@ -43,8 +43,8 @@ if [ -r "$ENV_FILE" ]; then
     set +a
 fi
 
-MODEL_REPO=""
-MODEL_FILE=""
+MODEL_REPO="${MODEL_REPO:-}"
+MODEL_FILE="${MODEL_FILE:-}"
 TARGET_DIR="$HOME/models"
 HF_CACHE_DIR="$HOME/.cache/huggingface/hub"
 print_header() {
