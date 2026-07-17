@@ -18,9 +18,7 @@ if [ ! -f "$PROJECT_ROOT/.env" ]; then
         "# ---------------------------------------------------------------------" \
         "LLM_PROVIDER=local" \
         "DATABASE_URL=sqlite:///data/db.sqlite3" \
-        "HF_REPO=Qwen/Qwen2.5-Coder-7B-Instruct-GGUF" \
-        "HF_FILE=qwen2.5-coder-7b-instruct-q4_k_m.gguf" \
-        "LOCAL_LLM_MODEL=qwen2.5-coder-7b-instruct-q4_k_m" \
+        "# Model selection is managed on server startup — use: bash scripts/llm_server.sh start" \
         "LOCAL_LLM_BASE_URL=http://localhost:1234/v1" \
         "LOCAL_LLM_API_KEY=not-needed" \
         "" \
@@ -69,12 +67,12 @@ else
     echo "  [OK] Dependencies installed successfully via pip."
 fi
 
-# Check model server variables are set
+# Check LLM_PROVIDER is configured
 echo "  [INFO] Verifying configuration environment variables..."
-if [ -z "${LLM_PROVIDER:-}" ] || [ -z "${HF_REPO:-}" ] || [ -z "${HF_FILE:-}" ]; then
-    echo "  [WARNING] Some default model configuration environment variables are missing."
+if [ -z "${LLM_PROVIDER:-}" ]; then
+    echo "  [WARNING] LLM_PROVIDER is missing from .env file."
 else
-    echo "  [OK] Environment configurations verified: provider=${LLM_PROVIDER}, repo=${HF_REPO}, file=${HF_FILE}."
+    echo "  [OK] Environment configurations verified: provider=${LLM_PROVIDER}."
 fi
 
 echo ""

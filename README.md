@@ -109,11 +109,11 @@ bash scripts/db.sh upgrade
 - `scripts/` — Execution and orchestration scripts:
   - `setup_env.sh` — Initializes environment, checks env vars, and syncs dependencies via uv.
   - `llm_manage.sh` — Interactive CLI to download configured GGUF model, list cached models, or delete them.
-  - `llm_server.sh` — Interactive CLI to start, stop, restart, or check the status of the local model server.
+  - `llm_server.sh` — Interactive CLI to start, stop, or check the status of the local model server.
   - `slurm_submit.sh` — Batch job script for SLURM cluster execution.
   - `db.sh` — Interactive CLI to manage database migrations, clear table data, reset DB, and show stats.
 - `src/` — Source code library:
-  - `llm/` — LLM provider bindings (`providers.py`) and prompt constants (`prompts.py`).
+  - `llm/` — LLM provider bindings (`client.py`) and prompt constants (`prompts.py`).
   - `problems/` — Additive Gaussian noise wrapper around BBOB functions (`bbob.py`).
   - `core/` — Sandbox execution (`evaluator.py`, `executor.py`) and evolutionary runner (`runner.py`).
   - `schema/` — Pydantic models and data schemas.

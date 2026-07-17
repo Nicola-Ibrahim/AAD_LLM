@@ -53,6 +53,23 @@ def _wrap_sample_solution(llm):
     return llm
 
 
+def _get_local_model_name(base_url: str) -> str:
+    """Queries the local server's /models endpoint to get the active model name."""
+    import json
+    import urllib.request
+    
+    models_url = f"{base_url.rstrip('/')}/models"
+    try:
+        req = urllib.request.Request(models_url, headers={"User-Agent": "AAD-LLM-Model-Check"})
+        with urllib.request.urlopen(req, timeout=1.0) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            if "data" in data and len(data["data"]) > 0:
+                return data["data"][0].get("id", "local-model")
+    except Exception:
+        pass
+    return "local-model"
+
+
 def get_llm_client(provider: Provider | str, skip_validation: bool = False, **kwargs):
     """
     Factory: returns a native LLaMEA LLM instance for the given provider name.
@@ -74,11 +91,14 @@ def get_llm_client(provider: Provider | str, skip_validation: bool = False, **kw
 
         case Provider.LOCAL:
             api_key = os.environ.get("LOCAL_LLM_API_KEY", "not-needed")
-            model = os.environ.get("LOCAL_LLM_MODEL", "local-model")
             base_url = os.environ.get("LOCAL_LLM_BASE_URL", "http://localhost:1234/v1")
 
+            # Check connection first if not skipping validation
             if not skip_val:
                 _check_connection(base_url, "local")
+                model = _get_local_model_name(base_url)
+            else:
+                model = "local-model"
 
             # Instantiate native OpenAI_LLM class
             llm = OpenAI_LLM(api_key=api_key, model=model, **kwargs)

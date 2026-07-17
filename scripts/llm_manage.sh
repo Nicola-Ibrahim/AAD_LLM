@@ -27,34 +27,26 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
+# ─── Locate Python ─────────────────────────────────────────
+PYTHON_CMD="python3"
+if [ -f "$PROJECT_ROOT/.venv/bin/python" ]; then
+    PYTHON_CMD="$PROJECT_ROOT/.venv/bin/python"
+elif command -v uv &> /dev/null; then
+    PYTHON_CMD="uv run python"
+fi
+
 # ─── Load Environment ──────────────────────────────────────
 ENV_FILE="$PROJECT_ROOT/.env"
-ENV_EXISTS=false
 if [ -r "$ENV_FILE" ]; then
     set -a
     source "$ENV_FILE"
     set +a
-    ENV_EXISTS=true
 fi
 
-# Fallback defaults
-DEFAULT_REPO="Qwen/Qwen2.5-Coder-7B-Instruct-GGUF"
-DEFAULT_FILE="qwen2.5-coder-7b-instruct-q4_k_m.gguf"
-
-MODEL_REPO="${HF_REPO:-}"
-MODEL_FILE="${HF_FILE:-}"
-ENV_INDICATOR="default"
-
-if [ -n "$MODEL_REPO" ] && [ -n "$MODEL_FILE" ]; then
-    ENV_INDICATOR="env"
-else
-    MODEL_REPO="$DEFAULT_REPO"
-    MODEL_FILE="$DEFAULT_FILE"
-fi
-
+MODEL_REPO=""
+MODEL_FILE=""
 TARGET_DIR="$HOME/models"
 HF_CACHE_DIR="$HOME/.cache/huggingface/hub"
-
 print_header() {
     echo ""
     echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════╗${NC}"
@@ -77,32 +69,31 @@ fi
 # ─── Interactive Menu (if no command given) ────────────────
 if [[ -z "$COMMAND" ]]; then
     if [[ -t 0 ]]; then
-        print_header
-        echo "  Select an operation:"
-        echo ""
-        options=(
-            "Download configured model ($MODEL_FILE) ($ENV_INDICATOR)"
-            "Select and download a model preset"
-            "Delete downloaded models       (cleanup)"
-            "List local cached models       (list)"
-            "Exit"
-        )
-        COLUMNS=1
-        select opt in "${options[@]}"; do
-            if [[ -z "$opt" && -z "$REPLY" ]]; then
-                echo "No selection made. Exiting."
+        while true; do
+            print_header
+            echo -e "  ${BOLD}Select an operation:${NC}"
+            echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
+            echo -e "    ${BOLD}1)${NC} Select and download a model preset"
+            echo -e "    ${BOLD}2)${NC} Download from custom Hugging Face repo & file"
+            echo -e "    ${BOLD}3)${NC} Delete downloaded models               (cleanup)"
+            echo -e "    ${BOLD}4)${NC} List local cached models               (list)"
+            echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
+            echo ""
+            echo -e "  ${BOLD}Options:${NC}"
+            echo -e "    - Type the number of the option to execute (e.g. ${CYAN}'1'${NC})."
+            echo -e "    - Press ${YELLOW}Enter${NC} or type ${YELLOW}'q'${NC} to exit."
+            echo ""
+            
+            read -rp "$(echo -e "  ${BOLD}Your choice:${NC} ")" choice
+            choice=$(echo "$choice" | tr '[:upper:]' '[:lower:]' | xargs)
+            
+            if [ -z "$choice" ] || [ "$choice" = "q" ] || [ "$choice" = "quit" ] || [ "$choice" = "exit" ]; then
+                echo -e "  ${YELLOW}Exiting.${NC}"
                 exit 0
             fi
-            case $REPLY in
-                1) COMMAND="download"; break ;;
-                2)
-                    # Find correct python interpreter
-                    PYTHON_CMD="python3"
-                    if [ -f "$PROJECT_ROOT/.venv/bin/python" ]; then
-                        PYTHON_CMD="$PROJECT_ROOT/.venv/bin/python"
-                    elif command -v uv &> /dev/null; then
-                        PYTHON_CMD="uv run python"
-                    fi
+            
+            case "$choice" in
+                1)
 
                     # Interactive Preset Submenu
                     TOML_FILE="$PROJECT_ROOT/scripts/llms.toml"
@@ -176,31 +167,36 @@ print(json.dumps(categories))
                             exit 1
                         fi
 
-                        echo "  Select a model family/category:"
-                        echo ""
-                        cat_options=()
+                        print_header
+                        echo -e "  ${BOLD}Select a model family/category:${NC}"
+                        echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
                         for ((i=0; i<CAT_COUNT; i++)); do
                             cat_name=$("$PYTHON_CMD" -c "import json; print(json.loads('''$CATEGORIES_JSON''')[$i]['name'])")
                             cat_desc=$("$PYTHON_CMD" -c "import json; print(json.loads('''$CATEGORIES_JSON''')[$i]['description'])")
-                            cat_options+=("$cat_name   ($cat_desc)")
+                            printf "    ${BOLD}%2d)${NC} %-25s - %s\n" "$((i + 1))" "$cat_name" "$cat_desc"
                         done
-                        cat_options+=("Cancel")
+                        echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
+                        echo ""
+                        echo -e "  ${BOLD}Options:${NC}"
+                        echo -e "    - Type the number of the family (e.g. ${CYAN}'1'${NC})."
+                        echo -e "    - Press ${YELLOW}Enter${NC} or type ${YELLOW}'q'${NC} to cancel."
+                        echo ""
 
                         SELECTED_CAT=""
-                        select cat_opt in "${cat_options[@]}"; do
-                            if [[ -z "$cat_opt" && -z "$REPLY" ]]; then
-                                echo "Cancelled."
+                        while true; do
+                            read -rp "$(echo -e "  ${BOLD}Your choice:${NC} ")" cat_choice
+                            cat_choice=$(echo "$cat_choice" | tr '[:upper:]' '[:lower:]' | xargs)
+                            
+                            if [ -z "$cat_choice" ] || [ "$cat_choice" = "q" ] || [ "$cat_choice" = "quit" ] || [ "$cat_choice" = "exit" ] || [ "$cat_choice" = "cancel" ]; then
+                                echo -e "  ${YELLOW}Cancelled.${NC}"
                                 exit 0
                             fi
-                            if [ "$REPLY" -eq "$((CAT_COUNT + 1))" ]; then
-                                echo "Cancelled."
-                                exit 0
-                            fi
-                            if [ "$REPLY" -ge 1 ] && [ "$REPLY" -le "$CAT_COUNT" ]; then
-                                SELECTED_CAT=$("$PYTHON_CMD" -c "import json; print(json.loads('''$CATEGORIES_JSON''')[$((REPLY - 1))]['name'])")
+                            
+                            if [[ "$cat_choice" =~ ^[0-9]+$ ]] && [ "$cat_choice" -ge 1 ] && [ "$cat_choice" -le "$CAT_COUNT" ]; then
+                                SELECTED_CAT=$("$PYTHON_CMD" -c "import json; print(json.loads('''$CATEGORIES_JSON''')[$((cat_choice - 1))]['name'])")
                                 break
                             else
-                                echo -e "  ${RED}Invalid option. Please choose 1–$((CAT_COUNT + 1)).${NC}"
+                                echo -e "  ${RED}✗ ERROR: Invalid choice. Please choose a number between 1 and $CAT_COUNT.${NC}"
                             fi
                         done
 
@@ -258,38 +254,42 @@ print(json.dumps(filtered))
                         MODEL_COUNT=$("$PYTHON_CMD" -c "import json; print(len(json.loads('''$FILTERED_MODELS''')))")
 
                         print_header
-                        echo "  Select a model from family '$SELECTED_CAT' to download and set as active in .env:"
-                        echo ""
-                        
-                        presets=()
+                        echo -e "  ${BOLD}Select a model from family '$SELECTED_CAT' to download:${NC}"
+                        echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
                         for ((i=0; i<MODEL_COUNT; i++)); do
                             name=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$i]; print(m.get('name', ''))")
                             desc=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$i]; print(m.get('description', ''))")
-                            presets+=("$name   ($desc)")
+                            printf "    ${BOLD}%2d)${NC} %-35s - %s\n" "$((i + 1))" "$name" "$desc"
                         done
-                        presets+=("Go Back to Category List")
-                        presets+=("Cancel")
+                        echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
+                        echo ""
+                        echo -e "  ${BOLD}Options:${NC}"
+                        echo -e "    - Type the number of the model to download."
+                        echo -e "    - Type ${YELLOW}'b'${NC} (or ${YELLOW}'back'${NC}) to return to the family list."
+                        echo -e "    - Press ${YELLOW}Enter${NC} or type ${YELLOW}'q'${NC} to cancel."
+                        echo ""
 
                         CHOSEN_MODEL_INDEX=""
                         GO_BACK=false
-                        select preset_opt in "${presets[@]}"; do
-                            if [[ -z "$preset_opt" && -z "$REPLY" ]]; then
-                                echo "Cancelled."
+                        while true; do
+                            read -rp "$(echo -e "  ${BOLD}Your choice:${NC} ")" preset_choice
+                            preset_choice=$(echo "$preset_choice" | tr '[:upper:]' '[:lower:]' | xargs)
+                            
+                            if [ -z "$preset_choice" ] || [ "$preset_choice" = "q" ] || [ "$preset_choice" = "quit" ] || [ "$preset_choice" = "exit" ] || [ "$preset_choice" = "cancel" ]; then
+                                echo -e "  ${YELLOW}Cancelled.${NC}"
                                 exit 0
                             fi
-                            if [ "$REPLY" -eq "$((MODEL_COUNT + 1))" ]; then
+                            
+                            if [ "$preset_choice" = "back" ] || [ "$preset_choice" = "b" ]; then
                                 GO_BACK=true
                                 break
                             fi
-                            if [ "$REPLY" -eq "$((MODEL_COUNT + 2))" ]; then
-                                echo "Cancelled."
-                                exit 0
-                            fi
-                            if [ "$REPLY" -ge 1 ] && [ "$REPLY" -le "$MODEL_COUNT" ]; then
-                                CHOSEN_MODEL_INDEX=$((REPLY - 1))
+                            
+                            if [[ "$preset_choice" =~ ^[0-9]+$ ]] && [ "$preset_choice" -ge 1 ] && [ "$preset_choice" -le "$MODEL_COUNT" ]; then
+                                CHOSEN_MODEL_INDEX=$((preset_choice - 1))
                                 break
                             else
-                                echo -e "  ${RED}Invalid option. Please choose 1–$((MODEL_COUNT + 2)).${NC}"
+                                echo -e "  ${RED}✗ ERROR: Invalid choice. Please choose a number between 1 and $MODEL_COUNT.${NC}"
                             fi
                         done
 
@@ -304,60 +304,36 @@ print(json.dumps(filtered))
                         break
                     done
 
-                    # Update .env file using Python helper
-                    echo -e "\n  ${CYAN}[i] Updating configuration in .env file...${NC}"
-                    touch "$ENV_FILE"
-
-                    "$PYTHON_CMD" -c "
-import os
-path = '$ENV_FILE'
-keys = {
-    'HF_REPO': '$SELECTED_REPO',
-    'HF_FILE': '$SELECTED_FILE',
-    'LOCAL_LLM_MODEL': '$SELECTED_MODEL'
-}
-lines = []
-if os.path.exists(path):
-    with open(path, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-else:
-    lines = [f'{k}={v}\n' for k, v in keys.items()]
-    
-new_lines = []
-updated = set()
-for line in lines:
-    stripped = line.strip()
-    if '=' in stripped and not stripped.startswith('#'):
-        k = stripped.split('=', 1)[0].strip()
-        if k in keys:
-            new_lines.append(f'{k}={keys[k]}\n')
-            updated.add(k)
-            continue
-    new_lines.append(line)
-    
-for k, v in keys.items():
-    if k not in updated:
-        new_lines.append(f'{k}={v}\n')
-        
-with open(path, 'w', encoding='utf-8') as f:
-    f.writelines(new_lines)
-"
-                    echo -e "  ${GREEN}✓ .env file updated successfully!${NC}"
-                    echo -e "    ${BOLD}HF_REPO:${NC}          $SELECTED_REPO"
-                    echo -e "    ${BOLD}HF_FILE:${NC}          $SELECTED_FILE"
-                    echo -e "    ${BOLD}LOCAL_LLM_MODEL:${NC}  $SELECTED_MODEL"
-                    echo ""
-
                     # Set parameters for the download case execution
                     MODEL_REPO="$SELECTED_REPO"
                     MODEL_FILE="$SELECTED_FILE"
                     COMMAND="download"
                     break
                     ;;
+                2)
+                    echo ""
+                    echo -e "  ${BOLD}Enter Hugging Face Repository ID (e.g. Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF):${NC}"
+                    read -rp "  Repository: " custom_repo
+                    echo -e "  ${BOLD}Enter GGUF Filename (e.g. qwen2.5-coder-1.5b-instruct-q4_k_m.gguf):${NC}"
+                    read -rp "  Filename: " custom_file
+
+                    if [ -z "$custom_repo" ] || [ -z "$custom_file" ]; then
+                        echo -e "  ${RED}✗ ERROR: Repository and filename cannot be empty.${NC}"
+                        exit 1
+                    fi
+
+                    MODEL_REPO="$custom_repo"
+                    MODEL_FILE="$custom_file"
+                    COMMAND="download"
+                    break
+                    ;;
                 3) COMMAND="cleanup";  break ;;
                 4) COMMAND="list";     break ;;
-                5) echo "Exiting."; exit 0 ;;
-                *) echo -e "  ${RED}Invalid option. Please choose 1–5.${NC}" ;;
+                *)
+                    echo -e "  ${RED}✗ ERROR: Invalid choice. Please choose a number between 1 and 4.${NC}"
+                    echo ""
+                    sleep 1
+                    ;;
             esac
         done
     else
@@ -410,21 +386,13 @@ case "$COMMAND" in
     download)
         print_header
         
-        # 1. Check if model attributes are set in environment
+        # 1. Check if model attributes are configured
         if [ -z "$MODEL_REPO" ] || [ -z "$MODEL_FILE" ]; then
-            echo -e "  ${YELLOW}! Warning: Model attributes not configured in your .env file.${NC}"
-            if [ "$ENV_EXISTS" = true ]; then
-                echo -e "    Please define ${BOLD}HF_REPO${NC} and ${BOLD}HF_FILE${NC} in: $ENV_FILE"
-            else
-                echo -e "    No .env file was found in: $PROJECT_ROOT"
-            fi
-            echo -e "    Falling back to defaults:"
-            echo -e "      ${BOLD}Default Repo:${NC} $DEFAULT_REPO"
-            echo -e "      ${BOLD}Default File:${NC} $DEFAULT_FILE"
-            echo ""
-            
-            MODEL_REPO="$DEFAULT_REPO"
-            MODEL_FILE="$DEFAULT_FILE"
+            echo -e "  ${RED}✗ ERROR: No active LLM model selected.${NC}" >&2
+            echo -e "    Please select or download a preset first using option 2," >&2
+            echo -e "    or download a custom model using option 3." >&2
+            echo "" >&2
+            exit 1
         fi
 
         target_path="$TARGET_DIR/$MODEL_FILE"
@@ -496,6 +464,8 @@ case "$COMMAND" in
         echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
         echo ""
         ;;
+
+
 
     cleanup)
         print_header
@@ -574,7 +544,7 @@ case "$COMMAND" in
 
     *)
         echo -e "  ${RED}Unknown command: '$COMMAND'${NC}"
-        echo "  Valid commands: download, cleanup, list"
+        echo "  Valid commands: download, cleanup, list, select"
         exit 1
         ;;
 esac

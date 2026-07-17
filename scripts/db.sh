@@ -88,26 +88,33 @@ fi
 # ─── Interactive Menu (if no command given) ────────────────
 if [[ -z "$COMMAND" ]]; then
     if [[ -t 0 ]]; then
-        print_header
-        echo "  Select an operation:"
-        echo ""
-        options=(
-            "Apply pending migrations        (upgrade)"
-            "Roll back last migration        (rollback)"
-            "Create new migration revision   (revision)"
-            "Create + apply migration        (both)"
-            "Clear all data from tables      (clear)"
-            "Reset database from scratch     (reset)"
-            "Show migration status & stats   (status)"
-            "Exit"
-        )
-        COLUMNS=1
-        select opt in "${options[@]}"; do
-            if [[ -z "$opt" && -z "$REPLY" ]]; then
-                echo "No selection made. Exiting."
+        while true; do
+            print_header
+            echo -e "  ${BOLD}Select an operation:${NC}"
+            echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
+            echo -e "    ${BOLD}1)${NC} Apply pending migrations        (upgrade)"
+            echo -e "    ${BOLD}2)${NC} Roll back last migration        (rollback)"
+            echo -e "    ${BOLD}3)${NC} Create new migration revision   (revision)"
+            echo -e "    ${BOLD}4)${NC} Create + apply migration        (both)"
+            echo -e "    ${BOLD}5)${NC} Clear all data from tables      (clear)"
+            echo -e "    ${BOLD}6)${NC} Reset database from scratch     (reset)"
+            echo -e "    ${BOLD}7)${NC} Show migration status & stats   (status)"
+            echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
+            echo ""
+            echo -e "  ${BOLD}Options:${NC}"
+            echo -e "    - Type the number of the option to execute (e.g. ${CYAN}'1'${NC})."
+            echo -e "    - Press ${YELLOW}Enter${NC} or type ${YELLOW}'q'${NC} to exit."
+            echo ""
+
+            read -rp "$(echo -e "  ${BOLD}Your choice:${NC} ")" choice
+            choice=$(echo "$choice" | tr '[:upper:]' '[:lower:]' | xargs)
+
+            if [ -z "$choice" ] || [ "$choice" = "q" ] || [ "$choice" = "quit" ] || [ "$choice" = "exit" ]; then
+                echo -e "  ${YELLOW}Exiting.${NC}"
                 exit 0
             fi
-            case $REPLY in
+
+            case "$choice" in
                 1) COMMAND="upgrade";  break ;;
                 2) COMMAND="rollback"; break ;;
                 3)
@@ -127,8 +134,11 @@ if [[ -z "$COMMAND" ]]; then
                 5) COMMAND="clear";  break ;;
                 6) COMMAND="reset";  break ;;
                 7) COMMAND="status"; break ;;
-                8) echo "Exiting."; exit 0 ;;
-                *) echo -e "  ${RED}Invalid option. Please choose 1–8.${NC}" ;;
+                *)
+                    echo -e "  ${RED}✗ ERROR: Invalid choice. Please choose a number between 1 and 7.${NC}"
+                    echo ""
+                    sleep 1
+                    ;;
             esac
         done
     else
