@@ -52,6 +52,43 @@ load_env_var() {
     fi
 }
 
+# Helper to convert KB to human readable MB/GB
+format_kb() {
+    local kb=$1
+    "$PYTHON_CMD" -c "
+kb = float('$kb')
+if kb >= 1048576:
+    print(f'{kb/1048576:.2f} GB')
+elif kb >= 1024:
+    print(f'{kb/1024:.2f} MB')
+else:
+    print(f'{kb} KB')
+" 2>/dev/null || echo "${kb} KB"
+}
+
+# Helper to output process diagnostics
+show_pid_stats() {
+    local pid=$1
+    if kill -0 "$pid" 2>/dev/null; then
+        local cpu="" mem="" rss="" vsz="" elapsed="" started=""
+        read -r cpu mem rss vsz < <(ps -p "$pid" -o %cpu=,%mem=,rss=,vsz= 2>/dev/null || true)
+        read -r elapsed started < <(ps -p "$pid" -o etime=,lstart= 2>/dev/null || true)
+        
+        if [ -n "$rss" ]; then
+            local rss_formatted
+            rss_formatted=$(format_kb "$rss")
+            local vsz_formatted
+            vsz_formatted=$(format_kb "$vsz")
+            
+            echo -e "      ${BOLD}CPU Usage:${NC}      $cpu%"
+            echo -e "      ${BOLD}Memory (RSS):${NC}   $rss_formatted ($mem% of system total)"
+            echo -e "      ${BOLD}Virtual Mem:${NC}    $vsz_formatted"
+            echo -e "      ${BOLD}Start Time:${NC}     $started"
+            echo -e "      ${BOLD}Uptime:${NC}         $elapsed"
+        fi
+    fi
+}
+
 print_header() {
     echo ""
     echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════╗${NC}"
@@ -390,7 +427,7 @@ try:
     print(data['data'][0]['id'])
 except:
     print('(none/server offline)')
-" 2>/dev/null || echo "(none/server offline)")
+" 2>/dev/null || true)
         
         echo -e "    ${BOLD}Active Model:${NC} $active_model"
         echo ""
@@ -402,6 +439,7 @@ except:
             pid=$(cat "$PID_FILE")
             if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
                 echo -e "    ${GREEN}● Active (PID: $pid from server.pid)${NC}"
+                show_pid_stats "$pid"
                 active=1
             fi
         fi
@@ -412,6 +450,10 @@ except:
             pids=$(pgrep -f "llama_cpp.server" 2>/dev/null || true)
             if [ -n "$pids" ]; then
                 echo -e "    ${GREEN}● Active (PIDs: $pids detected via pgrep)${NC}"
+                for p in $pids; do
+                    echo -e "      ${CYAN}[PID $p Stats]${NC}"
+                    show_pid_stats "$p"
+                done
                 active=1
             fi
         fi
