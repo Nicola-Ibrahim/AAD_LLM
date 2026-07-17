@@ -151,3 +151,15 @@ class BBOBProblem:
         subscripts = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
         f_sub = str(self.problem_id).translate(subscripts)
         return f"{self.name} (bbob f{f_sub}, {self.dim}-D, inst. {self.instance_id})"
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        # Exclude C++ unpicklable wrapper
+        state["_clean_problem"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        # Re-initialize clean IOH problem instance on unpickling
+        from ioh import get_problem, ProblemClass
+        self._clean_problem = get_problem(self.problem_id, self.instance_id, self.dim, ProblemClass.BBOB)

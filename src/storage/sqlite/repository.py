@@ -1,8 +1,9 @@
+from datetime import datetime
 from sqlalchemy.orm import sessionmaker
 
 from schema import ExperimentSummary, IterationMetadata, ProblemProfile
 from storage.repository import ExperimentRepository
-from storage.sqlite.models import ExperimentORM, IterationORM
+from storage.sqlite.tables import ExperimentORM, IterationORM, ErrorLogORM, ExperimentMode
 
 
 class SQLiteExperimentRepository(ExperimentRepository):
@@ -20,8 +21,10 @@ class SQLiteExperimentRepository(ExperimentRepository):
                 .filter_by(
                     problem_id=summary.problem.problem_id,
                     dim=summary.problem.dim,
-                    mode=summary.mode,
+                    mode=ExperimentMode(summary.mode),
                     llm_name=summary.llm_name,
+                    noise_std=summary.problem.noise_std,
+                    run_id=summary.run_id,
                 )
                 .first()
             )
@@ -34,13 +37,16 @@ class SQLiteExperimentRepository(ExperimentRepository):
             experiment = ExperimentORM(
                 problem_id=summary.problem.problem_id,
                 dim=summary.problem.dim,
-                mode=summary.mode,
+                mode=ExperimentMode(summary.mode),
                 llm_name=summary.llm_name,
                 noise_std=summary.problem.noise_std,
                 true_optimum=summary.problem.true_optimum,
                 best_iteration=summary.best_iteration,
                 best_algorithm=summary.best_algorithm,
                 best_final_error=summary.best_final_error,
+                run_id=summary.run_id,
+                status="completed",
+                finished_at=datetime.utcnow().isoformat(),
             )
 
             for it in summary.iterations:
@@ -64,6 +70,17 @@ class SQLiteExperimentRepository(ExperimentRepository):
                     k: v for k, v in flat_dict.items() if k in IterationORM.__table__.columns
                 }
                 iteration = IterationORM(**filtered_dict)
+
+                # Create separate ErrorLogORM if error information is present
+                error_dict = it_dict.get("error", {})
+                if error_dict.get("error_type"):
+                    error_log = ErrorLogORM(
+                        error_type=error_dict.get("error_type"),
+                        error_message=error_dict.get("error_message"),
+                        error_traceback=error_dict.get("error_traceback"),
+                    )
+                    iteration.error_log = error_log
+
                 experiment.iterations.append(iteration)
 
             session.add(experiment)
@@ -135,9 +152,9 @@ class SQLiteExperimentRepository(ExperimentRepository):
                         "code_path": row_dict.get("code_path"),
                     }
                     error_fields = {
-                        "error_type": row_dict.get("error_type"),
-                        "error_message": row_dict.get("error_message"),
-                        "error_traceback": row_dict.get("error_traceback"),
+                        "error_type": it.error_log.error_type if it.error_log else None,
+                        "error_message": it.error_log.error_message if it.error_log else None,
+                        "error_traceback": it.error_log.error_traceback if it.error_log else None,
                     }
                     convergence_fields = {
                         "converged": row_dict.get("converged"),
@@ -158,8 +175,9 @@ class SQLiteExperimentRepository(ExperimentRepository):
 
                 summaries.append(
                     ExperimentSummary(
-                        mode=exp.mode,
+                        mode=exp.mode.value,
                         llm_name=exp.llm_name,
+                        run_id=exp.run_id,
                         problem=problem_profile,
                         best_iteration=exp.best_iteration,
                         best_algorithm=exp.best_algorithm,

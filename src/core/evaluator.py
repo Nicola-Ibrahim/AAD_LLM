@@ -1,5 +1,7 @@
 import time
 import traceback
+import json
+from pathlib import Path
 from typing import Any
 import numpy as np
 from llamea import Solution
@@ -34,6 +36,9 @@ class Evaluator:
         budget: int = 1000,
         timeout_seconds: float = 10.0,
         noise_std: float = 0.0,
+        run_id: int = 1,
+        json_checkpoint_path: Path | str | None = None,
+        experiment_meta: dict | None = None,
     ):
         """
         Initialize the evaluator.
@@ -56,7 +61,43 @@ class Evaluator:
         self.budget = budget
         self.timeout_seconds = timeout_seconds
         self.noise_std = noise_std
+        self.run_id = run_id
+        self.json_checkpoint_path = Path(json_checkpoint_path) if json_checkpoint_path else None
+        self.experiment_meta = experiment_meta or {}
         self.executor = AlgorithmExecutor(timeout_seconds=self.timeout_seconds)
+        self._current_iteration = 0
+        self._write_checkpoint_header()
+
+    def _write_checkpoint_header(self) -> None:
+        """Write an empty envelope JSON so the file is self-describing from the start."""
+        if self.json_checkpoint_path is None:
+            return
+        path = self.json_checkpoint_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            return  # don't overwrite an existing checkpoint (crash recovery scenario)
+        envelope = {"experiment": self.experiment_meta, "iterations": []}
+        tmp = path.with_suffix(".tmp")
+        with tmp.open("w") as f:
+            json.dump(envelope, f, indent=2)
+        tmp.replace(path)
+
+    def _append_to_json_checkpoint(self, metadata: IterationMetadata) -> None:
+        """Atomically appends one IterationMetadata record to the envelope checkpoint JSON."""
+        if self.json_checkpoint_path is None:
+            return
+        path = self.json_checkpoint_path
+        try:
+            with path.open("r") as f:
+                envelope = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            # Corrupt file — rebuild from header and current record only
+            envelope = {"experiment": self.experiment_meta, "iterations": []}
+        envelope["iterations"].append(metadata.to_json_dict())
+        tmp = path.with_suffix(".tmp")
+        with tmp.open("w") as f:
+            json.dump(envelope, f, indent=2)
+        tmp.replace(path)  # atomic rename on Linux/macOS
 
     @property
     def problem_profile(self) -> ProblemProfile:
@@ -291,6 +332,10 @@ class Evaluator:
                 )
 
         # Set evaluation outcomes on the solution object
+        self._current_iteration += 1
+        metadata.iteration = self._current_iteration
+        self._append_to_json_checkpoint(metadata)
+
         solution.set_scores(fitness_score, feedback)
 
         # Attach metadata to the solution object for later serialization
@@ -299,9 +344,9 @@ class Evaluator:
         return solution
 
     def __getstate__(self):
-        # Exclude unpicklable C++ object wrappers (ioh problem, executor) for joblib/pickle state logging
+        # Exclude unpicklable C++ object wrappers (executor) for joblib/pickle state logging.
+        # problem is picklable since BBOBProblem implements its own self-healing __getstate__/__setstate__.
         state = self.__dict__.copy()
-        state["problem"] = None
         state["executor"] = None
         return state
 

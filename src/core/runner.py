@@ -24,11 +24,13 @@ class ProblemEvolutionResult:
     mode: str
     noise_std: float
     best_error: float | None
+    run_id: int = 1
     run_history: list[Any] = field(default_factory=list)
     experiment_name: str = ""
     llm_name: str = ""
     error_msg: str | None = None
     best_solution: Any = None
+    problem_profile: Any = None
 
     @property
     def best_so_far(self) -> Any:
@@ -45,6 +47,8 @@ def run_evolution_for_problem(
     log: bool = True,
     output_dir: str | Path = "experiments",
     llm_name: str = "unknown",
+    run_id: int = 1,
+    checkpoint_dir: Path | None = None,
 ) -> ProblemEvolutionResult:
     """
     Run LLaMEA evolution to synthesize an optimization algorithm for a single BBOB problem.
@@ -79,7 +83,27 @@ def run_evolution_for_problem(
     print(f"\n--- Starting LLaMEA Evolution for BBOB-{problem_id} (Dim {dim}, Mode {mode}) ---")
 
     # 2. Setup Evaluator
-    evaluator = Evaluator(problem=problem, budget=budget, noise_std=noise_std)
+    ckpt_path = None
+    if checkpoint_dir is not None:
+        ckpt_path = Path(checkpoint_dir) / f"run{run_id}_p{problem_id}_d{dim}_{mode}.ckpt.json"
+
+    experiment_meta = {
+        "run_id": run_id,
+        "problem_id": problem_id,
+        "dim": dim,
+        "mode": mode,
+        "noise_std": noise_std,
+        "llm_name": llm_name,
+    }
+
+    evaluator = Evaluator(
+        problem=problem,
+        budget=budget,
+        noise_std=noise_std,
+        run_id=run_id,
+        json_checkpoint_path=ckpt_path,
+        experiment_meta=experiment_meta,
+    )
 
     # 3. Initialize LLaMEA
     experiment_name = f"bbob_{problem_id}_dim{dim}_{mode}"
@@ -95,6 +119,8 @@ def run_evolution_for_problem(
         experiment_name=experiment_name,
         elitism=True,
         log=False,  # Set log=False initially to prevent default exp-* folder creation
+        max_workers=1,
+        parallel_backend="threading",
     )
 
     # 4. Run the evolution loop
@@ -146,11 +172,13 @@ def run_evolution_for_problem(
         mode=mode,
         noise_std=noise_std,
         best_error=best_error if best_error != float("inf") else None,
+        run_id=run_id,
         run_history=optimizer.run_history,
         experiment_name=experiment_name,
         llm_name=llm_name,
         best_solution=best_sol,
         error_msg=None,
+        problem_profile=evaluator.problem_profile,
     )
 
 

@@ -79,8 +79,48 @@ class ExperimentManager:
 
         # 3. Build the structured summary
         summary = build_experiment_summary(history, actual_problem, actual_mode, actual_llm_name)
+        summary.run_id = kwargs.get("run_id", 1)
 
         # 4. Persist to DB or JSON via the specific store
+        self.store.save(summary)
+
+    def save_from_checkpoint(self, experiment_meta: dict, iterations_data: list[dict]) -> None:
+        """Restores and persists an experiment summary directly from checkpoint dictionary data."""
+        from schema import ProblemProfile, IterationMetadata
+
+        problem_meta = ProblemProfile(
+            problem_id=experiment_meta["problem_id"],
+            dim=experiment_meta["dim"],
+            noise_std=experiment_meta["noise_std"],
+            instance_id=experiment_meta.get("instance_id", 1),
+            true_optimum=experiment_meta.get("true_optimum"),
+        )
+
+        iterations = [IterationMetadata(**it) for it in iterations_data]
+
+        # Calculate best iteration metrics
+        best_iteration = None
+        best_error = float("inf")
+        best_algo = None
+        for it in iterations:
+            if it.fitness.final_error is not None and it.fitness.final_error < best_error:
+                best_error = it.fitness.final_error
+                best_iteration = it.iteration
+                best_algo = it.algorithm_name
+
+        best_err_val = best_error if best_error != float("inf") else None
+
+        summary = ExperimentSummary(
+            mode=experiment_meta["mode"],
+            llm_name=experiment_meta["llm_name"],
+            run_id=experiment_meta["run_id"],
+            problem=problem_meta,
+            best_iteration=best_iteration,
+            best_algorithm=best_algo,
+            best_final_error=best_err_val,
+            iterations=iterations,
+        )
+
         self.store.save(summary)
 
     def load(
