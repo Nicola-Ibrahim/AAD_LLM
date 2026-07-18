@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Any
-from schema import ProblemProfile
+from core.schema import ProblemProfile
 
 
 class CodeBlobSaver:

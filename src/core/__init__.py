@@ -1,21 +1,24 @@
-from core.evaluator import Evaluator
-from core.executor import AlgorithmExecutor
-from core.runner import (
-    run_evolution_for_problem,
-    run_evolution_for_problems,
-    ProblemEvolutionResult,
-)
-from core.experiment_service import run_experiment, ExperimentTask, ExperimentError
-from core.recovery import recover_orphaned_checkpoints
+from core.llamea.session import LLaMEASession, SessionResult
+from core.llamea.evaluator import Evaluator
+from core.llamea.executor import AlgorithmExecutor
+from core.dispatcher import dispatch, EvolutionJob, DispatchError
+
+
+def recover_orphaned_checkpoints(checkpoint_dir, storage_manager):
+    """Wrapper to recover orphaned checkpoints."""
+    from core.checkpoint.manager import CheckpointManager
+    from infra.storage.checkpoint import CheckpointRepository
+    repo = CheckpointRepository(checkpoint_dir)
+    return CheckpointManager(repo, storage_manager).recover_orphaned()
+
 
 __all__ = [
     "Evaluator",
     "AlgorithmExecutor",
-    "run_evolution_for_problem",
-    "run_evolution_for_problems",
-    "ProblemEvolutionResult",
-    "run_experiment",
-    "ExperimentTask",
-    "ExperimentError",
+    "LLaMEASession",
+    "SessionResult",
+    "dispatch",
+    "EvolutionJob",
+    "DispatchError",
     "recover_orphaned_checkpoints",
 ]

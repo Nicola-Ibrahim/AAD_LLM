@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from schema import ExperimentSummary
+from core.schema import ExperimentSummary
 
 
 class ExperimentRepository(ABC):

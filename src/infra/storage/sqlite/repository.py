@@ -1,9 +1,9 @@
 from datetime import datetime
 from sqlalchemy.orm import sessionmaker
 
-from schema import ExperimentSummary, IterationMetadata, ProblemProfile
-from storage.repository import ExperimentRepository
-from storage.sqlite.tables import ExperimentORM, IterationORM, ErrorLogORM, ExperimentMode
+from core.schema import ExperimentSummary, IterationMetadata, ProblemProfile
+from infra.storage.base import ExperimentRepository
+from infra.storage.sqlite.tables import ExperimentORM, IterationORM, ErrorLogORM, ExperimentMode
 
 
 class SQLiteExperimentRepository(ExperimentRepository):

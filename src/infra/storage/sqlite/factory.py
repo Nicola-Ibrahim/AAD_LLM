@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from storage.sqlite.repository import SQLiteExperimentRepository
-from storage.sqlite.connection import build_engine, build_session_factory
-from storage.manager import ExperimentManager
+from infra.storage.sqlite.repository import SQLiteExperimentRepository
+from infra.storage.sqlite.connection import build_engine, build_session_factory
+from infra.storage.manager import ExperimentManager
 
 
 def initialize_storage(backend: str, path: str | Path) -> ExperimentManager:

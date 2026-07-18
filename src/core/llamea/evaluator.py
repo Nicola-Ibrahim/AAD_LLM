@@ -5,10 +5,10 @@ from pathlib import Path
 from typing import Any
 import numpy as np
 from llamea import Solution
-from problems.bbob import BBOBProblem
+from core.problems.bbob import BBOBProblem
 from func_timeout import FunctionTimedOut
-from core.executor import AlgorithmExecutor
-from schema import (
+from core.llamea.executor import AlgorithmExecutor
+from core.schema import (
     IterationMetadata,
     ExecutionProfile,
     FitnessMetrics,
@@ -353,6 +353,6 @@ class Evaluator:
     def __setstate__(self, state):
         self.__dict__.update(state)
         # Re-initialize the executor if needed
-        from core.executor import AlgorithmExecutor
+        from core.llamea.executor import AlgorithmExecutor
 
         self.executor = AlgorithmExecutor(timeout_seconds=self.timeout_seconds)

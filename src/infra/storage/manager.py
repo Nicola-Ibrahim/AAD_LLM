@@ -1,10 +1,10 @@
 from pathlib import Path
 from typing import Any
 
-from schema import ExperimentSummary
-from storage.repository import ExperimentRepository
-from storage.blob import CodeBlobSaver
-from storage.mapper import build_experiment_summary
+from core.schema import ExperimentSummary
+from infra.storage.base import ExperimentRepository
+from infra.storage.filesystem.blob import CodeBlobSaver
+from infra.storage.sqlite.mapper import build_experiment_summary
 
 
 class ExperimentManager:
@@ -34,7 +34,7 @@ class ExperimentManager:
         And the legacy/backward-compatible signature:
             save_experiment(history, problem_id: int, dim: int, mode: str, llm_name: str)
         """
-        from schema import ProblemProfile
+        from core.schema import ProblemProfile
 
         # 1. Distinguish between signatures
         if isinstance(problem, ProblemProfile):
@@ -86,7 +86,7 @@ class ExperimentManager:
 
     def save_from_checkpoint(self, experiment_meta: dict, iterations_data: list[dict]) -> None:
         """Restores and persists an experiment summary directly from checkpoint dictionary data."""
-        from schema import ProblemProfile, IterationMetadata
+        from core.schema import ProblemProfile, IterationMetadata
 
         problem_meta = ProblemProfile(
             problem_id=experiment_meta["problem_id"],

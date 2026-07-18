@@ -32,7 +32,7 @@ class BBOBProblem:
     >>> problem = BBOBProblem(problem_id=1, dim=3)
     >>> import numpy as np
     >>> y_clean = problem(np.zeros(3))                       # clean float
-    >>> y_dict = problem(np.zeros(3), noise_std=0.05)       # dict: {0.0: clean, 0.05: noisy}
+    >>> y_dict = problem(np.zeros(3), noise_level=0.05)      # dict: {0.0: clean, 0.05: noisy}
     >>> problem.true_optimum                                 # float: global minimum
     """
 
@@ -59,14 +59,47 @@ class BBOBProblem:
         self._lb = np.array(self._clean_problem.bounds.lb, dtype=float)
         self._ub = np.array(self._clean_problem.bounds.ub, dtype=float)
 
-    def add_noise(self, true_value: float, noise_std: float) -> float:
-        """Inject additive Gaussian noise N(0, noise_std^2) to a true value."""
-        if noise_std <= 0.0:
+        # Estimate the "Landscape Scale" by sampling random points
+        # This gives us a problem-specific magnitude to base our noise on.
+        np.random.seed(42)  # Fixed seed so the scale is consistent every run
+        sample_points = np.random.uniform(self._lb, self._ub, (20, self.dim))
+        sample_y = [self._clean_problem(x.tolist()) for x in sample_points]
+        
+        # The scale is the average distance from the optimum across the whole space
+        self._landscape_scale = float(np.mean([abs(y - self.true_optimum) for y in sample_y]))
+        
+        # Reset internal evaluation counter after initialization samples
+        self._clean_problem.reset()
+
+    def add_noise(self, true_value: float, noise_level: float) -> float:
+        """
+        Inject constant additive Gaussian noise, scaled to the problem's overall landscape.
+        
+        Parameters
+        ----------
+        true_value : float
+            The clean objective value.
+        noise_level : float
+            The percentage of noise to apply (e.g., 0.05 for 5%).
+            
+        Returns
+        -------
+        float
+            The noisy objective value.
+        """
+        if noise_level <= 0.0:
             return true_value
-        return true_value + np.random.normal(0.0, noise_std)
+
+        # The standard deviation is now fixed for the whole problem, 
+        # but relative to the specific problem's massive (or tiny) scale.
+        dynamic_std = noise_level * self._landscape_scale
+
+        return true_value + np.random.normal(0.0, dynamic_std)
 
     def __call__(
-        self, x: np.ndarray, noise_std: float | list[float] | None = None
+        self,
+        x: np.ndarray,
+        noise_level: float | list[float] | None = None,
     ) -> float | dict[float, float]:
         """
         Evaluate the objective function at point ``x``.
@@ -75,28 +108,28 @@ class BBOBProblem:
         ----------
         x : np.ndarray
             The candidate search point vector.
-        noise_std : float | list[float] | None, optional
+        noise_level : float | list[float] | None, optional
             If None, returns the clean objective value as a float.
             If a float or list of floats is passed, returns a dictionary mapping
-            noise standard deviations (including 0.0 for clean) to their evaluated fitness values.
-
+            noise levels (percentages, including 0.0 for clean) to their evaluated fitness.
+            
         Returns
         -------
         float | dict[float, float]
-            Evaluated fitness float or dictionary of noise_std -> fitness value.
+            Evaluated fitness float or dictionary of noise_level -> fitness value.
         """
         f_clean = self._clean_problem(x.tolist())
-        if noise_std is None:
+        if noise_level is None:
             return f_clean
 
-        if isinstance(noise_std, (int, float)):
-            stds = [noise_std]
+        if isinstance(noise_level, (int, float)):
+            levels = [float(noise_level)]
         else:
-            stds = [s for s in noise_std]
+            levels = [float(lvl) for lvl in noise_level]
 
         results: dict[float, float] = {0.0: f_clean}
-        for std in stds:
-            results[std] = self.add_noise(f_clean, std)
+        for lvl in levels:
+            results[lvl] = self.add_noise(f_clean, lvl)
         return results
 
     def __repr__(self) -> str:
@@ -123,6 +156,11 @@ class BBOBProblem:
     def ub(self) -> np.ndarray:
         """Return the upper bounds vector for the search space."""
         return self._ub
+
+    @property
+    def optimum_x(self) -> np.ndarray:
+        """Return the coordinates of the global optimum in the search space."""
+        return np.array(self._clean_problem.optimum.x, dtype=float)
 
     @property
     def lower_bound(self) -> float | np.ndarray:

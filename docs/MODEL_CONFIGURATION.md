@@ -56,7 +56,7 @@ bash scripts/llm_manage.sh
 ```
 
 This interactive tool lets you:
-1. **Select and download a model preset**: Shows a categorised list of optimized models (from `scripts/llms.toml`) and downloads the selection to `~/models`.
+1. **Select and download a model preset**: Shows a categorised list of optimized models (from `configs/llms.toml`) and downloads the selection to `~/models`.
 2. **Download from custom Hugging Face repo & file**: Prompts for repository ID and GGUF file name, and downloads it to `~/models`.
 3. **Delete downloaded models**: Clean up cache disk space.
 4. **List local cached models**: View cached GGUF models.

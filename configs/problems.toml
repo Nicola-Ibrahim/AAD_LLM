@@ -1,0 +1,32 @@
+# BBOB Benchmark Target Problems Configuration
+# Classified and grouped by the formal BBOB/COCO function categorization.
+
+[separable]
+description = "Separable functions are the simplest class of optimization problems where each variable can be optimized independently."
+problems = [
+    { id = 1, name = "F1", description = "Sphere", landscape_type = "Perfect, smooth bowl", expected_difficulty = "Very Easy", bbob_group = 1, properties = ["Separable", "Unimodal", "Quadratic", "Isotropic"], recommended_solvers = ["Gradient Descent", "CMA-ES", "BFGS"] }
+]
+
+[moderate_conditioning]
+description = "Functions with moderate conditioning require some coordinate rotation or basic dependency handling between variables."
+problems = [
+    { id = 8, name = "F8", description = "Rosenbrock", landscape_type = "Curved, narrow valley", expected_difficulty = "Easy-Medium", bbob_group = 2, properties = ["Non-separable", "Unimodal", "Quadratic-Valley", "Coupled-variables"], recommended_solvers = ["CMA-ES", "BFGS", "Nelder-Mead"] }
+]
+
+[high_conditioning]
+description = "High conditioning unimodal functions present search spaces with extremely sharp valleys or anisotropic scaling."
+problems = [
+    { id = 11, name = "F11", description = "Discus", landscape_type = "Single sharp asymmetric ridge", expected_difficulty = "Medium", bbob_group = 3, properties = ["Non-separable", "Unimodal", "Ill-conditioned", "Asymmetric-Ridge"], recommended_solvers = ["CMA-ES", "Powell"] }
+]
+
+[strong_multimodal]
+description = "Strong multi-modal functions contain a large number of local optima with an adequate global structure directing towards the global minimum."
+problems = [
+    { id = 15, name = "F15", description = "Rastrigin", landscape_type = "Highly rugged, clear macro-basin", expected_difficulty = "Medium-Hard", bbob_group = 4, properties = ["Non-separable", "Multi-modal", "Rugged", "Symmetric-Basins"], recommended_solvers = ["CMA-ES", "Differential Evolution", "Particle Swarm Optimization"] }
+]
+
+[weak_multimodal]
+description = "Weak multi-modal functions have local optima with little to no global structure or landscape trend, making them highly deceptive."
+problems = [
+    { id = 21, name = "F21", description = "Gallagher 101", landscape_type = "Disconnected Gaussian peaks", expected_difficulty = "Hard (but solvable)", bbob_group = 5, properties = ["Non-separable", "Multi-modal", "Highly-Deceptive", "Asymmetric-Peaks"], recommended_solvers = ["CMA-ES with restarts", "Evolutionary Strategies"] }
+]

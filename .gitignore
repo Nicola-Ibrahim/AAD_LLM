@@ -92,3 +92,6 @@ celerybeat.pid
 # Experiments & Server Logs
 /logs/*
 !/logs/.gitkeep
+
+# Checkpoints & Pickle states
+*.pkl

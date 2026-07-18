@@ -96,7 +96,7 @@ if [[ -z "$COMMAND" ]]; then
                 1)
 
                     # Interactive Preset Submenu
-                    TOML_FILE="$PROJECT_ROOT/scripts/llms.toml"
+                    TOML_FILE="$PROJECT_ROOT/configs/llms.toml"
                     if [ ! -f "$TOML_FILE" ]; then
                         echo -e "  ${RED}✗ ERROR: Preset file not found: $TOML_FILE${NC}"
                         exit 1
@@ -105,7 +105,7 @@ if [[ -z "$COMMAND" ]]; then
                     # Loop to support Back/Cancel actions
                     while true; do
                         print_header
-                        echo "  Loading model presets from scripts/llms.toml..."
+                        echo "  Loading model presets from configs/llms.toml..."
                         
                         # Load categories dynamically using Python
                         CATEGORIES_JSON=$("$PYTHON_CMD" -c "

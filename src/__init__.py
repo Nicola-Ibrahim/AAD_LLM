@@ -1,18 +1,15 @@
-from core.runner import (
-    run_evolution_for_problem,
-    run_evolution_for_problems,
-    ProblemEvolutionResult,
+from core import (
+    LLaMEASession,
+    SessionResult,
 )
-from problems.bbob import BBOBProblem
-from llm.client import get_llm_client, Provider
-from core.evaluator import Evaluator
-from core.executor import AlgorithmExecutor
-from llm.prompts import TASK_PROMPT_CLEAN, TASK_PROMPT_NOISY, EXAMPLE_PROMPT, FORMAT_PROMPT
+from core.problems.bbob import BBOBProblem
+from infra.llm.client import get_llm_client, Provider
+from core import Evaluator, AlgorithmExecutor
+from core.llamea.prompts import TASK_PROMPT_CLEAN, TASK_PROMPT_NOISY, EXAMPLE_PROMPT, FORMAT_PROMPT
 
 __all__ = [
-    "run_evolution_for_problem",
-    "run_evolution_for_problems",
-    "ProblemEvolutionResult",
+    "LLaMEASession",
+    "SessionResult",
     "BBOBProblem",
     "get_llm_client",
     "Provider",
