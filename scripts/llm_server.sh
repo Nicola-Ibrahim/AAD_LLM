@@ -376,6 +376,46 @@ start_server() {
     echo -e "    ${BOLD}Log File:${NC}   $LOG_FILE"
     echo ""
 
+    # Resolve CUDA Runtime dynamic libraries if GPU offloading is active
+    if [ "${N_GPU_LAYERS:-0}" -ne 0 ]; then
+        echo -e "  ${CYAN}[i] Resolving CUDA runtime dependencies...${NC}"
+        
+        # 1. Search in virtual environment site-packages for NVIDIA libraries
+        local found_in_venv=0
+        local site_packages_nvidia
+        site_packages_nvidia=$(find "$PROJECT_ROOT/.venv" -path "*/site-packages/nvidia" -type d -print -quit 2>/dev/null || true)
+        
+        if [ -n "$site_packages_nvidia" ]; then
+            local nvidia_libs=""
+            for lib_dir in "$site_packages_nvidia"/*/lib; do
+                if [ -d "$lib_dir" ]; then
+                    nvidia_libs="$lib_dir:$nvidia_libs"
+                fi
+            done
+            if [ -n "$nvidia_libs" ]; then
+                echo -e "    ${GREEN}● Found NVIDIA CUDA/cuBLAS libraries in virtual env:${NC} $site_packages_nvidia"
+                export LD_LIBRARY_PATH="${nvidia_libs}${LD_LIBRARY_PATH:-}"
+                found_in_venv=1
+            fi
+        fi
+        
+        if [ "$found_in_venv" -eq 0 ]; then
+            # 2. Search common system locations
+            local system_found=0
+            for path in "/usr/local/cuda/lib64" "/usr/local/cuda/targets/x86_64-linux/lib" "/usr/lib/x86_64-linux-gnu" "/usr/lib64"; do
+                if [ -f "$path/libcudart.so.12" ]; then
+                    echo -e "    ${GREEN}● Found system CUDA runtime:${NC} $path"
+                    export LD_LIBRARY_PATH="$path:${LD_LIBRARY_PATH:-}"
+                    system_found=1
+                    break
+                fi
+            done
+            if [ "$system_found" -eq 0 ]; then
+                echo -e "    ${YELLOW}[!] WARNING: libcudart.so.12 not found in system or virtual env. GPU server launch might fail.${NC}"
+            fi
+        fi
+    fi
+
     # Launch server in background
     "$PYTHON_CMD" -m llama_cpp.server \
         --model "$MODEL_PATH" \
