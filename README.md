@@ -34,7 +34,7 @@ Use this track if you are running on a remote Jupyter Server, custom Conda envir
 1. **Install Dependencies & Configure Environment:**
    Run the dedicated script which automatically checks/creates your `.env` configuration file, checks/syncs dependencies, and installs all packages using your active environment's `pip` or `uv`:
    ```bash
-   bash scripts/01_setup_env.sh
+   bash scripts/env.sh
    ```
 2. **Run Jupyter Notebook:**
    ```bash
@@ -56,7 +56,7 @@ To run the optimization pipeline locally without relying on external APIs or too
 
 1. **Install Dependencies**:
    ```bash
-    bash scripts/setup_env.sh
+     bash scripts/env.sh
     ```
  2. **Start the Server**:
     ```bash
@@ -107,7 +107,7 @@ bash scripts/db.sh upgrade
   - `02_llamea_evolution.ipynb` — Single and batch multi-problem LLaMEA evolutionary search pipeline.
   - `03_results_analysis.ipynb` — Comprehensive database analysis dashboard, stats builder, and interactive plots.
 - `scripts/` — Execution and orchestration scripts:
-  - `setup_env.sh` — Initializes environment, checks env vars, and syncs dependencies via uv.
+  - `env.sh` — Initializes environment, checks env vars, and syncs dependencies via uv.
   - `llm_manage.sh` — Interactive CLI to download configured GGUF model, list cached models, or delete them.
   - `llm_server.sh` — Interactive CLI to start, stop, or check the status of the local model server.
   - `slurm_submit.sh` — Batch job script for SLURM cluster execution.

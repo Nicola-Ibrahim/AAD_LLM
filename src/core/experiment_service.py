@@ -1,108 +1,101 @@
-import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-from llamea import LLM
+from typing import Any, Callable
+
+from core.runner import ProblemEvolutionResult
 from storage.manager import ExperimentManager
-from core.runner import run_evolution_for_problem
 
 
-def _run_thread(
-    noise_std: float,
-    llm: LLM,
-    problem_cfg: dict[str, Any],
-    run_id: int,
-    checkpoint_dir: Path,
-    storage_manager: ExperimentManager,
-    results: dict[str, Any],
+@dataclass
+class ExperimentTask:
+    """A single unit of experiment work to be run in the thread pool."""
+    key: str
+    fn: Callable[[], ProblemEvolutionResult]
+
+
+class ExperimentError(RuntimeError):
+    """Exception raised when one or more experiment tasks fail."""
+    def __init__(self, errors: dict[str, Exception]):
+        super().__init__(f"Experiment tasks failed: {list(errors.keys())}")
+        self.errors = errors
+
+
+def _persist_and_cleanup(
     key: str,
-    errors: dict[str, Any],
+    result: ProblemEvolutionResult,
+    storage_manager: ExperimentManager,
+    checkpoint_dir: Path,
 ) -> None:
-    try:
-        from problems.bbob import BBOBProblem
-        # Instantiate a thread-local BBOBProblem object
-        problem = BBOBProblem(**problem_cfg)
+    """Saves result history and problem profile to database via facade, then deletes checkpoint."""
+    # Save to DB via repository facade
+    storage_manager.save_experiment(
+        history=result.run_history,
+        problem=result.problem_profile,
+        mode=result.mode,
+        llm_name=result.llm_name,
+        run_id=result.run_id,
+    )
 
-        result = run_evolution_for_problem(
-            problem=problem,
-            llm=llm,
-            noise_std=noise_std,
-            run_id=run_id,
-            checkpoint_dir=checkpoint_dir,
-        )
-
-        # Save to DB via repository facade
-        storage_manager.save_experiment(
-            history=result.run_history,
-            problem=result.problem_profile,
-            mode=result.mode,
-            llm_name=result.llm_name,
-            run_id=run_id,
-        )
-
-        # Atomic delete of checkpoint file now that it is safely stored in DB
-        problem_id = problem.problem_id
-        dim = problem.dim
-        ckpt_path = checkpoint_dir / f"run{run_id}_p{problem_id}_d{dim}_{result.mode}.ckpt.json"
-        if ckpt_path.exists():
-            ckpt_path.unlink()
-
-        results[key] = result
-    except Exception as e:
-        errors[key] = e
+    # Atomic delete of checkpoint file now that it is safely stored in DB
+    ckpt_path = checkpoint_dir / f"run{result.run_id}_p{result.problem_id}_d{result.dim}_{result.mode}.ckpt.json"
+    if ckpt_path.exists():
+        ckpt_path.unlink()
 
 
-def orchestrate(
-    llm: LLM,
-    problem_cfg: dict[str, Any],
-    run_id: int,
+def run_experiment(
+    tasks: list[ExperimentTask],
     storage_manager: ExperimentManager,
     checkpoint_dir: Path = Path("data/checkpoints"),
-) -> dict[str, Any]:
-    """
-    Orchestrates Clean and Noisy runs of LLaMEA in parallel threads for resilience and high throughput.
+    max_workers: int | None = None,
+) -> dict[str, ProblemEvolutionResult]:
+    """Runs experiment tasks concurrently in a thread pool, persisting results and cleaning up checkpoints.
 
     Parameters
     ----------
-    llm : LLM
-        Large Language Model interface.
-    problem_cfg : dict[str, Any]
-        Configuration dictionary passed to BBOBProblem.
-    run_id : int
-        Unique integer repetition index.
+    tasks : list[ExperimentTask]
+        List of tasks containing a label and a callable returning ProblemEvolutionResult.
     storage_manager : ExperimentManager
-        Persistence coordinator for code blobs and SQLite database records.
+        Persistence coordinator for SQLite records and code blobs.
     checkpoint_dir : Path, optional
-        Directory where localized checkpoints are saved.
+        Directory where checkpoints are saved/loaded.
+    max_workers : int, optional
+        Maximum thread pool workers. Defaults to the number of tasks.
 
     Returns
     -------
-    dict[str, Any]
-        Dictionary with Clean and Noisy results or raises RuntimeError if execution failed.
+    dict[str, ProblemEvolutionResult]
+        Dictionary mapping task keys to their evolution results.
+
+    Raises
+    ------
+    ExperimentError
+        If one or more tasks fail during execution or persistence.
     """
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    results: dict[str, Any] = {}
-    errors: dict[str, Any] = {}
+    results: dict[str, ProblemEvolutionResult] = {}
+    errors: dict[str, Exception] = {}
 
-    thread_clean = threading.Thread(
-        target=_run_thread,
-        args=(0.0, llm, problem_cfg, run_id, checkpoint_dir, storage_manager, results, "clean", errors),
-        name="Thread-Clean",
-        daemon=False,
-    )
-    thread_noisy = threading.Thread(
-        target=_run_thread,
-        args=(0.5, llm, problem_cfg, run_id, checkpoint_dir, storage_manager, results, "noisy", errors),
-        name="Thread-Noisy",
-        daemon=False,
-    )
+    if not tasks:
+        return results
 
-    thread_clean.start()
-    thread_noisy.start()
+    workers = max_workers if max_workers is not None else len(tasks)
 
-    thread_clean.join()
-    thread_noisy.join()
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        # Submit all tasks
+        future_to_key = {executor.submit(task.fn): task.key for task in tasks}
+
+        for future in as_completed(future_to_key):
+            key = future_to_key[future]
+            try:
+                result = future.result()
+                # Run database persistence and checkpoint cleanup
+                _persist_and_cleanup(key, result, storage_manager, checkpoint_dir)
+                results[key] = result
+            except Exception as e:
+                errors[key] = e
 
     if errors:
-        raise RuntimeError(f"Evolution threading run {run_id} failed: {errors}")
+        raise ExperimentError(errors)
 
     return results

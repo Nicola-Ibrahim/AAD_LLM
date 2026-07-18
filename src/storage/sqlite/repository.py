@@ -103,7 +103,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
             if dim is not None:
                 query = query.filter(ExperimentORM.dim == dim)
             if mode is not None:
-                query = query.filter(ExperimentORM.mode == mode)
+                query = query.filter(ExperimentORM.mode == ExperimentMode(mode))
 
             query = query.order_by(ExperimentORM.problem_id.asc(), ExperimentORM.llm_name.asc())
             experiments = query.all()

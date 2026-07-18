@@ -53,13 +53,17 @@ pythonpath = ["src"]
 [tool.pyright]
 extraPaths = ["src"]
 
+[tool.uv]
+# Fallback to PyPI for other platforms, use custom CUDA wheels on Linux
 [[tool.uv.index]]
-name = "abetlen"
-url = "https://abetlen.github.io/llama-cpp-python/whl/cpu"
+name = "llama-cpp-cuda"
+url = "https://abetlen.github.io/llama-cpp-python/whl/cu124"
 explicit = true
 
 [tool.uv.sources]
-llama-cpp-python = { index = "abetlen" }
+llama-cpp-python = [
+    { index = "llama-cpp-cuda", marker = "sys_platform == 'linux'" }
+]
 
 # ====================================================================================
 # Poe tasks
@@ -89,6 +93,7 @@ help = "FORMAT: Automatically format code using ruff. Usage: poe format"
 sequence = ["lint", "format"]
 ignore_fail = false
 help = "CHECK: Run linting and formatting checks. Usage: poe check"
+
 
 
 

@@ -410,8 +410,8 @@ case "$COMMAND" in
         else
             # Verify huggingface_hub is installed
             if ! "$PYTHON_CMD" -c "import huggingface_hub" &> /dev/null; then
-                echo -e "  ${CYAN}[i] huggingface_hub not found. Running setup_env.sh...${NC}"
-                bash "$SCRIPT_DIR/setup_env.sh"
+                echo -e "  ${CYAN}[i] huggingface_hub not found. Running env.sh...${NC}"
+                bash "$SCRIPT_DIR/env.sh"
             fi
 
             echo -e "  ${CYAN}[i] Downloading LLM model from Hugging Face...${NC}"

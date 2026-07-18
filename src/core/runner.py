@@ -120,7 +120,7 @@ def run_evolution_for_problem(
         elitism=True,
         log=False,  # Set log=False initially to prevent default exp-* folder creation
         max_workers=1,
-        parallel_backend="threading",
+        parallel_backend="sequential",
     )
 
     # 4. Run the evolution loop

@@ -40,6 +40,7 @@ HOST="${LLM_SERVER_HOST:-0.0.0.0}"
 PORT="${LLM_SERVER_PORT:-1234}"
 N_CTX="${LLM_SERVER_N_CTX:-8192}"
 N_THREADS="${LLM_SERVER_N_THREADS:-8}"
+N_GPU_LAYERS="${LLM_SERVER_N_GPU_LAYERS:-0}"
 
 # Function to load variable from .env or env
 load_env_var() {
@@ -205,6 +206,24 @@ stop_server() {
 start_server() {
     mkdir -p "$LOG_DIR"
 
+    # ─── GPU Auto-Detection ────────────────────────────────────
+    if [ "${N_GPU_LAYERS:-0}" -eq 0 ] && [ -z "${LLM_SERVER_N_GPU_LAYERS:-}" ]; then
+        local os_type
+        os_type="$(uname -s 2>/dev/null || echo 'Unknown')"
+        if [ "$os_type" = "Darwin" ]; then
+            echo -e "  ${CYAN}[i] macOS detected. Automatically enabling GPU offloading.${NC}"
+            N_GPU_LAYERS=-1
+            N_THREADS=2  # Drop CPU threads to reduce overhead when fully offloaded
+        elif [ "$os_type" = "Linux" ] && command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null; then
+            echo -e "  ${CYAN}[i] Nvidia GPU detected. Automatically enabling CUDA offloading.${NC}"
+            N_GPU_LAYERS=-1
+            N_THREADS=2  # Drop CPU threads to reduce overhead when fully offloaded
+        else
+            echo -e "  ${YELLOW}[i] No GPU detected/supported for auto-offload. Defaulting to CPU.${NC}"
+            N_GPU_LAYERS=0
+        fi
+    fi
+
     local TARGET_DIR="$HOME/models"
     local HF_CACHE_DIR="$HOME/.cache/huggingface/hub"
     
@@ -353,6 +372,7 @@ start_server() {
     echo -e "    ${BOLD}Model:${NC}      $MODEL_PATH"
     echo -e "    ${BOLD}Context:${NC}    $N_CTX tokens"
     echo -e "    ${BOLD}Threads:${NC}    $N_THREADS"
+    echo -e "    ${BOLD}GPU Layers:${NC} $N_GPU_LAYERS"
     echo -e "    ${BOLD}Log File:${NC}   $LOG_FILE"
     echo ""
 
@@ -363,6 +383,7 @@ start_server() {
         --port "$PORT" \
         --n_ctx "$N_CTX" \
         --n_threads "$N_THREADS" \
+        --n_gpu_layers "$N_GPU_LAYERS" \
         > "$LOG_FILE" 2>&1 &
 
     local server_pid=$!

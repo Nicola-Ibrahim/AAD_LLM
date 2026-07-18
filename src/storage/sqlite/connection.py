@@ -12,12 +12,21 @@ def build_engine(db_path: str | Path, echo: bool = False):
     if db_path.parent:
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    engine = create_engine(f"sqlite:///{db_path}", echo=echo)
+    engine = create_engine(
+        f"sqlite:///{db_path}",
+        connect_args={
+            "check_same_thread": False,
+            "timeout": 15,
+        },
+        echo=echo,
+    )
 
     @event.listens_for(engine, "connect")
-    def _enable_foreign_keys(dbapi_conn, _):
+    def _configure_sqlite(dbapi_conn, _):
         cursor = dbapi_conn.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.close()
 
     return engine

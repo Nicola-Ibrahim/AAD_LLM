@@ -161,20 +161,20 @@ mkdir -p "$(dirname "$DB_PATH")"
 # Export for Alembic env.py
 export DATABASE_URL="sqlite:///$DB_PATH"
 
-# ─── Locate Alembic ────────────────────────────────────────
-ALEMBIC_CMD="alembic"
-if [ -f "$PROJECT_ROOT/.venv/bin/alembic" ]; then
-    ALEMBIC_CMD="$PROJECT_ROOT/.venv/bin/alembic"
-elif command -v uv &> /dev/null; then
-    ALEMBIC_CMD="uv run alembic"
-fi
-
 # ─── Locate Python ─────────────────────────────────────────
 PYTHON_CMD="python3"
 if [ -f "$PROJECT_ROOT/.venv/bin/python" ]; then
     PYTHON_CMD="$PROJECT_ROOT/.venv/bin/python"
 elif command -v uv &> /dev/null; then
     PYTHON_CMD="uv run python"
+fi
+
+# ─── Locate Alembic ────────────────────────────────────────
+ALEMBIC_CMD="alembic"
+if [ -f "$PROJECT_ROOT/.venv/bin/python" ]; then
+    ALEMBIC_CMD="$PROJECT_ROOT/.venv/bin/python -m alembic"
+elif command -v uv &> /dev/null; then
+    ALEMBIC_CMD="uv run alembic"
 fi
 
 # ─── Print DB info for destructive commands ────────────────
