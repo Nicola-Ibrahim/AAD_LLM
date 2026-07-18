@@ -55,6 +55,9 @@ class BBOBProblem:
         # Load the underlying clean IOH problem once
         self._clean_problem = get_problem(problem_id, instance_id, dim, ProblemClass.BBOB)
         self.true_optimum: float = float(self._clean_problem.optimum.y)
+        # Eagerly cache bounds to avoid deadlocks from dynamic imports in concurrent thread pools
+        self._lb = np.array(self._clean_problem.bounds.lb, dtype=float)
+        self._ub = np.array(self._clean_problem.bounds.ub, dtype=float)
 
     def add_noise(self, true_value: float, noise_std: float) -> float:
         """Inject additive Gaussian noise N(0, noise_std^2) to a true value."""
@@ -114,12 +117,12 @@ class BBOBProblem:
     @property
     def lb(self) -> np.ndarray:
         """Return the lower bounds vector for the search space."""
-        return np.array(self._clean_problem.bounds.lb, dtype=float)
+        return self._lb
 
     @property
     def ub(self) -> np.ndarray:
         """Return the upper bounds vector for the search space."""
-        return np.array(self._clean_problem.bounds.ub, dtype=float)
+        return self._ub
 
     @property
     def lower_bound(self) -> float | np.ndarray:

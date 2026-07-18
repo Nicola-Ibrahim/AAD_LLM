@@ -41,6 +41,7 @@ PORT="${LLM_SERVER_PORT:-1234}"
 N_CTX="${LLM_SERVER_N_CTX:-8192}"
 N_THREADS="${LLM_SERVER_N_THREADS:-8}"
 N_GPU_LAYERS="${LLM_SERVER_N_GPU_LAYERS:-0}"
+VERBOSE="${LLM_SERVER_VERBOSE:-False}"
 
 # Function to load variable from .env or env
 load_env_var() {
@@ -373,6 +374,7 @@ start_server() {
     echo -e "    ${BOLD}Context:${NC}    $N_CTX tokens"
     echo -e "    ${BOLD}Threads:${NC}    $N_THREADS"
     echo -e "    ${BOLD}GPU Layers:${NC} $N_GPU_LAYERS"
+    echo -e "    ${BOLD}Verbose:${NC}    $VERBOSE"
     echo -e "    ${BOLD}Log File:${NC}   $LOG_FILE"
     echo ""
 
@@ -424,6 +426,7 @@ start_server() {
         --n_ctx "$N_CTX" \
         --n_threads "$N_THREADS" \
         --n_gpu_layers "$N_GPU_LAYERS" \
+        --verbose "$VERBOSE" \
         > "$LOG_FILE" 2>&1 &
 
     local server_pid=$!

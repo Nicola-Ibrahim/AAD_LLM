@@ -42,6 +42,12 @@ def _persist_and_cleanup(
     if ckpt_path.exists():
         ckpt_path.unlink()
 
+    # Delete the pickle checkpoint directory if it exists
+    archive_dir = checkpoint_dir / f"bbob_{result.problem_id}_dim{result.dim}_{result.mode}"
+    if archive_dir.exists() and archive_dir.is_dir():
+        import shutil
+        shutil.rmtree(archive_dir)
+
 
 def run_experiment(
     tasks: list[ExperimentTask],
@@ -78,6 +84,23 @@ def run_experiment(
 
     if not tasks:
         return results
+
+    from functools import partial
+    import inspect
+
+    # Dynamically inject storage_manager and checkpoint_dir into task partial functions if supported
+    for task in tasks:
+        fn = task.fn
+        if isinstance(fn, partial):
+            sig = inspect.signature(fn.func)
+            new_keywords = dict(fn.keywords)
+            
+            if "storage_manager" in sig.parameters:
+                new_keywords["storage_manager"] = storage_manager
+            if "checkpoint_dir" in sig.parameters:
+                new_keywords["checkpoint_dir"] = checkpoint_dir
+                
+            task.fn = partial(fn.func, *fn.args, **new_keywords)
 
     workers = max_workers if max_workers is not None else len(tasks)
 

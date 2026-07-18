@@ -38,6 +38,76 @@ class ProblemEvolutionResult:
         return self.best_solution
 
 
+class CheckpointLogger:
+    """
+    Logger shim that gives LLaMEA a dirname so pickle_archive() fires,
+    and optionally flushes accumulated solutions to SQLite every N generations.
+    """
+    def __init__(
+        self,
+        dirname: str | Path,
+        storage_manager: Any = None,      # ExperimentManager — pass None to skip DB flush
+        flush_every: int = 5,             # how many generations between DB flushes
+        problem_profile: Any = None,      # ProblemProfile for DB record
+        mode: str | None = None,
+        llm_name: str | None = None,
+        run_id: int = 1,
+    ):
+        self.dirname = str(dirname)   # ← LLaMEA needs this attr for pickle_archive()
+        self.attempt = 0
+        self._storage_manager = storage_manager
+        self._flush_every = flush_every
+        self._problem_profile = problem_profile
+        self._mode = mode
+        self._llm_name = llm_name
+        self._run_id = run_id
+        self._pending_history: list = []
+        self._generation = 0
+
+    def log_population(self, population):
+        """Called by LLaMEA after every generation."""
+        self._generation += 1
+        self._pending_history.extend(population)
+        if self._storage_manager and self._generation % self._flush_every == 0:
+            self._flush_to_db()
+
+    def flush_remaining(self):
+        """Called manually at the end of a full run to save any leftover generations."""
+        if self._storage_manager and self._pending_history:
+            self._flush_to_db()
+
+    def _flush_to_db(self):
+        if not self._pending_history:
+            return
+        try:
+            self._storage_manager.save_experiment(
+                history=list(self._pending_history),
+                problem=self._problem_profile,
+                mode=self._mode,
+                llm_name=self._llm_name,
+                run_id=self._run_id,
+            )
+            self._pending_history = []
+        except Exception as e:
+            print(f"[!] Periodic DB flush failed (data still in memory): {e}")
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        # Exclude storage manager from pickle since it contains DB connections
+        state["_storage_manager"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+    # Stubs for LLaMEA methods we don't need
+    def log_individual(self, ind): pass
+    def log_code(self, attempt, name, code): pass
+    def log_conversation(self, role, content): pass
+    def log_import_fails(self, fails): pass
+    def set_attempt(self, attempt): self.attempt = attempt
+
+
 def run_evolution_for_problem(
     problem: BBOBProblem,
     llm: LLM,
@@ -49,6 +119,8 @@ def run_evolution_for_problem(
     llm_name: str = "unknown",
     run_id: int = 1,
     checkpoint_dir: Path | None = None,
+    storage_manager: Any = None,
+    flush_every: int = 5,
 ) -> ProblemEvolutionResult:
     """
     Run LLaMEA evolution to synthesize an optimization algorithm for a single BBOB problem.
@@ -84,8 +156,13 @@ def run_evolution_for_problem(
 
     # 2. Setup Evaluator
     ckpt_path = None
+    experiment_name = f"bbob_{problem_id}_dim{dim}_{mode}"
+    archive_dir: Path | None = None
+
     if checkpoint_dir is not None:
-        ckpt_path = Path(checkpoint_dir) / f"run{run_id}_p{problem_id}_d{dim}_{mode}.ckpt.json"
+        archive_dir = Path(checkpoint_dir) / experiment_name
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        ckpt_path = archive_dir / f"run{run_id}_p{problem_id}_d{dim}_{mode}.ckpt.json"
 
     experiment_meta = {
         "run_id": run_id,
@@ -105,26 +182,65 @@ def run_evolution_for_problem(
         experiment_meta=experiment_meta,
     )
 
-    # 3. Initialize LLaMEA
-    experiment_name = f"bbob_{problem_id}_dim{dim}_{mode}"
-    optimizer = LLaMEA(
-        f=evaluator,
-        llm=llm,
-        n_parents=1,
-        n_offspring=1,
-        budget=iterations,
-        task_prompt=task_prompt,
-        example_prompt=EXAMPLE_PROMPT,
-        output_format_prompt=FORMAT_PROMPT,
-        experiment_name=experiment_name,
-        elitism=True,
-        log=False,  # Set log=False initially to prevent default exp-* folder creation
-        max_workers=1,
-        parallel_backend="sequential",
-    )
+    # 3. Attempt warm start (crash recovery)
+    is_resumed = False
+    optimizer = None
+    if archive_dir and (archive_dir / "llamea_config.pkl").exists():
+        print(f"[i] Checkpoint found — resuming from {archive_dir}")
+        try:
+            optimizer = LLaMEA.warm_start(str(archive_dir))
+            if optimizer is not None:
+                optimizer.f = evaluator   # re-inject fresh evaluator
+                optimizer.llm = llm       # re-inject fresh LLM connection
+                is_resumed = True
+                print(f"[i] Resumed at generation {optimizer.generation}, "
+                      f"history size {len(optimizer.run_history)}")
+        except Exception as e:
+            print(f"[!] Warm start failed, starting fresh: {e}")
+            optimizer = None
 
-    # 4. Run the evolution loop
-    optimizer.run()
+    # 4. Fresh start if no checkpoint or warm_start failed
+    if optimizer is None:
+        optimizer = LLaMEA(
+            f=evaluator,
+            llm=llm,
+            n_parents=1,
+            n_offspring=1,
+            budget=iterations,
+            task_prompt=task_prompt,
+            example_prompt=EXAMPLE_PROMPT,
+            output_format_prompt=FORMAT_PROMPT,
+            experiment_name=experiment_name,
+            elitism=True,
+            log=False,                  # prevent default exp-* folder creation
+            max_workers=1,
+            parallel_backend="sequential",
+        )
+
+    # 5. Attach CheckpointLogger to enable pickle_archive() + periodic DB flush
+    if archive_dir is not None:
+        ckpt_logger = CheckpointLogger(
+            dirname=archive_dir,
+            storage_manager=storage_manager,
+            flush_every=flush_every,
+            problem_profile=evaluator.problem_profile,
+            mode=mode,
+            llm_name=llm_name,
+            run_id=run_id,
+        )
+        optimizer.logger = ckpt_logger
+        optimizer.log = True
+        if is_resumed:
+            # If resumed, restore the accumulated run history to CheckpointLogger
+            ckpt_logger._pending_history = list(optimizer.run_history)
+            ckpt_logger._generation = optimizer.generation
+
+    # 6. Run evolution (pass archive_path only on resume)
+    optimizer.run(archive_path=str(archive_dir) if is_resumed else None)
+
+    # 7. Flush any remaining unsaved generations to DB
+    if archive_dir and optimizer.logger:
+        optimizer.logger.flush_remaining()
 
     # 5. Display human-readable evolution summary
     best_sol = optimizer.best_so_far
@@ -192,6 +308,9 @@ def run_evolution_for_problems(
     log: bool = False,
     budget: int | None = None,
     output_dir: str | Path = "experiments",
+    checkpoint_dir: Path | None = None,
+    storage_manager: Any = None,
+    flush_every: int = 5,
 ) -> list[ProblemEvolutionResult]:
     """
     Run LLaMEA optimization algorithm evolution across a list of pre-built BBOBProblem instances.
@@ -242,6 +361,9 @@ def run_evolution_for_problems(
                 log=log,
                 output_dir=output_dir,
                 llm_name=llm_name,
+                checkpoint_dir=checkpoint_dir,
+                storage_manager=storage_manager,
+                flush_every=flush_every,
             )
             results.append(result)
 
