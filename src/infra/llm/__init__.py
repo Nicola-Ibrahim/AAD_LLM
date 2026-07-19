@@ -1,6 +1,6 @@
-from infra.llm.client import get_llm_client, Provider
+from infra.llm.client import LLMClient, Provider
 
 __all__ = [
-    "get_llm_client",
+    "LLMClient",
     "Provider",
 ]

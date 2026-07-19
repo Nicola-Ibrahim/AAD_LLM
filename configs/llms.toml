@@ -22,6 +22,28 @@ repo = "Qwen/Qwen2.5-Coder-7B-Instruct-GGUF"
 file = "qwen2.5-coder-7b-instruct-q4_k_m.gguf"
 model = "qwen2.5-coder-7b-instruct-q4_k_m"
 
+[[Qwen.llms]]
+name = "Qwen2.5-Coder-14B-Instruct"
+description = "9.0 GB, Balanced middle-ground upgrade for faster generation loops"
+repo = "Qwen/Qwen2.5-Coder-14B-Instruct-GGUF"
+file = "qwen2.5-coder-14b-instruct-q4_k_m.gguf"
+model = "qwen2.5-coder-14b-instruct-q4_k_m"
+
+[[Qwen.llms]]
+name = "Qwen2.5-Coder-32B-Instruct"
+description = "20.3 GB, Flagship coding performance. Perfect for 24GB+ VRAM configs"
+repo = "Qwen/Qwen2.5-Coder-32B-Instruct-GGUF"
+file = "qwen2.5-coder-32b-instruct-q4_k_m.gguf"
+model = "qwen2.5-coder-32b-instruct-q4_k_m"
+
+[[Qwen.llms]]
+name = "Qwen2.5-Coder-32B-Instruct-HighPrec"
+description = "24.5 GB, Q5_K_M variant maximizing performance if you are near the 30-40GB VRAM ceiling"
+repo = "Qwen/Qwen2.5-Coder-32B-Instruct-GGUF"
+file = "qwen2.5-coder-32b-instruct-q5_k_m.gguf"
+model = "qwen2.5-coder-32b-instruct-q5_k_m"
+
+
 [DeepSeek]
 description = "DeepSeek Coder Models"
 
@@ -38,6 +60,14 @@ description = "4.8 GB, Medium Alternative"
 repo = "DeepSeek-Coder-6.7B-Instruct-GGUF"
 file = "deepseek-coder-6.7b-instruct-q4_k_m.gguf"
 model = "deepseek-coder-6.7b-instruct-q4_k_m"
+
+[[DeepSeek.llms]]
+name = "DeepSeek-Coder-V2-Lite-Instruct"
+description = "10.5 GB, MoE architecture with massive context and blistering speeds"
+repo = "lmstudio-community/DeepSeek-Coder-V2-Lite-Instruct-GGUF"
+file = "DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf"
+model = "DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M"
+
 
 [Llama]
 description = "Llama Models"

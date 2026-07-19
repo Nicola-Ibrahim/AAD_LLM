@@ -24,7 +24,7 @@ class BBOBProblem:
         >>> problem = BBOBProblem(problem_id=1, dim=3)
         >>> import numpy as np
         >>> y_clean = problem(np.zeros(3))                       # clean float
-        >>> y_dict = problem(np.zeros(3), noise_level=0.05)      # dict: {0.0: clean, 0.05: noisy}
+        >>> y_dict = problem(np.zeros(3), noise_std=0.05)        # dict: {0.0: clean, 0.05: noisy}
         >>> problem.true_optimum                                 # float: global minimum
     """
 
@@ -63,49 +63,49 @@ class BBOBProblem:
         # Reset internal evaluation counter after initialization samples
         self._clean_problem.reset()
 
-    def add_noise(self, true_value: float, noise_level: float) -> float:
+    def add_noise(self, true_value: float, noise_std: float) -> float:
         """Inject constant additive Gaussian noise, scaled to the problem's overall landscape.
 
         Args:
             true_value: The clean objective value.
-            noise_level: The percentage of noise to apply (e.g., 0.05 for 5%).
+            noise_std: The standard deviation factor to apply (e.g., 0.05).
 
         Returns:
             float: The noisy objective value.
         """
-        if noise_level <= 0.0:
+        if noise_std <= 0.0:
             return true_value
 
         # The standard deviation is now fixed for the whole problem, 
         # but relative to the specific problem's massive (or tiny) scale.
-        dynamic_std = noise_level * self._landscape_scale
+        dynamic_std = noise_std * self._landscape_scale
 
         return true_value + np.random.normal(0.0, dynamic_std)
 
     def __call__(
         self,
         x: np.ndarray,
-        noise_level: float | list[float] | None = None,
+        noise_std: float | list[float] | None = None,
     ) -> float | dict[float, float]:
         """Evaluate the objective function at point `x`.
 
         Args:
             x: The candidate search point vector.
-            noise_level: If None, returns the clean objective value as a float.
+            noise_std: If None, returns the clean objective value as a float.
                 If a float or list of floats is passed, returns a dictionary mapping
-                noise levels (percentages, including 0.0 for clean) to their evaluated fitness.
+                noise standard deviation factors (including 0.0 for clean) to their evaluated fitness.
 
         Returns:
-            float | dict[float, float]: Evaluated fitness float or dictionary of noise_level -> fitness value.
+            float | dict[float, float]: Evaluated fitness float or dictionary of noise_std -> fitness value.
         """
         f_clean = self._clean_problem(x.tolist())
-        if noise_level is None:
+        if noise_std is None:
             return f_clean
 
-        if isinstance(noise_level, (int, float)):
-            levels = [float(noise_level)]
+        if isinstance(noise_std, (int, float)):
+            levels = [float(noise_std)]
         else:
-            levels = [float(lvl) for lvl in noise_level]
+            levels = [float(lvl) for lvl in noise_std]
 
         results: dict[float, float] = {0.0: f_clean}
         for lvl in levels:

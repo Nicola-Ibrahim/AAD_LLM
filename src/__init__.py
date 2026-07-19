@@ -3,7 +3,7 @@ from core import (
     SessionResult,
 )
 from core.problems.bbob import BBOBProblem
-from infra.llm.client import get_llm_client, Provider
+from infra.llm.client import LLMClient, Provider
 from core import Evaluator, AlgorithmExecutor
 from core.llamea.prompts import TASK_PROMPT_CLEAN, TASK_PROMPT_NOISY, EXAMPLE_PROMPT, FORMAT_PROMPT
 
@@ -11,7 +11,7 @@ __all__ = [
     "LLaMEASession",
     "SessionResult",
     "BBOBProblem",
-    "get_llm_client",
+    "LLMClient",
     "Provider",
     "Evaluator",
     "AlgorithmExecutor",

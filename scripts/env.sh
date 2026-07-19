@@ -162,6 +162,17 @@ show_gpu_status() {
         else
             echo -e "    ${YELLOW}No GPU compute processes running.${NC}"
         fi
+    elif [ "$(uname -s)" = "Darwin" ]; then
+        echo -e "  ${GREEN}✓ macOS Apple Silicon / Metal detected${NC}"
+        echo -e "  Metal GPU acceleration is supported natively via Unified Memory."
+        
+        # Show system unified memory
+        local mem_info
+        mem_info=$(sysctl -n hw.memsize 2>/dev/null || echo "0")
+        if [ "$mem_info" -ne 0 ]; then
+            local mem_gb=$((mem_info / 1024 / 1024 / 1024))
+            echo -e "  ${BOLD}Unified Memory:${NC} $mem_gb GB"
+        fi
     else
         echo -e "  ${CYAN}[i] No Nvidia GPU / CUDA driver detected on this system.${NC}"
     fi

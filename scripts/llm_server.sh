@@ -82,11 +82,40 @@ show_pid_stats() {
             local vsz_formatted
             vsz_formatted=$(format_kb "$vsz")
             
-            echo -e "      ${BOLD}CPU Usage:${NC}      $cpu%"
-            echo -e "      ${BOLD}Memory (RSS):${NC}   $rss_formatted ($mem% of system total)"
-            echo -e "      ${BOLD}Virtual Mem:${NC}    $vsz_formatted"
-            echo -e "      ${BOLD}Start Time:${NC}     $started"
-            echo -e "      ${BOLD}Uptime:${NC}         $elapsed"
+            echo -e "      ${BOLD}CPU Usage:${NC}        $cpu%"
+            echo -e "      ${BOLD}System RAM (RSS):${NC} $rss_formatted ($mem% of system total)"
+            echo -e "      ${BOLD}Virtual Mem:${NC}      $vsz_formatted"
+
+            # GPU Memory check for this PID on Linux
+            if command -v nvidia-smi &>/dev/null && nvidia-smi &>/dev/null; then
+                local gpu_mem
+                gpu_mem=$(nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader 2>/dev/null | grep "^[[:space:]]*$pid," | cut -d',' -f2 | xargs || true)
+                if [ -n "$gpu_mem" ]; then
+                    echo -e "      ${BOLD}GPU Memory:${NC}       $gpu_mem"
+                else
+                    echo -e "      ${BOLD}GPU Memory:${NC}       0 MiB (Not running on GPU)"
+                fi
+            elif [ "$(uname -s)" = "Darwin" ]; then
+                echo -e "      ${BOLD}GPU Memory:${NC}       (Shared/Unified Memory on macOS)"
+            fi
+
+            echo -e "      ${BOLD}Start Time:${NC}       $started"
+            echo -e "      ${BOLD}Uptime:${NC}           $elapsed"
+        fi
+
+        # Parse log file for llama.cpp stats if log file exists
+        if [ -f "$LOG_FILE" ]; then
+            local offloaded_layers
+            offloaded_layers=$(grep -i "offloaded" "$LOG_FILE" | tail -n 1 | sed -E 's/.*offloaded (.*)/\1/' || true)
+            if [ -n "$offloaded_layers" ]; then
+                echo -e "      ${BOLD}GPU Offloading:${NC}   $offloaded_layers"
+            fi
+            
+            local ctx_size
+            ctx_size=$(grep -E -i "n_ctx|context" "$LOG_FILE" | head -n 5 | grep -E -o "n_ctx[[:space:]]*=[[:space:]]*[0-9]+" | tail -n 1 | sed -E 's/n_ctx[[:space:]]*=[[:space:]]*//' || true)
+            if [ -n "$ctx_size" ]; then
+                echo -e "      ${BOLD}Model Context:${NC}    $ctx_size tokens"
+            fi
         fi
     fi
 }
@@ -115,6 +144,16 @@ if [[ -z "$COMMAND" ]]; then
     if [[ -t 0 ]]; then
         while true; do
             print_header
+            echo -e "  ${CYAN}${BOLD}Active Configuration Settings:${NC}"
+            echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
+            echo -e "    • ${BOLD}API Endpoint:${NC}  http://$HOST:$PORT/v1"
+            echo -e "    • ${BOLD}Context Size:${NC}  $N_CTX tokens"
+            echo -e "    • ${BOLD}CPU Threads:${NC}   $N_THREADS"
+            echo -e "    • ${BOLD}GPU Offload:${NC}   $N_GPU_LAYERS layers (-1 = auto, 0 = CPU only)"
+            echo -e "    • ${BOLD}Log File:${NC}      $LOG_FILE"
+            echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
+            echo -e "    ${YELLOW}Tip: Customize these settings in your .env file.${NC}"
+            echo ""
             echo -e "  ${BOLD}Select an operation:${NC}"
             echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
             echo -e "    ${BOLD}1)${NC} Start LLM Server         (start)"

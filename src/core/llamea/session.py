@@ -1,10 +1,9 @@
-from __future__ import annotations
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Tuple, TYPE_CHECKING
+from typing import Any, Tuple
 
-from llamea import LLaMEA, LLM
+from llamea import LLaMEA
+from infra.llm.client import LLMClient
 from core.llamea.prompts import (
     TASK_PROMPT_CLEAN,
     TASK_PROMPT_NOISY,
@@ -14,11 +13,10 @@ from core.llamea.prompts import (
 from core.llamea.evaluator import Evaluator
 from infra.storage.sqlite.mapper import build_experiment_summary
 
-if TYPE_CHECKING:
-    from core.problems.bbob import BBOBProblem
-    from infra.storage.base import ExperimentRepository
-    from infra.storage.filesystem.code import CodeRepository
-    from infra.storage.checkpoint.repository import CheckpointRepository, CheckpointState
+from core.problems.bbob import BBOBProblem
+from infra.storage.base import ExperimentRepository
+from infra.storage.filesystem.code import CodeRepository
+from infra.storage.checkpoint.repository import CheckpointRepository, CheckpointState
 
 
 class CheckpointLogger:
@@ -31,13 +29,13 @@ class CheckpointLogger:
         dirname: str | Path,
         db_repo: ExperimentRepository,
         code_repo: CodeRepository,
-        flush_every: int = 5,             # how many generations between DB flushes
-        problem_profile: Any = None,      # ProblemProfile for DB record
+        flush_every: int = 5,
+        problem_profile: Any = None,
         mode: str | None = None,
         llm_name: str | None = None,
         run_id: int = 1,
     ):
-        self.dirname = str(dirname)   # ← LLaMEA needs this attr for pickle_archive()
+        self.dirname = str(dirname)
         self.attempt = 0
         self._db_repo = db_repo
         self._code_repo = code_repo
@@ -129,14 +127,13 @@ class LLaMEASession:
     def __init__(
         self,
         problem: BBOBProblem,
-        llm: LLM,
+        llm: LLMClient,
         checkpoint_repo: CheckpointRepository,
         db_repo: ExperimentRepository,
         code_repo: CodeRepository,
         budget: int = 1000,
         iterations: int = 10,
         noise_std: float = 0.0,
-        llm_name: str = "unknown",
         run_id: int = 1,
         flush_every: int = 5,
         cleanup_on_completion: bool = True,
@@ -152,20 +149,26 @@ class LLaMEASession:
             budget: Code evaluation budget.
             iterations: Count of evolutionary loop iterations.
             noise_std: Standard deviation of evaluation noise.
-            llm_name: Friendly identifier for the active LLM.
             run_id: Unique run execution number.
             flush_every: Intermediate DB sync frequency (in generations).
             cleanup_on_completion: Delete checkpoint archives on clean run exits.
         """
         self._problem = problem
-        self._llm = llm
+        self._llm_client = llm
         self._checkpoint_repo = checkpoint_repo
         self._db_repo = db_repo
         self._code_repo = code_repo
         self._budget = budget
         self._iterations = iterations
         self._noise_std = noise_std
-        self._llm_name = llm_name
+        
+        # Resolve llm_name explicitly from the LLM provider
+        if isinstance(llm, LLMClient):
+            self._llm_name = llm.llm_name
+        else:
+            raw_name = getattr(llm, "model", "unknown")
+            self._llm_name = Path(raw_name).name.replace(":", "_").replace("/", "_").replace("\\", "_")
+
         self._run_id = run_id
         self._flush_every = flush_every
         self._cleanup_on_completion = cleanup_on_completion
@@ -199,10 +202,9 @@ class LLaMEASession:
         self._cleanup_checkpoint(ckpt_state)
 
         # Report and return result
-        best_sol = optimizer.best_so_far
-        self._print_report(best_sol)
+        self._print_report(optimizer.best_so_far)
 
-        return self._build_session_result(best_sol, optimizer, evaluator)
+        return self._build_session_result(optimizer.best_so_far, optimizer, evaluator)
 
     def _resolve_checkpoint(self) -> CheckpointState:
         """Resolves the checkpoint state for the current problem run from the repository."""
@@ -212,6 +214,7 @@ class LLaMEASession:
             mode=self._mode,
             run_id=self._run_id,
         )
+
 
     def _create_optimizer(
         self, evaluator: Evaluator, ckpt_state: CheckpointState, task_prompt: str
@@ -227,7 +230,7 @@ class LLaMEASession:
                 optimizer = LLaMEA.warm_start(str(ckpt_state.archive_dir))
                 if optimizer is not None:
                     optimizer.f = evaluator
-                    optimizer.llm = self._llm
+                    optimizer.llm = self._llm_client.native_llm
                     is_resumed = True
                     print(f"[i] Resumed at generation {optimizer.generation}, "
                           f"history size {len(optimizer.run_history)}")
@@ -238,7 +241,7 @@ class LLaMEASession:
         if optimizer is None:
             optimizer = LLaMEA(
                 f=evaluator,
-                llm=self._llm,
+                llm=self._llm_client.native_llm,
                 n_parents=1,
                 n_offspring=1,
                 budget=self._iterations,
@@ -285,21 +288,24 @@ class LLaMEASession:
         self, optimizer: LLaMEA, ckpt_state: CheckpointState, is_resumed: bool, evaluator: Evaluator
     ) -> None:
         """Configures and binds a CheckpointLogger shim to the optimizer for database sync and checkpointing."""
-        ckpt_logger = CheckpointLogger(
-            dirname=ckpt_state.archive_dir,
-            db_repo=self._db_repo,
-            code_repo=self._code_repo,
-            flush_every=self._flush_every,
-            problem_profile=evaluator.problem_profile,
-            mode=self._mode,
-            llm_name=self._llm_name,
-            run_id=self._run_id,
-        )
-        optimizer.logger = ckpt_logger
-        optimizer.log = True
-        if is_resumed:
-            ckpt_logger._pending_history = list(optimizer.run_history)
-            ckpt_logger._generation = optimizer.generation
+        if is_resumed and optimizer.logger is not None:
+            # Rehydrate the deserialized logger with live DB connections
+            optimizer.logger._db_repo = self._db_repo
+            optimizer.logger._code_repo = self._code_repo
+            optimizer.log = True
+        else:
+            ckpt_logger = CheckpointLogger(
+                dirname=ckpt_state.archive_dir,
+                db_repo=self._db_repo,
+                code_repo=self._code_repo,
+                flush_every=self._flush_every,
+                problem_profile=evaluator.problem_profile,
+                mode=self._mode,
+                llm_name=self._llm_name,
+                run_id=self._run_id,
+            )
+            optimizer.logger = ckpt_logger
+            optimizer.log = True
 
     def _save_final_results(self, optimizer: LLaMEA, evaluator: Evaluator) -> None:
         """Persists the candidate code files and the overall experiment summaries to the database."""
@@ -308,6 +314,7 @@ class LLaMEASession:
             problem=evaluator.problem_profile,
             mode=self._mode,
             llm_name=self._llm_name,
+            run_id=self._run_id,
         )
 
         summary = build_experiment_summary(

@@ -1,6 +1,5 @@
 from pathlib import Path
 from typing import Any
-from core.schema import ProblemProfile
 
 
 class CodeRepository:
@@ -12,16 +11,16 @@ class CodeRepository:
     def save(
         self,
         history: list[Any],
-        problem: ProblemProfile,
+        problem: Any,
         mode: str,
         llm_name: str,
+        run_id: int = 1,
     ) -> None:
         """Saves code snippets from iterations to files and updates the metadata with the filepath.
 
         IMPORTANT: This mutates the history object metadata elements in place.
         """
-        experiment_name = f"bbob_{problem.problem_id}_dim{problem.dim}_{mode}"
-        code_dir = self.base_dir / "code" / llm_name / experiment_name
+        code_dir = self.base_dir / "code" / f"bbob{problem.problem_id}" / f"xdim_{problem.dim}" / mode / llm_name / f"run_{run_id}"
         code_dir.mkdir(parents=True, exist_ok=True)
 
         for i, solution in enumerate(history):
