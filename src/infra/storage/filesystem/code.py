@@ -3,10 +3,10 @@ from typing import Any
 from core.schema import ProblemProfile
 
 
-class CodeBlobSaver:
-    """Handles persistence of generated candidate algorithm source code blobs on disk."""
+class CodeRepository:
+    """Handles persistence of generated candidate algorithm source code on disk."""
 
-    def __init__(self, base_dir: Path):
+    def __init__(self, base_dir: Path | str):
         self.base_dir = Path(base_dir)
 
     def save(

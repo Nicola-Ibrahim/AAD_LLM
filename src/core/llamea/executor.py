@@ -136,39 +136,22 @@ class AlgorithmExecutor:
     under strict timeout constraints.
     """
 
-    def __init__(self, timeout_seconds: float = 10.0):
-        self.timeout_seconds = timeout_seconds
-
-    def execute_algorithm(
-        self, code: str, name: str, dim: int, problem: Callable[..., float], budget: int
-    ) -> float:
+    def __init__(self, timeout_seconds: float = 10.0) -> None:
         """
-        Dynamically execute (compile) candidate algorithm code, instantiate the class,
-        and execute it with budget and wall-clock timeout protection.
+        Initialize the AlgorithmExecutor.
 
-        Parameters
-        ----------
-        code : str
-            The raw python code of the optimization algorithm.
-        name : str
-            The class name of the optimization algorithm to instantiate.
-            If the class is not found by name, the first class defined in the
-            code (via AST analysis) is used as a fallback.
-        dim : int
-            The dimensionality of the search space, to be injected into the algorithm.
-        problem : Callable
-            The objective function to be minimized.
-        budget : int
-            Stopping criterion given to the algorithm (equivalent to a convergence
-            threshold in gradient descent). The algorithm uses this to limit its `problem(x)`
-            calls and return its best found float value.
-
-        Returns
-        -------
-        algorithm_returned_fitness : float
-            The best fitness value reported by the candidate algorithm.
+        Args:
+            timeout_seconds (float): Maximum wall-clock time allowed for an algorithm execution.
         """
-        # --- 1. Compile candidate code in an isolated namespace ---
+        self._timeout_seconds = timeout_seconds
+
+    def _create_isolated_namespace(self) -> dict[str, Any]:
+        """
+        Create a secure, isolated namespace with essential math and utility libraries.
+
+        Returns:
+            dict[str, Any]: A dictionary representing the global namespace for code execution.
+        """
         isolated_globals: dict[str, Any] = {
             "__builtins__": builtins,
             "np": np,
@@ -181,12 +164,21 @@ class AlgorithmExecutor:
         }
         if scipy is not None:
             isolated_globals["scipy"] = scipy
+            
+        return isolated_globals
 
-        code = _sanitize_code(code)
+    def _instantiate_algorithm(self, algorithm_cls: type, name: str, dim: int) -> Any:
+        """
+        Safely instantiate the algorithm class.
 
-        # --- 2. Validate code structure and resolve algorithm class ---
-        algorithm_cls = _validate_code(code, isolated_globals)
+        Args:
+            algorithm_cls (type): The class of the algorithm.
+            name (str): The name of the class for fallback.
+            dim (int): Dimensionality to optionally pass to the constructor.
 
+        Returns:
+            Any: An instantiated algorithm object ready for execution.
+        """
         try:
             algorithm = algorithm_cls()
         except TypeError:
@@ -200,9 +192,36 @@ class AlgorithmExecutor:
         if not hasattr(algorithm, "__name__"):
             algorithm.__name__ = getattr(algorithm_cls, "__name__", name)
 
-        # --- 3. Execute candidate run with wall-clock timeout protection ---
+        return algorithm
+
+    def execute_algorithm(
+        self, code: str, name: str, dim: int, problem: Callable[..., float], budget: int
+    ) -> float:
+        """Dynamically execute (compile) candidate algorithm code, instantiate the class,
+        and execute it with budget and wall-clock timeout protection.
+
+        Args:
+            code: The raw python code of the optimization algorithm.
+            name: The class name of the optimization algorithm to instantiate.
+                If the class is not found by name, the first class defined in the
+                code (via AST analysis) is used as a fallback.
+            dim: The dimensionality of the search space, to be injected into the algorithm.
+            problem: The objective function to be minimized.
+            budget: Stopping criterion given to the algorithm (equivalent to a convergence
+                threshold in gradient descent). The algorithm uses this to limit its `problem(x)`
+                calls and return its best found float value.
+
+        Returns:
+            float: The best fitness value reported by the candidate algorithm.
+        """
+        isolated_globals = self._create_isolated_namespace()
+        code = _sanitize_code(code)
+        
+        algorithm_cls = _validate_code(code, isolated_globals)
+        algorithm = self._instantiate_algorithm(algorithm_cls, name, dim)
+
         algorithm_returned_fitness = func_timeout(
-            self.timeout_seconds, algorithm, args=(problem, budget)
+            self._timeout_seconds, algorithm, args=(problem, budget)
         )
 
         if algorithm_returned_fitness is None:

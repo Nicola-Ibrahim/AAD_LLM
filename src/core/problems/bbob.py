@@ -7,33 +7,25 @@ from ioh import get_problem, ProblemClass
 
 
 class BBOBProblem:
-    """
-    Stateless BBOB problem descriptor.
+    """Stateless BBOB problem descriptor.
 
     Loads the clean IOH problem instance once, stores the global optimum
     and problem parameters, and provides clean and noisy evaluation methods.
 
-    Parameters
-    ----------
-    problem_id : int
-        The BBOB function ID. Must be an integer in [1, 24].
-    dim : int
-        The search space dimensionality.
-    instance_id : int, optional
-        The BBOB instance ID, by default 1.
+    Args:
+        problem_id: The BBOB function ID. Must be an integer in [1, 24].
+        dim: The search space dimensionality.
+        instance_id: The BBOB instance ID, by default 1.
 
-    Raises
-    ------
-    ValueError
-        If ``problem_id`` is not in the range [1, 24].
+    Raises:
+        ValueError: If `problem_id` is not in the range [1, 24].
 
-    Examples
-    --------
-    >>> problem = BBOBProblem(problem_id=1, dim=3)
-    >>> import numpy as np
-    >>> y_clean = problem(np.zeros(3))                       # clean float
-    >>> y_dict = problem(np.zeros(3), noise_level=0.05)      # dict: {0.0: clean, 0.05: noisy}
-    >>> problem.true_optimum                                 # float: global minimum
+    Examples:
+        >>> problem = BBOBProblem(problem_id=1, dim=3)
+        >>> import numpy as np
+        >>> y_clean = problem(np.zeros(3))                       # clean float
+        >>> y_dict = problem(np.zeros(3), noise_level=0.05)      # dict: {0.0: clean, 0.05: noisy}
+        >>> problem.true_optimum                                 # float: global minimum
     """
 
     VALID_IDS: range = range(1, 25)  # Valid BBOB problem IDs: 1 to 24 inclusive
@@ -72,20 +64,14 @@ class BBOBProblem:
         self._clean_problem.reset()
 
     def add_noise(self, true_value: float, noise_level: float) -> float:
-        """
-        Inject constant additive Gaussian noise, scaled to the problem's overall landscape.
-        
-        Parameters
-        ----------
-        true_value : float
-            The clean objective value.
-        noise_level : float
-            The percentage of noise to apply (e.g., 0.05 for 5%).
-            
-        Returns
-        -------
-        float
-            The noisy objective value.
+        """Inject constant additive Gaussian noise, scaled to the problem's overall landscape.
+
+        Args:
+            true_value: The clean objective value.
+            noise_level: The percentage of noise to apply (e.g., 0.05 for 5%).
+
+        Returns:
+            float: The noisy objective value.
         """
         if noise_level <= 0.0:
             return true_value
@@ -101,22 +87,16 @@ class BBOBProblem:
         x: np.ndarray,
         noise_level: float | list[float] | None = None,
     ) -> float | dict[float, float]:
-        """
-        Evaluate the objective function at point ``x``.
+        """Evaluate the objective function at point `x`.
 
-        Parameters
-        ----------
-        x : np.ndarray
-            The candidate search point vector.
-        noise_level : float | list[float] | None, optional
-            If None, returns the clean objective value as a float.
-            If a float or list of floats is passed, returns a dictionary mapping
-            noise levels (percentages, including 0.0 for clean) to their evaluated fitness.
-            
-        Returns
-        -------
-        float | dict[float, float]
-            Evaluated fitness float or dictionary of noise_level -> fitness value.
+        Args:
+            x: The candidate search point vector.
+            noise_level: If None, returns the clean objective value as a float.
+                If a float or list of floats is passed, returns a dictionary mapping
+                noise levels (percentages, including 0.0 for clean) to their evaluated fitness.
+
+        Returns:
+            float | dict[float, float]: Evaluated fitness float or dictionary of noise_level -> fitness value.
         """
         f_clean = self._clean_problem(x.tolist())
         if noise_level is None:
@@ -202,5 +182,4 @@ class BBOBProblem:
     def __setstate__(self, state):
         self.__dict__.update(state)
         # Re-initialize clean IOH problem instance on unpickling
-        from ioh import get_problem, ProblemClass
         self._clean_problem = get_problem(self.problem_id, self.instance_id, self.dim, ProblemClass.BBOB)

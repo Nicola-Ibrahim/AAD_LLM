@@ -3,6 +3,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from core.schema import ProblemProfile, IterationMetadata, ExperimentSummary
 
 
 @dataclass
@@ -46,8 +47,9 @@ class CheckpointRepository:
         if state.archive_dir.exists() and state.archive_dir.is_dir():
             shutil.rmtree(state.archive_dir)
 
-    def recover_orphaned(self, storage_manager: Any) -> int:
+    def recover_orphaned(self, db_repo: Any) -> int:
         """Scans the checkpoint directory for orphaned .ckpt.json files and recovers them."""
+
         recovered_count = 0
         if not self.checkpoint_dir.exists():
             return 0
@@ -58,17 +60,47 @@ class CheckpointRepository:
                     envelope = json.load(f)
 
                 experiment_meta = envelope.get("experiment")
-                iterations = envelope.get("iterations")
+                iterations_data = envelope.get("iterations")
 
-                if not experiment_meta or not iterations:
+                if not experiment_meta or not iterations_data:
                     # Malformed checkpoint, discard
                     ckpt_path.unlink()
                     continue
 
-                storage_manager.save_from_checkpoint(
-                    experiment_meta=experiment_meta,
-                    iterations_data=iterations,
+                problem_meta = ProblemProfile(
+                    problem_id=experiment_meta["problem_id"],
+                    dim=experiment_meta["dim"],
+                    noise_std=experiment_meta["noise_std"],
+                    instance_id=experiment_meta.get("instance_id", 1),
+                    true_optimum=experiment_meta.get("true_optimum"),
                 )
+
+                iterations = [IterationMetadata(**it) for it in iterations_data]
+
+                # Calculate best iteration metrics
+                best_iteration = None
+                best_error = float("inf")
+                best_algo = None
+                for it in iterations:
+                    if it.fitness.final_error is not None and it.fitness.final_error < best_error:
+                        best_error = it.fitness.final_error
+                        best_iteration = it.iteration
+                        best_algo = it.algorithm_name
+
+                best_err_val = best_error if best_error != float("inf") else None
+
+                summary = ExperimentSummary(
+                    mode=experiment_meta["mode"],
+                    llm_name=experiment_meta["llm_name"],
+                    run_id=experiment_meta["run_id"],
+                    problem=problem_meta,
+                    best_iteration=best_iteration,
+                    best_algorithm=best_algo,
+                    best_final_error=best_err_val,
+                    iterations=iterations,
+                )
+
+                db_repo.save(summary)
 
                 ckpt_path.unlink()
                 recovered_count += 1

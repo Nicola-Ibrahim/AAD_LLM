@@ -38,45 +38,43 @@ class Evaluator:
         noise_std: float = 0.0,
         run_id: int = 1,
         json_checkpoint_path: Path | str | None = None,
-        experiment_meta: dict | None = None,
-    ):
-        """
-        Initialize the evaluator.
+        experiment_meta: dict[str, Any] | None = None,
+    ) -> None:
+        """Initialize the evaluator.
 
-        Parameters
-        ----------
-        problem : BBOBProblem
-            Fully-configured BBOB problem instance.
-        budget : int, optional
-            Maximum allowed objective function evaluations passed to the algorithm
-            as a stopping criterion (analogous to a convergence threshold in gradient
-            descent), by default 1000. It is NOT used for multi-run comparison or luck checking.
-        timeout_seconds : float, optional
-            Maximum wall-clock execution time allowed for one algorithm run,
-            by default 10.0.
-        noise_std : float, optional
-            Standard deviation of noise to apply during evaluation, by default 0.0.
+        Args:
+            problem: Fully-configured BBOB problem instance.
+            budget: Maximum allowed objective function evaluations passed to the algorithm
+                as a stopping criterion (analogous to a convergence threshold in gradient
+                descent), by default 1000. It is NOT used for multi-run comparison or luck checking.
+            timeout_seconds: Maximum wall-clock execution time allowed for one algorithm run,
+                by default 10.0.
+            noise_std: Standard deviation of noise to apply during evaluation, by default 0.0.
+            run_id: Unique run execution identifier, by default 1.
+            json_checkpoint_path: Path to write clean convergence trajectory, by default None.
+                If provided, a json file is updated incrementally.
+            experiment_meta: Metadata about the active experiment, by default None.
         """
-        self.problem = problem
-        self.budget = budget
-        self.timeout_seconds = timeout_seconds
-        self.noise_std = noise_std
-        self.run_id = run_id
-        self.json_checkpoint_path = Path(json_checkpoint_path) if json_checkpoint_path else None
-        self.experiment_meta = experiment_meta or {}
-        self.executor = AlgorithmExecutor(timeout_seconds=self.timeout_seconds)
+        self._problem = problem
+        self._budget = budget
+        self._timeout_seconds = timeout_seconds
+        self._noise_std = noise_std
+        self._run_id = run_id
+        self._json_checkpoint_path = Path(json_checkpoint_path) if json_checkpoint_path else None
+        self._experiment_meta = experiment_meta or {}
+        self._executor = AlgorithmExecutor(timeout_seconds=self._timeout_seconds)
         self._current_iteration = 0
         self._write_checkpoint_header()
 
     def _write_checkpoint_header(self) -> None:
         """Write an empty envelope JSON so the file is self-describing from the start."""
-        if self.json_checkpoint_path is None:
+        if self._json_checkpoint_path is None:
             return
-        path = self.json_checkpoint_path
+        path = self._json_checkpoint_path
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.exists():
             return  # don't overwrite an existing checkpoint (crash recovery scenario)
-        envelope = {"experiment": self.experiment_meta, "iterations": []}
+        envelope = {"experiment": self._experiment_meta, "iterations": []}
         tmp = path.with_suffix(".tmp")
         with tmp.open("w") as f:
             json.dump(envelope, f, indent=2)
@@ -84,15 +82,15 @@ class Evaluator:
 
     def _append_to_json_checkpoint(self, metadata: IterationMetadata) -> None:
         """Atomically appends one IterationMetadata record to the envelope checkpoint JSON."""
-        if self.json_checkpoint_path is None:
+        if self._json_checkpoint_path is None:
             return
-        path = self.json_checkpoint_path
+        path = self._json_checkpoint_path
         try:
             with path.open("r") as f:
                 envelope = json.load(f)
         except (json.JSONDecodeError, OSError):
             # Corrupt file — rebuild from header and current record only
-            envelope = {"experiment": self.experiment_meta, "iterations": []}
+            envelope = {"experiment": self._experiment_meta, "iterations": []}
         envelope["iterations"].append(metadata.to_json_dict())
         tmp = path.with_suffix(".tmp")
         with tmp.open("w") as f:
@@ -103,11 +101,11 @@ class Evaluator:
     def problem_profile(self) -> ProblemProfile:
         """Expose the configured BBOB problem profile."""
         return ProblemProfile(
-            problem_id=self.problem.problem_id,
-            dim=self.problem.dim,
-            noise_std=self.noise_std,
-            instance_id=self.problem.instance_id,
-            true_optimum=self.problem.true_optimum,
+            problem_id=self._problem.problem_id,
+            dim=self._problem.dim,
+            noise_std=self._noise_std,
+            instance_id=self._problem.instance_id,
+            true_optimum=self._problem.true_optimum,
         )
 
     def _compute_metrics_and_feedback(
@@ -123,16 +121,16 @@ class Evaluator:
         """
         Compute final error, fitness score, feedback message, and metadata object.
         """
-        true_optimum = self.problem.true_optimum
+        true_optimum = self._problem.true_optimum
         final_error = abs(algorithm_returned_fitness - true_optimum)
 
         feedback = (
             f"The algorithm achieved a final error of {final_error:.4f} from the true optimum ({true_optimum:.4f}) "
-            f"on BBOB Problem {self.problem.problem_id} (additive noise std: {self.noise_std}). "
+            f"on BBOB Problem {self._problem.problem_id} (additive noise std: {self._noise_std}). "
             "Improve convergence speed and resilience to minimize the final error."
         )
 
-        budget_consumed_pct = (evaluations_used / self.budget * 100) if self.budget > 0 else 0.0
+        budget_consumed_pct = (evaluations_used / self._budget * 100) if self._budget > 0 else 0.0
         relative_error = (final_error / abs(true_optimum)) if true_optimum != 0.0 else final_error
         evals_per_second = (evaluations_used / runtime_seconds) if runtime_seconds > 0.0 else 0.0
         error_per_evaluation = (final_error / evaluations_used) if evaluations_used > 0 else None
@@ -184,11 +182,11 @@ class Evaluator:
         looking up `noise_std` as the key; if there's any float precision
         drift we fall back to the first non-zero-key value in the dict.
         """
-        res = self.problem(x, noise_std=self.noise_std)
+        res = self._problem(x, noise_std=self._noise_std)
         if isinstance(res, dict):
             # Primary lookup: exact key match
-            if self.noise_std in res:
-                return res[self.noise_std]
+            if self._noise_std in res:
+                return res[self._noise_std]
             # Fallback: return the value for the first non-clean (non-zero) key
             for k, v in res.items():
                 if k != 0.0:
@@ -198,20 +196,14 @@ class Evaluator:
         return float(res)
 
     def __call__(self, solution: Solution, explogger: Any | None = None) -> Solution:
-        """
-        Execute and score a candidate optimization algorithm solution.
+        """Execute and score a candidate optimization algorithm solution.
 
-        Parameters
-        ----------
-        solution : Solution
-            The LLaMEA candidate solution containing its source code and name.
-        explogger : Any | None, optional
-            Framework-level experiment logger, by default None.
+        Args:
+            solution: The LLaMEA candidate solution containing its source code and name.
+            explogger: Framework-level experiment logger, by default None.
 
-        Returns
-        -------
-        solution : Solution
-            The modified solution object populated with fitness scores and feedback.
+        Returns:
+            Solution: The modified solution object populated with fitness scores and feedback.
         """
         # Compute static code complexity metrics
         code_lines = len(solution.code.splitlines())
@@ -223,20 +215,20 @@ class Evaluator:
             llm_gen_time = solution.metadata.get("llm_generation_time")
 
         # Reset evaluations counter to ensure we start at 0 for this candidate algorithm run
-        self.problem.reset()
+        self._problem.reset()
         start_time = time.perf_counter()
         try:
             # --- 1. Compile & Execute candidate run with timeout protection ---
-            problem_fn = self._noisy_problem_fn if self.noise_std > 0.0 else self.problem
-            algorithm_returned_fitness = self.executor.execute_algorithm(
+            problem_fn = self._noisy_problem_fn if self._noise_std > 0.0 else self._problem
+            algorithm_returned_fitness = self._executor.execute_algorithm(
                 code=solution.code,
                 name=solution.name,
-                dim=self.problem.dim,
+                dim=self._problem.dim,
                 problem=problem_fn,
-                budget=self.budget,
+                budget=self._budget,
             )
             elapsed_time = time.perf_counter() - start_time
-            evals_used = self.problem._clean_problem.state.evaluations
+            evals_used = self._problem._clean_problem.state.evaluations
 
             # --- 2. Calculate metrics, feedback, and metadata ---
             fitness_score, feedback, metadata = self._compute_metrics_and_feedback(
@@ -251,14 +243,14 @@ class Evaluator:
 
         except (Exception, FunctionTimedOut) as e:
             elapsed_time = time.perf_counter() - start_time
-            evals_used = self.problem._clean_problem.state.evaluations
-            budget_consumed_pct = (evals_used / self.budget * 100) if self.budget > 0 else 0.0
+            evals_used = self._problem._clean_problem.state.evaluations
+            budget_consumed_pct = (evals_used / self._budget * 100) if self._budget > 0 else 0.0
             evals_per_second = (evals_used / elapsed_time) if elapsed_time > 0.0 else 0.0
 
             if isinstance(e, FunctionTimedOut):
                 fitness_score = float("-inf")
                 feedback = (
-                    f"Execution failed: Your algorithm exceeded the {self.timeout_seconds}-second time limit. "
+                    f"Execution failed: Your algorithm exceeded the {self._timeout_seconds}-second time limit. "
                     "Please optimize your loops and make the code more efficient."
                 )
                 metadata = IterationMetadata(
@@ -343,16 +335,14 @@ class Evaluator:
 
         return solution
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         # Exclude unpicklable C++ object wrappers (executor) for joblib/pickle state logging.
         # problem is picklable since BBOBProblem implements its own self-healing __getstate__/__setstate__.
         state = self.__dict__.copy()
-        state["executor"] = None
+        state["_executor"] = None
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, Any]) -> None:
         self.__dict__.update(state)
         # Re-initialize the executor if needed
-        from core.llamea.executor import AlgorithmExecutor
-
-        self.executor = AlgorithmExecutor(timeout_seconds=self.timeout_seconds)
+        self._executor = AlgorithmExecutor(timeout_seconds=self._timeout_seconds)

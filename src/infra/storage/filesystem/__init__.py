@@ -1,3 +1,3 @@
-from infra.storage.filesystem.blob import CodeBlobSaver
+from infra.storage.filesystem.code import CodeRepository
 
-__all__ = ["CodeBlobSaver"]
+__all__ = ["CodeRepository"]
