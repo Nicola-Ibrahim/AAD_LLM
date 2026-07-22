@@ -63,7 +63,12 @@ class ExperimentORM(Base):
     __table_args__ = (
         Index("idx_experiments_lookup", "problem_id", "llm_name", "dim", "mode"),
         UniqueConstraint(
-            "problem_id", "dim", "mode", "llm_name", "noise_std", "run_id",
+            "problem_id",
+            "dim",
+            "mode",
+            "llm_name",
+            "noise_std",
+            "run_id",
             name="uq_experiment_run",
         ),
     )
@@ -124,7 +129,9 @@ class IterationORM(Base):
         # number within an experiment (e.g. convergence curves).
         Index("idx_iterations_experiment_iter", "experiment_id", "iteration"),
         UniqueConstraint(
-            "experiment_id", "instance_id", "iteration",
+            "experiment_id",
+            "instance_id",
+            "iteration",
             name="uq_iteration_identity",
         ),
     )
@@ -141,8 +148,10 @@ class ErrorLogORM(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     iteration_id = Column(
-        Integer, ForeignKey("iterations.id", ondelete="CASCADE"),
-        nullable=False, unique=True,
+        Integer,
+        ForeignKey("iterations.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
     )
     error_type = Column(String)
     error_message = Column(String)

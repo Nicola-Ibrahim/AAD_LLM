@@ -1,33 +1,37 @@
 from pathlib import Path
 from typing import Any
 
+from core.config import DATA_DIR
+
 
 class CodeRepository:
     """Handles persistence of generated candidate algorithm source code on disk."""
 
-    def __init__(self, base_dir: Path | str):
-        self.base_dir = Path(base_dir)
+    def __init__(self, base_dir: Path = DATA_DIR / "code"):
+        self.base_dir = base_dir
 
-    def save(
+    def save_code(
         self,
-        history: list[Any],
+        code: str,
+        iteration_num: int,
         problem: Any,
         mode: str,
         llm_name: str,
-        run_id: int = 1,
-    ) -> None:
-        """Saves code snippets from iterations to files and updates the metadata with the filepath.
+        run_id: int,
+    ) -> Path:
+        """Save candidate algorithm source code to disk under its run folder.
 
-        IMPORTANT: This mutates the history object metadata elements in place.
+        Returns the absolute Path to the created iter_N.py file.
         """
-        code_dir = self.base_dir / "code" / f"bbob{problem.problem_id}" / f"xdim_{problem.dim}" / mode / llm_name / f"run_{run_id}"
+        code_dir = (
+            self.base_dir
+            / f"run_{run_id}"
+            / f"bbob{problem.problem_id}"
+            / f"xdim_{problem.dim}"
+            / mode
+            / llm_name
+        )
         code_dir.mkdir(parents=True, exist_ok=True)
-
-        for i, solution in enumerate(history):
-            iteration_num = i + 1
-            meta = getattr(solution, "metadata", None)
-            if meta and hasattr(solution, "code") and solution.code:
-                code_path = code_dir / f"iter_{iteration_num}.py"
-                with open(code_path, "w", encoding="utf-8") as f:
-                    f.write(solution.code)
-                meta.code.code_path = str(code_path)
+        code_path = code_dir / f"iter_{iteration_num}.py"
+        code_path.write_text(code, encoding="utf-8")
+        return code_path

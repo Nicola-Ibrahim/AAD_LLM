@@ -4,7 +4,7 @@
 # Initializes the environment, checks environment variables, and installs dependencies.
 #
 # Usage:
-#   bash scripts/env.sh [command]
+#   bash scripts/env.sh [command] [mode]
 #
 # Commands:
 #   fresh     Fresh install (wipe .venv, clean all uv cache, sync)
@@ -12,6 +12,10 @@
 #   quick     Quick sync (no cache clean, just sync)
 #   inspect   Inspect current environment without any changes
 #   gpu       GPU / CUDA status check only
+#
+# Modes (optional, defaults to minimal):
+#   minimal   Install core dependencies only (no extras like llama, gemini, notebook)
+#   full      Install all optional dependencies/extras
 # ============================================================
 
 set -euo pipefail
@@ -63,12 +67,27 @@ if [ -r "$PROJECT_ROOT/.env" ]; then
     set +a
 fi
 
-# ─── Parse CLI Command ─────────────────────────────────────
+# ─── Parse CLI Command & Mode ──────────────────────────────
 COMMAND=""
+INSTALL_EXTRAS="false"
+
 if [[ $# -gt 0 ]]; then
     case "$1" in
         fresh|sync|quick|inspect|gpu)
             COMMAND="$1"
+            shift
+            ;;
+    esac
+fi
+
+if [[ $# -gt 0 ]]; then
+    case "$1" in
+        full|all|extras)
+            INSTALL_EXTRAS="true"
+            shift
+            ;;
+        minimal|core)
+            INSTALL_EXTRAS="false"
             shift
             ;;
     esac
@@ -81,7 +100,7 @@ if [[ -z "$COMMAND" ]]; then
             print_header
             echo -e "  ${BOLD}Select an operation:${NC}"
             echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
-            echo -e "    ${BOLD}1)${NC} Fresh Install   — Wipe .venv, purge uv cache, full sync"
+            echo -e "    ${BOLD}1)${NC} Fresh Install   — Wipe .venv, purge uv cache, sync"
             echo -e "    ${BOLD}2)${NC} Force Sync      — Purge package cache, sync in existing .venv"
             echo -e "    ${BOLD}3)${NC} Quick Sync      — Sync only (no cache clearing, fastest)"
             echo -e "    ${BOLD}4)${NC} Inspect Env     — Show env health, packages, Python, CUDA status"
@@ -102,9 +121,26 @@ if [[ -z "$COMMAND" ]]; then
             fi
 
             case "$choice" in
-                1) COMMAND="fresh";   break ;;
-                2) COMMAND="sync";    break ;;
-                3) COMMAND="quick";   break ;;
+                1|2|3)
+                    case "$choice" in
+                        1) COMMAND="fresh" ;;
+                        2) COMMAND="sync" ;;
+                        3) COMMAND="quick" ;;
+                    esac
+                    echo ""
+                    echo -e "  ${BOLD}Select installation mode:${NC}"
+                    echo -e "    ${BOLD}1)${NC} Minimal (Core dependencies only)"
+                    echo -e "    ${BOLD}2)${NC} Full    (Core + gemini, llama, notebook)"
+                    echo ""
+                    read -rp "$(echo -e "  ${BOLD}Your choice [1-2, default: 1]:${NC} ")" mode_choice
+                    mode_choice=$(echo "$mode_choice" | xargs)
+                    if [[ "$mode_choice" == "2" ]]; then
+                        INSTALL_EXTRAS="true"
+                    else
+                        INSTALL_EXTRAS="false"
+                    fi
+                    break
+                    ;;
                 4) COMMAND="inspect"; break ;;
                 5) COMMAND="gpu";     break ;;
                 *)
@@ -115,8 +151,9 @@ if [[ -z "$COMMAND" ]]; then
             esac
         done
     else
-        # Non-interactive: default to quick sync
+        # Non-interactive: default to quick sync, core/minimal dependencies
         COMMAND="quick"
+        INSTALL_EXTRAS="false"
     fi
 fi
 
@@ -292,15 +329,24 @@ case "$COMMAND" in
         if command -v uv &>/dev/null; then
             echo -e "  ${CYAN}[i] Cleaning ALL uv cache...${NC}"
             uv cache clean
-            echo -e "  ${CYAN}[i] Syncing all dependencies from scratch...${NC}"
-            uv sync --all-extras
+            if [ "$INSTALL_EXTRAS" = "true" ]; then
+                echo -e "  ${CYAN}[i] Syncing all dependencies from scratch (with all extras)...${NC}"
+                uv sync --all-extras
+            else
+                echo -e "  ${CYAN}[i] Syncing core dependencies from scratch (minimal)...${NC}"
+                uv sync
+            fi
             echo -e "  ${GREEN}✓ Fresh install complete.${NC}"
         else
             local python_cmd
             python_cmd=$(resolve_python)
             echo -e "  ${YELLOW}[!] uv not found. Using pip...${NC}"
             "$python_cmd" -m pip install --upgrade pip
-            "$python_cmd" -m pip install -e "$PROJECT_ROOT[gemini,notebook]"
+            if [ "$INSTALL_EXTRAS" = "true" ]; then
+                "$python_cmd" -m pip install -e "$PROJECT_ROOT[gemini,llama,notebook]"
+            else
+                "$python_cmd" -m pip install -e "$PROJECT_ROOT"
+            fi
             echo -e "  ${GREEN}✓ pip install complete.${NC}"
         fi
         show_gpu_status
@@ -312,10 +358,15 @@ case "$COMMAND" in
         echo -e "  ${CYAN}${BOLD}Step 1: Force Sync (Purge Package Cache)${NC}"
         echo -e "${BOLD}========================================================${NC}"
         if command -v uv &>/dev/null; then
-            echo -e "  ${CYAN}[i] Purging llama-cpp-python from uv cache...${NC}"
-            uv cache clean llama-cpp-python
-            echo -e "  ${CYAN}[i] Syncing all dependencies...${NC}"
-            uv sync --all-extras
+            if [ "$INSTALL_EXTRAS" = "true" ]; then
+                echo -e "  ${CYAN}[i] Purging llama-cpp-python from uv cache...${NC}"
+                uv cache clean llama-cpp-python
+                echo -e "  ${CYAN}[i] Syncing all dependencies (with all extras)...${NC}"
+                uv sync --all-extras
+            else
+                echo -e "  ${CYAN}[i] Syncing core dependencies (minimal)...${NC}"
+                uv sync
+            fi
             echo -e "  ${GREEN}✓ Force sync complete.${NC}"
         else
             echo -e "  ${RED}✗ uv not found. Cannot force sync without uv.${NC}"
@@ -330,14 +381,23 @@ case "$COMMAND" in
         echo -e "  ${CYAN}${BOLD}Step 1: Quick Sync${NC}"
         echo -e "${BOLD}========================================================${NC}"
         if command -v uv &>/dev/null; then
-            echo -e "  ${CYAN}[i] Running uv sync (no cache clearing)...${NC}"
-            uv sync --all-extras
+            if [ "$INSTALL_EXTRAS" = "true" ]; then
+                echo -e "  ${CYAN}[i] Running uv sync (with all extras, no cache clearing)...${NC}"
+                uv sync --all-extras
+            else
+                echo -e "  ${CYAN}[i] Running uv sync (minimal, no cache clearing)...${NC}"
+                uv sync
+            fi
             echo -e "  ${GREEN}✓ Quick sync complete.${NC}"
         else
             local python_cmd
             python_cmd=$(resolve_python)
             echo -e "  ${YELLOW}[!] uv not found. Using pip...${NC}"
-            "$python_cmd" -m pip install -e "$PROJECT_ROOT[gemini,notebook]"
+            if [ "$INSTALL_EXTRAS" = "true" ]; then
+                "$python_cmd" -m pip install -e "$PROJECT_ROOT[gemini,llama,notebook]"
+            else
+                "$python_cmd" -m pip install -e "$PROJECT_ROOT"
+            fi
             echo -e "  ${GREEN}✓ pip install complete.${NC}"
         fi
         show_gpu_status

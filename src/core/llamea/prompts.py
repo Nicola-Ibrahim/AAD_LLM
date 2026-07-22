@@ -1,6 +1,8 @@
 """
-Prompt constants for LLaMEA optimization algorithm design.
+Prompt constants and builder for LLaMEA optimization algorithm design.
 """
+
+import numpy as np
 
 TASK_PROMPT_CLEAN = """
 You are a highly skilled computer scientist and an expert in meta-heuristic optimization.
@@ -86,3 +88,20 @@ STRICT Rules — violating any rule will cause execution failure:
 - The `import numpy as np` statement MUST appear at the top of your code block.
 - Do NOT include `if __name__ == '__main__':` blocks.
 """
+
+
+def build_task_prompt(
+    problem_id: int,
+    dim: int,
+    lower_bound: np.ndarray,
+    upper_bound: np.ndarray,
+    is_noisy: bool = False,
+) -> str:
+    """Constructs the structured task prompt based on explicit problem parameters and noise flag."""
+    template = TASK_PROMPT_NOISY if is_noisy else TASK_PROMPT_CLEAN
+    return template.format(
+        problem_id=problem_id,
+        dim=dim,
+        lower_bound=lower_bound.tolist(),
+        upper_bound=upper_bound.tolist(),
+    )

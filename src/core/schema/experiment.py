@@ -15,8 +15,7 @@ class ExperimentSummary(BaseModel):
         examples=["qwen2.5-coder-7b-instruct-q4_k_m", "gpt-4o-mini"],
     )
     run_id: int = Field(
-        default=1,
-        description="Explicit repetition index assigned by the orchestrator."
+        default=1, description="Explicit repetition index assigned by the orchestrator."
     )
     problem: ProblemProfile = Field(
         description="Configuration of the BBOB problem for this execution run."

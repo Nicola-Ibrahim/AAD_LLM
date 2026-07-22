@@ -164,7 +164,7 @@ class AlgorithmExecutor:
         }
         if scipy is not None:
             isolated_globals["scipy"] = scipy
-            
+
         return isolated_globals
 
     def _instantiate_algorithm(self, algorithm_cls: type, name: str, dim: int) -> Any:
@@ -216,7 +216,7 @@ class AlgorithmExecutor:
         """
         isolated_globals = self._create_isolated_namespace()
         code = _sanitize_code(code)
-        
+
         algorithm_cls = _validate_code(code, isolated_globals)
         algorithm = self._instantiate_algorithm(algorithm_cls, name, dim)
 

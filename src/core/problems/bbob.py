@@ -56,10 +56,10 @@ class BBOBProblem:
         np.random.seed(42)  # Fixed seed so the scale is consistent every run
         sample_points = np.random.uniform(self._lb, self._ub, (20, self.dim))
         sample_y = [self._clean_problem(x.tolist()) for x in sample_points]
-        
+
         # The scale is the average distance from the optimum across the whole space
         self._landscape_scale = float(np.mean([abs(y - self.true_optimum) for y in sample_y]))
-        
+
         # Reset internal evaluation counter after initialization samples
         self._clean_problem.reset()
 
@@ -76,7 +76,7 @@ class BBOBProblem:
         if noise_std <= 0.0:
             return true_value
 
-        # The standard deviation is now fixed for the whole problem, 
+        # The standard deviation is now fixed for the whole problem,
         # but relative to the specific problem's massive (or tiny) scale.
         dynamic_std = noise_std * self._landscape_scale
 
@@ -143,16 +143,14 @@ class BBOBProblem:
         return np.array(self._clean_problem.optimum.x, dtype=float)
 
     @property
-    def lower_bound(self) -> float | np.ndarray:
-        """Return lower bound (scalar float if uniform across dimensions, otherwise array)."""
-        lb_vec = self.lb
-        return float(lb_vec[0]) if np.all(lb_vec == lb_vec[0]) else lb_vec
+    def lower_bound(self) -> np.ndarray:
+        """Return lower bounds vector for the search space."""
+        return self._lb
 
     @property
-    def upper_bound(self) -> float | np.ndarray:
-        """Return upper bound (scalar float if uniform across dimensions, otherwise array)."""
-        ub_vec = self.ub
-        return float(ub_vec[0]) if np.all(ub_vec == ub_vec[0]) else ub_vec
+    def upper_bound(self) -> np.ndarray:
+        """Return upper bounds vector for the search space."""
+        return self._ub
 
     @property
     def name(self) -> str:
@@ -182,4 +180,6 @@ class BBOBProblem:
     def __setstate__(self, state):
         self.__dict__.update(state)
         # Re-initialize clean IOH problem instance on unpickling
-        self._clean_problem = get_problem(self.problem_id, self.instance_id, self.dim, ProblemClass.BBOB)
+        self._clean_problem = get_problem(
+            self.problem_id, self.instance_id, self.dim, ProblemClass.BBOB
+        )

@@ -3,12 +3,11 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 
 
-def build_engine(db_path: str | Path, echo: bool = False):
+def build_engine(db_path: Path, echo: bool = False):
     """Creates and configures a SQLite SQLAlchemy engine.
     - Creates parent directories if they don't exist.
     - Registers PRAGMA foreign_keys=ON on every new connection.
     """
-    db_path = Path(db_path)
     if db_path.parent:
         db_path.parent.mkdir(parents=True, exist_ok=True)
 

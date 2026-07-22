@@ -35,7 +35,9 @@ class LLMClient:
         """Checks if the local LLM server is reachable at the given base URL."""
         models_url = f"{base_url.rstrip('/')}/models"
         try:
-            req = urllib.request.Request(models_url, headers={"User-Agent": "AAD-LLM-Connection-Check"})
+            req = urllib.request.Request(
+                models_url, headers={"User-Agent": "AAD-LLM-Connection-Check"}
+            )
             with urllib.request.urlopen(req, timeout=2.0) as _:
                 pass
         except Exception as e:
@@ -53,7 +55,7 @@ class LLMClient:
         """Queries the local server's /models endpoint to get the active model name."""
         import json
         import urllib.request
-        
+
         models_url = f"{base_url.rstrip('/')}/models"
         try:
             req = urllib.request.Request(models_url, headers={"User-Agent": "AAD-LLM-Model-Check"})
@@ -110,7 +112,9 @@ class LLMClient:
                 return llm
 
             case _:
-                raise ValueError(f"Unknown provider '{self.provider}'. Choose from: {list(Provider)}")
+                raise ValueError(
+                    f"Unknown provider '{self.provider}'. Choose from: {list(Provider)}"
+                )
 
     def sample_solution(
         self,
@@ -121,6 +125,7 @@ class LLMClient:
         diff_mode: bool = False,
     ):
         import time
+
         start_t = time.perf_counter()
         sol = self._native_client.sample_solution(
             session_messages=session_messages,
@@ -140,12 +145,13 @@ class LLMClient:
         return self._native_client
 
     @property
-    def llm_name(self) -> str:
+    def name(self) -> str:
         """Sanitized name of the LLM model for path creation and database logging."""
         model = getattr(self._native_client, "model", None)
         if not model:
             return "unknown"
         from pathlib import Path
+
         model_base = Path(model).name
         return model_base.replace(":", "_").replace("/", "_").replace("\\", "_")
 
@@ -166,5 +172,3 @@ class LLMClient:
         self.kwargs = state["kwargs"]
         self._native_client = self._init_native_client()
         self._native_client.model = state["model"]
-
-

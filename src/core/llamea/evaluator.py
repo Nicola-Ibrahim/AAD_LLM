@@ -1,7 +1,5 @@
 import time
 import traceback
-import json
-from pathlib import Path
 from typing import Any
 import numpy as np
 from llamea import Solution
@@ -17,6 +15,8 @@ from core.schema import (
     ConvergenceProfile,
     ProblemProfile,
 )
+from infra.storage.base import ExperimentRepository
+from infra.storage.filesystem.code import CodeRepository
 
 
 class Evaluator:
@@ -33,17 +33,20 @@ class Evaluator:
     def __init__(
         self,
         problem: BBOBProblem,
+        db_repo: ExperimentRepository,
+        code_repo: CodeRepository,
         budget: int = 1000,
         timeout_seconds: float = 10.0,
         noise_std: float = 0.0,
         run_id: int = 1,
-        json_checkpoint_path: Path | str | None = None,
         experiment_meta: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the evaluator.
 
         Args:
             problem: Fully-configured BBOB problem instance.
+            db_repo: ExperimentRepository to persist incremental checkpoint iterations.
+            code_repo: CodeRepository to persist algorithm source code per iteration.
             budget: Maximum allowed objective function evaluations passed to the algorithm
                 as a stopping criterion (analogous to a convergence threshold in gradient
                 descent), by default 1000. It is NOT used for multi-run comparison or luck checking.
@@ -51,51 +54,18 @@ class Evaluator:
                 by default 10.0.
             noise_std: Standard deviation of noise to apply during evaluation, by default 0.0.
             run_id: Unique run execution identifier, by default 1.
-            json_checkpoint_path: Path to write clean convergence trajectory, by default None.
-                If provided, a json file is updated incrementally.
             experiment_meta: Metadata about the active experiment, by default None.
         """
         self._problem = problem
+        self._db_repo = db_repo
+        self._code_repo = code_repo
         self._budget = budget
         self._timeout_seconds = timeout_seconds
         self._noise_std = noise_std
         self._run_id = run_id
-        self._json_checkpoint_path = Path(json_checkpoint_path) if json_checkpoint_path else None
         self._experiment_meta = experiment_meta or {}
         self._executor = AlgorithmExecutor(timeout_seconds=self._timeout_seconds)
         self._current_iteration = 0
-        self._write_checkpoint_header()
-
-    def _write_checkpoint_header(self) -> None:
-        """Write an empty envelope JSON so the file is self-describing from the start."""
-        if self._json_checkpoint_path is None:
-            return
-        path = self._json_checkpoint_path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists():
-            return  # don't overwrite an existing checkpoint (crash recovery scenario)
-        envelope = {"experiment": self._experiment_meta, "iterations": []}
-        tmp = path.with_suffix(".tmp")
-        with tmp.open("w") as f:
-            json.dump(envelope, f, indent=2)
-        tmp.replace(path)
-
-    def _append_to_json_checkpoint(self, metadata: IterationMetadata) -> None:
-        """Atomically appends one IterationMetadata record to the envelope checkpoint JSON."""
-        if self._json_checkpoint_path is None:
-            return
-        path = self._json_checkpoint_path
-        try:
-            with path.open("r") as f:
-                envelope = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            # Corrupt file — rebuild from header and current record only
-            envelope = {"experiment": self._experiment_meta, "iterations": []}
-        envelope["iterations"].append(metadata.to_json_dict())
-        tmp = path.with_suffix(".tmp")
-        with tmp.open("w") as f:
-            json.dump(envelope, f, indent=2)
-        tmp.replace(path)  # atomic rename on Linux/macOS
 
     @property
     def problem_profile(self) -> ProblemProfile:
@@ -108,7 +78,7 @@ class Evaluator:
             true_optimum=self._problem.true_optimum,
         )
 
-    def _compute_metrics_and_feedback(
+    def _calculate_fitness_and_feedback(
         self,
         algorithm_returned_fitness: float,
         algorithm_name: str,
@@ -174,7 +144,7 @@ class Evaluator:
 
         return fitness_score, feedback, metadata
 
-    def _noisy_problem_fn(self, x: np.ndarray) -> float:
+    def _noisy_objective_function(self, x: np.ndarray) -> float:
         """Wrap the problem call to inject noise, returning only the noisy scalar.
 
         BBOBProblem.__call__(x, noise_std=s) returns a dict like
@@ -195,31 +165,23 @@ class Evaluator:
             return res.get(0.0, float("inf"))
         return float(res)
 
-    def __call__(self, solution: Solution, explogger: Any | None = None) -> Solution:
-        """Execute and score a candidate optimization algorithm solution.
-
-        Args:
-            solution: The LLaMEA candidate solution containing its source code and name.
-            explogger: Framework-level experiment logger, by default None.
-
-        Returns:
-            Solution: The modified solution object populated with fitness scores and feedback.
-        """
-        # Compute static code complexity metrics
-        code_lines = len(solution.code.splitlines())
-        code_length = len(solution.code)
-
-        # Get LLM generation time from solution metadata if available
-        llm_gen_time = None
+    def _parse_generation_latency(self, solution: Solution) -> float | None:
+        """Extract LLM generation time from solution metadata if available."""
         if hasattr(solution, "metadata") and isinstance(solution.metadata, dict):
-            llm_gen_time = solution.metadata.get("llm_generation_time")
+            return solution.metadata.get("llm_generation_time")
+        return None
 
-        # Reset evaluations counter to ensure we start at 0 for this candidate algorithm run
-        self._problem.reset()
-        start_time = time.perf_counter()
+    def _run_and_score_algorithm(
+        self,
+        solution: Solution,
+        start_time: float,
+        code_lines: int,
+        code_length: int,
+        llm_gen_time: float | None,
+    ) -> tuple[float, str, IterationMetadata]:
+        """Compile, execute algorithm run with exception handling, and return metrics/feedback."""
+        problem_fn = self._noisy_objective_function if self._noise_std > 0.0 else self._problem
         try:
-            # --- 1. Compile & Execute candidate run with timeout protection ---
-            problem_fn = self._noisy_problem_fn if self._noise_std > 0.0 else self._problem
             algorithm_returned_fitness = self._executor.execute_algorithm(
                 code=solution.code,
                 name=solution.name,
@@ -230,8 +192,7 @@ class Evaluator:
             elapsed_time = time.perf_counter() - start_time
             evals_used = self._problem._clean_problem.state.evaluations
 
-            # --- 2. Calculate metrics, feedback, and metadata ---
-            fitness_score, feedback, metadata = self._compute_metrics_and_feedback(
+            return self._calculate_fitness_and_feedback(
                 algorithm_returned_fitness,
                 solution.name,
                 elapsed_time,
@@ -240,106 +201,160 @@ class Evaluator:
                 code_length,
                 llm_generation_time=llm_gen_time,
             )
+        except (Exception, FunctionTimedOut) as error:
+            return self._score_failed_algorithm(
+                error, solution.name, start_time, code_lines, code_length, llm_gen_time
+            )
 
-        except (Exception, FunctionTimedOut) as e:
-            elapsed_time = time.perf_counter() - start_time
-            evals_used = self._problem._clean_problem.state.evaluations
-            budget_consumed_pct = (evals_used / self._budget * 100) if self._budget > 0 else 0.0
-            evals_per_second = (evals_used / elapsed_time) if elapsed_time > 0.0 else 0.0
+    def _score_failed_algorithm(
+        self,
+        error: Exception | FunctionTimedOut,
+        solution_name: str,
+        start_time: float,
+        code_lines: int,
+        code_length: int,
+        llm_gen_time: float | None,
+    ) -> tuple[float, str, IterationMetadata]:
+        """Handle execution timeout or runtime error, generating failure feedback and metadata."""
+        elapsed_time = time.perf_counter() - start_time
+        evals_used = self._problem._clean_problem.state.evaluations
+        is_timeout = isinstance(error, FunctionTimedOut)
 
-            if isinstance(e, FunctionTimedOut):
-                fitness_score = float("-inf")
-                feedback = (
-                    f"Execution failed: Your algorithm exceeded the {self._timeout_seconds}-second time limit. "
-                    "Please optimize your loops and make the code more efficient."
-                )
-                metadata = IterationMetadata(
-                    algorithm_name=solution.name,
-                    execution=ExecutionProfile(
-                        timed_out=True,
-                        runtime_seconds=elapsed_time,
-                        llm_generation_time=llm_gen_time,
-                        evaluations_used=evals_used,
-                        budget_consumed_pct=budget_consumed_pct,
-                        evals_per_second=evals_per_second,
-                    ),
-                    fitness=FitnessMetrics(
-                        raw_fitness=None,
-                        final_error=None,
-                        relative_error=None,
-                        error_per_evaluation=None,
-                    ),
-                    code=CodeMetrics(
-                        code_lines=code_lines,
-                        code_length=code_length,
-                        code_path=None,
-                    ),
-                    error=ErrorProfile(
-                        error_type=type(e).__name__,
-                        error_message=str(e),
-                        error_traceback=None,
-                    ),
-                    convergence=ConvergenceProfile(
-                        converged=False,
-                        convergence_threshold=1e-6,
-                    ),
-                )
-            else:
-                fitness_score = float("-inf")
-                feedback = (
-                    "Execution failed with the following Python error:\n"
-                    f"{traceback.format_exc()}\n"
-                    "Please fix the bugs."
-                )
-                metadata = IterationMetadata(
-                    algorithm_name=solution.name,
-                    execution=ExecutionProfile(
-                        timed_out=False,
-                        runtime_seconds=elapsed_time,
-                        llm_generation_time=llm_gen_time,
-                        evaluations_used=evals_used,
-                        budget_consumed_pct=budget_consumed_pct,
-                        evals_per_second=evals_per_second,
-                    ),
-                    fitness=FitnessMetrics(
-                        raw_fitness=None,
-                        final_error=None,
-                        relative_error=None,
-                        error_per_evaluation=None,
-                    ),
-                    code=CodeMetrics(
-                        code_lines=code_lines,
-                        code_length=code_length,
-                        code_path=None,
-                    ),
-                    error=ErrorProfile(
-                        error_type=type(e).__name__,
-                        error_message=str(e),
-                        error_traceback=traceback.format_exc(),
-                    ),
-                    convergence=ConvergenceProfile(
-                        converged=False,
-                        convergence_threshold=1e-6,
-                    ),
-                )
+        if is_timeout:
+            feedback = (
+                f"Execution failed: Your algorithm exceeded the {self._timeout_seconds}-second time limit. "
+                "Please optimize your loops and make the code more efficient."
+            )
+        else:
+            feedback = (
+                "Execution failed with the following Python error:\n"
+                f"{traceback.format_exc()}\n"
+                "Please fix the bugs."
+            )
 
-        # Set evaluation outcomes on the solution object
+        metadata = self._build_error_metadata(
+            algorithm_name=solution_name,
+            elapsed_time=elapsed_time,
+            evals_used=evals_used,
+            code_lines=code_lines,
+            code_length=code_length,
+            llm_gen_time=llm_gen_time,
+            is_timeout=is_timeout,
+            error=error,
+        )
+
+        return float("-inf"), feedback, metadata
+
+    def _build_error_metadata(
+        self,
+        algorithm_name: str,
+        elapsed_time: float,
+        evals_used: int,
+        code_lines: int,
+        code_length: int,
+        llm_gen_time: float | None,
+        is_timeout: bool,
+        error: Exception,
+    ) -> IterationMetadata:
+        """Construct an IterationMetadata object for failed algorithm executions."""
+        budget_consumed_pct = (evals_used / self._budget * 100) if self._budget > 0 else 0.0
+        evals_per_second = (evals_used / elapsed_time) if elapsed_time > 0.0 else 0.0
+        error_traceback = None if is_timeout else traceback.format_exc()
+
+        return IterationMetadata(
+            algorithm_name=algorithm_name,
+            execution=ExecutionProfile(
+                timed_out=is_timeout,
+                runtime_seconds=elapsed_time,
+                llm_generation_time=llm_gen_time,
+                evaluations_used=evals_used,
+                budget_consumed_pct=budget_consumed_pct,
+                evals_per_second=evals_per_second,
+            ),
+            fitness=FitnessMetrics(
+                raw_fitness=None,
+                final_error=None,
+                relative_error=None,
+                error_per_evaluation=None,
+            ),
+            code=CodeMetrics(
+                code_lines=code_lines,
+                code_length=code_length,
+                code_path=None,
+            ),
+            error=ErrorProfile(
+                error_type=type(error).__name__,
+                error_message=str(error),
+                error_traceback=error_traceback,
+            ),
+            convergence=ConvergenceProfile(
+                converged=False,
+                convergence_threshold=1e-6,
+            ),
+        )
+
+    def _checkpoint_iteration(self, solution: Solution, metadata: IterationMetadata) -> None:
+        """Record iteration count, save code file, and persist metadata to JSONL checkpoint."""
         self._current_iteration += 1
         metadata.iteration = self._current_iteration
-        self._append_to_json_checkpoint(metadata)
+        mode = self._experiment_meta.get("mode", "noisy" if self._noise_std > 0.0 else "clean")
+
+        # 1. Save candidate code file immediately
+        if solution.code:
+            code_path = self._code_repo.save_code(
+                code=solution.code,
+                iteration_num=self._current_iteration,
+                problem=self.problem_profile,
+                mode=mode,
+                llm_name=self._experiment_meta.get("llm_name", "unknown"),
+                run_id=self._run_id,
+            )
+            metadata.code.code_path = str(code_path)
+
+        # 2. Append complete iteration metadata to JSONL checkpoint
+        self._db_repo.append_iteration(
+            problem_id=self._problem.problem_id,
+            dim=self._problem.dim,
+            mode=mode,
+            run_id=self._run_id,
+            metadata=metadata,
+            experiment_meta=self._experiment_meta,
+        )
+
+    def __call__(self, solution: Solution, explogger: Any | None = None) -> Solution:
+        """Execute and score a candidate optimization algorithm solution.
+
+        Args:
+            solution: The LLaMEA candidate solution containing its source code and name.
+            explogger: Framework-level experiment logger, by default None.
+
+        Returns:
+            Solution: The modified solution object populated with fitness scores and feedback.
+        """
+        code_lines = len(solution.code.splitlines())
+        code_length = len(solution.code)
+        llm_gen_time = self._parse_generation_latency(solution)
+
+        self._problem.reset()
+        start_time = time.perf_counter()
+
+        fitness_score, feedback, metadata = self._run_and_score_algorithm(
+            solution, start_time, code_lines, code_length, llm_gen_time
+        )
 
         solution.set_scores(fitness_score, feedback)
-
-        # Attach metadata to the solution object for later serialization
         solution.metadata = metadata
+        self._checkpoint_iteration(solution, metadata)
 
         return solution
 
     def __getstate__(self) -> dict[str, Any]:
-        # Exclude unpicklable C++ object wrappers (executor) for joblib/pickle state logging.
+        # Exclude unpicklable C++ object wrappers (executor) and DB repos for joblib/pickle state logging.
         # problem is picklable since BBOBProblem implements its own self-healing __getstate__/__setstate__.
         state = self.__dict__.copy()
         state["_executor"] = None
+        state["_db_repo"] = None
+        state["_code_repo"] = None
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
