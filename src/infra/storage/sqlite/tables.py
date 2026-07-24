@@ -2,6 +2,7 @@ import enum
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Column,
     Enum,
     Float,
@@ -44,10 +45,10 @@ class ExperimentORM(Base):
     # without touching the iterations table.
     best_iteration = Column(Integer)
     best_algorithm = Column(String)
-    best_final_error = Column(Float)
+    best_final_error = Column(Float, nullable=True)
 
-    status = Column(String, default="running")  # running / completed / failed
-    started_at = Column(String, server_default=text("(datetime('now'))"))
+    status = Column(String, nullable=False, default="running")  # running / completed / failed
+    started_at = Column(String, nullable=False, server_default=text("(datetime('now'))"))
     finished_at = Column(String)
 
     iterations = relationship(
@@ -57,7 +58,15 @@ class ExperimentORM(Base):
         passive_deletes=True,
     )
 
-    __table_args__ = (Index("idx_experiments_lookup", "problem_id", "llm_name", "dim", "mode"),)
+    __table_args__ = (
+        Index("idx_experiments_lookup", "problem_id", "llm_name", "dim", "mode"),
+        Index("idx_experiments_status", "status"),
+        CheckConstraint("dim > 0", name="check_positive_dim"),
+        CheckConstraint(
+            "status IN ('running', 'completed', 'failed')", name="check_valid_status"
+        ),
+        CheckConstraint("noise_std IS NULL OR noise_std >= 0", name="check_non_negative_noise"),
+    )
 
 
 class IterationORM(Base):
@@ -76,17 +85,17 @@ class IterationORM(Base):
     )
 
     iteration = Column(Integer, nullable=False)
-    instance_id = Column(Integer)
+    instance_id = Column(Integer, nullable=False, default=1, server_default=text("1"))
     algorithm_name = Column(String)
 
     # Core metrics
-    raw_fitness = Column(Float)
-    final_error = Column(Float)
-    relative_error = Column(Float)
-    error_per_evaluation = Column(Float)
+    raw_fitness = Column(Float, nullable=True)
+    final_error = Column(Float, nullable=True)
+    relative_error = Column(Float, nullable=True)
+    error_per_evaluation = Column(Float, nullable=True)
 
-    timed_out = Column(Boolean, default=False)
-    converged = Column(Boolean, default=False)
+    timed_out = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    converged = Column(Boolean, nullable=False, default=False, server_default=text("0"))
     convergence_threshold = Column(Float)
 
     runtime_seconds = Column(Float)
@@ -110,15 +119,20 @@ class IterationORM(Base):
     )
 
     __table_args__ = (
-        Index("idx_iterations_experiment", "experiment_id"),
         # Speeds up groupby/analysis queries that filter or sort by iteration
         # number within an experiment (e.g. convergence curves).
         Index("idx_iterations_experiment_iter", "experiment_id", "iteration"),
+        Index("idx_iterations_exp_error", "experiment_id", "final_error"),
         UniqueConstraint(
             "experiment_id",
             "instance_id",
             "iteration",
             name="uq_iteration_identity",
+        ),
+        CheckConstraint("iteration >= 0", name="check_non_negative_iteration"),
+        CheckConstraint(
+            "evaluations_used IS NULL OR evaluations_used >= 0",
+            name="check_non_negative_evals",
         ),
     )
 
@@ -139,7 +153,7 @@ class ErrorLogORM(Base):
         nullable=False,
         unique=True,
     )
-    error_type = Column(String)
+    error_type = Column(String, nullable=False)
     error_message = Column(String)
     error_traceback = Column(String)
 

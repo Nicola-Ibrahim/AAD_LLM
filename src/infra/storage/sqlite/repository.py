@@ -60,6 +60,38 @@ class SQLiteExperimentRepository(ExperimentRepository):
             session.refresh(experiment)
             return experiment.id
 
+    def get_incomplete_experiments(
+        self,
+        problem_id: int,
+        dim: int,
+        mode: str,
+        llm_name: str,
+        noise_std: float,
+    ) -> list[int]:
+        """Returns a list of experiment IDs with status 'running' that match the given parameters."""
+        with self.SessionLocal() as session:
+            query = session.query(ExperimentORM.id).filter(
+                ExperimentORM.problem_id == problem_id,
+                ExperimentORM.dim == dim,
+                ExperimentORM.mode == ExperimentMode(mode),
+                ExperimentORM.llm_name == llm_name,
+                ExperimentORM.status == "running",
+            )
+            if noise_std > 0.0:
+                query = query.filter(ExperimentORM.noise_std == noise_std)
+            else:
+                query = query.filter(
+                    (ExperimentORM.noise_std == 0.0) | (ExperimentORM.noise_std.is_(None))
+                )
+            rows = query.order_by(ExperimentORM.id.asc()).all()
+            return [r[0] for r in rows]
+
+    def get_experiment_status(self, experiment_id: int) -> str | None:
+        """Returns the status string (e.g., 'running', 'completed', 'failed') for an experiment, or None if not found."""
+        with self.SessionLocal() as session:
+            exp = session.get(ExperimentORM, experiment_id)
+            return exp.status if exp else None
+
     def append_iteration(
         self,
         experiment_id: int,
@@ -220,12 +252,10 @@ class SQLiteExperimentRepository(ExperimentRepository):
                 evals_per_second=it.evals_per_second,
             ),
             fitness=FitnessMetrics(
-                raw_fitness=it.raw_fitness if it.raw_fitness is not None else float("inf"),
-                final_error=it.final_error if it.final_error is not None else float("inf"),
-                relative_error=it.relative_error if it.relative_error is not None else float("inf"),
-                error_per_evaluation=it.error_per_evaluation
-                if it.error_per_evaluation is not None
-                else float("inf"),
+                raw_fitness=it.raw_fitness,
+                final_error=it.final_error,
+                relative_error=it.relative_error,
+                error_per_evaluation=it.error_per_evaluation,
             ),
             code=CodeMetrics(
                 code_lines=it.code_lines,

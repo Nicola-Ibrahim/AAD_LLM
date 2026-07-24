@@ -7,6 +7,8 @@ from typing import Any
 from llamea import LLaMEA
 
 
+from filelock import FileLock, Timeout
+
 from core.llamea.evaluator import Evaluator
 from core.llamea.prompts import (
     EXAMPLE_PROMPT,
@@ -49,6 +51,7 @@ class LLaMEASession:
         budget: int = 1000,
         iterations: int = 10,
         noise_std: float = 0.0,
+        resume_experiment_id: int | None = None,
     ):
         """Initializes the synthesis session with its parameters and required repositories."""
         if llm_client is None:
@@ -61,6 +64,7 @@ class LLaMEASession:
         self._budget = budget
         self._iterations = iterations
         self._noise_std = noise_std
+        self._lock: FileLock | None = None
 
         # Derived fields
         self._problem_id = problem.problem_id
@@ -68,30 +72,62 @@ class LLaMEASession:
         self._mode = "noisy" if noise_std > 0.0 else "clean"
         self._experiment_name = f"bbob_{self._problem_id}_dim{self._dim}_{self._mode}"
 
-        # Initialize the experiment context via the DB
-        self._experiment_id = self._db_repo.create_experiment(
-            problem_id=self._problem_id,
-            dim=self._dim,
-            mode=self._mode,
-            llm_name=self._llm_client.model.name,
-            noise_std=self._noise_std,
-            true_optimum=self._problem.true_optimum,
-        )
+        if resume_experiment_id is not None:
+            status = self._db_repo.get_experiment_status(resume_experiment_id)
+            if status != "running":
+                incomplete = self._db_repo.get_incomplete_experiments(
+                    self._problem_id,
+                    self._dim,
+                    self._mode,
+                    self._llm_client.model.name,
+                    self._noise_std,
+                )
+                raise ValueError(
+                    f"Cannot resume experiment {resume_experiment_id} because its status is '{status}'.\n"
+                    f"Please start a new experiment without passing an ID, or choose from these "
+                    f"incomplete experiments matching your parameters: {incomplete}"
+                )
 
-        self._archive_dir = self._init_archive_dir()
+            archive_dir = self._get_archive_dir_path(resume_experiment_id)
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            lock = FileLock(archive_dir / "session.lock", timeout=0)
 
-    def _init_archive_dir(self) -> Path:
-        """Initializes and creates the session evolution state archive directory."""
+            try:
+                lock.acquire()
+                self._experiment_id = resume_experiment_id
+                self._archive_dir = archive_dir
+                self._lock = lock
+            except Timeout:
+                raise RuntimeError(
+                    f"Experiment {resume_experiment_id} is currently locked and actively running in another process."
+                )
+        else:
+            # Initialize a new experiment context via the DB
+            self._experiment_id = self._db_repo.create_experiment(
+                problem_id=self._problem_id,
+                dim=self._dim,
+                mode=self._mode,
+                llm_name=self._llm_client.model.name,
+                noise_std=self._noise_std,
+                true_optimum=self._problem.true_optimum,
+            )
+
+            self._archive_dir = self._get_archive_dir_path(self._experiment_id)
+            self._archive_dir.mkdir(parents=True, exist_ok=True)
+            lock = FileLock(self._archive_dir / "session.lock", timeout=0)
+            lock.acquire()
+            self._lock = lock
+
+    def _get_archive_dir_path(self, experiment_id: int) -> Path:
+        """Returns the archive directory path for a given experiment ID."""
         from core.config import DATA_DIR
 
-        archive_dir = (
+        return (
             DATA_DIR
             / "evolution_state"
             / self._experiment_name
-            / f"experiment_{self._experiment_id}"
+            / f"experiment_{experiment_id}"
         )
-        archive_dir.mkdir(parents=True, exist_ok=True)
-        return archive_dir
 
     def run(self) -> SessionResult:
         """Runs the complete evolution loop for the problem."""
@@ -135,6 +171,12 @@ class LLaMEASession:
                 error_msg=None,
                 problem_profile=evaluator.problem_profile,
             )
+        finally:
+            if self._lock is not None:
+                try:
+                    self._lock.release()
+                except Exception:
+                    pass
 
     def _create_optimizer(self, evaluator: Evaluator, task_prompt: str) -> LLaMEA:
         """Creates a new LLaMEA optimizer or resumes from a warm-start session state if it exists."""

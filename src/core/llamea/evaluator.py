@@ -103,7 +103,7 @@ class Evaluator:
         relative_error = (final_error / abs(true_optimum)) if true_optimum != 0.0 else final_error
         evals_per_second = (evaluations_used / runtime_seconds) if runtime_seconds > 0.0 else 0.0
         error_per_evaluation = (
-            (final_error / evaluations_used) if evaluations_used > 0 else float("inf")
+            (final_error / evaluations_used) if evaluations_used > 0 else None
         )
         converged = final_error < 1e-6
 
@@ -246,10 +246,10 @@ class Evaluator:
                 evals_per_second=evals_per_second,
             ),
             fitness=FitnessMetrics(
-                raw_fitness=float("inf"),
-                final_error=float("inf"),
-                relative_error=float("inf"),
-                error_per_evaluation=float("inf"),
+                raw_fitness=None,
+                final_error=None,
+                relative_error=None,
+                error_per_evaluation=None,
             ),
             code=CodeMetrics(
                 code_lines=code_lines,

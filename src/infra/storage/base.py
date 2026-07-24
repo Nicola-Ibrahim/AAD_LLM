@@ -19,6 +19,23 @@ class ExperimentRepository(ABC):
         pass
 
     @abstractmethod
+    def get_incomplete_experiments(
+        self,
+        problem_id: int,
+        dim: int,
+        mode: str,
+        llm_name: str,
+        noise_std: float,
+    ) -> list[int]:
+        """Returns a list of experiment IDs with status 'running' that match the given parameters."""
+        pass
+
+    @abstractmethod
+    def get_experiment_status(self, experiment_id: int) -> str | None:
+        """Returns the status string (e.g., 'running', 'completed', 'failed') for an experiment, or None if not found."""
+        pass
+
+    @abstractmethod
     def create_experiment(
         self,
         problem_id: int,

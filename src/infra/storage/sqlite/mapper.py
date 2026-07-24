@@ -12,7 +12,7 @@ def build_experiment_summary(
     iterations_data: list[IterationMetadata] = []
 
     best_iteration = None
-    best_error = float("inf")
+    best_error = None
     best_algo = None
 
     for i, solution in enumerate(history):
@@ -28,12 +28,12 @@ def build_experiment_summary(
         meta_copy = meta.model_copy(update={"iteration": effective_iteration})
         iterations_data.append(meta_copy)
 
-        if meta_copy.fitness.final_error is not None and meta_copy.fitness.final_error < best_error:
-            best_error = meta_copy.fitness.final_error
-            best_iteration = effective_iteration
-            best_algo = meta_copy.algorithm_name
-
-    best_err_val = best_error if best_error != float("inf") else None
+        err = meta_copy.fitness.final_error
+        if err is not None:
+            if best_error is None or err < best_error:
+                best_error = err
+                best_iteration = effective_iteration
+                best_algo = meta_copy.algorithm_name
 
     return ExperimentSummary(
         mode=mode,
@@ -41,6 +41,6 @@ def build_experiment_summary(
         problem=problem,
         best_iteration=best_iteration,
         best_algorithm=best_algo,
-        best_final_error=best_err_val,
+        best_final_error=best_error,
         iterations=iterations_data,
     )

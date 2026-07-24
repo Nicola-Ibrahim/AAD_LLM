@@ -33,25 +33,25 @@ class ExecutionProfile(BaseModel):
 class FitnessMetrics(BaseModel):
     """Objective values, errors, and noise properties for candidate execution."""
 
-    raw_fitness: float = Field(
-        default=float("inf"),
+    raw_fitness: float | None = Field(
+        default=None,
         description="The raw objective function score returned by the executed algorithm (with noise included).",
-        examples=[80.12, float("inf")],
+        examples=[80.12, None],
     )
-    final_error: float = Field(
-        default=float("inf"),
+    final_error: float | None = Field(
+        default=None,
         description="The absolute difference between the true optimum and the best clean fitness achieved.",
-        examples=[0.64, float("inf")],
+        examples=[0.64, None],
     )
-    relative_error: float = Field(
-        default=float("inf"),
+    relative_error: float | None = Field(
+        default=None,
         description="Relative error ratio computed as final_error / true_optimum.",
-        examples=[0.008, float("inf")],
+        examples=[0.008, None],
     )
-    error_per_evaluation: float = Field(
-        default=float("inf"),
+    error_per_evaluation: float | None = Field(
+        default=None,
         description="The average error rate per evaluation (final_error / evaluations_used).",
-        examples=[0.00064, float("inf")],
+        examples=[0.00064, None],
     )
 
 

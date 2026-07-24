@@ -135,7 +135,7 @@ if [[ -z "$COMMAND" ]]; then
                 6) COMMAND="reset";  break ;;
                 7) COMMAND="status"; break ;;
                 *)
-                    echo -e "  ${RED}✗ ERROR: Invalid choice. Please choose a number between 1 and 7.${NC}"
+                    echo -e "  ${RED}✗ ERROR: Invalid choice. Please choose a number between 1 and 8.${NC}"
                     echo ""
                     sleep 1
                     ;;
@@ -148,7 +148,7 @@ if [[ -z "$COMMAND" ]]; then
 fi
 
 # ─── Resolve Database Path ─────────────────────────────────
-DB_PATH="${DATABASE_URL:-$PROJECT_ROOT/data/db.sqlite3}"
+DB_PATH="${DATABASE_URL:-sqlite:///$PROJECT_ROOT/data/db.sqlite3}"
 DB_PATH="${DB_PATH#sqlite:///}"
 
 if [[ ! "$DB_PATH" = /* ]]; then
@@ -249,6 +249,13 @@ with engine.begin() as conn:
 print("  Done.")
 EOF
                 echo -e "  ${GREEN}✓ All data cleared. Schema intact.${NC}"
+                echo ""
+                if confirm "Also delete evolution_state archives and generated code files?"; then
+                    echo -e "  ${YELLOW}Cleaning cached data files...${NC}"
+                    rm -rf "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code"
+                    mkdir -p "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code"
+                    echo -e "  ${GREEN}✓ Evolution state archives and code files cleaned.${NC}"
+                fi
             else
                 echo -e "  ${YELLOW}Confirmation did not match. Aborted.${NC}"
             fi
@@ -271,6 +278,13 @@ EOF
                 echo -e "  ${YELLOW}Re-applying all migrations...${NC}"
                 (cd "$PROJECT_ROOT" && $ALEMBIC_CMD upgrade head)
                 echo -e "  ${GREEN}✓ Database reset complete. Fresh schema applied.${NC}"
+                echo ""
+                if confirm "Also delete evolution_state archives and generated code files?"; then
+                    echo -e "  ${YELLOW}Cleaning cached data files...${NC}"
+                    rm -rf "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code"
+                    mkdir -p "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code"
+                    echo -e "  ${GREEN}✓ Evolution state archives and code files cleaned.${NC}"
+                fi
             else
                 echo -e "  ${YELLOW}Confirmation did not match. Aborted.${NC}"
             fi
@@ -308,7 +322,7 @@ EOF
 
     *)
         echo -e "  ${RED}Unknown command: '$COMMAND'${NC}"
-        echo "  Valid commands: upgrade, rollback, revision, both, clear, reset, status"
+        echo "  Valid commands: upgrade, rollback, revision, both, clear, reset, clean-files, status"
         exit 1
         ;;
 esac
