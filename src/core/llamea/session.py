@@ -72,8 +72,9 @@ class LLaMEASession:
         self._mode = "noisy" if noise_std > 0.0 else "clean"
         self._experiment_name = f"bbob_{self._problem_id}_dim{self._dim}_{self._mode}"
 
+        self._initial_iteration = 0
         if resume_experiment_id is not None:
-            status = self._db_repo.get_experiment_status(resume_experiment_id)
+            status, max_iter = self._db_repo.get_experiment_status(resume_experiment_id)
             if status != "running":
                 incomplete = self._db_repo.get_incomplete_experiments(
                     self._problem_id,
@@ -88,6 +89,7 @@ class LLaMEASession:
                     f"incomplete experiments matching your parameters: {incomplete}"
                 )
 
+            self._initial_iteration = max_iter
             archive_dir = self._get_archive_dir_path(resume_experiment_id)
             archive_dir.mkdir(parents=True, exist_ok=True)
             lock = FileLock(archive_dir / "session.lock", timeout=0)
@@ -228,6 +230,7 @@ class LLaMEASession:
             budget=self._budget,
             noise_std=self._noise_std,
             experiment_id=self._experiment_id,
+            initial_iteration=self._initial_iteration,
             experiment_meta={
                 "experiment_id": self._experiment_id,
                 "problem_id": self._problem_id,

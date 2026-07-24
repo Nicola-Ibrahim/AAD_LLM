@@ -31,8 +31,8 @@ class ExperimentRepository(ABC):
         pass
 
     @abstractmethod
-    def get_experiment_status(self, experiment_id: int) -> str | None:
-        """Returns the status string (e.g., 'running', 'completed', 'failed') for an experiment, or None if not found."""
+    def get_experiment_status(self, experiment_id: int) -> tuple[str | None, int]:
+        """Returns a tuple of (status_string, max_iteration_number) for an experiment, or (None, 0) if not found."""
         pass
 
     @abstractmethod

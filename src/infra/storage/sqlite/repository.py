@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any
 
+from sqlalchemy import func
 from sqlalchemy.orm import sessionmaker
 
 from core.schema.experiment import ExperimentSummary
@@ -86,11 +87,18 @@ class SQLiteExperimentRepository(ExperimentRepository):
             rows = query.order_by(ExperimentORM.id.asc()).all()
             return [r[0] for r in rows]
 
-    def get_experiment_status(self, experiment_id: int) -> str | None:
-        """Returns the status string (e.g., 'running', 'completed', 'failed') for an experiment, or None if not found."""
+    def get_experiment_status(self, experiment_id: int) -> tuple[str | None, int]:
+        """Returns tuple of (status_string, max_iteration_number) for an experiment, or (None, 0) if not found."""
         with self.SessionLocal() as session:
             exp = session.get(ExperimentORM, experiment_id)
-            return exp.status if exp else None
+            if not exp:
+                return None, 0
+            max_iter = (
+                session.query(func.max(IterationORM.iteration))
+                .filter(IterationORM.experiment_id == experiment_id)
+                .scalar()
+            )
+            return exp.status, max_iter if max_iter is not None else 0
 
     def append_iteration(
         self,

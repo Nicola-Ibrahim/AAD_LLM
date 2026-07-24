@@ -38,6 +38,7 @@ class Evaluator:
         timeout_seconds: float = 10.0,
         noise_std: float = 0.0,
         experiment_id: int = 1,
+        initial_iteration: int = 0,
         experiment_meta: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the evaluator.
@@ -53,6 +54,7 @@ class Evaluator:
                 by default 10.0.
             noise_std: Standard deviation of noise to apply during evaluation, by default 0.0.
             experiment_id: Globally unique experiment primary key, by default 1.
+            initial_iteration: Starting iteration counter (e.g. from warm start), by default 0.
             experiment_meta: Metadata about the active experiment, by default None.
         """
         self._problem = problem
@@ -64,7 +66,7 @@ class Evaluator:
         self._experiment_id = experiment_id
         self._experiment_meta = experiment_meta or {}
         self._executor = AlgorithmExecutor(timeout_seconds=self._timeout_seconds)
-        self._current_iteration = 0
+        self._current_iteration = initial_iteration
 
     @property
     def problem_profile(self) -> ProblemProfile:
