@@ -7,7 +7,7 @@ The system architecture documentation for `AAD_LLM` has been modularized into di
    - Core domain models, infrastructure layer, and boundary definitions.
 
 2. [Execution Sequence & Resumption Flow](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/docs/EXECUTION_FLOW.md)
-   - Step-by-step sequence of dispatching and resuming evolution jobs.
+   - Step-by-step sequence of orchestrating and resuming evolution tasks.
    - Details how checkpoint recovery and warm starts are orchestrated.
 
 3. [LLaMEA Decoupled Architecture](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/docs/LLAMEA_ARCHITECTURE.md)

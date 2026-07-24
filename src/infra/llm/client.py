@@ -1,7 +1,7 @@
 """
 LLM Provider Abstraction Layer for LLaMEA.
 
-Uses native LLaMEA LLM classes directly, while resolving environment variables
+Uses underlying LLaMEA LLM provider classes directly, while resolving environment variables
 and patching client settings to support custom endpoint URLs.
 """
 
@@ -18,9 +18,21 @@ class Provider(StrEnum):
     LMSTUDIO = "lmstudio"
 
 
+class ModelInfo(str):
+    """String representation of an LLM model with a .name property for sanitized access."""
+
+    @property
+    def name(self) -> str:
+        """Sanitized model name for directory paths and database logging."""
+        from pathlib import Path
+
+        model_base = Path(self).name
+        return model_base.replace(":", "_").replace("/", "_").replace("\\", "_")
+
+
 class LLMClient:
     """
-    Wrapper for LLM clients that provides connection validation,
+    Wrapper for LLM client connections that provides connection validation,
     telemetry, and safe serialization.
     """
 
@@ -28,7 +40,7 @@ class LLMClient:
         self.provider = provider if isinstance(provider, Provider) else Provider(provider)
         self.skip_validation = skip_validation
         self.kwargs = kwargs
-        self._native_client = self._init_native_client()
+        self._client = self._init_client()
 
     @staticmethod
     def _check_connection(base_url: str, provider_name: str) -> None:
@@ -67,7 +79,7 @@ class LLMClient:
             pass
         return "local-model"
 
-    def _init_native_client(self) -> LLM:
+    def _init_client(self) -> LLM:
         skip_val = self.skip_validation or os.environ.get("SKIP_LLM_VALIDATION") == "True"
 
         match self.provider:
@@ -127,7 +139,7 @@ class LLMClient:
         import time
 
         start_t = time.perf_counter()
-        sol = self._native_client.sample_solution(
+        sol = self._client.sample_solution(
             session_messages=session_messages,
             parent_ids=parent_ids,
             HPO=HPO,
@@ -140,35 +152,25 @@ class LLMClient:
         return sol
 
     @property
-    def native_llm(self) -> LLM:
-        """The underlying native LLaMEA LLM instance (Gemini_LLM or OpenAI_LLM)."""
-        return self._native_client
-
-    @property
-    def name(self) -> str:
-        """Sanitized name of the LLM model for path creation and database logging."""
-        model = getattr(self._native_client, "model", None)
-        if not model:
-            return "unknown"
-        from pathlib import Path
-
-        model_base = Path(model).name
-        return model_base.replace(":", "_").replace("/", "_").replace("\\", "_")
+    def model(self) -> ModelInfo:
+        """Model identifier string wrapped as ModelInfo to allow accessing .name directly."""
+        raw_model = getattr(self._client, "model", "unknown") or "unknown"
+        return ModelInfo(raw_model)
 
     def __getattr__(self, name):
-        return getattr(self._native_client, name)
+        return getattr(self._client, name)
 
     def __getstate__(self):
         return {
             "provider": self.provider,
             "skip_validation": self.skip_validation,
             "kwargs": self.kwargs,
-            "model": getattr(self._native_client, "model", None),
+            "model": getattr(self._client, "model", None),
         }
 
     def __setstate__(self, state):
         self.provider = state["provider"]
         self.skip_validation = state["skip_validation"]
         self.kwargs = state["kwargs"]
-        self._native_client = self._init_native_client()
-        self._native_client.model = state["model"]
+        self._client = self._init_client()
+        self._client.model = state["model"]

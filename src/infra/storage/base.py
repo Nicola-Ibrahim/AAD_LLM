@@ -1,18 +1,11 @@
 from abc import ABC, abstractmethod
-from pathlib import Path
 
 from core.schema.experiment import ExperimentSummary
 from core.schema.iteration import IterationMetadata
-from infra.storage.run_context import RunContext
 
 
 class ExperimentRepository(ABC):
-    """Abstract base class representing a repository interface for experiment results metadata and checkpoint lifecycle."""
-
-    @abstractmethod
-    def save(self, summary: ExperimentSummary) -> None:
-        """Persists a pre-built ExperimentSummary."""
-        pass
+    """Abstract base class representing a repository interface for experiment results metadata and session state lifecycle."""
 
     @abstractmethod
     def load(
@@ -34,38 +27,31 @@ class ExperimentRepository(ABC):
         llm_name: str,
         noise_std: float,
         true_optimum: float,
-    ) -> RunContext:
-        """Creates the experiment DB row and all pre-execution directories.
-
-        Returns a RunContext with run_id and guaranteed-to-exist directory paths.
-        This is the only setup call needed before firing a session.
-        """
+    ) -> int:
+        """Creates the experiment DB row and returns its id."""
         pass
 
     @abstractmethod
     def append_iteration(
         self,
-        problem_id: int,
-        dim: int,
-        mode: str,
-        run_id: int,
+        experiment_id: int,
         metadata: IterationMetadata,
         experiment_meta: dict,
     ) -> None:
-        """Appends an iteration record to the checkpoint cache file."""
+        """Appends an iteration record to the repository."""
         pass
 
     @abstractmethod
-    def commit_and_cleanup(self, problem_id: int, dim: int, mode: str, run_id: int) -> None:
-        """Parses local checkpoint cache, commits to DB, and deletes temporary files."""
+    def mark_completed(self, experiment_id: int) -> None:
+        """Marks experiment completed and computes best_* rollup fields from iterations."""
         pass
 
     @abstractmethod
-    def commit_without_cleanup(self, problem_id: int, dim: int, mode: str, run_id: int) -> None:
-        """Parses local checkpoint cache, commits to DB, but preserves temporary files."""
+    def mark_failed(self, experiment_id: int, reason: str = "") -> None:
+        """Marks an experiment as failed so it is not left in 'running' state."""
         pass
 
     @abstractmethod
-    def recover_orphaned(self) -> int:
-        """Scans for orphaned checkpoints and commits them."""
+    def checkpoint_wal(self) -> None:
+        """Forces a checkpoint to flush WAL logs to the main database file (if applicable)."""
         pass

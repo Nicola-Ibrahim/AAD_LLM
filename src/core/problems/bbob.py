@@ -2,6 +2,7 @@
 BBOB problem wrapper with validation and noise injection.
 """
 
+from typing import Callable
 import numpy as np
 from ioh import get_problem, ProblemClass
 
@@ -111,6 +112,32 @@ class BBOBProblem:
         for lvl in levels:
             results[lvl] = self.add_noise(f_clean, lvl)
         return results
+
+    def eval_scalar(self, x: np.ndarray, noise_std: float = 0.0) -> float:
+        """Evaluate the objective function at point `x` and return a single scalar float.
+
+        If `noise_std` > 0.0, extracts or calculates the noisy objective value,
+        handling dictionary output and float precision matching.
+        """
+        if noise_std <= 0.0:
+            res = self(x)
+        else:
+            res = self(x, noise_std=noise_std)
+
+        if isinstance(res, dict):
+            if noise_std in res:
+                return res[noise_std]
+            for k, v in res.items():
+                if k != 0.0:
+                    return v
+            return res.get(0.0, float("inf"))
+        return float(res)
+
+    def get_objective_fn(self, noise_std: float = 0.0) -> Callable[[np.ndarray], float]:
+        """Return a single-scalar objective callable for optimization algorithms."""
+        if noise_std <= 0.0:
+            return self
+        return lambda x: self.eval_scalar(x, noise_std=noise_std)
 
     def __repr__(self) -> str:
         return (

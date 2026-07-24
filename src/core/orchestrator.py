@@ -17,7 +17,10 @@ class OrchestrationError(RuntimeError):
     """Exception raised when one or more evolution tasks fail."""
 
     def __init__(self, errors: dict[str, Exception]):
-        super().__init__(f"Evolution tasks failed: {list(errors.keys())}")
+        formatted_details = "\n".join(
+            f"  - Task '{key}': {type(err).__name__}: {err}" for key, err in errors.items()
+        )
+        super().__init__(f"Evolution tasks failed:\n{formatted_details}")
         self.errors = errors
 
 

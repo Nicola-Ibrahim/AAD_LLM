@@ -24,10 +24,8 @@ class ExperimentMode(enum.Enum):
 
 class ExperimentORM(Base):
     """
-    One row per (problem, dim, mode, llm, noise_std, run_id) combination.
-    `run_id` must be assigned explicitly by the orchestrator (e.g. a simple
-    `for run_id in range(n_repetitions)` loop) -- never rely on a DB default
-    or a max()+1 query for this, to avoid races under parallel execution.
+    One row per experiment execution.
+    `id` is the primary key and serves as the globally unique experiment identifier.
     """
 
     __tablename__ = "experiments"
@@ -39,7 +37,6 @@ class ExperimentORM(Base):
     mode = Column(Enum(ExperimentMode), nullable=False)
     llm_name = Column(String, nullable=False)
     noise_std = Column(Float, nullable=True)  # NULL for CLEAN mode
-    run_id = Column(Integer, nullable=False)  # explicit repetition index, assigned by caller
 
     true_optimum = Column(Float)
 
@@ -60,18 +57,7 @@ class ExperimentORM(Base):
         passive_deletes=True,
     )
 
-    __table_args__ = (
-        Index("idx_experiments_lookup", "problem_id", "llm_name", "dim", "mode"),
-        UniqueConstraint(
-            "problem_id",
-            "dim",
-            "mode",
-            "llm_name",
-            "noise_std",
-            "run_id",
-            name="uq_experiment_run",
-        ),
-    )
+    __table_args__ = (Index("idx_experiments_lookup", "problem_id", "llm_name", "dim", "mode"),)
 
 
 class IterationORM(Base):

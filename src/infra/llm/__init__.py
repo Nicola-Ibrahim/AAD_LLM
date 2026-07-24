@@ -1,6 +1,7 @@
-from infra.llm.client import LLMClient, Provider
+from infra.llm.client import LLMClient, ModelInfo, Provider
 
 __all__ = [
     "LLMClient",
+    "ModelInfo",
     "Provider",
 ]

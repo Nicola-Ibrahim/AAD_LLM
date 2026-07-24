@@ -1,7 +1,6 @@
 import time
 import traceback
 from typing import Any
-import numpy as np
 from llamea import Solution
 from core.problems.bbob import BBOBProblem
 from func_timeout import FunctionTimedOut
@@ -16,7 +15,7 @@ from core.schema import (
     ProblemProfile,
 )
 from infra.storage.base import ExperimentRepository
-from infra.storage.filesystem.code import CodeRepository
+from infra.storage.code_store.code import CodeRepository
 
 
 class Evaluator:
@@ -38,14 +37,14 @@ class Evaluator:
         budget: int = 1000,
         timeout_seconds: float = 10.0,
         noise_std: float = 0.0,
-        run_id: int = 1,
+        experiment_id: int = 1,
         experiment_meta: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the evaluator.
 
         Args:
             problem: Fully-configured BBOB problem instance.
-            db_repo: ExperimentRepository to persist incremental checkpoint iterations.
+            db_repo: ExperimentRepository to persist incremental iteration records.
             code_repo: CodeRepository to persist algorithm source code per iteration.
             budget: Maximum allowed objective function evaluations passed to the algorithm
                 as a stopping criterion (analogous to a convergence threshold in gradient
@@ -53,7 +52,7 @@ class Evaluator:
             timeout_seconds: Maximum wall-clock execution time allowed for one algorithm run,
                 by default 10.0.
             noise_std: Standard deviation of noise to apply during evaluation, by default 0.0.
-            run_id: Unique run execution identifier, by default 1.
+            experiment_id: Globally unique experiment primary key, by default 1.
             experiment_meta: Metadata about the active experiment, by default None.
         """
         self._problem = problem
@@ -62,7 +61,7 @@ class Evaluator:
         self._budget = budget
         self._timeout_seconds = timeout_seconds
         self._noise_std = noise_std
-        self._run_id = run_id
+        self._experiment_id = experiment_id
         self._experiment_meta = experiment_meta or {}
         self._executor = AlgorithmExecutor(timeout_seconds=self._timeout_seconds)
         self._current_iteration = 0
@@ -103,7 +102,9 @@ class Evaluator:
         budget_consumed_pct = (evaluations_used / self._budget * 100) if self._budget > 0 else 0.0
         relative_error = (final_error / abs(true_optimum)) if true_optimum != 0.0 else final_error
         evals_per_second = (evaluations_used / runtime_seconds) if runtime_seconds > 0.0 else 0.0
-        error_per_evaluation = (final_error / evaluations_used) if evaluations_used > 0 else None
+        error_per_evaluation = (
+            (final_error / evaluations_used) if evaluations_used > 0 else float("inf")
+        )
         converged = final_error < 1e-6
 
         metadata = IterationMetadata(
@@ -144,33 +145,6 @@ class Evaluator:
 
         return fitness_score, feedback, metadata
 
-    def _noisy_objective_function(self, x: np.ndarray) -> float:
-        """Wrap the problem call to inject noise, returning only the noisy scalar.
-
-        BBOBProblem.__call__(x, noise_std=s) returns a dict like
-        {0.0: clean_val, s: noisy_val}. We extract the noisy value by
-        looking up `noise_std` as the key; if there's any float precision
-        drift we fall back to the first non-zero-key value in the dict.
-        """
-        res = self._problem(x, noise_std=self._noise_std)
-        if isinstance(res, dict):
-            # Primary lookup: exact key match
-            if self._noise_std in res:
-                return res[self._noise_std]
-            # Fallback: return the value for the first non-clean (non-zero) key
-            for k, v in res.items():
-                if k != 0.0:
-                    return v
-            # Last resort: return clean value
-            return res.get(0.0, float("inf"))
-        return float(res)
-
-    def _parse_generation_latency(self, solution: Solution) -> float | None:
-        """Extract LLM generation time from solution metadata if available."""
-        if hasattr(solution, "metadata") and isinstance(solution.metadata, dict):
-            return solution.metadata.get("llm_generation_time")
-        return None
-
     def _run_and_score_algorithm(
         self,
         solution: Solution,
@@ -180,7 +154,7 @@ class Evaluator:
         llm_gen_time: float | None,
     ) -> tuple[float, str, IterationMetadata]:
         """Compile, execute algorithm run with exception handling, and return metrics/feedback."""
-        problem_fn = self._noisy_objective_function if self._noise_std > 0.0 else self._problem
+        problem_fn = self._problem.get_objective_fn(self._noise_std)
         try:
             algorithm_returned_fitness = self._executor.execute_algorithm(
                 code=solution.code,
@@ -272,10 +246,10 @@ class Evaluator:
                 evals_per_second=evals_per_second,
             ),
             fitness=FitnessMetrics(
-                raw_fitness=None,
-                final_error=None,
-                relative_error=None,
-                error_per_evaluation=None,
+                raw_fitness=float("inf"),
+                final_error=float("inf"),
+                relative_error=float("inf"),
+                error_per_evaluation=float("inf"),
             ),
             code=CodeMetrics(
                 code_lines=code_lines,
@@ -293,30 +267,23 @@ class Evaluator:
             ),
         )
 
-    def _checkpoint_iteration(self, solution: Solution, metadata: IterationMetadata) -> None:
-        """Record iteration count, save code file, and persist metadata to JSONL checkpoint."""
+    def _persist_iteration(self, solution: Solution, metadata: IterationMetadata) -> None:
+        """Record iteration count, save code file, and persist metadata to database repo."""
         self._current_iteration += 1
         metadata.iteration = self._current_iteration
-        mode = self._experiment_meta.get("mode", "noisy" if self._noise_std > 0.0 else "clean")
 
         # 1. Save candidate code file immediately
         if solution.code:
             code_path = self._code_repo.save_code(
                 code=solution.code,
                 iteration_num=self._current_iteration,
-                problem=self.problem_profile,
-                mode=mode,
-                llm_name=self._experiment_meta.get("llm_name", "unknown"),
-                run_id=self._run_id,
+                experiment_id=self._experiment_id,
             )
             metadata.code.code_path = str(code_path)
 
-        # 2. Append complete iteration metadata to JSONL checkpoint
+        # 2. Append complete iteration metadata to database repo
         self._db_repo.append_iteration(
-            problem_id=self._problem.problem_id,
-            dim=self._problem.dim,
-            mode=mode,
-            run_id=self._run_id,
+            experiment_id=self._experiment_id,
             metadata=metadata,
             experiment_meta=self._experiment_meta,
         )
@@ -333,7 +300,7 @@ class Evaluator:
         """
         code_lines = len(solution.code.splitlines())
         code_length = len(solution.code)
-        llm_gen_time = self._parse_generation_latency(solution)
+        llm_gen_time = solution.metadata.get("llm_generation_time")
 
         self._problem.reset()
         start_time = time.perf_counter()
@@ -344,20 +311,34 @@ class Evaluator:
 
         solution.set_scores(fitness_score, feedback)
         solution.metadata = metadata
-        self._checkpoint_iteration(solution, metadata)
+        self._persist_iteration(solution, metadata)
 
         return solution
 
     def __getstate__(self) -> dict[str, Any]:
-        # Exclude unpicklable C++ object wrappers (executor) and DB repos for joblib/pickle state logging.
-        # problem is picklable since BBOBProblem implements its own self-healing __getstate__/__setstate__.
+        # Exclude unpicklable C++ executor wrapper only.
+        # _db_repo and _code_repo are preserved: SQLiteExperimentRepository has its own
+        # __getstate__/__setstate__ that safely strips the non-picklable session_factory.
+        # Without them, warm-start resumes would have no db_repo and all iteration
+        # persistence would silently stop.
         state = self.__dict__.copy()
         state["_executor"] = None
-        state["_db_repo"] = None
-        state["_code_repo"] = None
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.__dict__.update(state)
-        # Re-initialize the executor if needed
+        # Re-initialize the executor on resume.
         self._executor = AlgorithmExecutor(timeout_seconds=self._timeout_seconds)
+        # If _db_repo or _code_repo are None after resume (e.g. from an old pickle),
+        # we cannot recover them here — the session must re-attach them after warm_start.
+        if self._db_repo is None:
+            print(
+                "[WARN] Evaluator resumed from pickle with _db_repo=None. "
+                "Iteration persistence is DISABLED for this run. "
+                "Call evaluator._db_repo = repo to re-attach."
+            )
+        if self._code_repo is None:
+            print(
+                "[WARN] Evaluator resumed from pickle with _code_repo=None. "
+                "Code file saving is DISABLED for this run."
+            )

@@ -1,6 +1,4 @@
-import math
-from typing import Any
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 
 class ExecutionProfile(BaseModel):
@@ -35,39 +33,26 @@ class ExecutionProfile(BaseModel):
 class FitnessMetrics(BaseModel):
     """Objective values, errors, and noise properties for candidate execution."""
 
-    raw_fitness: float | None = Field(
-        default=None,
+    raw_fitness: float = Field(
+        default=float("inf"),
         description="The raw objective function score returned by the executed algorithm (with noise included).",
-        examples=[80.12, None],
+        examples=[80.12, float("inf")],
     )
-    final_error: float | None = Field(
-        default=None,
+    final_error: float = Field(
+        default=float("inf"),
         description="The absolute difference between the true optimum and the best clean fitness achieved.",
-        examples=[0.64, None],
+        examples=[0.64, float("inf")],
     )
-    relative_error: float | None = Field(
-        default=None,
+    relative_error: float = Field(
+        default=float("inf"),
         description="Relative error ratio computed as final_error / true_optimum.",
-        examples=[0.008, None],
+        examples=[0.008, float("inf")],
     )
-    error_per_evaluation: float | None = Field(
-        default=None,
+    error_per_evaluation: float = Field(
+        default=float("inf"),
         description="The average error rate per evaluation (final_error / evaluations_used).",
-        examples=[0.00064, None],
+        examples=[0.00064, float("inf")],
     )
-
-    @field_validator(
-        "raw_fitness",
-        "final_error",
-        "relative_error",
-        "error_per_evaluation",
-        mode="before",
-    )
-    @classmethod
-    def sanitize_non_finite_floats(cls, v: Any) -> Any:
-        if isinstance(v, float) and (math.isinf(v) or math.isnan(v)):
-            return None
-        return v
 
 
 class CodeMetrics(BaseModel):

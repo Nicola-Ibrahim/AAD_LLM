@@ -105,7 +105,7 @@ graph LR
 ## 🧩 Component Breakdown
 
 ### 1. Core Domain Layer (`src/core/`)
-- **Dispatcher (`dispatcher.py`)**: Entry-point module running batch configurations of multiple evolution jobs concurrently under a `ThreadPoolExecutor`. Binds resources and runs database persistence and checkpoint cleanups.
+- **Orchestrator (`orchestrator.py`)**: Entry-point module running batch configurations of multiple evolution tasks concurrently under a `ThreadPoolExecutor`. Binds resources and runs database persistence.
 - **LLaMEASession (`llamea/session.py`)**: Consolidated execution orchestrator. Instantiates or warm-starts the LLaMEA algorithm optimizer, runs the core generation iterations, logs outputs, and compiles final metrics.
 - **Evaluator (`llamea/evaluator.py`)**: A LLaMEA-compliant evaluator. It executes generated algorithms, measures execution metrics (runtime, CPU cycles, error bounds), penalizes timeouts/crashes, and assigns fitness.
 - **Algorithm Executor (`llamea/executor.py`)**: Uses isolated python environment execution tools to securely execute generated source code under strict `timeout` constraints.
