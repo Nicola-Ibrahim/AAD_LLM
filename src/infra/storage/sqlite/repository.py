@@ -178,11 +178,17 @@ class SQLiteExperimentRepository(ExperimentRepository):
         self.checkpoint_wal()
 
     def checkpoint_wal(self) -> None:
-        """Forces SQLite to flush WAL logs to the main db file by issuing a PRAGMA wal_checkpoint."""
+        """Flushes WAL log frames to the main database file using PASSIVE mode without truncating or deleting the WAL file."""
+        if not self.SessionLocal:
+            return
         from sqlalchemy import text
-        with self.SessionLocal() as session:
-            session.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))
-            session.commit()
+
+        try:
+            with self.SessionLocal() as session:
+                session.execute(text("PRAGMA wal_checkpoint(PASSIVE)"))
+                session.commit()
+        except Exception as e:
+            print(f"[WARN] checkpoint_wal failed non-fatally: {e}")
 
     def load(
         self,

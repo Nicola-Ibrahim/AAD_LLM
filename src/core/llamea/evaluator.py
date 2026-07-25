@@ -36,7 +36,6 @@ class Evaluator:
         code_repo: CodeRepository,
         budget: int = 1000,
         timeout_seconds: float = 10.0,
-        noise_std: float = 0.0,
         experiment_id: int = 1,
         initial_iteration: int = 0,
         experiment_meta: dict[str, Any] | None = None,
@@ -52,7 +51,6 @@ class Evaluator:
                 descent), by default 1000. It is NOT used for multi-run comparison or luck checking.
             timeout_seconds: Maximum wall-clock execution time allowed for one algorithm run,
                 by default 10.0.
-            noise_std: Standard deviation of noise to apply during evaluation, by default 0.0.
             experiment_id: Globally unique experiment primary key, by default 1.
             initial_iteration: Starting iteration counter (e.g. from warm start), by default 0.
             experiment_meta: Metadata about the active experiment, by default None.
@@ -62,7 +60,6 @@ class Evaluator:
         self._code_repo = code_repo
         self._budget = budget
         self._timeout_seconds = timeout_seconds
-        self._noise_std = noise_std
         self._experiment_id = experiment_id
         self._experiment_meta = experiment_meta or {}
         self._executor = AlgorithmExecutor(timeout_seconds=self._timeout_seconds)
@@ -74,7 +71,7 @@ class Evaluator:
         return ProblemProfile(
             problem_id=self._problem.problem_id,
             dim=self._problem.dim,
-            noise_std=self._noise_std,
+            noise_std=self._problem.noise_std,
             instance_id=self._problem.instance_id,
             true_optimum=self._problem.true_optimum,
         )
@@ -97,16 +94,14 @@ class Evaluator:
 
         feedback = (
             f"The algorithm achieved a final error of {final_error:.4f} from the true optimum ({true_optimum:.4f}) "
-            f"on BBOB Problem {self._problem.problem_id} (additive noise std: {self._noise_std}). "
+            f"on BBOB Problem {self._problem.problem_id} (additive noise std: {self._problem.noise_std}). "
             "Improve convergence speed and resilience to minimize the final error."
         )
 
         budget_consumed_pct = (evaluations_used / self._budget * 100) if self._budget > 0 else 0.0
         relative_error = (final_error / abs(true_optimum)) if true_optimum != 0.0 else final_error
         evals_per_second = (evaluations_used / runtime_seconds) if runtime_seconds > 0.0 else 0.0
-        error_per_evaluation = (
-            (final_error / evaluations_used) if evaluations_used > 0 else None
-        )
+        error_per_evaluation = (final_error / evaluations_used) if evaluations_used > 0 else None
         converged = final_error < 1e-6
 
         metadata = IterationMetadata(
@@ -156,7 +151,7 @@ class Evaluator:
         llm_gen_time: float | None,
     ) -> tuple[float, str, IterationMetadata]:
         """Compile, execute algorithm run with exception handling, and return metrics/feedback."""
-        problem_fn = self._problem.get_objective_fn(self._noise_std)
+        problem_fn = self._problem.get_objective_fn()
         try:
             algorithm_returned_fitness = self._executor.execute_algorithm(
                 code=solution.code,

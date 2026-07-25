@@ -41,4 +41,3 @@ class CodeRepository:
         """Loads and returns the source code string from a stored code_path."""
         full_path = self.resolve_code_path(code_path)
         return full_path.read_text(encoding="utf-8")
-

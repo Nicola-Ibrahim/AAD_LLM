@@ -36,6 +36,7 @@ class BBOBProblem:
         problem_id: int,
         dim: int,
         instance_id: int = 1,
+        noise_std: float = 0.0,
     ):
         if problem_id not in self.VALID_IDS:
             raise ValueError(
@@ -44,6 +45,7 @@ class BBOBProblem:
         self.problem_id = problem_id
         self.dim = dim
         self.instance_id = instance_id
+        self.noise_std = float(noise_std)
 
         # Load the underlying clean IOH problem once
         self._clean_problem = get_problem(problem_id, instance_id, dim, ProblemClass.BBOB)
@@ -113,31 +115,32 @@ class BBOBProblem:
             results[lvl] = self.add_noise(f_clean, lvl)
         return results
 
-    def eval_scalar(self, x: np.ndarray, noise_std: float = 0.0) -> float:
-        """Evaluate the objective function at point `x` and return a single scalar float.
+    @property
+    def mode(self) -> str:
+        """Return 'noisy' if noise_std > 0 else 'clean'."""
+        return "noisy" if self.noise_std > 0.0 else "clean"
 
-        If `noise_std` > 0.0, extracts or calculates the noisy objective value,
-        handling dictionary output and float precision matching.
-        """
-        if noise_std <= 0.0:
+    def eval_scalar(self, x: np.ndarray) -> float:
+        """Evaluate the objective function at point `x` and return a single scalar float."""
+        if self.noise_std <= 0.0:
             res = self(x)
         else:
-            res = self(x, noise_std=noise_std)
+            res = self(x, noise_std=self.noise_std)
 
         if isinstance(res, dict):
-            if noise_std in res:
-                return res[noise_std]
+            if self.noise_std in res:
+                return res[self.noise_std]
             for k, v in res.items():
                 if k != 0.0:
                     return v
             return res.get(0.0, float("inf"))
         return float(res)
 
-    def get_objective_fn(self, noise_std: float = 0.0) -> Callable[[np.ndarray], float]:
+    def get_objective_fn(self) -> Callable[[np.ndarray], float]:
         """Return a single-scalar objective callable for optimization algorithms."""
-        if noise_std <= 0.0:
+        if self.noise_std <= 0.0:
             return self
-        return lambda x: self.eval_scalar(x, noise_std=noise_std)
+        return lambda x: self.eval_scalar(x)
 
     def __repr__(self) -> str:
         return (

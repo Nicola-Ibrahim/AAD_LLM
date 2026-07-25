@@ -50,7 +50,6 @@ class LLaMEASession:
         code_repo: CodeRepository,
         budget: int = 1000,
         iterations: int = 10,
-        noise_std: float = 0.0,
         resume_experiment_id: int | None = None,
     ):
         """Initializes the synthesis session with its parameters and required repositories."""
@@ -63,14 +62,12 @@ class LLaMEASession:
         self._code_repo = code_repo
         self._budget = budget
         self._iterations = iterations
-        self._noise_std = noise_std
         self._lock: FileLock | None = None
 
         # Derived fields
         self._problem_id = problem.problem_id
         self._dim = problem.dim
-        self._mode = "noisy" if noise_std > 0.0 else "clean"
-        self._experiment_name = f"bbob_{self._problem_id}_dim{self._dim}_{self._mode}"
+        self._experiment_name = f"bbob_{self._problem_id}_dim{self._dim}_{self._problem.mode}"
 
         self._initial_iteration = 0
         if resume_experiment_id is not None:
@@ -79,9 +76,9 @@ class LLaMEASession:
                 incomplete = self._db_repo.get_incomplete_experiments(
                     self._problem_id,
                     self._dim,
-                    self._mode,
+                    self._problem.mode,
                     self._llm_client.model.name,
-                    self._noise_std,
+                    self._problem.noise_std,
                 )
                 raise ValueError(
                     f"Cannot resume experiment {resume_experiment_id} because its status is '{status}'.\n"
@@ -108,9 +105,9 @@ class LLaMEASession:
             self._experiment_id = self._db_repo.create_experiment(
                 problem_id=self._problem_id,
                 dim=self._dim,
-                mode=self._mode,
+                mode=self._problem.mode,
                 llm_name=self._llm_client.model.name,
-                noise_std=self._noise_std,
+                noise_std=self._problem.noise_std,
                 true_optimum=self._problem.true_optimum,
             )
 
@@ -124,17 +121,12 @@ class LLaMEASession:
         """Returns the archive directory path for a given experiment ID."""
         from core.config import DATA_DIR
 
-        return (
-            DATA_DIR
-            / "evolution_state"
-            / self._experiment_name
-            / f"experiment_{experiment_id}"
-        )
+        return DATA_DIR / "evolution_state" / self._experiment_name / f"experiment_{experiment_id}"
 
     def run(self) -> SessionResult:
         """Runs the complete evolution loop for the problem."""
         print(
-            f"\n--- Starting LLaMEA Evolution for BBOB-{self._problem_id} (Dim {self._dim}, Mode {self._mode}, Experiment {self._experiment_id}) ---"
+            f"\n--- Starting LLaMEA Evolution for BBOB-{self._problem_id} (Dim {self._dim}, Mode {self._problem.mode}, Experiment {self._experiment_id}) ---"
         )
 
         try:
@@ -143,7 +135,7 @@ class LLaMEASession:
                 dim=self._dim,
                 lower_bound=self._problem.lower_bound,
                 upper_bound=self._problem.upper_bound,
-                is_noisy=self._noise_std > 0.0,
+                is_noisy=self._problem.mode == "noisy",
             )
             evaluator = self._setup_evaluator()
             optimizer = self._create_optimizer(evaluator, task_prompt)
@@ -162,8 +154,8 @@ class LLaMEASession:
             return SessionResult(
                 problem_id=self._problem_id,
                 dim=self._dim,
-                mode=self._mode,
-                noise_std=self._noise_std,
+                mode=self._problem.mode,
+                noise_std=self._problem.noise_std,
                 best_error=optimizer.best_so_far.metadata.fitness.final_error,
                 experiment_id=self._experiment_id,
                 run_history=optimizer.run_history,
@@ -228,15 +220,14 @@ class LLaMEASession:
             db_repo=self._db_repo,
             code_repo=self._code_repo,
             budget=self._budget,
-            noise_std=self._noise_std,
             experiment_id=self._experiment_id,
             initial_iteration=self._initial_iteration,
             experiment_meta={
                 "experiment_id": self._experiment_id,
                 "problem_id": self._problem_id,
                 "dim": self._dim,
-                "mode": self._mode,
-                "noise_std": self._noise_std,
+                "mode": self._problem.mode,
+                "noise_std": self._problem.noise_std,
                 "llm_name": self._llm_client.model.name,
                 "instance_id": self._problem.instance_id,
             },
@@ -255,7 +246,7 @@ class LLaMEASession:
 
         print("\n" + "=" * 65)
         print(
-            f"=== BBOB-{self._problem_id} Evolution Best Solution Summary ({self._mode.upper()}) ==="
+            f"=== BBOB-{self._problem_id} Evolution Best Solution Summary ({self._problem.mode.upper()}) ==="
         )
         print(f"  Best Algorithm Name:       {best_sol.name}")
         print(f"  Returned Objective Value:  {returned_val:.6f}")

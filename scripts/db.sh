@@ -252,6 +252,8 @@ EOF
                 echo ""
                 if confirm "Also delete evolution_state archives and generated code files?"; then
                     echo -e "  ${YELLOW}Cleaning cached data files...${NC}"
+                    find "$PROJECT_ROOT/data/evolution_state" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/evolution_state"/* 2>/dev/null || true
+                    find "$PROJECT_ROOT/data/code" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/code"/* 2>/dev/null || true
                     rm -rf "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code"
                     mkdir -p "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code"
                     echo -e "  ${GREEN}✓ Evolution state archives and code files cleaned.${NC}"
@@ -274,13 +276,15 @@ EOF
         if confirm "Are you absolutely sure you want to RESET the database?"; then
             if confirm_type "RESET"; then
                 echo -e "\n  ${YELLOW}Deleting database file...${NC}"
-                rm -f "$DB_PATH"
+                rm -f "$DB_PATH" "${DB_PATH}-wal" "${DB_PATH}-shm"
                 echo -e "  ${YELLOW}Re-applying all migrations...${NC}"
                 (cd "$PROJECT_ROOT" && $ALEMBIC_CMD upgrade head)
                 echo -e "  ${GREEN}✓ Database reset complete. Fresh schema applied.${NC}"
                 echo ""
                 if confirm "Also delete evolution_state archives and generated code files?"; then
                     echo -e "  ${YELLOW}Cleaning cached data files...${NC}"
+                    find "$PROJECT_ROOT/data/evolution_state" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/evolution_state"/* 2>/dev/null || true
+                    find "$PROJECT_ROOT/data/code" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/code"/* 2>/dev/null || true
                     rm -rf "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code"
                     mkdir -p "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code"
                     echo -e "  ${GREEN}✓ Evolution state archives and code files cleaned.${NC}"

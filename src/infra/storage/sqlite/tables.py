@@ -62,9 +62,7 @@ class ExperimentORM(Base):
         Index("idx_experiments_lookup", "problem_id", "llm_name", "dim", "mode"),
         Index("idx_experiments_status", "status"),
         CheckConstraint("dim > 0", name="check_positive_dim"),
-        CheckConstraint(
-            "status IN ('running', 'completed', 'failed')", name="check_valid_status"
-        ),
+        CheckConstraint("status IN ('running', 'completed', 'failed')", name="check_valid_status"),
         CheckConstraint("noise_std IS NULL OR noise_std >= 0", name="check_non_negative_noise"),
     )
 
