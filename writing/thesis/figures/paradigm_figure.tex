@@ -1,0 +1,77 @@
+\begin{tikzpicture}[
+    node distance=1.8cm and 2.5cm,
+    font=\small\sffamily,
+    % Node styles
+    llmNode/.style={
+        rectangle, 
+        rounded corners=5pt, 
+        draw=blue!70!black, 
+        fill=blue!5, 
+        thick, 
+        minimum width=3.2cm, 
+        minimum height=1.3cm, 
+        align=center
+    },
+    sandboxNode/.style={
+        rectangle, 
+        rounded corners=5pt, 
+        draw=red!70!black, 
+        fill=red!5, 
+        thick, 
+        minimum width=3.2cm, 
+        minimum height=1.3cm, 
+        align=center
+    },
+    evalNode/.style={
+        rectangle, 
+        rounded corners=5pt, 
+        draw=green!50!black, 
+        fill=green!5, 
+        thick, 
+        minimum width=3.2cm, 
+        minimum height=1.3cm, 
+        align=center
+    },
+    % Arrow style
+    myArrow/.style={
+        -Stealth, 
+        thick, 
+        draw=gray!80!black
+    },
+    annotation/.style={
+        font=\footnotesize\sffamily, 
+        text=gray!90!black, 
+        align=center
+    }
+]
+
+    % Nodes
+    \node (llm) [llmNode] {
+        \textbf{LLM Generator Engine}\\
+        \footnotesize (e.g., LLaMEA Loop)\\
+        \scriptsize Generates Candidate Python Code
+    };
+
+    \node (sandbox) [sandboxNode, right=of llm] {
+        \textbf{Stochastic Sandbox Layer}\\
+        \footnotesize BBOB Suite + Noise Injection\\
+        \scriptsize $f_{\text{noisy}}(x) = f(x) + \epsilon$
+    };
+
+    \node (eval) [evalNode, below=1.8cm of $(llm)!0.5!(sandbox)$] {
+        \textbf{Assessor \& Feedback Unit}\\
+        \footnotesize Performance Metric (AOCC)\\
+        \scriptsize Runtime Tracebacks \& Compiler Traces
+    };
+
+    % Paths / Arrows
+    \draw [myArrow] (llm) -- node[above, annotation] {Executable Python\\Class Script} (sandbox);
+    
+    \draw [myArrow] (sandbox) |- node[right=2pt, annotation] {Corrupted Fitness\\Evaluations} (eval);
+    
+    \draw [myArrow] (eval) -| node[left=2pt, annotation] {Reflective Context\\Feedback Loop} (llm);
+
+    % Optional Outer Container Box
+    \node[draw=gray!40, dashed, inner sep=0.4cm, rounded corners=8pt, fit=(llm) (sandbox) (eval), label=above:{\footnotesize\textbf{Closed-Loop Autonomous Algorithm Design Pipeline}}] {};
+
+\end{tikzpicture}
