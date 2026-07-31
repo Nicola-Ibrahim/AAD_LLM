@@ -1,18 +1,19 @@
 import ast
 import builtins
-from typing import Any, Callable
-
-from func_timeout import func_timeout
-
 import collections
 import functools
 import itertools
 import math
 import random
+from typing import Any, Callable
+
+from func_timeout import func_timeout, FunctionTimedOut
 import numpy as np
 import scipy
 import scipy.optimize
 import scipy.stats
+
+from core.llamea.exceptions import AlgorithmTimeoutException, CodeValidationException
 
 
 def _sanitize_code(code: str) -> str:
@@ -61,28 +62,22 @@ def _find_class_names_in_code(code: str) -> list[str]:
     return [node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
 
 
-class CodeValidationError(Exception):
-    """Raised when LLM-generated code fails structural or syntax validation."""
-
-    pass
-
-
-def _validate_code(code: str, isolated_globals: dict[str, Any]) -> type:
+def _validate_code(code: str, isolated_globals: dict[str, Any], name: str = "") -> type:
     """
     Validate LLM-generated code through four stages:
       1. AST syntax check (catches IndentationError, SyntaxError)
       2. Execution into isolated namespace
-      3. Class resolution (finding the top-level algorithm class)
+      3. Class resolution (preferring target `name`, falling back to AST class definitions)
       4. Instantiation check (verifying no-arg constructor or dim parameter)
 
     Returns the resolved algorithm class if valid.
-    Raises CodeValidationError with a descriptive message if invalid.
+    Raises CodeValidationException with a descriptive message if invalid.
     """
     # Stage 1: AST syntax check
     try:
         ast.parse(code)
     except SyntaxError as e:
-        raise CodeValidationError(
+        raise CodeValidationException(
             f"Generated code has a Python syntax error:\n"
             f"  Line {e.lineno}: {e.msg}\n\n"
             f"Fix: ensure all method bodies are non-empty (use `pass` if needed), "
@@ -93,23 +88,27 @@ def _validate_code(code: str, isolated_globals: dict[str, Any]) -> type:
     try:
         exec(code, isolated_globals)  # noqa: S102
     except Exception as e:
-        raise CodeValidationError(
+        raise CodeValidationException(
             f"Generated code raised an error during compilation:\n"
             f"  {type(e).__name__}: {e}\n\n"
             f"Fix: check for undefined names, import errors, or invalid statements."
         ) from e
 
     # Stage 3: Class resolution
-    class_names = _find_class_names_in_code(code)
     algorithm_cls: type | None = None
-    for cls_name in class_names:
-        candidate = isolated_globals.get(cls_name)
-        if candidate is not None and isinstance(candidate, type):
-            algorithm_cls = candidate
-            break
+    if name and name in isolated_globals and isinstance(isolated_globals[name], type):
+        algorithm_cls = isolated_globals[name]
+    else:
+        class_names = _find_class_names_in_code(code)
+        for cls_name in class_names:
+            candidate = isolated_globals.get(cls_name)
+            if candidate is not None and isinstance(candidate, type):
+                algorithm_cls = candidate
+                break
 
     if algorithm_cls is None:
-        raise CodeValidationError(
+        class_names = _find_class_names_in_code(code)
+        raise CodeValidationException(
             f"No callable class found in generated code. "
             f"Detected class names: {class_names}. "
             f"Ensure the code contains a class with a `__call__(self, problem, budget)` method."
@@ -122,7 +121,7 @@ def _validate_code(code: str, isolated_globals: dict[str, Any]) -> type:
         try:
             _ = algorithm_cls(dim=3)
         except Exception as err:
-            raise CodeValidationError(
+            raise CodeValidationException(
                 f"Algorithm class `{algorithm_cls.__name__}.__init__` failed to instantiate: {err}.\n"
                 f"Fix: `__init__` must accept only `self` with no extra required parameters."
             ) from err
@@ -217,12 +216,17 @@ class AlgorithmExecutor:
         isolated_globals = self._create_isolated_namespace()
         code = _sanitize_code(code)
 
-        algorithm_cls = _validate_code(code, isolated_globals)
+        algorithm_cls = _validate_code(code, isolated_globals, name=name)
         algorithm = self._instantiate_algorithm(algorithm_cls, name, dim)
 
-        algorithm_returned_fitness = func_timeout(
-            self._timeout_seconds, algorithm, args=(problem, budget)
-        )
+        try:
+            algorithm_returned_fitness = func_timeout(
+                self._timeout_seconds, algorithm, args=(problem, budget)
+            )
+        except FunctionTimedOut as e:
+            raise AlgorithmTimeoutException(
+                f"Execution failed: Your algorithm exceeded the {self._timeout_seconds}-second time limit."
+            ) from e
 
         if algorithm_returned_fitness is None:
             raise TypeError(

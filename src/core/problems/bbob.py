@@ -2,13 +2,19 @@
 BBOB problem wrapper with validation and noise injection.
 """
 
-from typing import Callable
+
+from enum import StrEnum
 import numpy as np
 from ioh import get_problem, ProblemClass
 
 
+class ProblemMode(StrEnum):
+    CLEAN = "clean"
+    NOISY = "noisy"
+
+
 class BBOBProblem:
-    """Stateless BBOB problem descriptor.
+    """BBOB problem wrapper with a configurable noise level.
 
     Loads the clean IOH problem instance once, stores the global optimum
     and problem parameters, and provides clean and noisy evaluation methods.
@@ -17,16 +23,19 @@ class BBOBProblem:
         problem_id: The BBOB function ID. Must be an integer in [1, 24].
         dim: The search space dimensionality.
         instance_id: The BBOB instance ID, by default 1.
+        noise_std: Standard deviation factor for additive Gaussian noise
+            scaled to the problem landscape. 0.0 means clean (no noise), by default 0.0.
 
     Raises:
         ValueError: If `problem_id` is not in the range [1, 24].
 
     Examples:
-        >>> problem = BBOBProblem(problem_id=1, dim=3)
+        >>> clean_problem = BBOBProblem(problem_id=1, dim=3, noise_std=0.0)
+        >>> noisy_problem = BBOBProblem(problem_id=1, dim=3, noise_std=0.05)
         >>> import numpy as np
-        >>> y_clean = problem(np.zeros(3))                       # clean float
-        >>> y_dict = problem(np.zeros(3), noise_std=0.05)        # dict: {0.0: clean, 0.05: noisy}
-        >>> problem.true_optimum                                 # float: global minimum
+        >>> y_clean = clean_problem(np.zeros(3))   # clean float
+        >>> y_noisy = noisy_problem(np.zeros(3))   # noisy float
+        >>> clean_problem.true_optimum              # float: global minimum
     """
 
     VALID_IDS: range = range(1, 25)  # Valid BBOB problem IDs: 1 to 24 inclusive
@@ -66,7 +75,7 @@ class BBOBProblem:
         # Reset internal evaluation counter after initialization samples
         self._clean_problem.reset()
 
-    def add_noise(self, true_value: float, noise_std: float) -> float:
+    def _add_noise(self, true_value: float, noise_std: float) -> float:
         """Inject constant additive Gaussian noise, scaled to the problem's overall landscape.
 
         Args:
@@ -85,62 +94,33 @@ class BBOBProblem:
 
         return true_value + np.random.normal(0.0, dynamic_std)
 
-    def __call__(
-        self,
-        x: np.ndarray,
-        noise_std: float | list[float] | None = None,
-    ) -> float | dict[float, float]:
+    def __call__(self, x: np.ndarray) -> float:
         """Evaluate the objective function at point `x`.
 
         Args:
             x: The candidate search point vector.
-            noise_std: If None, returns the clean objective value as a float.
-                If a float or list of floats is passed, returns a dictionary mapping
-                noise standard deviation factors (including 0.0 for clean) to their evaluated fitness.
 
         Returns:
-            float | dict[float, float]: Evaluated fitness float or dictionary of noise_std -> fitness value.
+            float: Evaluated objective value (noisy if self.noise_std > 0 else clean).
         """
         f_clean = self._clean_problem(x.tolist())
-        if noise_std is None:
+        if self.noise_std <= 0.0:
             return f_clean
 
-        if isinstance(noise_std, (int, float)):
-            levels = [float(noise_std)]
-        else:
-            levels = [float(lvl) for lvl in noise_std]
-
-        results: dict[float, float] = {0.0: f_clean}
-        for lvl in levels:
-            results[lvl] = self.add_noise(f_clean, lvl)
-        return results
+        return self._add_noise(f_clean, self.noise_std)
 
     @property
-    def mode(self) -> str:
-        """Return 'noisy' if noise_std > 0 else 'clean'."""
-        return "noisy" if self.noise_std > 0.0 else "clean"
+    def mode(self) -> ProblemMode:
+        """Return ProblemMode.NOISY if noise_std > 0 else ProblemMode.CLEAN."""
+        return ProblemMode.NOISY if self.noise_std > 0.0 else ProblemMode.CLEAN
 
     def eval_scalar(self, x: np.ndarray) -> float:
         """Evaluate the objective function at point `x` and return a single scalar float."""
-        if self.noise_std <= 0.0:
-            res = self(x)
-        else:
-            res = self(x, noise_std=self.noise_std)
+        return self(x)
 
-        if isinstance(res, dict):
-            if self.noise_std in res:
-                return res[self.noise_std]
-            for k, v in res.items():
-                if k != 0.0:
-                    return v
-            return res.get(0.0, float("inf"))
-        return float(res)
-
-    def get_objective_fn(self) -> Callable[[np.ndarray], float]:
-        """Return a single-scalar objective callable for optimization algorithms."""
-        if self.noise_std <= 0.0:
-            return self
-        return lambda x: self.eval_scalar(x)
+    def get_objective_fn(self) -> "BBOBProblem":
+        """Return self as the single-scalar objective callable for optimization algorithms."""
+        return self
 
     def __repr__(self) -> str:
         return (

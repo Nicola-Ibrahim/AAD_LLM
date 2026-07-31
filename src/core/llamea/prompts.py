@@ -12,7 +12,7 @@ The objective function you are optimizing is entirely deterministic (noise-free)
 This is NOT a general-purpose solver. You are designing a bespoke algorithm tailored to exploit the specific features of this single landscape.
 
 Write the Python code for a class that contains a `__call__(self, problem, budget)` method.
-The `problem` is the objective function to be minimized. You can evaluate a point `x` by calling `y = problem(x)`, where `x` is a numpy array and `y` is a float.
+The `problem` is the objective function to be minimized. You can evaluate a point `x` by calling `y = problem(x)`, where `x` is a 1D vector of coordinates (length = dimension) and `y` is a float scalar.
 The `budget` is the maximum number of times you can evaluate `problem`.
 The domain bounds for the search space are [{lower_bound}, {upper_bound}] for all dimensions (accessible via `problem.lower_bound` and `problem.upper_bound` or `problem.lb` and `problem.ub`).
 Your goal is to find and return the lowest possible value of `problem(x)` within the budget.
@@ -26,7 +26,7 @@ Critically, the objective function you are optimizing contains statistical noise
 This is NOT a general-purpose solver. You are designing a bespoke algorithm tailored to exploit the specific features of this single noisy landscape.
 
 Write the Python code for a class that contains a `__call__(self, problem, budget)` method.
-The `problem` is the noisy objective function to be minimized. You can evaluate a point `x` by calling `y = problem(x)`, where `x` is a numpy array and `y` is a noisy float.
+The `problem` is the noisy objective function to be minimized. You can evaluate a point `x` by calling `y = problem(x)`, where `x` is a 1D vector of coordinates (length = dimension) and `y` is a noisy float scalar.
 The `budget` is the maximum number of times you can evaluate `problem`.
 The domain bounds for the search space are [{lower_bound}, {upper_bound}] for all dimensions (accessible via `problem.lower_bound` and `problem.upper_bound` or `problem.lb` and `problem.ub`).
 Your goal is to find and return the lowest possible value of `problem(x)` within the budget.
@@ -40,7 +40,7 @@ Your algorithm will be instantiated and called as follows:
 You MUST use the following class skeleton — fill in your algorithm logic in the marked section only.
 Do NOT change the class structure, method signatures, or return statement:
 
-    import numpy as np
+    import random
 
     class AlgorithmName:
         def __init__(self):
@@ -52,14 +52,15 @@ Do NOT change the class structure, method signatures, or return statement:
             dim = getattr(problem, 'dim', 3)
 
             # Always start with a random initial point
-            best_x = np.random.uniform(lb, ub, dim)
+            best_x = [random.uniform(lb[i] if hasattr(lb, '__getitem__') else lb, 
+                                     ub[i] if hasattr(ub, '__getitem__') else ub) for i in range(dim)]
             best_y = problem(best_x)
             evaluations = 1
 
             # --- YOUR ALGORITHM LOGIC BELOW ---
             # Use `evaluations` to track calls. Stop when evaluations >= budget.
-            # Always call `y = problem(x)` where x is a 1D numpy array of shape (dim,).
-            # Compare only scalar floats: `if y < best_y:` (not arrays).
+            # Always call `y = problem(x)` where x is a 1D sequence of float coordinates.
+            # Compare only scalar floats: `if y < best_y:`
             # Update best_x and best_y when you find improvement.
             # --- YOUR ALGORITHM LOGIC ABOVE ---
 
@@ -72,7 +73,7 @@ Respond with EXACTLY the following format — no extra code blocks:
 Feedback: <your reasoning and description of the algorithm>
 Code:
 ```python
-<import numpy as np first, then your complete class>
+<your complete class and any required imports>
 ```
 
 STRICT Rules — violating any rule will cause execution failure:
@@ -81,11 +82,9 @@ STRICT Rules — violating any rule will cause execution failure:
 - `__init__(self)` MUST take NO extra arguments beyond `self`.
 - `__init__(self)` MUST have a non-empty body (use `pass` if nothing to initialize).
 - The class MUST have a `__call__(self, problem, budget)` method.
-- `__call__` MUST return `float(best_y)` — a scalar Python float, NOT a numpy array.
+- `__call__` MUST return `float(best_y)` — a scalar Python float.
 - Every variable you use MUST be defined before use. Never reference undefined names.
 - Do NOT store `problem` or `budget` in `__init__` — they are provided to `__call__` directly.
-- `x` is a 1D numpy array of shape `(dim,)`. Never use bare `if x < value:` — use `np.all()`, `np.any()`, or `np.clip(x, lb, ub)`.
-- The `import numpy as np` statement MUST appear at the top of your code block.
 - Do NOT include `if __name__ == '__main__':` blocks.
 """
 

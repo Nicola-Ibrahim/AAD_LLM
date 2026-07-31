@@ -43,11 +43,13 @@ class SQLiteExperimentRepository(ExperimentRepository):
         llm_name: str,
         noise_std: float,
         true_optimum: float,
+        instance_id: int = 1,
     ) -> int:
         """Creates the experiment DB row and returns its id."""
         with self.SessionLocal() as session:
             experiment = ExperimentORM(
                 problem_id=problem_id,
+                instance_id=instance_id,
                 dim=dim,
                 mode=ExperimentMode(mode),
                 llm_name=llm_name,
@@ -68,11 +70,13 @@ class SQLiteExperimentRepository(ExperimentRepository):
         mode: str,
         llm_name: str,
         noise_std: float,
+        instance_id: int = 1,
     ) -> list[int]:
         """Returns a list of experiment IDs with status 'running' that match the given parameters."""
         with self.SessionLocal() as session:
             query = session.query(ExperimentORM.id).filter(
                 ExperimentORM.problem_id == problem_id,
+                ExperimentORM.instance_id == instance_id,
                 ExperimentORM.dim == dim,
                 ExperimentORM.mode == ExperimentMode(mode),
                 ExperimentORM.llm_name == llm_name,
@@ -119,7 +123,6 @@ class SQLiteExperimentRepository(ExperimentRepository):
                     flat_data[key] = value
 
             flat_data["experiment_id"] = experiment_id
-            flat_data["instance_id"] = experiment_meta.get("instance_id", 1)
 
             # Filter fields to only columns defined on IterationORM
             valid_columns = IterationORM.__table__.columns.keys()
@@ -193,6 +196,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
     def load(
         self,
         problem_id: int | None = None,
+        instance_id: int | None = None,
         llm_name: str | None = None,
         dim: int | None = None,
         mode: str | None = None,
@@ -202,6 +206,8 @@ class SQLiteExperimentRepository(ExperimentRepository):
             query = session.query(ExperimentORM)
             if problem_id is not None:
                 query = query.filter(ExperimentORM.problem_id == problem_id)
+            if instance_id is not None:
+                query = query.filter(ExperimentORM.instance_id == instance_id)
             if llm_name is not None:
                 query = query.filter(ExperimentORM.llm_name == llm_name)
             if dim is not None:
@@ -215,17 +221,11 @@ class SQLiteExperimentRepository(ExperimentRepository):
 
             summaries: list[ExperimentSummary] = []
             for exp in experiments:
-                instance_id = (
-                    exp.iterations[0].instance_id
-                    if exp.iterations and exp.iterations[0].instance_id
-                    else 1
-                )
-
                 problem_profile = ProblemProfile(
                     problem_id=exp.problem_id,
                     dim=exp.dim,
                     noise_std=exp.noise_std or 0.0,
-                    instance_id=instance_id,
+                    instance_id=exp.instance_id,
                     true_optimum=exp.true_optimum,
                 )
 

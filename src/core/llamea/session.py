@@ -1,13 +1,12 @@
+import math
 from dataclasses import dataclass, field
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 
 from llamea import LLaMEA
+from core.config import DATA_DIR
 
-
-from filelock import FileLock, Timeout
 
 from core.llamea.evaluator import Evaluator
 from core.llamea.prompts import (
@@ -18,7 +17,7 @@ from core.llamea.prompts import (
 from core.problems.bbob import BBOBProblem
 from infra.llm.client import LLMClient
 from infra.storage.base import ExperimentRepository
-from infra.storage.code_store.code import CodeRepository
+from infra.storage.code.repository import CodeRepository
 
 
 @dataclass
@@ -40,7 +39,42 @@ class SessionResult:
 
 
 class LLaMEASession:
-    """Manages the lifecycle of a single LLaMEA synthesis session on a BBOB problem."""
+    """
+    Manages the lifecycle of a single LLaMEA synthesis session on a BBOB problem.
+
+    Workflow:
+                   LLaMEASession(problem, llm, db, budget, iterations)
+                                        │
+                                        ▼
+                    Initialize DB Experiment (Create / Resume ID)
+                                        │
+                                        ▼
+                               LLaMEASession.run()
+                                        │
+               ┌────────────────────────┴────────────────────────┐
+               ▼                                                 ▼
+       Build Task Prompt                                 Setup Evaluator & Engine
+               │                                                 │
+               └────────────────────────┬────────────────────────┘
+                                        ▼
+               ┌──────────────────────────────────────────────────┐
+               │ ↺ Evolutionary Synthesis Loop (for N iterations) │
+               │                                                  │
+               │   LLM Generates / Mutates Code ─────────┐        │
+               │            ▲                            │        │
+               │            │ (Feedback:                 ▼        │
+               │            │  error / score)   Evaluator Scores  │
+               │            └─────────────────── & Logs Iteration │
+               └────────────────────────┬─────────────────────────┘
+                                        │
+               ┌────────────────────────┴────────────────────────┐
+            Success                                           Failure
+      (mark DB completed)                              (mark DB failed)
+             │                                                 │
+             ▼                                                 ▼
+       Extract Best Solution                            Raise Exception / Log Error
+       Return SessionResult
+    """
 
     def __init__(
         self,
@@ -62,23 +96,21 @@ class LLaMEASession:
         self._code_repo = code_repo
         self._budget = budget
         self._iterations = iterations
-        self._lock: FileLock | None = None
 
-        # Derived fields
-        self._problem_id = problem.problem_id
-        self._dim = problem.dim
-        self._experiment_name = f"bbob_{self._problem_id}_dim{self._dim}_{self._problem.mode}"
+        self._init_experiment_context(resume_experiment_id)
 
-        self._initial_iteration = 0
+    def _init_experiment_context(self, resume_experiment_id: int | None) -> None:
+        """Determines whether to resume an existing experiment or initialize a fresh one, setting state accordingly."""
         if resume_experiment_id is not None:
             status, max_iter = self._db_repo.get_experiment_status(resume_experiment_id)
             if status != "running":
                 incomplete = self._db_repo.get_incomplete_experiments(
-                    self._problem_id,
-                    self._dim,
+                    self._problem.problem_id,
+                    self._problem.dim,
                     self._problem.mode,
                     self._llm_client.model.name,
                     self._problem.noise_std,
+                    instance_id=self._problem.instance_id,
                 )
                 raise ValueError(
                     f"Cannot resume experiment {resume_experiment_id} because its status is '{status}'.\n"
@@ -87,113 +119,106 @@ class LLaMEASession:
                 )
 
             self._initial_iteration = max_iter
-            archive_dir = self._get_archive_dir_path(resume_experiment_id)
-            archive_dir.mkdir(parents=True, exist_ok=True)
-            lock = FileLock(archive_dir / "session.lock", timeout=0)
-
-            try:
-                lock.acquire()
-                self._experiment_id = resume_experiment_id
-                self._archive_dir = archive_dir
-                self._lock = lock
-            except Timeout:
-                raise RuntimeError(
-                    f"Experiment {resume_experiment_id} is currently locked and actively running in another process."
-                )
+            self._experiment_id = resume_experiment_id
         else:
-            # Initialize a new experiment context via the DB
+            self._initial_iteration = 0
             self._experiment_id = self._db_repo.create_experiment(
-                problem_id=self._problem_id,
-                dim=self._dim,
+                problem_id=self._problem.problem_id,
+                instance_id=self._problem.instance_id,
+                dim=self._problem.dim,
                 mode=self._problem.mode,
                 llm_name=self._llm_client.model.name,
                 noise_std=self._problem.noise_std,
                 true_optimum=self._problem.true_optimum,
             )
 
-            self._archive_dir = self._get_archive_dir_path(self._experiment_id)
-            self._archive_dir.mkdir(parents=True, exist_ok=True)
-            lock = FileLock(self._archive_dir / "session.lock", timeout=0)
-            lock.acquire()
-            self._lock = lock
+        self._archive_dir = (
+            DATA_DIR
+            / "evolution_state"
+            / self._experiment_name
+            / f"experiment_{self._experiment_id}"
+        )
+        self._archive_dir.mkdir(parents=True, exist_ok=True)
 
-    def _get_archive_dir_path(self, experiment_id: int) -> Path:
-        """Returns the archive directory path for a given experiment ID."""
-        from core.config import DATA_DIR
-
-        return DATA_DIR / "evolution_state" / self._experiment_name / f"experiment_{experiment_id}"
+    @property
+    def _experiment_name(self) -> str:
+        """Derived name string for the experiment context."""
+        return f"bbob_{self._problem.problem_id}_dim{self._problem.dim}_{self._problem.mode}"
 
     def run(self) -> SessionResult:
         """Runs the complete evolution loop for the problem."""
         print(
-            f"\n--- Starting LLaMEA Evolution for BBOB-{self._problem_id} (Dim {self._dim}, Mode {self._problem.mode}, Experiment {self._experiment_id}) ---"
+            f"\n=== Starting LLaMEA Evolution: BBOB-{self._problem.problem_id} (Dim {self._problem.dim}, Mode {self._problem.mode}, Exp {self._experiment_id}) [Budget: {self._budget} evals | Max Iterations: {self._iterations}] ===",
+            flush=True,
         )
 
         try:
             task_prompt = build_task_prompt(
-                problem_id=self._problem_id,
-                dim=self._dim,
+                problem_id=self._problem.problem_id,
+                dim=self._problem.dim,
                 lower_bound=self._problem.lower_bound,
                 upper_bound=self._problem.upper_bound,
                 is_noisy=self._problem.mode == "noisy",
             )
             evaluator = self._setup_evaluator()
-            optimizer = self._create_optimizer(evaluator, task_prompt)
+            synthesis_engine = self._create_synthesis_engine(evaluator, task_prompt)
 
-            optimizer.run()
+            synthesis_engine.run()
         except Exception as e:
             self._db_repo.mark_failed(self._experiment_id, str(e))
             raise
         else:
-            # Final persistence and cleanup via db_repo
             self._db_repo.mark_completed(self._experiment_id)
 
-            # Report and return result
-            self._print_report(optimizer.best_so_far)
+            best_so_far = synthesis_engine.best_so_far
+            raw_fitness = best_so_far.fitness
+            if raw_fitness is not None and not math.isnan(raw_fitness) and not math.isinf(raw_fitness):
+                best_error = abs(raw_fitness - self._problem.true_optimum)
+            else:
+                raw_fitness = None
+                best_error = None
+
+            algorithm_name = best_so_far.name or "None"
+
+            self._print_report(algorithm_name, raw_fitness, best_error)
 
             return SessionResult(
-                problem_id=self._problem_id,
-                dim=self._dim,
+                problem_id=self._problem.problem_id,
+                dim=self._problem.dim,
                 mode=self._problem.mode,
                 noise_std=self._problem.noise_std,
-                best_error=optimizer.best_so_far.metadata.fitness.final_error,
+                best_error=best_error,
                 experiment_id=self._experiment_id,
-                run_history=optimizer.run_history,
+                run_history=synthesis_engine.run_history,
                 experiment_name=self._experiment_name,
                 llm_name=self._llm_client.model.name,
-                best_solution=optimizer.best_so_far,
+                best_solution=synthesis_engine.best_so_far,
                 error_msg=None,
                 problem_profile=evaluator.problem_profile,
             )
-        finally:
-            if self._lock is not None:
-                try:
-                    self._lock.release()
-                except Exception:
-                    pass
 
-    def _create_optimizer(self, evaluator: Evaluator, task_prompt: str) -> LLaMEA:
-        """Creates a new LLaMEA optimizer or resumes from a warm-start session state if it exists."""
-        optimizer = None
+    def _create_synthesis_engine(self, evaluator: Evaluator, task_prompt: str) -> LLaMEA:
+        """Creates a new LLaMEA synthesis engine or resumes from a warm-start session state if it exists."""
+        synthesis_engine = None
         state_file = self._archive_dir / "llamea_config.pkl"
 
         if state_file.exists():
             print(f"[i] Existing session state found — resuming from {self._archive_dir}")
             try:
-                optimizer = LLaMEA.warm_start(str(self._archive_dir))
-                if optimizer is not None:
-                    optimizer.f = evaluator
-                    optimizer.llm = self._llm_client
+                synthesis_engine = LLaMEA.warm_start(str(self._archive_dir))
+                if synthesis_engine is not None:
+                    synthesis_engine.f = evaluator
+                    synthesis_engine.llm = self._llm_client
                     print(
-                        f"[i] Resumed at generation {optimizer.generation}, "
-                        f"history size {len(optimizer.run_history)}"
+                        f"[i] Resumed at generation {synthesis_engine.generation}, "
+                        f"history size {len(synthesis_engine.run_history)}"
                     )
             except Exception as e:
                 print(f"[!] Warm start failed, starting fresh: {e}")
-                optimizer = None
+                synthesis_engine = None
 
-        if optimizer is None:
-            optimizer = LLaMEA(
+        if synthesis_engine is None:
+            synthesis_engine = LLaMEA(
                 f=evaluator,
                 llm=self._llm_client,
                 n_parents=1,
@@ -209,9 +234,9 @@ class LLaMEASession:
                 parallel_backend="sequential",
             )
 
-        optimizer.logger = SimpleNamespace(dirname=str(self._archive_dir))
+        synthesis_engine.logger = SimpleNamespace(dirname=str(self._archive_dir))
 
-        return optimizer
+        return synthesis_engine
 
     def _setup_evaluator(self) -> Evaluator:
         """Initializes the problem evaluator with experiment metadata and budget limits."""
@@ -224,8 +249,8 @@ class LLaMEASession:
             initial_iteration=self._initial_iteration,
             experiment_meta={
                 "experiment_id": self._experiment_id,
-                "problem_id": self._problem_id,
-                "dim": self._dim,
+                "problem_id": self._problem.problem_id,
+                "dim": self._problem.dim,
                 "mode": self._problem.mode,
                 "noise_std": self._problem.noise_std,
                 "llm_name": self._llm_client.model.name,
@@ -233,24 +258,26 @@ class LLaMEASession:
             },
         )
 
-    def _print_report(self, best_sol: Any) -> None:
+    def _print_report(
+        self,
+        algorithm_name: str,
+        raw_fitness: float | None,
+        final_error: float | None,
+    ) -> None:
         """Prints a human-readable console report highlighting objective value and error metrics of the best candidate."""
-        if best_sol is None or not hasattr(best_sol, "metadata") or not best_sol.metadata:
-            return
-
-        meta = best_sol.metadata
-        returned_val = meta.fitness.raw_fitness
         true_opt = self._problem.true_optimum
-        final_err = meta.fitness.final_error
-        fit_val = best_sol.fitness if hasattr(best_sol, "fitness") else -final_err
+        fit_val = -final_error if final_error is not None else float("-inf")
+        raw_str = f"{raw_fitness:.6f}" if raw_fitness is not None else "N/A (All Executions Failed)"
+        err_str = f"{final_error:.6e}" if final_error is not None else "N/A"
+        fit_str = f"{fit_val:.6e}" if fit_val != float("-inf") else "-inf"
 
-        print("\n" + "=" * 65)
+        print("\n" + "=" * 70)
         print(
-            f"=== BBOB-{self._problem_id} Evolution Best Solution Summary ({self._problem.mode.upper()}) ==="
+            f"=== BBOB-{self._problem.problem_id} Evolution Best Solution Summary ({self._problem.mode.upper()}) ==="
         )
-        print(f"  Best Algorithm Name:       {best_sol.name}")
-        print(f"  Returned Objective Value:  {returned_val:.6f}")
-        print(f"  True Global Optimum:       {true_opt:.6f}")
-        print(f"  Final Absolute Error:       {final_err:.6e} (Target = 0.0)")
-        print(f"  Negated Error (LLaMEA Fitness): {fit_val:.6e} [= -|error|, higher is better]")
-        print("=" * 65 + "\n")
+        print(f"  Best Algorithm Name:            {algorithm_name}")
+        print(f"  Returned Objective Value (Obj): {raw_str}")
+        print(f"  True Global Optimum (Opt):      {true_opt:.6f}")
+        print(f"  Final Absolute Error (|Obj-Opt|): {err_str} (Target = 0.0)")
+        print(f"  LLaMEA Fitness Score (-Error):  {fit_str} (Higher is better, Max = 0.0)")
+        print("=" * 70 + "\n")

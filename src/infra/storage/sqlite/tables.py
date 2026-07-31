@@ -34,6 +34,7 @@ class ExperimentORM(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
 
     problem_id = Column(Integer, nullable=False)
+    instance_id = Column(Integer, nullable=False, default=1, server_default=text("1"))
     dim = Column(Integer, nullable=False)
     mode = Column(Enum(ExperimentMode), nullable=False)
     llm_name = Column(String, nullable=False)
@@ -59,7 +60,7 @@ class ExperimentORM(Base):
     )
 
     __table_args__ = (
-        Index("idx_experiments_lookup", "problem_id", "llm_name", "dim", "mode"),
+        Index("idx_experiments_lookup", "problem_id", "instance_id", "llm_name", "dim", "mode"),
         Index("idx_experiments_status", "status"),
         CheckConstraint("dim > 0", name="check_positive_dim"),
         CheckConstraint("status IN ('running', 'completed', 'failed')", name="check_valid_status"),
@@ -83,7 +84,6 @@ class IterationORM(Base):
     )
 
     iteration = Column(Integer, nullable=False)
-    instance_id = Column(Integer, nullable=False, default=1, server_default=text("1"))
     algorithm_name = Column(String)
 
     # Core metrics
@@ -123,7 +123,6 @@ class IterationORM(Base):
         Index("idx_iterations_exp_error", "experiment_id", "final_error"),
         UniqueConstraint(
             "experiment_id",
-            "instance_id",
             "iteration",
             name="uq_iteration_identity",
         ),

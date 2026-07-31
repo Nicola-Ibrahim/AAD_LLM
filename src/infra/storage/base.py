@@ -11,6 +11,7 @@ class ExperimentRepository(ABC):
     def load(
         self,
         problem_id: int | None = None,
+        instance_id: int | None = None,
         llm_name: str | None = None,
         dim: int | None = None,
         mode: str | None = None,
@@ -26,6 +27,7 @@ class ExperimentRepository(ABC):
         mode: str,
         llm_name: str,
         noise_std: float,
+        instance_id: int = 1,
     ) -> list[int]:
         """Returns a list of experiment IDs with status 'running' that match the given parameters."""
         pass
@@ -44,6 +46,7 @@ class ExperimentRepository(ABC):
         llm_name: str,
         noise_std: float,
         true_optimum: float,
+        instance_id: int = 1,
     ) -> int:
         """Creates the experiment DB row and returns its id."""
         pass

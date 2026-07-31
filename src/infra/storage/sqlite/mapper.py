@@ -1,5 +1,7 @@
 from typing import Any
-from core.schema import ExperimentSummary, IterationMetadata, ProblemProfile
+from core.schema.experiment import ExperimentSummary
+from core.schema.iteration import IterationMetadata
+from core.schema.problem import ProblemProfile
 
 
 def build_experiment_summary(

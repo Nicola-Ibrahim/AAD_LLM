@@ -1,16 +1,63 @@
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable
 
-from core.llamea.session import LLaMEASession, SessionResult
+from core.config import DATA_DIR
+from core.llamea.session import SessionResult
+from core.problems.bbob import BBOBProblem
+from infra.llm.client import LLMClient
+
+from core.llamea.session import LLaMEASession
+from infra.storage.code.repository import CodeRepository
+from infra.storage.sqlite.connection import build_engine, build_session_factory, ensure_wal_mode
+from infra.storage.sqlite.repository import SQLiteExperimentRepository
 
 
 @dataclass
 class EvolutionTask:
-    """A single unit of evolution work to be executed in the thread pool."""
+    """A single unit of evolution work to be executed in the process pool.
+
+    Stores all parameters required to construct and run a LLaMEASession inside a worker process,
+    or a custom picklable fn callable for custom tasks.
+    """
 
     key: str
-    fn: Callable[[], SessionResult | LLaMEASession]
+    problem: BBOBProblem | None = None
+    llm_client: LLMClient | None = None
+    budget: int = 1000
+    iterations: int = 10
+    resume_experiment_id: int | None = None
+    db_path: Path = field(default_factory=lambda: DATA_DIR / "db.sqlite3")
+    fn: Callable[[], SessionResult] | None = None
+
+    def __call__(self) -> SessionResult:
+        """Executes the evolution task inside the worker process."""
+        if self.fn is not None:
+            return self.fn()
+
+        if self.problem is None or self.llm_client is None:
+            raise ValueError(
+                "EvolutionTask requires either a custom fn or both problem and llm_client"
+            )
+
+        ensure_wal_mode(self.db_path)
+        engine = build_engine(self.db_path)
+        session_factory = build_session_factory(engine)
+        db_repo = SQLiteExperimentRepository(session_factory=session_factory)
+        code_repo = CodeRepository()
+
+        session = LLaMEASession(
+            problem=self.problem,
+            llm_client=self.llm_client,
+            db_repo=db_repo,
+            code_repo=code_repo,
+            budget=self.budget,
+            iterations=self.iterations,
+            resume_experiment_id=self.resume_experiment_id,
+        )
+        return session.run()
 
 
 class OrchestrationError(RuntimeError):
@@ -24,48 +71,50 @@ class OrchestrationError(RuntimeError):
         self.errors = errors
 
 
-def run_experiments(
-    tasks: list[EvolutionTask],
-    max_workers: int | None = None,
-) -> dict[str, SessionResult]:
-    """Runs evolution tasks concurrently in a thread pool.
+def _execute_task(task: EvolutionTask) -> SessionResult:
+    """Worker function that runs the task directly."""
+    return task()
 
-    Args:
-        tasks: List of tasks containing a label and a callable returning SessionResult or LLaMEASession.
-        max_workers: Maximum thread pool workers. Defaults to the number of tasks.
 
-    Returns:
-        dict[str, SessionResult]: Dictionary mapping task keys to their evolution results.
+class TaskOrchestrator:
+    """Manages multi-core parallel execution and lifecycle of evolution tasks."""
 
-    Raises:
-        OrchestrationError: If one or more tasks fail during execution.
-    """
-    results: dict[str, SessionResult] = {}
-    errors: dict[str, Exception] = {}
+    def __init__(self, max_workers: int | None = None):
+        """Initializes the task orchestrator with worker configuration.
 
-    if not tasks:
+        Args:
+            max_workers: Maximum process pool worker processes. Defaults to number of tasks.
+        """
+        self.max_workers = max_workers
+
+    def run(self, tasks: list[EvolutionTask]) -> dict[str, SessionResult]:
+        """Executes a list of evolution tasks concurrently in a multi-core process pool.
+
+        Args:
+            tasks: List of EvolutionTask units to execute.
+
+        Returns:
+            dict[str, SessionResult]: Dictionary mapping task keys to their SessionResult objects.
+
+        Raises:
+            OrchestrationError: If one or more tasks fail during execution.
+        """
+
+        results: dict[str, SessionResult] = {}
+        errors: dict[str, Exception] = {}
+        workers = self.max_workers if self.max_workers is not None else len(tasks)
+
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            future_to_key = {executor.submit(_execute_task, task): task.key for task in tasks}
+
+            for future in as_completed(future_to_key):
+                key = future_to_key[future]
+                try:
+                    results[key] = future.result()
+                except Exception as e:
+                    errors[key] = e
+
+        if errors:
+            raise OrchestrationError(errors)
+
         return results
-
-    workers = max_workers if max_workers is not None else len(tasks)
-
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-
-        def _run_task(task_fn):
-            res = task_fn()
-            if isinstance(res, LLaMEASession):
-                return res.run()
-            return res
-
-        future_to_key = {executor.submit(_run_task, task.fn): task.key for task in tasks}
-
-        for future in as_completed(future_to_key):
-            key = future_to_key[future]
-            try:
-                results[key] = future.result()
-            except Exception as e:
-                errors[key] = e
-
-    if errors:
-        raise OrchestrationError(errors)
-
-    return results
