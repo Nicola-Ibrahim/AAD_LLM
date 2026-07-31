@@ -75,3 +75,8 @@ class ExperimentRepository(ABC):
     def checkpoint_wal(self) -> None:
         """Forces a checkpoint to flush WAL logs to the main database file (if applicable)."""
         pass
+
+    @abstractmethod
+    def get_best_raw_fitness(self, experiment_id: int) -> float | None:
+        """Returns the raw algorithm-returned objective value from the best (lowest-error) iteration of an experiment."""
+        pass

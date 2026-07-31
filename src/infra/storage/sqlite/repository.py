@@ -193,6 +193,21 @@ class SQLiteExperimentRepository(ExperimentRepository):
         except Exception as e:
             print(f"[WARN] checkpoint_wal failed non-fatally: {e}")
 
+    def get_best_raw_fitness(self, experiment_id: int) -> float | None:
+        """Returns the raw algorithm objective value from the best (lowest-error) iteration of an experiment."""
+        with self.SessionLocal() as session:
+            best_row = (
+                session.query(IterationORM.raw_fitness)
+                .filter(
+                    IterationORM.experiment_id == experiment_id,
+                    IterationORM.final_error.isnot(None),
+                    IterationORM.raw_fitness.isnot(None),
+                )
+                .order_by(IterationORM.final_error.asc())
+                .first()
+            )
+            return float(best_row[0]) if best_row else None
+
     def load(
         self,
         problem_id: int | None = None,

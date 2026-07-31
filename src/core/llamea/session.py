@@ -171,12 +171,18 @@ class LLaMEASession:
             self._db_repo.mark_completed(self._experiment_id)
 
             best_so_far = synthesis_engine.best_so_far
-            raw_fitness = best_so_far.fitness
-            if raw_fitness is not None and not math.isnan(raw_fitness) and not math.isinf(raw_fitness):
-                best_error = abs(raw_fitness - self._problem.true_optimum)
+            fitness_score = best_so_far.fitness  # This is -final_error (LLaMEA convention)
+            if fitness_score is not None and not math.isnan(fitness_score) and not math.isinf(fitness_score):
+                # fitness_score = -final_error, so final_error = -fitness_score
+                best_error = -fitness_score
+                # Reconstruct the raw algorithm objective value for display:
+                # final_error = |raw_obj - true_optimum|, and raw_obj ≈ true_optimum - final_error
+                # but we don't have the sign, so we retrieve from DB
+                raw_fitness = self._db_repo.get_best_raw_fitness(self._experiment_id)
             else:
-                raw_fitness = None
+                fitness_score = None
                 best_error = None
+                raw_fitness = None
 
             algorithm_name = best_so_far.name or "None"
 
