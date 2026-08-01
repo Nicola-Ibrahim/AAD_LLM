@@ -1,14 +1,19 @@
 %-------------------------------------------------------------------------------
-% Chapter 2: Related Work
+% Chapter 2: Background and Related Work
 %-------------------------------------------------------------------------------
 
-\chapter{Related Work}\label{chap:research}
+\chapter{Background and Related Work}\label{chap:research}
 
-To properly contextualize the operational environment of this thesis, it is necessary to examine the fundamental domain of continuous black-box optimization, the algorithmic vulnerabilities exposed by stochastic noise, and the recent conceptual shift toward Automated Algorithm Design. Continuous black-box optimization focuses on identifying the global minimum of an unknown, real-valued objective function:
-\begin{equation}
+To properly contextualize the operational environment of this research, it is necessary to examine the foundational concepts of continuous black-box optimization alongside the algorithmic vulnerabilities introduced by stochastic noise. Building upon these theoretical foundations, recent advancements in Large Language Models (LLMs) have driven a paradigm shift toward Automated Algorithm Design (AAD), enabling autonomous agents to synthesize executable search strategies. This chapter establishes the mathematical background of continuous optimization under uncertainty and surveys the state-of-the-art literature in LLM-driven code evolution.
+
+%-------------------------------------------------------------------------------
+\section{Theoretical Background}\label{sec:bg_theory}
+
+Continuous black-box optimization focuses on identifying the global minimum of an unknown, real-valued objective function:
+\begin{equation}\label{eq:bbob_min}
     \min_{x \in \mathcal{S} \subseteq \mathbb{R}^D} f(x)
 \end{equation}
-where $\mathcal{S}$ represents a bounded $D$-dimensional search space (typically $[-5, 5]^D$), and the analytical gradient $\nabla f(x)$—alongside any internal structural information regarding the function—is completely unavailable, leaving sampling queries as the sole mechanism for information retrieval. In standard literature, algorithms designed for these problems are usually evaluated against the deterministic Black-Box Optimization Benchmark (BBOB) suite \cite{Hansen2010}. Standardized within the IOHexperimenter and COCO platforms, the BBOB testbed comprises 24 synthetic mathematical functions designed to emulate distinct topological traps encountered in real-world engineering. These functions are systematically categorized into five structural problem groups, as detailed in Table~\ref{tab:bbob_groups}.
+where $\mathcal{S}$ represents a bounded $D$-dimensional search space (typically $[-5, 5]^D$), and the analytical gradient $\nabla f(x)$—alongside any internal structural information regarding the function—is completely unavailable, leaving point sampling as the sole mechanism for information retrieval. In standard literature, algorithms designed for these problems are systematically evaluated against the deterministic Black-Box Optimization Benchmark (BBOB) suite \cite{Hansen2010}. Standardized within the IOHexperimenter and COCO platforms, the BBOB testbed comprises 24 synthetic mathematical functions designed to emulate distinct topological traps encountered in real-world engineering. These functions are categorized into five structural problem groups, as detailed in Table~\ref{tab:bbob_groups}.
 
 \begin{table}[htbp]
 \centering
@@ -19,40 +24,49 @@ where $\mathcal{S}$ represents a bounded $D$-dimensional search space (typically
 \toprule
 \textbf{Group} & \textbf{Function Indices} & \textbf{Landscape Property} & \textbf{Core Topological Challenge} \\ 
 \midrule
-1 & $f_1 - f_5$   & Separable Functions             & Dimensions are orthogonal; can be optimized independently along axes. \\
-2 & $f_6 - f_9$   & Low/Moderate Conditioning       & Unimodal landscapes with smooth, single-valley trajectories. \\
-3 & $f_{10} - f_{14}$ & High Conditioning           & Steep, narrow ill-conditioned valleys requiring precise coordinate rotations. \\
+1 & $f_1 - f_5$   & Separable Functions               & Dimensions are orthogonal; can be optimized independently along axes. \\
+2 & $f_6 - f_9$   & Low/Moderate Conditioning        & Unimodal landscapes with smooth, single-valley trajectories. \\
+3 & $f_{10} - f_{14}$ & High Conditioning            & Steep, narrow ill-conditioned valleys requiring precise coordinate rotations. \\
 4 & $f_{15} - f_{19}$ & Multi-modal w/ Global Structure & Multiple deceptive local minima superimposed on an overarching global slope. \\
 5 & $f_{20} - f_{24}$ & Multi-modal w/ Weak Structure   & Highly deceptive, randomized local optima lacking strong global gradients. \\ 
 \bottomrule
 \end{tabularx}
 \end{table}
 
+Crucially, the BBOB framework standardized the use of empirical cumulative distribution functions (ECDFs) to characterize algorithm performance, measuring runtime by the number of function evaluations required to achieve a specific target precision ($\Delta f_t = f(x) - f_{\text{opt}} \le 10^{-8}$). Over recent decades, human engineering has yielded robust heuristics to navigate these deterministic spaces, most notably the Nelder-Mead simplex algorithm \cite{Nelder1965}, Differential Evolution (DE) \cite{Storn1997}, Particle Swarm Optimization (PSO) \cite{Kennedy1995}, and the Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001}. Empirical benchmarks on the noiseless BBOB testbed consistently demonstrate that CMA-ES represents the state-of-the-art baseline for continuous optimization, outperforming local search methods like NEWUOA \cite{Powell2006} by multiple orders of magnitude on highly conditioned, non-separable topologies due to its robust covariance matrix update mechanics \cite{Hansen2010}.
 
-Crucially, the BBOB framework standardized the use of empirical cumulative distribution functions (ECDFs) to characterize algorithm performance, measuring runtime by the number of function evaluations required to achieve a specific target precision ($\Delta f_t = f(x) - f_{\text{opt}} \le 10^{-8}$). Over recent decades, human engineering has yielded robust heuristics to navigate these deterministic spaces, most notably the Nelder-Mead simplex algorithm \cite{Nelder1965}, Differential Evolution (DE) \cite{Storn1997}, Particle Swarm Optimization (PSO) \cite{Kennedy1995}, and the Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001}. Empirical benchmarks on the noiseless BBOB testbed consistently demonstrate that CMA-ES represents the state-of-the-art baseline for continuous optimization, outperforming local search methods like NEWUOA \cite{Powell2006} by multiple orders of magnitude on highly conditioned, non-separable, and ill-conditioned multi-modal topologies due to its robust covariance update mechanics \cite{Hansen2010}. However, because these human updates are calculated from exact historical variance assumptions, they establish a baseline performance floor that assumes uniform landscape consistency—rendering them vulnerable to unexpected target data shifts.
-
-While human-engineered algorithms excel on deterministic functions, practical industrial applications—such as electro-chemical battery cell parameter extraction \cite{Plett2004, Xiong2018} and structural finite-element model updating \cite{Mottershead1993, Marwala2010}—are inherently stochastic. Objective evaluations in these environments are frequently corrupted by sensor inaccuracies, thermal drift, and environmental turbulence, which are systematically modeled in continuous optimization testbeds, most notably the BBOB-noisy suite \cite{Hansen2009Noisy}. As established in the foundational taxonomic framework on uncertain environments by Jin and Branke \cite{Jin2005}, stochastic optimization bottlenecks can be classified by whether uncertainty disrupts the parameter space, time space, or the fitness space. This thesis isolates noise acting directly within the fitness space, where the true time-invariant topology $f_{\text{clean}}(x)$ is masked by an error component $\epsilon$, rendering the observed objective value a random variable centered around the underlying true fitness:
+While human-engineered algorithms excel on deterministic functions, practical industrial applications—such as electro-chemical battery cell parameter extraction \cite{Plett2004, Xiong2018} and structural finite-element model updating \cite{Mottershead1993, Marwala2010}—are inherently non-deterministic. Objective evaluations in these physical environments are derived directly from hardware instrumentation, telemetry apparatuses, or complex numerical simulations, rendering them persistently corrupted by thermal drift, electromagnetic interference, sensor quantization limits, and environmental turbulence \cite{Plett2004, Xiong2018}. As established in the foundational taxonomic framework on uncertain optimization environments by Jin and Branke \cite{Jin2005}, stochastic bottlenecks in computational search can be classified by whether uncertainty disrupts the parameter space through variable deviations post-optimization, the time space via dynamic topological drift, the surrogate space through approximation errors, or the fitness space. This thesis isolates noise acting directly within the fitness space, where the true, time-invariant system response $f_{\text{clean}}(x)$ is masked by an additive stochastic measurement error component $z$:
 \begin{equation}\label{eq:noisy_evaluation}
-    f_{\text{noisy}}(x) = f_{\text{clean}}(x) + \epsilon
+    f_{\text{noisy}}(x) = f_{\text{clean}}(x) + z
 \end{equation}
+rendering the observed objective value a random variable centered around the underlying true fitness, which directly distorts candidate evaluations during the optimization process \cite{Jin2005}.
 
-Standard continuous optimization testbeds model these environmental disruptions through three primary statistical noise distributions:
+Standard continuous optimization testbeds model these environmental disruptions through three primary statistical noise distributions \cite{Hansen2009Noisy}:
 \begin{enumerate}
     \item \textbf{Additive Uniform Noise:} Models digital sensor quantization errors and signal truncation limits:
     \begin{equation}
-        \epsilon \sim \mathcal{U}(-a, a), \quad p(\epsilon) = \frac{1}{2a} \quad \text{for } \epsilon \in [-a, a]
+        z \sim \mathcal{U}(-a, a), \quad p(z) = \frac{1}{2a} \quad \text{for } z \in [-a, a]
     \end{equation}
-    \item \textbf{Cauchy Noise:} A heavy-tailed distribution that models sudden, severe anomalies such as physical sensor dropouts or electrical hardware spikes:
+    
+    \item \textbf{Additive Cauchy Noise:} A heavy-tailed distribution modeling severe, intermittent physical sensor dropouts or hardware spikes:
     \begin{equation}
-        p(\epsilon) = \frac{1}{\pi \gamma \left[1 + \left(\frac{\epsilon}{\gamma}\right)^2\right]}
+        p(z) = \frac{1}{\pi \gamma \left[1 + \left(\frac{z}{\gamma}\right)^2\right]}
     \end{equation}
+    
     \item \textbf{Additive Gaussian Noise:} Models background thermal, electronic, and environmental white noise operating independently of signal magnitude \cite{Hansen2009Noisy}:
     \begin{equation}\label{eq:gaussian_noise}
-        \epsilon \sim \mathcal{N}(0, \sigma^2), \quad p(\epsilon) = \frac{1}{\sigma \sqrt{2\pi}} \exp\left(-\frac{\epsilon^2}{2\sigma^2}\right)
+        z \sim \mathcal{N}(0, \sigma^2), \quad p(z) = \frac{1}{\sigma \sqrt{2\pi}} \exp\left(-\frac{z^2}{2\sigma^2}\right)
     \end{equation}
 \end{enumerate}
 
-In these turbulent configurations, conventional gradient-free heuristics collapse; because their selection mechanisms rely on sorting population candidates by performance, localized fitness noise systematically corrupts these ranking operators \cite{Jin2005}. Jin and Branke's evaluation confirmed that while traditional human-engineered workarounds—such as static sample averaging or increasing population sizes—can reduce noise variance, they severely degrade optimization speed and over-consume function evaluation budgets \cite{Jin2005}. Consequently, a sub-optimal candidate may secure a dominant position in the population purely due to a favorable statistical anomaly, deceiving the algorithm into adjusting its covariance matrices or search steps toward entirely false gradients \cite{Jin2005, Hansen2009Noisy}. This vulnerability is further magnified in classical gradient-based algorithms; because these systems rely entirely on computing exact analytical or finite-difference derivatives, even minor statistical noise completely corrupts gradient estimation vectors, leading to immediate algorithmic failure \cite{Sarafian2024}. Traditional parameter tuning—which relies on selecting fixed, static hyperparameter configurations prior to runtime—fails to resolve this trade-off, as fixed parameter choices cannot dynamically adapt to local noise fluctuations across the search space. This fundamental limitation creates an active mandate to investigate whether autonomous logic generators can discover deep structural alternatives rather than relying on static computational averages.
+While the official BBOB-noisy suite \cite{Hansen2009Noisy} formalizes scale-invariant multiplicative log-normal distributions ($f \cdot \exp(\beta \mathcal{N}(0,1))$), physical hardware sensors exhibit constant-variance additive noise. Applying unscaled static additive noise across heterogeneous landscapes causes severe evaluation imbalances: a fixed noise level completely overwhelms flat separable functions while remaining mathematically imperceptible on steep, highly conditioned functions. Resolving this discrepancy requires engineering a normalized landscape-scaling mechanism, as detailed in Chapter 3.
+
+In these turbulent configurations, conventional derivative-free heuristics collapse because selection operators in algorithms like CMA-ES rely on sorting population candidates by relative rank, which localized fitness noise systematically corrupts \cite{Jin2005, Miller1996}. Jin and Branke's survey confirmed that traditional human-engineered workarounds—such as static sample averaging or increasing population sizes—severely degrade optimization speed and over-consume function evaluation budgets due to the $\sqrt{N}$ sample size penalty \cite{Jin2005}. Consequently, a sub-optimal candidate may secure a dominant position purely due to a favorable statistical anomaly, deceiving the algorithm into adjusting its covariance matrices or search steps toward false gradients \cite{Jin2005, Hansen2009Noisy}. This vulnerability is magnified in classical gradient-based algorithms where minor statistical noise completely corrupts finite-difference derivative vectors, causing immediate algorithmic failure \cite{Sarafian2024}. Fixed hyperparameter configurations cannot dynamically react to local noise fluctuations, creating an active mandate to investigate whether autonomous logic generators can discover deep structural alternatives rather than relying on static computational averages.
+
+
+%-------------------------------------------------------------------------------
+\section{Related Work}\label{sec:related_work}
+
 
 To eliminate this human bottleneck, the field is currently experiencing a profound paradigm shift towards Automated Algorithm Design (AAD). While early AAD frameworks relied on Genetic Programming \cite{Burke2013} or modular human-authored spaces \cite{vanRijn2016}, the immense size of the search spaces or strict boundaries frequently constrained discovery. This barrier has been recently overcome by the integration of Large Language Models, which were validated for strict mathematical discovery by Romera-Paredes et al. \cite{Romera2023}. Their framework, FunSearch, addresses the inherent tendency of LLMs toward hallucination by pairing the model with a systematic, closed-loop evaluator. By constraining the LLM to evolve the critical logical components of a program skeleton—rather than attempting to generate raw numerical solutions—the authors demonstrated that the model could synthesize novel, verifiable algorithmic constructions. Empirically, FunSearch achieved a historic milestone by discovering entirely new, large-sized caps in the cap-set problem that surpassed all existing lower bounds established by human mathematicians, alongside generating highly compact, reusable bin-packing heuristics that significantly outperformed traditional greedy algorithms across large-scale datasets \cite{Romera2023}. This landmark verification proves that foundation models possess the structural reasoning needed to invent mathematical scripts, paving the way to apply this exact closed-loop paradigm to real-valued exploration spaces.
 
