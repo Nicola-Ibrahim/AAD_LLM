@@ -38,6 +38,9 @@ class ExperimentORM(Base):
     dim = Column(Integer, nullable=False)
     mode = Column(Enum(ExperimentMode), nullable=False)
     llm_name = Column(String, nullable=False)
+    prompt_strategy = Column(
+        String, nullable=False, default="baseline", server_default=text("'baseline'")
+    )
     noise_std = Column(Float, nullable=True)  # NULL for CLEAN mode
 
     true_optimum = Column(Float)
@@ -60,7 +63,15 @@ class ExperimentORM(Base):
     )
 
     __table_args__ = (
-        Index("idx_experiments_lookup", "problem_id", "instance_id", "llm_name", "dim", "mode"),
+        Index(
+            "idx_experiments_lookup",
+            "problem_id",
+            "instance_id",
+            "llm_name",
+            "dim",
+            "mode",
+            "prompt_strategy",
+        ),
         Index("idx_experiments_status", "status"),
         CheckConstraint("dim > 0", name="check_positive_dim"),
         CheckConstraint("status IN ('running', 'completed', 'failed')", name="check_valid_status"),

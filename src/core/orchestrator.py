@@ -11,7 +11,7 @@ from infra.llm.client import LLMClient
 
 from core.llamea.session import LLaMEASession
 from infra.storage.code.repository import CodeRepository
-from infra.storage.sqlite.connection import build_engine, build_session_factory, ensure_wal_mode
+from infra.storage.sqlite.factory import initialize_sqlite_storage, setup_storage_environment
 from infra.storage.sqlite.repository import SQLiteExperimentRepository
 
 
@@ -29,6 +29,7 @@ class EvolutionTask:
     budget: int = 1000
     iterations: int = 10
     resume_experiment_id: int | None = None
+    prompt_strategy: str = "baseline"
     db_path: Path = field(default_factory=lambda: DATA_DIR / "db.sqlite3")
     fn: Callable[[], SessionResult] | None = None
 
@@ -42,10 +43,7 @@ class EvolutionTask:
                 "EvolutionTask requires either a custom fn or both problem and llm_client"
             )
 
-        ensure_wal_mode(self.db_path)
-        engine = build_engine(self.db_path)
-        session_factory = build_session_factory(engine)
-        db_repo = SQLiteExperimentRepository(session_factory=session_factory)
+        db_repo = initialize_sqlite_storage(self.db_path)
         code_repo = CodeRepository()
 
         session = LLaMEASession(
@@ -56,6 +54,7 @@ class EvolutionTask:
             budget=self.budget,
             iterations=self.iterations,
             resume_experiment_id=self.resume_experiment_id,
+            prompt_strategy=self.prompt_strategy,
         )
         return session.run()
 
@@ -103,6 +102,10 @@ class TaskOrchestrator:
         results: dict[str, SessionResult] = {}
         errors: dict[str, Exception] = {}
         workers = self.max_workers if self.max_workers is not None else len(tasks)
+
+        # Pre-flight: Ensure WAL mode is active once in the parent process before worker processes start
+        db_paths = [task.db_path for task in tasks if task.db_path]
+        setup_storage_environment(db_paths)
 
         with ProcessPoolExecutor(max_workers=workers) as executor:
             future_to_key = {executor.submit(_execute_task, task): task.key for task in tasks}

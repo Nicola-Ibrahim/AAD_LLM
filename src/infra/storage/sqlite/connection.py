@@ -4,30 +4,36 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 
 
+def _ensure_db_dir(db_path: Path) -> None:
+    if db_path.parent:
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+
 def ensure_wal_mode(db_path: Path) -> None:
     """Ensures WAL journal mode is set on the DB file before engines are built.
 
-    Idempotent and safe to call multiple times.
+    Idempotent and safe to call multiple times across concurrent processes.
     """
-    if db_path.parent:
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.close()
+    _ensure_db_dir(db_path)
+    conn = sqlite3.connect(str(db_path), timeout=60.0)
+    try:
+        cur = conn.cursor()
+        cur.execute("PRAGMA journal_mode")
+        row = cur.fetchone()
+        if row is None or str(row[0]).lower() != "wal":
+            cur.execute("PRAGMA journal_mode=WAL")
+            cur.execute("PRAGMA synchronous=NORMAL")
+    finally:
+        conn.close()
 
 
 def build_engine(db_path: Path, echo: bool = False):
     """Creates and configures a SQLite SQLAlchemy engine.
     - Creates parent directories if they don't exist.
-    - Ensures WAL journal mode is active on the database file.
     - Configures 60s connection timeout and C-level busy_timeout for multi-process concurrency.
     - Registers PRAGMA foreign_keys=ON on every new connection.
     """
-    if db_path.parent:
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    ensure_wal_mode(db_path)
+    _ensure_db_dir(db_path)
 
     engine = create_engine(
         f"sqlite:///{db_path}",

@@ -14,6 +14,11 @@ class ExperimentSummary(BaseModel):
         description="Name of the LLM used to generate algorithm candidates.",
         examples=["qwen2.5-coder-7b-instruct-q4_k_m", "gpt-4o-mini"],
     )
+    prompt_strategy: str = Field(
+        default="baseline",
+        description="Name of the prompt strategy used for algorithm synthesis.",
+        examples=["baseline", "vectorization", "math_hints", "full_scaffold"],
+    )
     experiment_id: int = Field(default=1, description="Globally unique experiment primary key.")
     problem: ProblemProfile = Field(
         description="Configuration of the BBOB problem for this execution run."

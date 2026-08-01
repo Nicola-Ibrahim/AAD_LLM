@@ -1,8 +1,28 @@
 from pathlib import Path
+from typing import Iterable
+from sqlalchemy.orm import Session, sessionmaker
 
 from core.config import DATA_DIR
-from infra.storage.sqlite.connection import build_engine, build_session_factory
+from infra.storage.sqlite.connection import build_engine, build_session_factory, ensure_wal_mode
 from infra.storage.sqlite.repository import SQLiteExperimentRepository
+
+
+def setup_storage_environment(db_paths: Iterable[Path]) -> None:
+    """Pre-flight setup for SQLite databases before spawning concurrent processes.
+
+    Ensures WAL mode is enabled on all unique database paths in the parent process.
+    """
+    for db_path in set(db_paths):
+        if db_path:
+            ensure_wal_mode(db_path)
+
+
+def create_db_session_factory(
+    path: Path = DATA_DIR / "db.sqlite3",
+) -> sessionmaker[Session]:
+    """Creates engine and returns a thread-safe session factory for the given SQLite database path."""
+    engine = build_engine(path)
+    return build_session_factory(engine)
 
 
 def initialize_sqlite_storage(
@@ -13,9 +33,5 @@ def initialize_sqlite_storage(
     Args:
         path: DB file path. Defaults to DATA_DIR / "db.sqlite3".
     """
-
-    engine = build_engine(path)
-    session_factory = build_session_factory(engine)
-    repo = SQLiteExperimentRepository(session_factory=session_factory)
-
-    return repo
+    session_factory = create_db_session_factory(path)
+    return SQLiteExperimentRepository(session_factory=session_factory)

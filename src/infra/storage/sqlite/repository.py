@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import func
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload, sessionmaker
 
 from core.schema.experiment import ExperimentSummary
 from core.schema.iteration import (
@@ -44,6 +44,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
         noise_std: float,
         true_optimum: float,
         instance_id: int = 1,
+        prompt_strategy: str = "baseline",
     ) -> int:
         """Creates the experiment DB row and returns its id."""
         with self.SessionLocal() as session:
@@ -53,6 +54,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
                 dim=dim,
                 mode=ExperimentMode(mode),
                 llm_name=llm_name,
+                prompt_strategy=prompt_strategy,
                 noise_std=noise_std,
                 true_optimum=true_optimum,
                 status="running",
@@ -71,25 +73,29 @@ class SQLiteExperimentRepository(ExperimentRepository):
         llm_name: str,
         noise_std: float,
         instance_id: int = 1,
+        prompt_strategy: str = "baseline",
     ) -> list[int]:
         """Returns a list of experiment IDs with status 'running' that match the given parameters."""
-        with self.SessionLocal() as session:
-            query = session.query(ExperimentORM.id).filter(
-                ExperimentORM.problem_id == problem_id,
-                ExperimentORM.instance_id == instance_id,
-                ExperimentORM.dim == dim,
-                ExperimentORM.mode == ExperimentMode(mode),
-                ExperimentORM.llm_name == llm_name,
-                ExperimentORM.status == "running",
+        stmt = select(ExperimentORM.id).where(
+            ExperimentORM.problem_id == problem_id,
+            ExperimentORM.instance_id == instance_id,
+            ExperimentORM.dim == dim,
+            ExperimentORM.mode == ExperimentMode(mode),
+            ExperimentORM.llm_name == llm_name,
+            ExperimentORM.prompt_strategy == prompt_strategy,
+            ExperimentORM.status == "running",
+        )
+        if noise_std > 0.0:
+            stmt = stmt.where(ExperimentORM.noise_std == noise_std)
+        else:
+            stmt = stmt.where(
+                (ExperimentORM.noise_std == 0.0) | (ExperimentORM.noise_std.is_(None))
             )
-            if noise_std > 0.0:
-                query = query.filter(ExperimentORM.noise_std == noise_std)
-            else:
-                query = query.filter(
-                    (ExperimentORM.noise_std == 0.0) | (ExperimentORM.noise_std.is_(None))
-                )
-            rows = query.order_by(ExperimentORM.id.asc()).all()
-            return [r[0] for r in rows]
+        stmt = stmt.order_by(ExperimentORM.id.asc())
+
+        with self.SessionLocal() as session:
+            rows = session.execute(stmt).scalars().all()
+            return list(rows)
 
     def get_experiment_status(self, experiment_id: int) -> tuple[str | None, int]:
         """Returns tuple of (status_string, max_iteration_number) for an experiment, or (None, 0) if not found."""
@@ -97,11 +103,10 @@ class SQLiteExperimentRepository(ExperimentRepository):
             exp = session.get(ExperimentORM, experiment_id)
             if not exp:
                 return None, 0
-            max_iter = (
-                session.query(func.max(IterationORM.iteration))
-                .filter(IterationORM.experiment_id == experiment_id)
-                .scalar()
+            stmt = select(func.max(IterationORM.iteration)).where(
+                IterationORM.experiment_id == experiment_id
             )
+            max_iter = session.execute(stmt).scalar()
             return exp.status, max_iter if max_iter is not None else 0
 
     def append_iteration(
@@ -148,15 +153,15 @@ class SQLiteExperimentRepository(ExperimentRepository):
                 print(f"[WARN] mark_completed: no experiment row for id={experiment_id}")
                 return
 
-            best_row = (
-                session.query(IterationORM)
-                .filter(
+            stmt = (
+                select(IterationORM)
+                .where(
                     IterationORM.experiment_id == experiment_id,
                     IterationORM.final_error.isnot(None),
                 )
                 .order_by(IterationORM.final_error.asc())
-                .first()
             )
+            best_row = session.execute(stmt).scalars().first()
 
             if best_row:
                 exp.best_iteration = best_row.iteration
@@ -195,18 +200,18 @@ class SQLiteExperimentRepository(ExperimentRepository):
 
     def get_best_raw_fitness(self, experiment_id: int) -> float | None:
         """Returns the raw algorithm objective value from the best (lowest-error) iteration of an experiment."""
-        with self.SessionLocal() as session:
-            best_row = (
-                session.query(IterationORM.raw_fitness)
-                .filter(
-                    IterationORM.experiment_id == experiment_id,
-                    IterationORM.final_error.isnot(None),
-                    IterationORM.raw_fitness.isnot(None),
-                )
-                .order_by(IterationORM.final_error.asc())
-                .first()
+        stmt = (
+            select(IterationORM.raw_fitness)
+            .where(
+                IterationORM.experiment_id == experiment_id,
+                IterationORM.final_error.isnot(None),
+                IterationORM.raw_fitness.isnot(None),
             )
-            return float(best_row[0]) if best_row else None
+            .order_by(IterationORM.final_error.asc())
+        )
+        with self.SessionLocal() as session:
+            best_val = session.execute(stmt).scalar()
+            return float(best_val) if best_val is not None else None
 
     def load(
         self,
@@ -215,24 +220,31 @@ class SQLiteExperimentRepository(ExperimentRepository):
         llm_name: str | None = None,
         dim: int | None = None,
         mode: str | None = None,
+        prompt_strategy: str | None = None,
     ) -> list[ExperimentSummary]:
-        """Loads and filters ExperimentSummary objects from SQLite database using SQLAlchemy."""
-        with self.SessionLocal() as session:
-            query = session.query(ExperimentORM)
-            if problem_id is not None:
-                query = query.filter(ExperimentORM.problem_id == problem_id)
-            if instance_id is not None:
-                query = query.filter(ExperimentORM.instance_id == instance_id)
-            if llm_name is not None:
-                query = query.filter(ExperimentORM.llm_name == llm_name)
-            if dim is not None:
-                query = query.filter(ExperimentORM.dim == dim)
-            if mode is not None:
-                query = query.filter(ExperimentORM.mode == ExperimentMode(mode))
+        """Loads and filters ExperimentSummary objects from SQLite database using SQLAlchemy 2.0 select."""
+        stmt = select(ExperimentORM).options(
+            selectinload(ExperimentORM.iterations).selectinload(IterationORM.error_log)
+        )
 
-            experiments = query.order_by(
-                ExperimentORM.problem_id.asc(), ExperimentORM.llm_name.asc()
-            ).all()
+        raw_filters = {
+            "problem_id": problem_id,
+            "instance_id": instance_id,
+            "llm_name": llm_name,
+            "dim": dim,
+            "prompt_strategy": prompt_strategy,
+        }
+        active_filters = {k: v for k, v in raw_filters.items() if v is not None}
+        if active_filters:
+            stmt = stmt.filter_by(**active_filters)
+
+        if mode is not None:
+            stmt = stmt.where(ExperimentORM.mode == ExperimentMode(mode))
+
+        stmt = stmt.order_by(ExperimentORM.problem_id.asc(), ExperimentORM.llm_name.asc())
+
+        with self.SessionLocal() as session:
+            experiments = session.scalars(stmt).all()
 
             summaries: list[ExperimentSummary] = []
             for exp in experiments:
@@ -250,6 +262,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
                     ExperimentSummary(
                         mode=exp.mode.value,
                         llm_name=exp.llm_name,
+                        prompt_strategy=exp.prompt_strategy or "baseline",
                         experiment_id=exp.id,
                         problem=problem_profile,
                         best_iteration=exp.best_iteration,

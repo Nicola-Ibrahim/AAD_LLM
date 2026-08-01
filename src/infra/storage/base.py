@@ -15,6 +15,7 @@ class ExperimentRepository(ABC):
         llm_name: str | None = None,
         dim: int | None = None,
         mode: str | None = None,
+        prompt_strategy: str | None = None,
     ) -> list[ExperimentSummary]:
         """Loads and filters stored ExperimentSummary objects."""
         pass
@@ -28,6 +29,7 @@ class ExperimentRepository(ABC):
         llm_name: str,
         noise_std: float,
         instance_id: int = 1,
+        prompt_strategy: str = "baseline",
     ) -> list[int]:
         """Returns a list of experiment IDs with status 'running' that match the given parameters."""
         pass
@@ -47,6 +49,7 @@ class ExperimentRepository(ABC):
         noise_std: float,
         true_optimum: float,
         instance_id: int = 1,
+        prompt_strategy: str = "baseline",
     ) -> int:
         """Creates the experiment DB row and returns its id."""
         pass

@@ -85,6 +85,7 @@ class LLaMEASession:
         budget: int = 1000,
         iterations: int = 10,
         resume_experiment_id: int | None = None,
+        prompt_strategy: str = "baseline",
     ):
         """Initializes the synthesis session with its parameters and required repositories."""
         if llm_client is None:
@@ -96,6 +97,7 @@ class LLaMEASession:
         self._code_repo = code_repo
         self._budget = budget
         self._iterations = iterations
+        self._prompt_strategy = prompt_strategy
 
         self._init_experiment_context(resume_experiment_id)
 
@@ -111,6 +113,7 @@ class LLaMEASession:
                     self._llm_client.model.name,
                     self._problem.noise_std,
                     instance_id=self._problem.instance_id,
+                    prompt_strategy=self._prompt_strategy,
                 )
                 raise ValueError(
                     f"Cannot resume experiment {resume_experiment_id} because its status is '{status}'.\n"
@@ -130,6 +133,7 @@ class LLaMEASession:
                 llm_name=self._llm_client.model.name,
                 noise_std=self._problem.noise_std,
                 true_optimum=self._problem.true_optimum,
+                prompt_strategy=self._prompt_strategy,
             )
 
         self._archive_dir = (
@@ -148,7 +152,7 @@ class LLaMEASession:
     def run(self) -> SessionResult:
         """Runs the complete evolution loop for the problem."""
         print(
-            f"\n=== Starting LLaMEA Evolution: BBOB-{self._problem.problem_id} (Dim {self._problem.dim}, Mode {self._problem.mode}, Exp {self._experiment_id}) [Budget: {self._budget} evals | Max Iterations: {self._iterations}] ===",
+            f"\n=== Starting LLaMEA Evolution: BBOB-{self._problem.problem_id} (Dim {self._problem.dim}, Mode {self._problem.mode}, Exp {self._experiment_id}, Strategy {self._prompt_strategy}) [Budget: {self._budget} evals | Max Iterations: {self._iterations}] ===",
             flush=True,
         )
 
@@ -159,6 +163,7 @@ class LLaMEASession:
                 lower_bound=self._problem.lower_bound,
                 upper_bound=self._problem.upper_bound,
                 is_noisy=self._problem.mode == "noisy",
+                strategy=self._prompt_strategy,
             )
             evaluator = self._setup_evaluator()
             synthesis_engine = self._create_synthesis_engine(evaluator, task_prompt)
