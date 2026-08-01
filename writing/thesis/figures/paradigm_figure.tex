@@ -1,42 +1,69 @@
 \begin{tikzpicture}[
-    node distance=1.8cm and 2.5cm,
+    node distance=1.1cm,
     font=\small\sffamily,
-    % Node styles
-    llmNode/.style={
+    >=Stealth,
+    % --- Node Styles ---
+    ioNode/.style={
         rectangle, 
         rounded corners=5pt, 
-        draw=blue!70!black, 
-        fill=blue!5, 
+        draw=gray!70!black, 
+        fill=gray!10, 
         thick, 
-        minimum width=3.2cm, 
-        minimum height=1.3cm, 
+        minimum width=7.0cm, 
+        minimum height=1.1cm, 
+        align=center
+    },
+    llmNode/.style={
+        rectangle, 
+        rounded corners=6pt, 
+        draw=blue!80!black, 
+        fill=blue!8, 
+        thick, 
+        minimum width=7.0cm, 
+        minimum height=1.4cm, 
         align=center
     },
     sandboxNode/.style={
         rectangle, 
-        rounded corners=5pt, 
-        draw=red!70!black, 
-        fill=red!5, 
+        rounded corners=6pt, 
+        draw=red!80!black, 
+        fill=red!8, 
         thick, 
-        minimum width=3.2cm, 
-        minimum height=1.3cm, 
+        minimum width=7.0cm, 
+        minimum height=1.4cm, 
         align=center
     },
     evalNode/.style={
         rectangle, 
-        rounded corners=5pt, 
-        draw=green!50!black, 
-        fill=green!5, 
+        rounded corners=6pt, 
+        draw=green!60!black, 
+        fill=green!8, 
         thick, 
-        minimum width=3.2cm, 
-        minimum height=1.3cm, 
+        minimum width=7.0cm, 
+        minimum height=1.4cm, 
         align=center
     },
-    % Arrow style
-    myArrow/.style={
-        -Stealth, 
+    outNode/.style={
+        rectangle, 
+        rounded corners=5pt, 
+        draw=orange!80!black, 
+        fill=yellow!20, 
         thick, 
+        minimum width=7.0cm, 
+        minimum height=1.1cm, 
+        align=center
+    },
+    % --- Path Styles ---
+    mainArrow/.style={
+        ->, 
+        very thick, 
         draw=gray!80!black
+    },
+    feedbackArrow/.style={
+        ->, 
+        very thick, 
+        draw=blue!80!black, 
+        dashed
     },
     annotation/.style={
         font=\footnotesize\sffamily, 
@@ -45,33 +72,72 @@
     }
 ]
 
-    % Nodes
-    \node (llm) [llmNode] {
-        \textbf{LLM Generator Engine}\\
-        \footnotesize (e.g., LLaMEA Loop)\\
-        \scriptsize Generates Candidate Python Code
+    % =========================================================================
+    % VERTICAL STACK NODES
+    % =========================================================================
+
+    % System Input
+    \node (input) [ioNode] {
+        \textbf{System Input}\\[-1pt]
+        \footnotesize Problem Constraints, Search Domain, and API Interfaces
     };
 
-    \node (sandbox) [sandboxNode, right=of llm] {
-        \textbf{Stochastic Sandbox Layer}\\
-        \footnotesize BBOB Suite + Noise Injection\\
-        \scriptsize $f_{\text{noisy}}(x) = f(x) + \epsilon$
+    % Stage 1: LLM Engine
+    \node (llm) [llmNode, below=1.3cm of input] {
+        \textbf{Stage 1: Generative LLM Engine}\\[-1pt]
+        \footnotesize Synthesizes and Mutates Executable Source Code
     };
 
-    \node (eval) [evalNode, below=1.8cm of $(llm)!0.5!(sandbox)$] {
-        \textbf{Assessor \& Feedback Unit}\\
-        \footnotesize Performance Metric (AOCC)\\
-        \scriptsize Runtime Tracebacks \& Compiler Traces
+    % Stage 2: Sandbox
+    \node (sandbox) [sandboxNode, below=1.3cm of llm] {
+        \textbf{Stage 2: Execution and Evaluation Sandbox}\\[-1pt]
+        \footnotesize Evaluates Candidate Code against Target Benchmarks
     };
 
-    % Paths / Arrows
-    \draw [myArrow] (llm) -- node[above, annotation] {Executable Python\\Class Script} (sandbox);
-    
-    \draw [myArrow] (sandbox) |- node[right=2pt, annotation] {Corrupted Fitness\\Evaluations} (eval);
-    
-    \draw [myArrow] (eval) -| node[left=2pt, annotation] {Reflective Context\\Feedback Loop} (llm);
+    % Stage 3: Assessor Module
+    \node (eval) [evalNode, below=1.3cm of sandbox] {
+        \textbf{Stage 3: Assessor Module}\\[-1pt]
+        \footnotesize Computes Quantitative Metrics and Diagnostics
+    };
 
-    % Optional Outer Container Box
-    \node[draw=gray!40, dashed, inner sep=0.4cm, rounded corners=8pt, fit=(llm) (sandbox) (eval), label=above:{\footnotesize\textbf{Closed-Loop Autonomous Algorithm Design Pipeline}}] {};
+    % System Output
+    \node (output) [outNode, below=1.3cm of eval] {
+        \textbf{Final System Output}\\[-1pt]
+        \footnotesize Evolved, Domain-Adapted Optimization Heuristic
+    };
+
+    % =========================================================================
+    % FORWARD PIPELINE ARROWS
+    % =========================================================================
+
+    \draw [mainArrow] (input) -- node[right=6pt, annotation] {Initial Prompt Setup} (llm);
+    \draw [mainArrow] (llm) -- node[right=6pt, annotation] {Generated Python Class} (sandbox);
+    \draw [mainArrow] (sandbox) -- node[right=6pt, annotation] {Execution Traces} (eval);
+    \draw [mainArrow] (eval) -- node[right=6pt, annotation] {Selection Target Reached} (output);
+
+    % =========================================================================
+    % REFLECTIVE FEEDBACK LOOP (LEFT-HAND CURVE)
+    % =========================================================================
+
+    \draw [feedbackArrow] (eval.west) 
+        .. controls ($(eval.west)+(-3.6,0)$) and ($(llm.west)+(-3.6,0)$) .. 
+        node[left=6pt, annotation, text=blue!80!black, xshift=-2pt] {
+            \textbf{Reflective Feedback Loop}\\[2pt]
+            \textbf{(Generations $1 \dots N-1$)}\\[4pt]
+            Performance Metrics $+$\\[2pt]
+            Compiler Tracebacks $+$\\[2pt]
+            Self-Debugging Prompts
+        } (llm.west);
+
+    % =========================================================================
+    % DASHED CONTAINER BOX
+    % =========================================================================
+    \node[
+        draw=gray!50, 
+        dashed, 
+        inner sep=0.45cm, 
+        rounded corners=8pt, 
+        fit=(llm) (sandbox) (eval)
+    ] {};
 
 \end{tikzpicture}
