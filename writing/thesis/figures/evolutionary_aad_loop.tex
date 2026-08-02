@@ -1,0 +1,93 @@
+\begin{tikzpicture}[
+    auto, 
+    >=Stealth, 
+    scale=0.88, 
+    every node/.style={transform shape},
+    % Custom Style Definitions
+    llmbox/.style={rectangle, draw=purple!80!black, fill=purple!8, text width=3.4cm, align=center, rounded corners=5pt, minimum height=1.3cm, font=\small},
+    sandbox/.style={rectangle, draw=blue!80!black, fill=blue!6, text width=3.4cm, align=center, rounded corners=5pt, minimum height=1.3cm, font=\small},
+    noisebox/.style={rectangle, draw=teal!80!black, fill=teal!8, text width=3.2cm, align=center, rounded corners=5pt, minimum height=1.3cm, font=\small},
+    evalbox/.style={rectangle, draw=orange!80!black, fill=orange!8, text width=3.4cm, align=center, rounded corners=5pt, minimum height=1.3cm, font=\small},
+    safetybox/.style={rectangle, draw=red!70!black, fill=red!6, text width=3.2cm, align=center, rounded corners=5pt, minimum height=1.3cm, font=\small},
+    groupcontainer/.style={draw=gray!50, dashed, fill=gray!4, rounded corners=8pt, inner sep=10pt}
+]
+
+    % =========================================================================
+    % NODES PLACEMENT
+    % =========================================================================
+
+    % 1. Generative LLM Node (Top Left)
+    \node [llmbox] (llm) {
+        \textbf{Generative Foundation Model}\\ 
+        \scriptsize Context Window $\mathcal{C}_g$\\
+        \tiny Refactors algorithm code $\mathcal{A}_{\text{child}}$
+    };
+
+    % 2. AST Validation & Security Gate
+    \node [safetybox, right=1.2cm of llm] (ast) {
+        \textbf{AST Validation \& Safety}\\ 
+        \scriptsize Whitelist imports / Timeout\\
+        \tiny Catch Syntax/Tracebacks
+    };
+
+    % 3. Sandbox Calibration & Interceptor
+    \node [sandbox, right=1.2cm of ast] (sandbox_node) {
+        \textbf{Stochastic Execution Sandbox}\\ 
+        \scriptsize BBOB Wrapper Problem $f$\\
+        \tiny Intercepts calls at $x_k \in \mathbb{R}^D$
+    };
+
+    % 4. Landscape-Scaled Noise Engine (Lower Right)
+    \node [noisebox, below=1.8cm of sandbox_node] (noise) {
+        \textbf{Landscape Noise Layer}\\ 
+        \scriptsize $\sigma_{\text{scaled}} = \gamma \cdot S$\\
+        \tiny Adds $z \sim \mathcal{N}(0, \sigma_{\text{scaled}}^2)$
+    };
+
+    % 5. Dual Evaluation & Resampling Engine
+    \node [evalbox, left=1.2cm of noise] (resampling) {
+        \textbf{Evaluation \& Resampling}\\ 
+        \scriptsize $K$-Pass Parent Mean $\bar{F}_{\text{parent}}$\\
+        \tiny Tracks uncorrupted $\Delta f(x_k)$
+    };
+
+    % 6. Prompt Assembly & Reflective Context
+    \node [llmbox, fill=purple!5, draw=purple!60, left=1.2cm of resampling] (context) {
+        \textbf{Context Builder}\\ 
+        \scriptsize $\mathcal{C}_g = \{\mathcal{P}_{\text{system}}, \mathcal{H}_{g-1}, \mathcal{T}_{\text{feedback}}\}$\\
+        \tiny Formulates mutation feedback
+    };
+
+    % =========================================================================
+    % CONTAINERS / STAGING BOUNDARIES
+    % =========================================================================
+    \begin{scope}[on background layer]
+        \node [groupcontainer, fit=(sandbox_node) (noise) (resampling), label={[font=\bfseries\scriptsize, gray!80!black]below:Scaled Stochastic Execution Environment}] (env_group) {};
+    \end{scope}
+
+    % =========================================================================
+    % ARROWS AND FLOW CONNECTIONS
+    % =========================================================================
+
+    % LLM -> AST Safety
+    \draw [->, thick] (llm) -- node[above, font=\tiny, fill=white, inner sep=1pt] {Source Code $\mathcal{A}_{\text{child}}$} (ast);
+
+    % AST -> Execution Sandbox
+    \draw [->, thick] (ast) -- node[above, font=\tiny, fill=white, inner sep=1pt] {Validated Code} (sandbox_node);
+
+    % AST Exception Feedback Loop
+    \draw [->, thick, red!70!black, dashed] (ast.south) -- ++(0,-0.3) -| node[below, pos=0.25, font=\tiny, fill=white, inner sep=1pt] {Runtime Traceback / Syntax Error} (context.north);
+
+    % Sandbox -> Noise Engine
+    \draw [->, thick] (sandbox_node) -- node[right, font=\tiny, fill=white, inner sep=1pt] {Query $x_k \to f_{\text{clean}}(x_k)$} (noise);
+
+    % Noise Engine -> Candidate Search Logic (Feedback Signal)
+    \draw [->, thick, teal!80!black] (noise) -- node[above, font=\tiny, fill=white, inner sep=1pt] {Noisy $f_{\text{noisy}}(x_k)$} (resampling);
+
+    % Resampling / Fitness -> Context Builder
+    \draw [->, thick] (resampling) -- node[above, font=\tiny, fill=white, inner sep=1pt] {Scalar Score / Mean $\bar{F}$} (context);
+
+    % Context Builder -> LLM
+    \draw [->, thick, purple!80!black] (context) -- node[left, font=\tiny, fill=white, inner sep=1pt] {Injected Prompt $\mathcal{C}_g$} (llm);
+
+\end{tikzpicture}
