@@ -1,0 +1,89 @@
+\begin{tikzpicture}[
+    auto, 
+    >=Stealth, 
+    scale=0.85, 
+    every node/.style={transform shape},
+    box/.style={rectangle, draw=blue!70!black, fill=blue!6, text width=3.2cm, align=center, rounded corners=4pt, minimum height=1.3cm, font=\small},
+    mathbox/.style={rectangle, draw=teal!80!black, fill=teal!8, text width=3.4cm, align=center, rounded corners=4pt, minimum height=1.3cm, font=\small},
+    drawbox/.style={circle, draw=red!70!black, fill=red!10, align=center, inner sep=2pt, minimum size=1.4cm, font=\small},
+    outputbox/.style={rectangle, draw=purple!70!black, fill=purple!8, text width=3.2cm, align=center, rounded corners=4pt, minimum height=1.3cm, font=\small},
+    loggerbox/.style={rectangle, draw=green!60!black, fill=green!8, text width=3.2cm, align=center, rounded corners=4pt, minimum height=1.3cm, font=\small},
+    stagebox/.style={rectangle, draw=gray!50, fill=gray!6, rounded corners=6pt, inner sep=8pt}
+]
+
+    % =========================================================================
+    % PHASE 1: Calibration (Top Banner)
+    % =========================================================================
+    \node [mathbox, fill=gray!12, draw=gray!70, text width=12.2cm, minimum height=1.0cm] (phase1) {
+        \textbf{Phase 1: Fixed-Seed Environment Calibration (\texttt{seed=42})}\\[2pt]
+        \scriptsize Sample $N=20$ points across bounds $\to$ Compute Landscape Scale $S = \frac{1}{N}\sum_{i=1}^N \left|f(x_i) - f(x^*)\right|$
+    };
+
+    % =========================================================================
+    % PHASE 2: Runtime Dynamic Noise Injection
+    % =========================================================================
+    
+    % Step 1: Query Point
+    \node [box, below=1.5cm of phase1.south west, anchor=north west] (step1) {
+        \textbf{1. Candidate Query}\\[2pt]
+        \scriptsize LLM Algorithm evaluates coordinate $x_k \in \mathbb{R}^D$
+    };
+
+    % Step 2: Ground Truth Evaluation
+    \node [box, right=1.1cm of step1] (step2) {
+        \textbf{2. True Evaluation}\\[2pt]
+        \scriptsize BBOB Engine computes clean value $f_{\text{clean}}(x_k)$
+    };
+
+    % Step 3: Dynamic Scale Calculation
+    \node [mathbox, right=1.1cm of step2] (step3) {
+        \textbf{3. Noise Scale}\\[2pt]
+        \scriptsize Scale variance by multiplier $\gamma$:\\[1pt]
+        $\sigma_{\text{dynamic}} = \gamma \cdot S$
+    };
+
+    % Step 4: Random Draw PDF
+    \node [drawbox, below=1.6cm of step3] (step4) {
+        \textbf{4. Draw $z$}\\[1pt]
+        \scriptsize $z \sim \mathcal{N}(0, \sigma_{\text{dyn}}^2)$
+    };
+
+    % Step 5: Final Noisy Addition
+    \node [outputbox, left=1.1cm of step4] (step5) {
+        \textbf{5. Noisy Observation}\\[2pt]
+        \scriptsize Additive Perturbation:\\[1pt]
+        $f_{\text{noisy}}(x_k) = f_{\text{clean}}(x_k) + z$
+    };
+
+    % Step 6: Decoupled Diagnostic Log
+    \node [loggerbox, left=1.1cm of step5] (step6) {
+        \textbf{6. Decoupled Log}\\[2pt]
+        \scriptsize Tracks true progression strictly via $f_{\text{clean}}(x_k)$
+    };
+
+    % =========================================================================
+    % ARROWS & CONNECTIONS
+    % =========================================================================
+    
+    % Calibration to Query
+    \draw [->, thick, gray!70!black] (phase1.south -| step1.north) -- node[right, font=\tiny, text=gray!80!black] {Provides $S$} (step1.north);
+
+    % Step 1 to Step 2
+    \draw [->, thick] (step1) -- node[above, font=\scriptsize, fill=white, inner sep=1pt] {$x_k$} (step2);
+
+    % Step 2 to Step 3
+    \draw [->, thick] (step2) -- node[above, font=\scriptsize, fill=white, inner sep=1pt] {$f_{\text{clean}}$} (step3);
+
+    % Step 3 to Step 4
+    \draw [->, thick] (step3) -- node[right, font=\scriptsize, fill=white, inner sep=1pt] {$\sigma_{\text{dynamic}}$} (step4);
+
+    % Step 4 to Step 5
+    \draw [->, thick] (step4) -- node[above, font=\scriptsize, fill=white, inner sep=1pt] {$+z$} (step5);
+
+    % Decoupled Arrow from Step 2 down to Step 6
+    \draw [->, thick, green!50!black] (step2.south) -- node[left, font=\scriptsize, align=right, fill=white, inner sep=1pt] {Decoupled\\Clean Signal} (step6.north);
+
+    % Loopback from Step 5 back to Step 1 (Search Logic)
+    \draw [->, thick, red!70!black] (step5.south) -- ++(0,-0.4) -| node[below, pos=0.25, font=\scriptsize, fill=white, inner sep=1.5pt] {Corrupted Observation returned to LLM Search Logic} (step1.south);
+
+\end{tikzpicture}
