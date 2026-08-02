@@ -4,49 +4,195 @@
 
 \chapter{Methodology}\label{chap:methodology}
 
-This chapter details the architectural synthesis, software orchestration, and mathematical formulation of the non-deterministic automated algorithm design pipeline implemented in this thesis. To isolate the direct impact of stochastic pressure on language model-driven heuristic synthesis, our framework tightly couples the generation capabilities of foundational language models with a rigid, noise-injected execution sandbox. The system operates as a closed-loop evolutionary cycle designed to transition Python source-code structures from deterministic assumptions to noise-resilient behaviors. The subsequent methodology outlines our environmental wrapper implementation, the multi-tiered assessment strategy designed to mitigate runaway API overhead, the database tracking layers used to capture structural code mutations, and the formal runtime security containment protocols.
+This chapter details the architectural design, software orchestration, and mathematical formulation of the non-deterministic automated algorithm design pipeline implemented in this thesis. To isolate the adaptive mechanics of Large Language Model code discovery under fitness uncertainty, our framework tightly couples generative foundation models with a controlled, noise-injected execution sandbox. The pipeline operates as a closed-loop evolutionary system designed to transition Python source-code structures from deterministic assumptions to noise-resilient operational behaviors. The following sections delineate our environmental wrapper implementation, the closed-loop evolutionary orchestration strategy, the structural code sanitization and tracking layers, and the statistical evaluation metrics designed to measure cross-environment generalizability.
 
-% ==============================================================================
-% METHODOLOGY EXPANSION ROADMAP (TO BE CODED AS CONTENT LATER)
-% ==============================================================================
-%
-% % FUTURE SECTION 4.1: Architecture of the Closed-Loop Orchestrator
-% % - Placeholder to write a flowing explanation of the three-block system:
-% %   The Generator Block (managing system prompts and LLM context state via standard APIs),
-% %   The Assessor Block (operating the execution environment), and 
-% %   The Feedback Block (translating raw compiler errors and optimization metrics into mutation cues).
-% % - Placeholder for a detailed flowchart diagram tracing the programmatic control path:
-% %   [Prompt Configuration] -> [LLM Synthesis] -> [Syntax Validation] -> [Noisy Sandbox Sandbox Evaluation] -> [SQL State Update] -> [Reflective Feedback Prompts].
-%
-% % FUTURE SECTION 4.2: Stochastic Layer Engineering and Wrapper Design
-% % - Placeholder to explain how you intercept standard function evaluations inside IOHexperimenter.
-% % - Detail the software logic of the stochastic wrapper: how it receives a candidate array 'x', 
-% %   requests the clean baseline objective evaluation f(x), samples from a randomized 
-% %   distribution seed, and applies the parameter-controlled Additive Gaussian deviation factor.
-% % - Placeholder to define how the seed state is locked or systematically rotated across iterations 
-% %   to prevent the LLM from simply overfitting to a single static noise signature.
-%
-% % FUTURE SECTION 4.3: The Representative Gauntlet (Multi-Tiered Assessment)
-% % - Placeholder to detail your token-saving strategy and cost optimization logic.
-% % - Explain the two-phase validation structure: 
-% %   Phase 1: Evolving mutations against a compressed, representative subset of functions 
-% %   representing the primary topological classes (Separable, Moderate, High, Multi-modal).
-% %   Phase 2: Post-evolution scaling, where the finalized champion candidate undergoes deep, 
-% %   expensive validation across the broad spectrum of functions, dimensional limits, and instances.
-%
-% % FUTURE SECTION 4.4: Evolutionary Database Schemas and State Tracking
-% % - Placeholder to formalize the backend persistence layer. Detail your local SQLite layout.
-% % - Provide the exact database schema definitions. Document the tracking table columns: 
-% %   Generation ID, Evolved Source Code String, Execution Convergence Scores, and Prompt Payload Logs.
-% % - Explain how this historical tracking mechanism enables behavioral tracking and code analysis 
-% %   across 30 distinct generations, allowing for white-box structural inspection later.
-%
-% % FUTURE SECTION 4.5: Sandbox Security Containment and Runtime Safeguards
-% % - Placeholder to discuss risk management regarding executing unverified, LLM-generated Python scripts.
-% % - Detail the isolation layer architecture: running evaluation sandboxes inside constrained subprocess 
-% %   wrappers or lightweight container utilities.
-% % - Document the automatic execution recovery logic: how the orchestrator catches infinite loops, 
-% %   wasting of system resource allocations, or segmentation faults, intercepts the traceback dump, 
-% %   and securely routes it back to the feedback block as a severe penalty payload.
-%
-% ==============================================================================
+%-------------------------------------------------------------------------------
+\section{The Stochastic Sandbox and Landscape-Scaled Noise Framework}\label{sec:method_sandbox}
+
+To systematically evaluate whether Large Language Models can design optimization heuristics capable of surviving real-world sensory uncertainty, candidate code must be subjected to controlled, non-deterministic operational conditions \cite{Jin2005}. This research utilizes the continuous Black-Box Optimization Benchmark (BBOB) suite as its foundational testbed \cite{Hansen2010}. However, because standard benchmark instances are strictly deterministic, evaluating noise resilience required formulating an environmental noise injection model over the objective functions.
+
+In continuous stochastic optimization literature, sensory uncertainty is predominantly simulated using either static additive white Gaussian noise \cite{Jin2005},
+\begin{equation}\label{eq:static_noise_lit}
+    f_{\text{noisy}}(x) = f_{\text{clean}}(x) + \mathcal{N}(0, \sigma^2)
+\end{equation}
+or point-wise proportional noise,
+\begin{equation}\label{eq:proportional_noise_lit}
+    f_{\text{noisy}}(x) = f_{\text{clean}}(x) \cdot \left(1 + \mathcal{N}(0, \sigma^2)\right)
+\end{equation}
+where $x \in \mathbb{R}^D$ denotes a $D$-dimensional coordinate vector in the search space, $f_{\text{clean}}(x) \in \mathbb{R}$ represents the true deterministic objective evaluation, $\sigma^2 \in \mathbb{R}^+$ is a fixed scalar variance, and $f_{\text{noisy}}(x) \in \mathbb{R}$ is the corrupted observation returned to the search heuristic.
+
+When applied across a heterogeneous suite of continuous functions, however, both standard models exhibit fundamental theoretical breakdowns \cite{Hansen2010}. Static unscaled noise applies a fixed variance $\sigma^2$ regardless of objective magnitude. On flat, separable landscapes, such as function $f_1$ where objective values near the optimum approach $10^{-5}$, a static variance of $\sigma = 0.05$ creates an overwhelmingly low Signal-to-Noise Ratio (SNR), swamping the true gradient signal in random static. Conversely, on steep, ill-scaled landscapes, such as function $f_{10}$ where objective values scale to $10^6$, an additive noise magnitude of $0.05$ represents less than $0.000005\%$ of the objective range. This renders uncertainty mathematically imperceptible, allowing algorithms to exploit clean gradients without acquiring genuine noise tolerance. On the other hand, point-wise proportional noise maintains the Signal-to-Noise Ratio across scales but introduces a zero-noise sanctuary near convergence. As candidate search trajectories approach the global minimum $f(x^*)$ or roots where $f_{\text{clean}}(x) \to 0$, local noise variance mathematically vanishes,
+\begin{equation}\label{eq:vanishing_variance}
+    \lim_{f(x) \to 0} \operatorname{Var}\left(f_{\text{noisy}}(x)\right) = 0
+\end{equation}
+where $\operatorname{Var}(\cdot)$ denotes the mathematical variance operator. This vanishing variance allows optimizers to exploit uncorrupted signals precisely at the point of convergence, defeating the purpose of the stochastic benchmark.
+
+To resolve these limitations, this thesis formulates a Landscape-Scaled Additive Gaussian Noise model. The foundational premise is that noise variance must be scaled relative to the macro-scale magnitude of each problem's bounded domain, rather than fixed globally or scaled locally point-by-point. 
+
+Because the BBOB suite is a controlled benchmarking environment, the absolute global minimum $f(x^*)$ is known \textit{a priori} to the evaluation sandbox (acting as an omniscient wrapper). This allows the sandbox to calibrate environmental difficulty before the candidate algorithm begins its search, without leaking spatial information to the optimizer. The baseline magnitude of a problem landscape is quantified by a scale parameter $S \in \mathbb{R}^+$, which measures the average objective height and overall vertical scale of the function across its domain. Mathematically, $S$ is defined theoretically as the expected absolute objective deviation across the bounded search domain $\mathcal{S} = \prod_{d=1}^D [\text{lb}_d, \text{ub}_d] \subset \mathbb{R}^D$:
+\begin{equation}\label{eq:landscape_scale_theory}
+    S = \mathbb{E}_{x \sim \mathcal{U}(\mathcal{S})} \left[ \left| f(x) - f(x^*) \right| \right]
+\end{equation}
+where $\mathcal{S}$ represents the search space bounded by lower spatial limits $\text{lb}_d$ and upper spatial limits $\text{ub}_d$ in dimension $d$, $\mathcal{U}(\mathcal{S})$ denotes a continuous uniform probability distribution over $\mathcal{S}$, $x^* \in \mathbb{R}^D$ is the known global optimum coordinate vector, and $f(x^*) \in \mathbb{R}$ is the optimal objective value.
+
+Evaluating Equation~\ref{eq:landscape_scale_theory} analytically or via deterministic numerical quadrature over a $D$-dimensional continuous space is computationally intractable. Quadrature methods suffer from the curse of dimensionality, requiring an exponential grid evaluation cost of $\mathcal{O}(m^D)$ where $m$ is the grid resolution per dimension. To prevent evaluation pre-processing from dominating runtime budgets, $S$ is approximated via a computationally lightweight Monte Carlo sampling proxy:
+\begin{equation}\label{eq:landscape_scale_approx}
+    S \approx \frac{1}{N} \sum_{i=1}^{N} \left| f_{\text{clean}}(x_i) - f(x^*) \right|
+\end{equation}
+where $N = 20$ specifies the number of Monte Carlo sampling points, and $x_i \in \mathbb{R}^D$ represents the $i$-th coordinate vector sampled uniformly at random ($x_i \sim \mathcal{U}(\mathcal{S})$) directly from the objective function. While $N = 20$ is too small for fine numerical integration, Monte Carlo estimation error scales as $\mathcal{O}(1/\sqrt{N})$ independent of dimensionality $D$. Thus, $N = 20$ provides an extremely efficient, dimension-agnostic proxy that reliably extracts the function's structural order of magnitude (e.g., distinguishing $10^1$ from $10^3$ or $10^6$) in milliseconds before the search loop begins. To guarantee strict deterministic reproducibility of $S$ across independent evolutionary runs, this Monte Carlo sampling procedure utilizes a fixed random initialization seed (\texttt{seed=42}).
+
+Given the domain scale factor $S$ and a configurable dimensionless noise intensity parameter $\gamma \ge 0$, the wrapper computes an instance-specific standard deviation $\sigma_{\text{scaled}} \in \mathbb{R}^+$:
+\begin{equation}\label{eq:scaled_std}
+    \sigma_{\text{scaled}} = \gamma \cdot S
+\end{equation}
+where $\gamma$ acts as a user-controlled global noise multiplier. Crucially, $\sigma_{\text{scaled}}$ remains constant for the duration of the algorithm's execution on that specific problem instance. The evaluation of any spatial coordinate $x_k \in \mathbb{R}^D$ at step $k$ under stochastic noise is modeled by adding a continuous zero-mean Gaussian random variable $z \sim \mathcal{N}\left(0, \sigma_{\text{scaled}}^2\right)$ to the deterministic objective value $f_{\text{clean}}(x_k)$:
+\begin{equation}\label{eq:scaled_gaussian_noise}
+    f_{\text{noisy}}(x_k) = f_{\text{clean}}(x_k) + z
+\end{equation}
+where $x_k$ is the $k$-th coordinate vector generated by the algorithm, $f_{\text{clean}}(x_k)$ is the true objective value, $z \in \mathbb{R}$ is the sampled stochastic perturbation, and $f_{\text{noisy}}(x_k)$ is the corrupted value returned to the search logic.
+
+The continuous probability density function $p(z)$ governing the additive perturbation variable $z$ is formally expressed as:
+\begin{equation}\label{eq:gaussian_pdf}
+    p(z) = \frac{1}{\sqrt{2\pi \sigma_{\text{scaled}}^2}} \exp\left( -\frac{z^2}{2\sigma_{\text{scaled}}^2} \right)
+\end{equation}
+where $\pi \approx 3.14159$ represents the mathematical constant pi. Because the probability density function $p(z)$ is symmetric around zero ($\mathbb{E}[z] = 0$), the noisy objective expectation remains completely unbiased:
+\begin{equation}\label{eq:unbiased_expectation}
+    \mathbb{E}[f_{\text{noisy}}(x_k)] = f_{\text{clean}}(x_k)
+\end{equation}
+By scaling the noise variance directly with $S$, Equation~\ref{eq:scaled_gaussian_noise} normalizes environmental uncertainty across all benchmark topological groups.
+
+To explicitly demonstrate the physical mechanics and mathematical application of this noise model, consider a detailed case study on BBOB Function $f_8$. In the official benchmark taxonomy \cite{Hansen2010}, instance transformations apply spatial translations $x^* \in \mathbb{R}^D$ and orthonormal rotation matrices $R \in \mathbb{R}^{D \times D}$ to prevent algorithm over-specialization to coordinate axes. The mathematical formulation of $f_8$ is defined by:
+\begin{equation}\label{eq:bbob_f8_formula}
+    f_8(x) = \sum_{i=1}^{D-1} \left[ 100 \cdot \left( y_{i+1} - y_i^2 \right)^2 + (1 - y_i)^2 \right] + f_{\text{opt}}
+\end{equation}
+where $y \in \mathbb{R}^D$ represents the transformed spatial coordinate vector calculated via $y = \max\left(1, \frac{\sqrt{D}}{8}\right) R (x - x^*) + \mathbf{1}$, $\mathbf{1} \in \mathbb{R}^D$ is a vector of ones, and $f_{\text{opt}} \in \mathbb{R}$ represents the shifted global minimum value.
+
+As visualized in Figure~\ref{fig:f8_3d_landscape}, the quadratic term $100 \cdot (y_{i+1} - y_i^2)^2$ constructs a steep parabolic valley curving across the search domain, driving baseline objective deviations $f_{\text{clean}}(x_i) - f_{\text{opt}}$ to magnitudes on the order of $10^3$ near domain boundaries.
+
+%-------------------------------------------------------------------------------
+% Figure: BBOB Function f8 3D Surface Landscape
+%-------------------------------------------------------------------------------
+\begin{figure}[htbp]
+\centering
+\input{figures/f8_3d_landscape}
+\caption{Objective surface visualization of BBOB Function $f_8$. The orthogonal transformation rotates the steep parabolic valley across the bounded search domain, generating high objective magnitudes at the boundaries that mandate scale-proportional noise modeling.}
+\label{fig:f8_3d_landscape}
+\end{figure}
+
+Applying Equation~\ref{eq:landscape_scale_approx} over uniform Monte Carlo samples on BBOB function $f_8$ computes a baseline landscape scale factor on the order of:
+\begin{equation}\label{eq:f8_scale_value}
+    S_{f_8} \approx 10^3
+\end{equation}
+In contrast, evaluating Equation~\ref{eq:landscape_scale_approx} on BBOB function $f_1$ (an isotropic quadratic basin defined by $f_1(x) = \|R(x - x^*)\|^2 + f_{\text{opt}}$) yields a significantly smaller baseline scale factor:
+\begin{equation}\label{eq:f1_scale_value}
+    S_{f_1} \approx 10^1
+\end{equation}
+
+If a traditional static noise model (Equation~\ref{eq:static_noise_lit}) with $\sigma_{\text{static}} = 0.05$ were applied to $f_8$, the injected noise magnitude of $\pm 0.05$ relative to $S_{f_8} \approx 10^3$ would represent a variance ratio of less than $0.005\%$, rendering noise mathematically imperceptible and allowing algorithms to navigate uncorrupted gradients.
+
+Under the proposed landscape-scaled model, setting a noise intensity parameter of $\gamma = 0.1$ applies Equation~\ref{eq:scaled_std} to compute fixed, function-specific standard deviations:
+\begin{equation}\label{eq:f8_scaled_std_calc}
+    \sigma_{\text{scaled}, f_8} = 0.1 \cdot S_{f_8} \approx 10^2
+\end{equation}
+\begin{equation}\label{eq:f1_scaled_std_calc}
+    \sigma_{\text{scaled}, f_1} = 0.1 \cdot S_{f_1} \approx 10^0
+\end{equation}
+
+Substituting Equation~\ref{eq:f8_scaled_std_calc} and Equation~\ref{eq:f1_scaled_std_calc} into Equation~\ref{eq:scaled_gaussian_noise} generates constant noise perturbations $z_{f_8} \sim \mathcal{N}(0, \sigma_{\text{scaled}, f_8}^2)$ and $z_{f_1} \sim \mathcal{N}(0, \sigma_{\text{scaled}, f_1}^2)$ that persist throughout the optimization run. This step-by-step application proves how the model preserves Signal-to-Noise Ratio (SNR) equivalence: $f_8$ receives noise scaled to its steep parabolic topology, while $f_1$ receives noise scaled to its shallow basin, as illustrated in Figure~\ref{fig:landscape_noise_comparison}.
+
+%-------------------------------------------------------------------------------
+% Figure 4.1: Landscape Noise Comparison
+%-------------------------------------------------------------------------------
+\begin{figure}[htbp]
+\centering
+\input{figures/landscape_noise_comparison}
+\caption{Comparison of noise injection models. Static noise (a, b) causes severe Signal-to-Noise Ratio imbalances across different function scales. The proposed Landscape-Scaled Noise model (c) dynamically scales noise variance via Equation~\ref{eq:landscape_scale_approx}, establishing standardized uncertainty pressure across all benchmark topologies.}
+\label{fig:landscape_noise_comparison}
+\end{figure}
+
+Having established a normalized stochastic environment, it is equally critical to define how algorithmic progress is measured within it. To evaluate true optimization capability without corrupting performance tracking with stochastic variance, the experimental framework separates the feedback signal provided to the candidate algorithm from the benchmark's progress measurement. Exposing candidate algorithms to corrupted observations $f_{\text{noisy}}(x_k)$ is necessary to force the discovery of noise-resilient search logic. However, using noisy values to evaluate spatial progress would distort empirical measurement, as an algorithm could receive an unusually favorable negative noise draw that falsely suggests convergence toward $f(x^*)$. To preserve scientific rigor, candidate algorithms rely exclusively on $f_{\text{noisy}}(x_k)$ to guide internal search trajectories and step-size adaptations, while evaluation metrics record the ground-truth distance to the optimum:
+\begin{equation}\label{eq:clean_distance_metric}
+    \Delta f(x_k) = f_{\text{clean}}(x_k) - f(x^*)
+\end{equation}
+where $\Delta f(x_k) \in \mathbb{R}^+$ measures the uncorrupted objective distance from coordinate $x_k$ to the global minimum $f(x^*)$. This ensures that reported results reflect actual spatial convergence rather than transient stochastic perturbations. The complete mathematical workflow of this noise injection and progress tracking pipeline is depicted in Figure~\ref{fig:landscape_noise_injection}.
+
+%-------------------------------------------------------------------------------
+% Figure 4.2: Landscape Noise Injection Pipeline
+%-------------------------------------------------------------------------------
+\begin{figure}[htbp]
+\centering
+\input{figures/landscape_noise_injection}
+\caption{Mathematical pipeline of the Landscape-Scaled Additive Gaussian Noise model. Phase 1 calculates the baseline domain scale $S$ via Equation~\ref{eq:landscape_scale_approx}. Phase 2 evaluates the true objective $f_{\text{clean}}(x_k)$, constructs variance $\sigma_{\text{scaled}} = \gamma \cdot S$ via Equation~\ref{eq:scaled_std}, and injects a Gaussian draw $z \sim \mathcal{N}(0, \sigma_{\text{scaled}}^2)$ to form the noisy observation $f_{\text{noisy}}(x_k)$ via Equation~\ref{eq:scaled_gaussian_noise}.}
+\label{fig:landscape_noise_injection}
+\end{figure}
+
+%-------------------------------------------------------------------------------
+\section{LLM-Driven Evolutionary Code Discovery}\label{sec:method_llamea}
+
+To enable foundation models to autonomously discover optimization heuristics specialized for stochastic environments, this framework adapts the Large Language Model Evolutionary Algorithm (LLaMEA) as its core Automated Algorithm Design engine \cite{LLaMEA2024}. In traditional evolutionary computation, search operators such as crossover and mutation are rigidly defined via pre-coded mathematical routines. Under the Automated Algorithm Design paradigm, the language model itself acts as a highly non-linear, semantic variation operator capable of refactoring entire software architectures, altering search mechanisms, and generating novel algorithmic logic directly from reflective execution feedback.
+
+Rather than synthesizing generic algorithms across pooled benchmark suites, our pipeline executes LLaMEA on each target BBOB objective problem individually. This problem-specific evolutionary setup enables the language model to discover bespoke search logic tailored to the unique geometric and topological properties of a given landscape. The architecture implements a single-offspring $(1+1)$ Evolution Strategy executed directly within the language model's natural language context window. In each generation cycle $g \in \{1 \dots G\}$, where $G = 20$ denotes the maximum evolutionary generation horizon, the language model acts as a code-level mutation operator, generating exactly one candidate child algorithm $\mathcal{A}_{\text{child}}$ derived from the incumbent parent algorithm $\mathcal{A}_{\text{parent}}$. By evaluating a single child per generation, the language model receives an immediate, isolated feedback signal comparing the specific code modifications made in $\mathcal{A}_{\text{child}}$ against the resulting performance differential, enabling precise credit assignment during semantic reflection.
+
+For a targeted continuous objective function $f$, the candidate algorithm $\mathcal{A}$ is allocated a high evaluation budget of $B = 100,000$ function evaluations. During execution, the candidate algorithm interacts exclusively with noisy observations $f_{\text{noisy}}(x_k)$ to guide its internal search decisions. Simultaneously, the background diagnostic layer tracks the uncorrupted objective distance to the global minimum, $\Delta f(x_k) = f_{\text{clean}}(x_k) - f(x^*)$, across all evaluation steps $k \in \{1 \dots B\}$. The scalar fitness score assigned to algorithm $\mathcal{A}$ on problem $f$ is defined as the logarithmic minimum uncorrupted distance achieved over its trajectory:
+\begin{equation}\label{eq:individual_fitness}
+    \text{Fitness}(\mathcal{A}) = \log_{10} \left( \min_{k \in \{1 \dots B\}} \Delta f(x_k) \right)
+\end{equation}
+where $B = 100,000$ represents the budget boundary, $\Delta f(x_k) \in \mathbb{R}^+$ is the true objective distance at evaluation step $k$, and $\text{Fitness}(\mathcal{A}) \in \mathbb{R}$ is the scalar score returned to LLaMEA. Because the task is minimization, lower fitness values indicate superior spatial convergence toward $f(x^*)$.
+
+Under deterministic conditions ($\gamma = 0$), evolutionary selection is strictly greedy: $\mathcal{A}_{\text{child}}$ replaces $\mathcal{A}_{\text{parent}}$ if and only if $\text{Fitness}(\mathcal{A}_{\text{child}}) < \text{Fitness}(\mathcal{A}_{\text{parent}})$. However, when operating inside a non-deterministic evaluation sandbox ($\gamma > 0$), standard greedy selection is vulnerable to stochastic anomalies. A poorly designed child algorithm may evaluate a sequence of coordinates $x_k$ that happen to receive exceptionally favorable negative noise draws ($z \ll 0$), yielding an artificially superior (lower) fitness score. If this over-evaluated child replaces the parent, it becomes an un-killable statistical ghost parent. Subsequent, structurally superior offspring will be repeatedly rejected because they cannot match the ghost parent's mathematically unachievable, noise-inflated baseline.
+
+To eliminate this bottleneck, the evolutionary pipeline enforces a mandatory Stochastic Parent Resampling Policy. At the conclusion of every generation cycle $g$, the incumbent parent algorithm $\mathcal{A}_{\text{parent}}$ is re-evaluated across $K$ independent stochastic passes on problem $f$, dynamically updating its stored baseline fitness to the sample mean score:
+\begin{equation}\label{eq:parent_resampling}
+    \bar{F}_{\text{parent}} = \frac{1}{K} \sum_{j=1}^{K} \text{Fitness}^{(j)}\left(\mathcal{A}_{\text{parent}}\right)
+\end{equation}
+where $K = 3$ specifies the number of independent Monte Carlo re-evaluation passes, $\text{Fitness}^{(j)}\left(\mathcal{A}_{\text{parent}}\right) \in \mathbb{R}$ denotes the candidate's aggregate score computed via Equation~\ref{eq:individual_fitness} during the $j$-th pass, and $\bar{F}_{\text{parent}} \in \mathbb{R}$ represents the updated mean fitness threshold assigned to the parent. This Monte Carlo resampling policy ensures that transient noise anomalies decay rapidly, guaranteeing that evolutionary selection pressure favors algorithms possessing genuine structural variance-filtering logic rather than temporary stochastic luck.
+
+During the evolutionary loop, the generated Python source code of $\mathcal{A}_{\text{child}}$ is subjected to strict execution sandboxing. All generated candidate scripts undergo an Abstract Syntax Tree (AST) validation phase prior to execution. This structural validation layer whitelists scientific mathematical libraries such as NumPy and SciPy while outright rejecting unauthorized system modules, thereby preventing arbitrary code execution vulnerabilities. During active evaluation, the sandbox enforces a strict wall-clock execution timeout to safely terminate algorithms that collapse into infinite loops or demonstrate pathologically slow time complexity. If candidate code triggers a fatal runtime exception (e.g., singular matrix inversion, numerical overflow, or bounds violation), the raw Python traceback is intercepted by the sandbox and injected directly into the next generation's prompt context. This operational feedback loop enables the language model to autonomously self-correct its own syntax and logical vulnerabilities across generations.
+
+\begin{figure}[htbp]
+    \centering
+    \input{figures/evolutionary_aad_loop}
+    \caption{System orchestration of the non-deterministic Automated Algorithm Design framework. Candidate algorithm source code flows through Abstract Syntax Tree (AST) validation into the stochastic evaluation sandbox. Search decisions process noisy feedback $f_{\text{noisy}}(x_k)$, while selection and parent resampling ($\bar{F}_{\text{parent}}$) evaluate uncorrupted metrics $\Delta f(x_k)$ to update the reflective prompt context $\mathcal{C}_g$.}
+    \label{fig:evolutionary_aad_loop}
+\end{figure}
+
+%-------------------------------------------------------------------------------
+\section{Experimental Configuration and Foundation Models}\label{sec:method_setup}
+
+To evaluate algorithmic synthesis capabilities across differing levels of model scale and computational reasoning, the evolutionary pipeline is deployed using two distinct foundation models within LLaMEA \cite{LLaMEA2024}. OpenAI's \texttt{gpt-4o} serves as the commercial baseline for state-of-the-art programmatic reasoning and advanced semantic reflection \cite{OpenAI2024}. To evaluate cost-effective, self-hosted algorithm discovery, Meta's open-weights \texttt{Llama-3.1-70B-Instruct} model is hosted locally via vLLM inference endpoints \cite{Llama3}.
+
+Generation parameters are strictly standardized across both foundation models to maintain experimental control. The decoding temperature is fixed at $T = 0.7$, providing an optimal balance between syntactic stability and structural exploration during the code mutation phase. Top-$p$ nucleus sampling is constrained to $0.95$, and the maximum output token limit per generation cycle is capped at $2048$ tokens.
+
+Each LLaMEA discovery run is executed on an individual target BBOB benchmark function instance. Candidate algorithms are evaluated with a function evaluation budget of $B = 100,000$ evaluations per run. The Automated Algorithm Design process iterates for a maximum evolutionary horizon of $G = 20$ generations per problem experiment, providing sufficient mutation depth for the model to refine and stabilize noise-resilient search heuristics.
+
+%-------------------------------------------------------------------------------
+\section{Cross-Environment Validation Protocols}\label{sec:method_metrics}
+
+To verify whether the autonomously designed heuristics have acquired generalized noise resilience or specialized to specific stochastic conditions, champion algorithms undergo cross-environment validation.
+
+Validation is conducted across representative continuous benchmark functions from the Black-Box Optimization Benchmark suite \cite{Hansen2010}. The experimental protocol benchmarks candidate algorithms across three distinct origin classes:
+\begin{enumerate}
+    \item \textbf{Clean-Evolved Champions ($\mathcal{A}_{\text{clean}}$):} Algorithms discovered by the language model on problem $f$ when the sandbox is configured with zero environmental noise ($\gamma = 0$).
+    \item \textbf{Noise-Evolved Champions ($\mathcal{A}_{\text{noisy}}$):} Algorithms discovered by the language model on problem $f$ when the sandbox injects dynamic landscape-scaled Gaussian noise ($\gamma = 0.1$).
+    \item \textbf{Classical Human Baselines ($\mathcal{A}_{\text{baseline}}$):} Standard mathematical implementations of Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001}, Differential Evolution \cite{Storn1997}, and Particle Swarm Optimization \cite{Kennedy1995}.
+\end{enumerate}
+
+As detailed in the experimental matrix in Table~\ref{tab:cross_matrix}, these algorithm classes are cross-evaluated in both deterministic ($\gamma = 0$) and stochastic ($\gamma = 0.1$) testing modes across independent random seed replicates.
+
+\begin{table}[htbp]
+\centering
+\caption{Cross-Environment Experimental Validation Matrix.}
+\label{tab:cross_matrix}
+\small
+\begin{tabularx}{\textwidth}{l X X}
+\toprule
+Algorithm Origin & Testing Mode 1: Deterministic ($\gamma = 0$) & Testing Mode 2: Stochastic ($\gamma = 0.1$) \\
+\midrule
+Clean Evolved ($\mathcal{A}_{\text{clean}}$) & Establishes Baseline Deterministic Capability & Assesses Vulnerability and Noise Breakdown \\
+Noise Evolved ($\mathcal{A}_{\text{noisy}}$) & Verifies Zero-Shot Deterministic Retention & Proves Generalized Noise Robustness \\
+Human Baselines ($\mathcal{A}_{\text{baseline}}$) & Benchmark Gold Standard & Classical Resilience Baseline \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+To ensure statistical significance and eliminate sensitivity to initialization parameters, each candidate algorithm is executed across 30 independent random seed replicates during the validation phase. Algorithm performance trajectories are recorded by logging the uncorrupted distance to the global minimum, $\Delta f(x_k) = f_{\text{clean}}(x_k) - f(x^*)$, across all evaluation steps $k \in \{1 \dots B\}$.
