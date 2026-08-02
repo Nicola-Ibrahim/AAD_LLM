@@ -5,15 +5,15 @@ from llamea import Solution
 from core.problems.bbob import BBOBProblem
 from core.llamea.exceptions import AlgorithmTimeoutException
 from core.llamea.executor import AlgorithmExecutor
-from core.schema.iteration import IterationMetadata
-from core.schema.metrics import (
+from core.domain.iteration import IterationMetadata
+from core.domain.metrics import (
     CodeMetrics,
     ConvergenceProfile,
     ErrorProfile,
     ExecutionProfile,
     FitnessMetrics,
 )
-from core.schema.problem import ProblemProfile
+from core.domain.problem import ProblemProfile
 from infra.storage.base import ExperimentRepository
 from infra.storage.code.repository import CodeRepository
 
@@ -283,7 +283,7 @@ class Evaluator:
     def _persist_iteration(self, solution: Solution, metadata: IterationMetadata) -> None:
         """Record iteration count, save code file, and persist metadata to database repo."""
         self._current_iteration += 1
-        metadata.iteration = self._current_iteration
+        code_path_str: str | None = None
 
         # 1. Save candidate code file immediately
         if solution.code:
@@ -292,13 +292,21 @@ class Evaluator:
                 iteration_num=self._current_iteration,
                 experiment_id=self._experiment_id,
             )
-            metadata.code.code_path = str(code_path)
+            code_path_str = str(code_path)
+
+        # Re-create updated, immutable metadata using model_copy
+        updated_code = metadata.code.model_copy(update={"code_path": code_path_str})
+        final_metadata = metadata.model_copy(
+            update={
+                "iteration": self._current_iteration,
+                "code": updated_code,
+            }
+        )
 
         # 2. Append complete iteration metadata to database repo
         self._db_repo.append_iteration(
             experiment_id=self._experiment_id,
-            metadata=metadata,
-            experiment_meta=self._experiment_meta,
+            metadata=final_metadata,
         )
 
     def __call__(self, solution: Solution, explogger: Any | None = None) -> Solution:

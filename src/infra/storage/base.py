@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
-from core.schema.experiment import ExperimentSummary
-from core.schema.iteration import IterationMetadata
+from core.domain.experiment import ExperimentSummary
+from core.domain.iteration import IterationMetadata
 
 
 class ExperimentRepository(ABC):
@@ -59,7 +59,6 @@ class ExperimentRepository(ABC):
         self,
         experiment_id: int,
         metadata: IterationMetadata,
-        experiment_meta: dict,
     ) -> None:
         """Appends an iteration record to the repository."""
         pass

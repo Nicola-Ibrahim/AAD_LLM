@@ -1,12 +1,13 @@
 import math
 from typing import Any
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 
-from core.schema.problem import ProblemProfile
-from core.schema.iteration import IterationMetadata
+from core.domain.base import DomainEntity
+from core.domain.problem import ProblemProfile
+from core.domain.iteration import IterationMetadata
 
 
-class ExperimentSummary(BaseModel):
+class ExperimentSummary(DomainEntity):
     """Aggregated result of a full LLaMEA evolution run."""
 
     mode: str = Field(description="Experiment running mode.", examples=["noisy", "clean"])
@@ -19,7 +20,21 @@ class ExperimentSummary(BaseModel):
         description="Name of the prompt strategy used for algorithm synthesis.",
         examples=["baseline", "vectorization", "math_hints", "full_scaffold"],
     )
-    experiment_id: int = Field(default=1, description="Globally unique experiment primary key.")
+    status: str = Field(
+        default="running",
+        description="Current lifecycle status of the experiment: running, completed, or failed.",
+        examples=["completed", "running", "failed"],
+    )
+    started_at: str | None = Field(
+        default=None,
+        description="ISO timestamp string when the experiment execution started.",
+        examples=["2026-08-02T10:00:00+00:00", None],
+    )
+    finished_at: str | None = Field(
+        default=None,
+        description="ISO timestamp string when the experiment execution finished.",
+        examples=["2026-08-02T10:15:00+00:00", None],
+    )
     problem: ProblemProfile = Field(
         description="Configuration of the BBOB problem for this execution run."
     )
@@ -48,7 +63,3 @@ class ExperimentSummary(BaseModel):
         if isinstance(v, float) and (math.isinf(v) or math.isnan(v)):
             return None
         return v
-
-    def to_json_dict(self) -> dict[str, Any]:
-        """Return a plain dict safe for JSON serialization."""
-        return self.model_dump(mode="json")

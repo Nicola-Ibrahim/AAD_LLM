@@ -4,8 +4,8 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload, sessionmaker
 
-from core.schema.experiment import ExperimentSummary
-from core.schema.iteration import (
+from core.domain.experiment import ExperimentSummary
+from core.domain.iteration import (
     CodeMetrics,
     ConvergenceProfile,
     ErrorProfile,
@@ -13,7 +13,7 @@ from core.schema.iteration import (
     FitnessMetrics,
     IterationMetadata,
 )
-from core.schema.problem import ProblemProfile
+from core.domain.problem import ProblemProfile
 from infra.storage.base import ExperimentRepository
 from infra.storage.sqlite.tables import ErrorLogORM, ExperimentMode, ExperimentORM, IterationORM
 
@@ -103,45 +103,58 @@ class SQLiteExperimentRepository(ExperimentRepository):
             exp = session.get(ExperimentORM, experiment_id)
             if not exp:
                 return None, 0
-            stmt = select(func.max(IterationORM.iteration)).where(
+            stmt = select(func.count(IterationORM.id)).where(
                 IterationORM.experiment_id == experiment_id
             )
-            max_iter = session.execute(stmt).scalar()
-            return exp.status, max_iter if max_iter is not None else 0
+            count_iter = session.execute(stmt).scalar()
+            return exp.status, count_iter if count_iter is not None else 0
+
+    @staticmethod
+    def _from_iteration_metadata(
+        experiment_id: int, metadata: IterationMetadata
+    ) -> tuple[IterationORM, ErrorLogORM | None]:
+        """Explicit domain IterationMetadata to ORM mapper."""
+        iteration_orm = IterationORM(
+            experiment_id=experiment_id,
+            algorithm_name=metadata.algorithm_name,
+            timed_out=metadata.execution.timed_out,
+            runtime_seconds=metadata.execution.runtime_seconds,
+            llm_generation_time=metadata.execution.llm_generation_time,
+            evaluations_used=metadata.execution.evaluations_used,
+            budget_consumed_pct=metadata.execution.budget_consumed_pct,
+            evals_per_second=metadata.execution.evals_per_second,
+            raw_fitness=metadata.fitness.raw_fitness,
+            final_error=metadata.fitness.final_error,
+            relative_error=metadata.fitness.relative_error,
+            error_per_evaluation=metadata.fitness.error_per_evaluation,
+            code_lines=metadata.code.code_lines,
+            code_length=metadata.code.code_length,
+            code_path=metadata.code.code_path,
+            converged=metadata.convergence.converged,
+            convergence_threshold=metadata.convergence.convergence_threshold,
+        )
+
+        error_orm = None
+        if metadata.error.error_type:
+            error_orm = ErrorLogORM(
+                error_type=metadata.error.error_type,
+                error_message=metadata.error.error_message,
+                error_traceback=metadata.error.error_traceback,
+            )
+
+        return iteration_orm, error_orm
 
     def append_iteration(
         self,
         experiment_id: int,
         metadata: IterationMetadata,
-        experiment_meta: dict[str, Any],
     ) -> None:
         """Inserts one IterationORM row per call. Each call is its own committed transaction."""
+        iteration_orm, error_orm = self._from_iteration_metadata(experiment_id, metadata)
+        if error_orm:
+            iteration_orm.error_log = error_orm
+
         with self.SessionLocal() as session:
-            it_dict = metadata.model_dump()
-
-            # Flatten nested profiles (execution, fitness, code, error, convergence)
-            flat_data = {}
-            for key, value in it_dict.items():
-                if isinstance(value, dict):
-                    flat_data.update(value)
-                else:
-                    flat_data[key] = value
-
-            flat_data["experiment_id"] = experiment_id
-
-            # Filter fields to only columns defined on IterationORM
-            valid_columns = IterationORM.__table__.columns.keys()
-            filtered_data = {k: v for k, v in flat_data.items() if k in valid_columns}
-            iteration_orm = IterationORM(**filtered_data)
-
-            error_dict = it_dict.get("error") or {}
-            if error_dict.get("error_type"):
-                iteration_orm.error_log = ErrorLogORM(
-                    error_type=error_dict["error_type"],
-                    error_message=error_dict.get("error_message"),
-                    error_traceback=error_dict.get("error_traceback"),
-                )
-
             session.add(iteration_orm)
             session.commit()
 
@@ -164,7 +177,11 @@ class SQLiteExperimentRepository(ExperimentRepository):
             best_row = session.execute(stmt).scalars().first()
 
             if best_row:
-                exp.best_iteration = best_row.iteration
+                count_stmt = select(func.count(IterationORM.id)).where(
+                    IterationORM.experiment_id == experiment_id,
+                    IterationORM.id <= best_row.id,
+                )
+                exp.best_iteration = session.execute(count_stmt).scalar()
                 exp.best_algorithm = best_row.algorithm_name
                 exp.best_final_error = best_row.final_error
 
@@ -256,14 +273,20 @@ class SQLiteExperimentRepository(ExperimentRepository):
                     true_optimum=exp.true_optimum,
                 )
 
-                iterations = [self._to_iteration_metadata(it) for it in exp.iterations]
+                iterations = [
+                    self._to_iteration_metadata(it, idx)
+                    for idx, it in enumerate(exp.iterations, start=1)
+                ]
 
                 summaries.append(
                     ExperimentSummary(
                         mode=exp.mode.value,
                         llm_name=exp.llm_name,
                         prompt_strategy=exp.prompt_strategy or "baseline",
-                        experiment_id=exp.id,
+                        id=exp.id,
+                        status=exp.status,
+                        started_at=exp.started_at,
+                        finished_at=exp.finished_at,
                         problem=problem_profile,
                         best_iteration=exp.best_iteration,
                         best_algorithm=exp.best_algorithm,
@@ -274,7 +297,9 @@ class SQLiteExperimentRepository(ExperimentRepository):
         return summaries
 
     @staticmethod
-    def _to_iteration_metadata(it: IterationORM) -> IterationMetadata:
+    def _to_iteration_metadata(
+        it: IterationORM, iteration_number: int | None = None
+    ) -> IterationMetadata:
         """Helper to convert an IterationORM database instance into an IterationMetadata schema object."""
         error_fields = {
             "error_type": it.error_log.error_type if it.error_log else None,
@@ -284,7 +309,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
 
         return IterationMetadata(
             algorithm_name=it.algorithm_name,
-            iteration=it.iteration,
+            iteration=iteration_number,
             execution=ExecutionProfile(
                 timed_out=it.timed_out,
                 runtime_seconds=it.runtime_seconds,

@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
+from core.domain.base import ValueObject
 
 
-class ExecutionProfile(BaseModel):
+class ExecutionProfile(ValueObject):
     """Timing and throughput metrics for candidate algorithm execution."""
 
     timed_out: bool = Field(
@@ -30,7 +31,7 @@ class ExecutionProfile(BaseModel):
     )
 
 
-class FitnessMetrics(BaseModel):
+class FitnessMetrics(ValueObject):
     """Objective values, errors, and noise properties for candidate execution."""
 
     raw_fitness: float | None = Field(
@@ -55,7 +56,7 @@ class FitnessMetrics(BaseModel):
     )
 
 
-class CodeMetrics(BaseModel):
+class CodeMetrics(ValueObject):
     """Metadata regarding generated Python source code."""
 
     code_lines: int = Field(
@@ -72,7 +73,7 @@ class CodeMetrics(BaseModel):
     )
 
 
-class ErrorProfile(BaseModel):
+class ErrorProfile(ValueObject):
     """Exception traceback details if evaluation failed."""
 
     error_type: str | None = Field(
@@ -92,7 +93,7 @@ class ErrorProfile(BaseModel):
     )
 
 
-class ConvergenceProfile(BaseModel):
+class ConvergenceProfile(ValueObject):
     """Resiliency and convergence details for candidate executions."""
 
     converged: bool = Field(

@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
+from core.domain.base import ValueObject
 
 
-class ProblemProfile(BaseModel):
+class ProblemProfile(ValueObject):
     """Configuration profile of the target optimization problem."""
 
     problem_id: int = Field(

@@ -94,7 +94,6 @@ class IterationORM(Base):
         Integer, ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False
     )
 
-    iteration = Column(Integer, nullable=False)
     algorithm_name = Column(String)
 
     # Core metrics
@@ -128,16 +127,7 @@ class IterationORM(Base):
     )
 
     __table_args__ = (
-        # Speeds up groupby/analysis queries that filter or sort by iteration
-        # number within an experiment (e.g. convergence curves).
-        Index("idx_iterations_experiment_iter", "experiment_id", "iteration"),
         Index("idx_iterations_exp_error", "experiment_id", "final_error"),
-        UniqueConstraint(
-            "experiment_id",
-            "iteration",
-            name="uq_iteration_identity",
-        ),
-        CheckConstraint("iteration >= 0", name="check_non_negative_iteration"),
         CheckConstraint(
             "evaluations_used IS NULL OR evaluations_used >= 0",
             name="check_non_negative_evals",

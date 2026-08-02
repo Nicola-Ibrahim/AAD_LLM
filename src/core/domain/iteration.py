@@ -1,7 +1,7 @@
-from typing import Any
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from core.schema.metrics import (
+from core.domain.base import ValueObject
+from core.domain.metrics import (
     ExecutionProfile,
     FitnessMetrics,
     CodeMetrics,
@@ -10,7 +10,7 @@ from core.schema.metrics import (
 )
 
 
-class IterationMetadata(BaseModel):
+class IterationMetadata(ValueObject):
     """Structured result of one algorithm evaluation by the Evaluator."""
 
     iteration: int | None = Field(
@@ -38,7 +38,3 @@ class IterationMetadata(BaseModel):
     convergence: ConvergenceProfile = Field(
         description="Details about convergence of the execution run."
     )
-
-    def to_json_dict(self) -> dict[str, Any]:
-        """Return a plain dict safe for JSON serialization."""
-        return self.model_dump(mode="json")
