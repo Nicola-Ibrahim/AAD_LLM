@@ -1,18 +1,15 @@
-import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
 from core.config import DATA_DIR
-from core.llamea.session import SessionResult
+from core.llamea.prompts import PromptStrategy
+from core.llamea.session import LLaMEASession, SessionResult
 from core.problems.bbob import BBOBProblem
 from infra.llm.client import LLMClient
-
-from core.llamea.session import LLaMEASession
 from infra.storage.code.repository import CodeRepository
 from infra.storage.sqlite.factory import initialize_sqlite_storage, setup_storage_environment
-from infra.storage.sqlite.repository import SQLiteExperimentRepository
 
 
 @dataclass
@@ -29,7 +26,7 @@ class EvolutionTask:
     budget: int = 1000
     iterations: int = 10
     resume_experiment_id: int | None = None
-    prompt_strategy: str = "baseline"
+    prompt_strategy: PromptStrategy | str = PromptStrategy.BASELINE
     db_path: Path = field(default_factory=lambda: DATA_DIR / "db.sqlite3")
     fn: Callable[[], SessionResult] | None = None
 

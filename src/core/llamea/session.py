@@ -3,15 +3,14 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
-
 from llamea import LLaMEA
+
 from core.config import DATA_DIR
-
-
 from core.llamea.evaluator import Evaluator
 from core.llamea.prompts import (
     EXAMPLE_PROMPT,
     FORMAT_PROMPT,
+    PromptStrategy,
     build_task_prompt,
 )
 from core.problems.bbob import BBOBProblem
@@ -85,7 +84,7 @@ class LLaMEASession:
         budget: int = 1000,
         iterations: int = 10,
         resume_experiment_id: int | None = None,
-        prompt_strategy: str = "baseline",
+        prompt_strategy: PromptStrategy | str = PromptStrategy.BASELINE,
     ):
         """Initializes the synthesis session with its parameters and required repositories."""
         if llm_client is None:
@@ -97,7 +96,9 @@ class LLaMEASession:
         self._code_repo = code_repo
         self._budget = budget
         self._iterations = iterations
-        self._prompt_strategy = prompt_strategy
+        self._prompt_strategy = (
+            PromptStrategy(prompt_strategy) if isinstance(prompt_strategy, str) else prompt_strategy
+        )
 
         self._init_experiment_context(resume_experiment_id)
 
@@ -162,7 +163,7 @@ class LLaMEASession:
                 dim=self._problem.dim,
                 lower_bound=self._problem.lower_bound,
                 upper_bound=self._problem.upper_bound,
-                is_noisy=self._problem.mode == "noisy",
+                mode=self._problem.mode,
                 strategy=self._prompt_strategy,
             )
             evaluator = self._setup_evaluator()
@@ -177,7 +178,11 @@ class LLaMEASession:
 
             best_so_far = synthesis_engine.best_so_far
             fitness_score = best_so_far.fitness  # This is -final_error (LLaMEA convention)
-            if fitness_score is not None and not math.isnan(fitness_score) and not math.isinf(fitness_score):
+            if (
+                fitness_score is not None
+                and not math.isnan(fitness_score)
+                and not math.isinf(fitness_score)
+            ):
                 # fitness_score = -final_error, so final_error = -fitness_score
                 best_error = -fitness_score
                 # Reconstruct the raw algorithm objective value for display:

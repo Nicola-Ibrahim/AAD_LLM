@@ -1,10 +1,9 @@
 import time
 import traceback
 from typing import Any
+
 from llamea import Solution
-from core.problems.bbob import BBOBProblem
-from core.llamea.exceptions import AlgorithmTimeoutException
-from core.llamea.executor import AlgorithmExecutor
+
 from core.domain.iteration import IterationMetadata
 from core.domain.metrics import (
     CodeMetrics,
@@ -14,6 +13,9 @@ from core.domain.metrics import (
     FitnessMetrics,
 )
 from core.domain.problem import ProblemProfile
+from core.llamea.exceptions import AlgorithmTimeoutException
+from core.llamea.executor import AlgorithmExecutor
+from core.problems.bbob import BBOBProblem
 from infra.storage.base import ExperimentRepository
 from infra.storage.code.repository import CodeRepository
 

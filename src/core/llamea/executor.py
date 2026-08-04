@@ -7,11 +7,11 @@ import math
 import random
 from typing import Any, Callable
 
-from func_timeout import func_timeout, FunctionTimedOut
 import numpy as np
 import scipy
 import scipy.optimize
 import scipy.stats
+from func_timeout import FunctionTimedOut, func_timeout
 
 from core.llamea.exceptions import AlgorithmTimeoutException, CodeValidationException
 

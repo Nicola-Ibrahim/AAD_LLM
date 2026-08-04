@@ -2,10 +2,10 @@
 BBOB problem wrapper with validation and noise injection.
 """
 
-
 from enum import StrEnum
+
 import numpy as np
-from ioh import get_problem, ProblemClass
+from ioh import ProblemClass, get_problem
 
 
 class ProblemMode(StrEnum):

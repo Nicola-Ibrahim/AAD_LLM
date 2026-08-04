@@ -1,4 +1,5 @@
 from pydantic import Field
+
 from core.domain.base import ValueObject
 
 

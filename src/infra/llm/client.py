@@ -8,8 +8,9 @@ and patching client settings to support custom endpoint URLs.
 import os
 import urllib.request
 from enum import StrEnum
+
 import openai
-from llamea import Gemini_LLM, OpenAI_LLM, LLM
+from llamea import LLM, Gemini_LLM, OpenAI_LLM
 
 
 class Provider(StrEnum):

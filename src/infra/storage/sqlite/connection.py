@@ -1,7 +1,8 @@
 import sqlite3
 from pathlib import Path
+
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 
 
 def _ensure_db_dir(db_path: Path) -> None:

@@ -1,0 +1,9 @@
+{% extends "task_base.j2" %}
+
+{% block problem_nature %}
+The objective function you are optimizing is entirely deterministic (noise-free). You can rely on precise gradient approximations, exact local search, or aggressive exploitation.
+{% endblock %}
+
+{% block landscape_desc %}this single noise-free landscape{% endblock %}
+{% block objective_desc %}deterministic (noise-free) objective function{% endblock %}
+{% block return_desc %}exact float scalar{% endblock %}

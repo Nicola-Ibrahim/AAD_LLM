@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Iterable
+
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.config import DATA_DIR

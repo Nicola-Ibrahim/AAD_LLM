@@ -1,64 +1,30 @@
-"""
-Prompt constants and builder for LLaMEA optimization algorithm design.
-"""
+from enum import StrEnum
+from pathlib import Path
 
 import numpy as np
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-BASE_TASK_PROMPT_CLEAN = """
-You are a highly skilled computer scientist and an expert in meta-heuristic optimization.
-Your task is to design a novel, continuous black-box optimization algorithm that is highly specialized for a specific target landscape (BBOB Problem ID: {problem_id}).
-The objective function you are optimizing is entirely deterministic (noise-free). You can rely on precise gradient approximations, exact local search, or aggressive exploitation.
 
-This is NOT a general-purpose solver. You are designing a bespoke algorithm tailored to exploit the specific features of this single landscape.
+class PromptMode(StrEnum):
+    CLEAN = "clean"
+    NOISY = "noisy"
 
-Write the Python code for a class that contains a `__call__(self, problem, budget)` method.
-The `problem` is the objective function to be minimized. You can evaluate a point `x` by calling `y = problem(x)`, where `x` is a 1D vector or 1D array of coordinates (length = dimension) and `y` is a float scalar.
-The `budget` is the maximum number of times you can evaluate `problem`.
-The domain bounds for the search space are [{lower_bound}, {upper_bound}] for all dimensions (accessible via `problem.lower_bound` and `problem.upper_bound` or `problem.lb` and `problem.ub`).
-{strategy_blocks}
-Your goal is to find and return the lowest possible value of `problem(x)` within the budget.
-"""
 
-BASE_TASK_PROMPT_NOISY = """
-You are a highly skilled computer scientist and an expert in meta-heuristic optimization.
-Your task is to design a novel, continuous black-box optimization algorithm that is highly specialized for a specific target landscape (BBOB Problem ID: {problem_id}).
-Critically, the objective function you are optimizing contains statistical noise. Your algorithm must be resilient to this noise and avoid being trapped by false gradients.
+class PromptStrategy(StrEnum):
+    BASELINE = "baseline"
+    THINKING = "thinking"
+    VECTORIZATION = "vectorization"
+    GUIDED = "guided"
 
-This is NOT a general-purpose solver. You are designing a bespoke algorithm tailored to exploit the specific features of this single noisy landscape.
 
-Write the Python code for a class that contains a `__call__(self, problem, budget)` method.
-The `problem` is the noisy objective function to be minimized. You can evaluate a point `x` by calling `y = problem(x)`, where `x` is a 1D vector or 1D array of coordinates (length = dimension) and `y` is a noisy float scalar.
-The `budget` is the maximum number of times you can evaluate `problem`.
-The domain bounds for the search space are [{lower_bound}, {upper_bound}] for all dimensions (accessible via `problem.lower_bound` and `problem.upper_bound` or `problem.lb` and `problem.ub`).
-{strategy_blocks}
-Your goal is to find and return the lowest possible value of `problem(x)` within the budget.
-"""
-
-PROMPT_BLOCK_MATH = "You may use standard mathematical and numerical computation libraries (`numpy` / `np`, `math`, `random`).\n"
-PROMPT_BLOCK_VEC = "You are strongly encouraged to use population-level and matrix-level vectorization in NumPy (e.g., creating matrices of candidate vectors of shape `(pop_size, dim)` and applying vectorized mutations, linear algebra, or batch domain clipping `np.clip`) rather than scalar Python loops.\n"
-PROMPT_BLOCK_NO_SOLVER = "Do NOT use pre-built, off-the-shelf optimizer solvers or wrapper functions — you MUST design and write your own custom optimization search logic.\n"
-
-PROMPT_STRATEGIES: dict[str, list[str]] = {
-    "baseline": [],
-    "math_hints": [PROMPT_BLOCK_MATH],
-    "vectorization": [PROMPT_BLOCK_MATH, PROMPT_BLOCK_VEC],
-    "full_scaffold": [PROMPT_BLOCK_MATH, PROMPT_BLOCK_VEC, PROMPT_BLOCK_NO_SOLVER],
-}
-
-# Kept for backward compatibility with existing imports
-TASK_PROMPT_CLEAN = BASE_TASK_PROMPT_CLEAN.format(
-    problem_id="{problem_id}",
-    lower_bound="{lower_bound}",
-    upper_bound="{upper_bound}",
-    strategy_blocks="\n" + "".join(PROMPT_STRATEGIES["full_scaffold"]) + "\n",
+_TEMPLATES_DIR = Path(__file__).parent / "templates"
+_jinja_env = Environment(
+    loader=FileSystemLoader(_TEMPLATES_DIR),
+    autoescape=select_autoescape([]),
+    trim_blocks=True,
+    lstrip_blocks=True,
 )
 
-TASK_PROMPT_NOISY = BASE_TASK_PROMPT_NOISY.format(
-    problem_id="{problem_id}",
-    lower_bound="{lower_bound}",
-    upper_bound="{upper_bound}",
-    strategy_blocks="\n" + "".join(PROMPT_STRATEGIES["full_scaffold"]) + "\n",
-)
 
 EXAMPLE_PROMPT = """
 Your algorithm will be instantiated and called as follows:
@@ -112,9 +78,6 @@ STRICT Rules — violating any rule will cause execution failure:
 - `__init__(self)` MUST have a non-empty body (use `pass` if nothing to initialize).
 - The class MUST have a `__call__(self, problem, budget)` method.
 - `__call__` MUST return `float(best_y)` — a scalar Python float.
-- You may use standard math/vectorization libraries (`numpy`, `math`, `random`).
-- Use matrix/population-level NumPy vectorization (e.g. shapes of `(pop_size, dim)`) for candidate generation and updates.
-- Do NOT use pre-built optimizer packages or solver wrappers.
 - Every variable you use MUST be defined before use. Never reference undefined names.
 - Do NOT store `problem` or `budget` in `__init__` — they are provided to `__call__` directly.
 - Do NOT include `if __name__ == '__main__':` blocks.
@@ -126,19 +89,18 @@ def build_task_prompt(
     dim: int,
     lower_bound: np.ndarray,
     upper_bound: np.ndarray,
-    is_noisy: bool = False,
-    strategy: str = "baseline",
+    mode: PromptMode | str = PromptMode.CLEAN,
+    strategy: PromptStrategy | str = PromptStrategy.BASELINE,
 ) -> str:
-    """Constructs the structured task prompt based on explicit problem parameters, noise flag, and prompt strategy."""
-    blocks = PROMPT_STRATEGIES.get(strategy, PROMPT_STRATEGIES["baseline"])
-    strategy_text = ("\n" + "".join(blocks) + "\n") if blocks else "\n"
-
-    template = BASE_TASK_PROMPT_NOISY if is_noisy else BASE_TASK_PROMPT_CLEAN
-    return template.format(
+    """Constructs the structured task prompt based on explicit problem parameters, PromptMode enum, and prompt strategy."""
+    mode_enum = PromptMode(mode) if isinstance(mode, str) else mode
+    strategy_enum = PromptStrategy(strategy) if isinstance(strategy, str) else strategy
+    template_name = "task_noisy.j2" if mode_enum == PromptMode.NOISY else "task_clean.j2"
+    return _jinja_env.get_template(template_name).render(
         problem_id=problem_id,
         dim=dim,
         lower_bound=lower_bound.tolist(),
         upper_bound=upper_bound.tolist(),
-        strategy_blocks=strategy_text,
+        mode=mode_enum,
+        strategy=strategy_enum,
     )
-

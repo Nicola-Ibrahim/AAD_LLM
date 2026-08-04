@@ -2,11 +2,11 @@ from pydantic import Field
 
 from core.domain.base import ValueObject
 from core.domain.metrics import (
+    CodeMetrics,
+    ConvergenceProfile,
+    ErrorProfile,
     ExecutionProfile,
     FitnessMetrics,
-    CodeMetrics,
-    ErrorProfile,
-    ConvergenceProfile,
 )
 
 

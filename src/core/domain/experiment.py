@@ -1,10 +1,11 @@
 import math
 from typing import Any
+
 from pydantic import Field, field_validator
 
 from core.domain.base import DomainEntity
-from core.domain.problem import ProblemProfile
 from core.domain.iteration import IterationMetadata
+from core.domain.problem import ProblemProfile
 
 
 class ExperimentSummary(DomainEntity):
