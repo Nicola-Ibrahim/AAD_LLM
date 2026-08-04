@@ -10,28 +10,16 @@ class ExperimentRepository(ABC):
     @abstractmethod
     def load(
         self,
+        experiment_id: int | None = None,
         problem_id: int | None = None,
         instance_id: int | None = None,
         llm_name: str | None = None,
         dim: int | None = None,
         mode: str | None = None,
         prompt_strategy: str | None = None,
+        status: str | None = None,
     ) -> list[ExperimentSummary]:
         """Loads and filters stored ExperimentSummary objects."""
-        pass
-
-    @abstractmethod
-    def get_incomplete_experiments(
-        self,
-        problem_id: int,
-        dim: int,
-        mode: str,
-        llm_name: str,
-        noise_std: float,
-        instance_id: int = 1,
-        prompt_strategy: str = "baseline",
-    ) -> list[int]:
-        """Returns a list of experiment IDs with status 'running' that match the given parameters."""
         pass
 
     @abstractmethod

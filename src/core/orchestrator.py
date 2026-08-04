@@ -35,11 +35,6 @@ class EvolutionTask:
         if self.fn is not None:
             return self.fn()
 
-        if self.problem is None or self.llm_client is None:
-            raise ValueError(
-                "EvolutionTask requires either a custom fn or both problem and llm_client"
-            )
-
         db_repo = initialize_sqlite_storage(self.db_path)
         code_repo = CodeRepository()
 

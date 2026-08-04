@@ -65,37 +65,9 @@ class SQLiteExperimentRepository(ExperimentRepository):
             session.refresh(experiment)
             return experiment.id
 
-    def get_incomplete_experiments(
-        self,
-        problem_id: int,
-        dim: int,
-        mode: str,
-        llm_name: str,
-        noise_std: float,
-        instance_id: int = 1,
-        prompt_strategy: str = "baseline",
-    ) -> list[int]:
-        """Returns a list of experiment IDs with status 'running' that match the given parameters."""
-        stmt = select(ExperimentORM.id).where(
-            ExperimentORM.problem_id == problem_id,
-            ExperimentORM.instance_id == instance_id,
-            ExperimentORM.dim == dim,
-            ExperimentORM.mode == ExperimentMode(mode),
-            ExperimentORM.llm_name == llm_name,
-            ExperimentORM.prompt_strategy == prompt_strategy,
-            ExperimentORM.status == "running",
-        )
-        if noise_std > 0.0:
-            stmt = stmt.where(ExperimentORM.noise_std == noise_std)
-        else:
-            stmt = stmt.where(
-                (ExperimentORM.noise_std == 0.0) | (ExperimentORM.noise_std.is_(None))
-            )
-        stmt = stmt.order_by(ExperimentORM.id.asc())
 
-        with self.SessionLocal() as session:
-            rows = session.execute(stmt).scalars().all()
-            return list(rows)
+
+
 
     def get_experiment_status(self, experiment_id: int) -> tuple[str | None, int]:
         """Returns tuple of (status_string, max_iteration_number) for an experiment, or (None, 0) if not found."""
@@ -232,12 +204,14 @@ class SQLiteExperimentRepository(ExperimentRepository):
 
     def load(
         self,
+        experiment_id: int | None = None,
         problem_id: int | None = None,
         instance_id: int | None = None,
         llm_name: str | None = None,
         dim: int | None = None,
         mode: str | None = None,
         prompt_strategy: str | None = None,
+        status: str | None = None,
     ) -> list[ExperimentSummary]:
         """Loads and filters ExperimentSummary objects from SQLite database using SQLAlchemy 2.0 select."""
         stmt = select(ExperimentORM).options(
@@ -245,11 +219,13 @@ class SQLiteExperimentRepository(ExperimentRepository):
         )
 
         raw_filters = {
+            "id": experiment_id,
             "problem_id": problem_id,
             "instance_id": instance_id,
             "llm_name": llm_name,
             "dim": dim,
             "prompt_strategy": prompt_strategy,
+            "status": status,
         }
         active_filters = {k: v for k, v in raw_filters.items() if v is not None}
         if active_filters:

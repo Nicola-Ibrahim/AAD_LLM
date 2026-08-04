@@ -77,54 +77,74 @@ class LLaMEASession:
 
     def __init__(
         self,
-        problem: BBOBProblem,
         llm_client: LLMClient,
         db_repo: ExperimentRepository,
         code_repo: CodeRepository,
+        problem: BBOBProblem | None = None,
         budget: int = 1000,
         iterations: int = 10,
         resume_experiment_id: int | None = None,
         prompt_strategy: PromptStrategy | str = PromptStrategy.BASELINE,
     ):
-        """Initializes the synthesis session with its parameters and required repositories."""
+        """Initializes the synthesis session with its parameters and required repositories.
+
+        Must provide either `problem` (for a new experiment) OR `resume_experiment_id` (to resume an existing experiment).
+        Providing both or neither will raise a ValueError.
+        """
         if llm_client is None:
             raise ValueError("LLaMEASession requires a valid LLMClient")
 
-        self._problem = problem
+        if (problem is None) == (resume_experiment_id is None):
+            if problem is None and resume_experiment_id is None:
+                raise ValueError(
+                    "Must provide either 'problem' (for a new run) or 'resume_experiment_id' (to resume an existing run)."
+                )
+            raise ValueError(
+                "Cannot provide both 'problem' and 'resume_experiment_id'; they are mutually exclusive."
+            )
+
         self._llm_client = llm_client
         self._db_repo = db_repo
         self._code_repo = code_repo
         self._budget = budget
         self._iterations = iterations
-        self._prompt_strategy = (
-            PromptStrategy(prompt_strategy) if isinstance(prompt_strategy, str) else prompt_strategy
-        )
 
-        self._init_experiment_context(resume_experiment_id)
+        self._init_experiment_context(problem, resume_experiment_id, prompt_strategy)
 
-    def _init_experiment_context(self, resume_experiment_id: int | None) -> None:
+    def _init_experiment_context(
+        self,
+        problem: BBOBProblem | None,
+        resume_experiment_id: int | None,
+        prompt_strategy: PromptStrategy | str,
+    ) -> None:
         """Determines whether to resume an existing experiment or initialize a fresh one, setting state accordingly."""
         if resume_experiment_id is not None:
-            status, max_iter = self._db_repo.get_experiment_status(resume_experiment_id)
-            if status != "running":
-                incomplete = self._db_repo.get_incomplete_experiments(
-                    self._problem.problem_id,
-                    self._problem.dim,
-                    self._problem.mode,
-                    self._llm_client.model.name,
-                    self._problem.noise_std,
-                    instance_id=self._problem.instance_id,
-                    prompt_strategy=self._prompt_strategy,
-                )
+            exps = self._db_repo.load(experiment_id=resume_experiment_id)
+            if not exps:
+                raise ValueError(f"Experiment ID {resume_experiment_id} was not found in the database.")
+            exp = exps[0]
+            if exp.status != "running":
                 raise ValueError(
-                    f"Cannot resume experiment {resume_experiment_id} because its status is '{status}'.\n"
-                    f"Please start a new experiment without passing an ID, or choose from these "
-                    f"incomplete experiments matching your parameters: {incomplete}"
+                    f"Cannot resume experiment {resume_experiment_id} because its status is '{exp.status}'."
                 )
 
-            self._initial_iteration = max_iter
+            self._problem = BBOBProblem(
+                problem_id=exp.problem.problem_id,
+                dim=exp.problem.dim,
+                instance_id=exp.problem.instance_id,
+                noise_std=exp.problem.noise_std,
+            )
+            self._prompt_strategy = PromptStrategy(exp.prompt_strategy)
+            self._initial_iteration = len(exp.iterations)
             self._experiment_id = resume_experiment_id
         else:
+            assert problem is not None
+            self._problem = problem
+            self._prompt_strategy = (
+                PromptStrategy(prompt_strategy)
+                if isinstance(prompt_strategy, str)
+                else prompt_strategy
+            )
             self._initial_iteration = 0
             self._experiment_id = self._db_repo.create_experiment(
                 problem_id=self._problem.problem_id,
