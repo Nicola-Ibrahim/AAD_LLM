@@ -77,85 +77,32 @@ class LLaMEASession:
 
     def __init__(
         self,
+        problem: BBOBProblem,
+        experiment_id: int,
+        initial_iteration: int,
+        prompt_strategy: PromptStrategy,
         llm_client: LLMClient,
         db_repo: ExperimentRepository,
         code_repo: CodeRepository,
-        problem: BBOBProblem | None = None,
-        budget: int = 1000,
-        iterations: int = 10,
-        resume_experiment_id: int | None = None,
-        prompt_strategy: PromptStrategy | str = PromptStrategy.BASELINE,
+        budget: int,
+        iterations: int,
     ):
-        """Initializes the synthesis session with its parameters and required repositories.
+        """Initializes the synthesis session instance directly with fully resolved domain objects.
 
-        Must provide either `problem` (for a new experiment) OR `resume_experiment_id` (to resume an existing experiment).
-        Providing both or neither will raise a ValueError.
+        Note: Use factory methods `LLaMEASession.create(...)` or `LLaMEASession.resume(...)`.
         """
         if llm_client is None:
             raise ValueError("LLaMEASession requires a valid LLMClient")
 
-        if (problem is None) == (resume_experiment_id is None):
-            if problem is None and resume_experiment_id is None:
-                raise ValueError(
-                    "Must provide either 'problem' (for a new run) or 'resume_experiment_id' (to resume an existing run)."
-                )
-            raise ValueError(
-                "Cannot provide both 'problem' and 'resume_experiment_id'; they are mutually exclusive."
-            )
-
+        self._problem = problem
+        self._experiment_id = experiment_id
+        self._initial_iteration = initial_iteration
+        self._prompt_strategy = prompt_strategy
         self._llm_client = llm_client
         self._db_repo = db_repo
         self._code_repo = code_repo
         self._budget = budget
         self._iterations = iterations
-
-        self._init_experiment_context(problem, resume_experiment_id, prompt_strategy)
-
-    def _init_experiment_context(
-        self,
-        problem: BBOBProblem | None,
-        resume_experiment_id: int | None,
-        prompt_strategy: PromptStrategy | str,
-    ) -> None:
-        """Determines whether to resume an existing experiment or initialize a fresh one, setting state accordingly."""
-        if resume_experiment_id is not None:
-            exps = self._db_repo.load(experiment_id=resume_experiment_id)
-            if not exps:
-                raise ValueError(f"Experiment ID {resume_experiment_id} was not found in the database.")
-            exp = exps[0]
-            if exp.status != "running":
-                raise ValueError(
-                    f"Cannot resume experiment {resume_experiment_id} because its status is '{exp.status}'."
-                )
-
-            self._problem = BBOBProblem(
-                problem_id=exp.problem.problem_id,
-                dim=exp.problem.dim,
-                instance_id=exp.problem.instance_id,
-                noise_std=exp.problem.noise_std,
-            )
-            self._prompt_strategy = PromptStrategy(exp.prompt_strategy)
-            self._initial_iteration = len(exp.iterations)
-            self._experiment_id = resume_experiment_id
-        else:
-            assert problem is not None
-            self._problem = problem
-            self._prompt_strategy = (
-                PromptStrategy(prompt_strategy)
-                if isinstance(prompt_strategy, str)
-                else prompt_strategy
-            )
-            self._initial_iteration = 0
-            self._experiment_id = self._db_repo.create_experiment(
-                problem_id=self._problem.problem_id,
-                instance_id=self._problem.instance_id,
-                dim=self._problem.dim,
-                mode=self._problem.mode,
-                llm_name=self._llm_client.model.name,
-                noise_std=self._problem.noise_std,
-                true_optimum=self._problem.true_optimum,
-                prompt_strategy=self._prompt_strategy,
-            )
 
         self._archive_dir = (
             DATA_DIR
@@ -164,6 +111,96 @@ class LLaMEASession:
             / f"experiment_{self._experiment_id}"
         )
         self._archive_dir.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def create(
+        cls,
+        problem: BBOBProblem,
+        llm_client: LLMClient,
+        db_repo: ExperimentRepository,
+        code_repo: CodeRepository,
+        budget: int = 1000,
+        iterations: int = 10,
+        prompt_strategy: PromptStrategy | str = PromptStrategy.BASELINE,
+    ) -> "LLaMEASession":
+        """Factory method for creating a brand-new synthesis session."""
+        if llm_client is None:
+            raise ValueError("LLaMEASession requires a valid LLMClient")
+        if problem is None:
+            raise ValueError("LLaMEASession.create requires a valid problem")
+        strategy = (
+            PromptStrategy(prompt_strategy) if isinstance(prompt_strategy, str) else prompt_strategy
+        )
+        exp_id = db_repo.create_experiment(
+            problem_id=problem.problem_id,
+            instance_id=problem.instance_id,
+            dim=problem.dim,
+            mode=problem.mode,
+            llm_name=llm_client.model.name,
+            noise_std=problem.noise_std,
+            true_optimum=problem.true_optimum,
+            prompt_strategy=strategy,
+            budget=budget,
+            iterations=iterations,
+        )
+        return cls(
+            problem=problem,
+            experiment_id=exp_id,
+            initial_iteration=0,
+            prompt_strategy=strategy,
+            llm_client=llm_client,
+            db_repo=db_repo,
+            code_repo=code_repo,
+            budget=budget,
+            iterations=iterations,
+        )
+
+    @classmethod
+    def resume(
+        cls,
+        experiment_id: int,
+        llm_client: LLMClient,
+        db_repo: ExperimentRepository,
+        code_repo: CodeRepository,
+        iterations: int | None = None,
+    ) -> "LLaMEASession":
+        """Factory method for resuming an existing synthesis session from database state."""
+        if llm_client is None:
+            raise ValueError("LLaMEASession requires a valid LLMClient")
+        exps = db_repo.load(experiment_id=experiment_id)
+        if not exps:
+            raise ValueError(f"Experiment ID {experiment_id} was not found in the database.")
+        exp = exps[0]
+        if exp.status != "running":
+            raise ValueError(
+                f"Cannot resume experiment {experiment_id} because its status is '{exp.status}'."
+            )
+
+        problem = BBOBProblem(
+            problem_id=exp.problem.problem_id,
+            dim=exp.problem.dim,
+            instance_id=exp.problem.instance_id,
+            noise_std=exp.problem.noise_std,
+        )
+        strategy = PromptStrategy(exp.prompt_strategy)
+        budget = exp.budget if exp.budget is not None else 1000
+        total_iterations = (
+            iterations
+            if iterations is not None
+            else (exp.max_iterations if exp.max_iterations is not None else 10)
+        )
+
+        return cls(
+            problem=problem,
+            experiment_id=experiment_id,
+            initial_iteration=len(exp.iterations),
+            prompt_strategy=strategy,
+            llm_client=llm_client,
+            db_repo=db_repo,
+            code_repo=code_repo,
+            budget=budget,
+            iterations=total_iterations,
+        )
 
     @property
     def _experiment_name(self) -> str:
@@ -195,6 +232,7 @@ class LLaMEASession:
             raise
         else:
             self._db_repo.mark_completed(self._experiment_id)
+            self._cleanup_archive_dir()
 
             best_so_far = synthesis_engine.best_so_far
             fitness_score = best_so_far.fitness  # This is -final_error (LLaMEA convention)
@@ -317,3 +355,10 @@ class LLaMEASession:
         print(f"  Final Absolute Error (|Obj-Opt|): {err_str} (Target = 0.0)")
         print(f"  LLaMEA Fitness Score (-Error):  {fit_str} (Higher is better, Max = 0.0)")
         print("=" * 70 + "\n")
+
+    def _cleanup_archive_dir(self) -> None:
+        """Silently removes the temporary evolution_state checkpoint directory upon successful experiment completion."""
+        if self._archive_dir.exists():
+            import shutil
+
+            shutil.rmtree(self._archive_dir, ignore_errors=True)

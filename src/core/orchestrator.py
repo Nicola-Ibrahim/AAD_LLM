@@ -24,7 +24,7 @@ class EvolutionTask:
     problem: BBOBProblem | None = None
     llm_client: LLMClient | None = None
     budget: int = 1000
-    iterations: int = 10
+    iterations: int | None = None
     resume_experiment_id: int | None = None
     prompt_strategy: PromptStrategy | str = PromptStrategy.BASELINE
     db_path: Path = field(default_factory=lambda: DATA_DIR / "db.sqlite3")
@@ -38,16 +38,24 @@ class EvolutionTask:
         db_repo = initialize_sqlite_storage(self.db_path)
         code_repo = CodeRepository()
 
-        session = LLaMEASession(
-            problem=self.problem,
-            llm_client=self.llm_client,
-            db_repo=db_repo,
-            code_repo=code_repo,
-            budget=self.budget,
-            iterations=self.iterations,
-            resume_experiment_id=self.resume_experiment_id,
-            prompt_strategy=self.prompt_strategy,
-        )
+        if self.resume_experiment_id is not None:
+            session = LLaMEASession.resume(
+                experiment_id=self.resume_experiment_id,
+                llm_client=self.llm_client,
+                db_repo=db_repo,
+                code_repo=code_repo,
+                iterations=self.iterations,
+            )
+        else:
+            session = LLaMEASession.create(
+                problem=self.problem,
+                llm_client=self.llm_client,
+                db_repo=db_repo,
+                code_repo=code_repo,
+                budget=self.budget,
+                iterations=self.iterations or 10,
+                prompt_strategy=self.prompt_strategy,
+            )
         return session.run()
 
 

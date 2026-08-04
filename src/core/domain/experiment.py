@@ -21,6 +21,16 @@ class ExperimentSummary(DomainEntity):
         description="Name of the prompt strategy used for algorithm synthesis.",
         examples=["baseline", "vectorization", "math_hints", "full_scaffold"],
     )
+    budget: int | None = Field(
+        default=None,
+        description="Evaluation budget allocated per candidate algorithm run.",
+        examples=[1000, 10000],
+    )
+    max_iterations: int | None = Field(
+        default=None,
+        description="Maximum synthesis iterations set for the experiment run.",
+        examples=[10, 20],
+    )
     status: str = Field(
         default="running",
         description="Current lifecycle status of the experiment: running, completed, or failed.",

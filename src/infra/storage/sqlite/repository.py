@@ -45,6 +45,8 @@ class SQLiteExperimentRepository(ExperimentRepository):
         true_optimum: float,
         instance_id: int = 1,
         prompt_strategy: str = "baseline",
+        budget: int = 1000,
+        iterations: int = 10,
     ) -> int:
         """Creates the experiment DB row and returns its id."""
         with self.SessionLocal() as session:
@@ -56,6 +58,8 @@ class SQLiteExperimentRepository(ExperimentRepository):
                 llm_name=llm_name,
                 prompt_strategy=prompt_strategy,
                 noise_std=noise_std,
+                budget=budget,
+                max_iterations=iterations,
                 true_optimum=true_optimum,
                 status="running",
                 started_at=datetime.now(timezone.utc).isoformat(),
@@ -64,10 +68,6 @@ class SQLiteExperimentRepository(ExperimentRepository):
             session.commit()
             session.refresh(experiment)
             return experiment.id
-
-
-
-
 
     def get_experiment_status(self, experiment_id: int) -> tuple[str | None, int]:
         """Returns tuple of (status_string, max_iteration_number) for an experiment, or (None, 0) if not found."""
@@ -259,6 +259,8 @@ class SQLiteExperimentRepository(ExperimentRepository):
                         mode=exp.mode.value,
                         llm_name=exp.llm_name,
                         prompt_strategy=exp.prompt_strategy or "baseline",
+                        budget=exp.budget,
+                        max_iterations=exp.max_iterations,
                         id=exp.id,
                         status=exp.status,
                         started_at=exp.started_at,

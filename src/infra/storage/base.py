@@ -38,6 +38,8 @@ class ExperimentRepository(ABC):
         true_optimum: float,
         instance_id: int = 1,
         prompt_strategy: str = "baseline",
+        budget: int = 1000,
+        iterations: int = 10,
     ) -> int:
         """Creates the experiment DB row and returns its id."""
         pass

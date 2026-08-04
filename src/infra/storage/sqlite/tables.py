@@ -41,6 +41,8 @@ class ExperimentORM(Base):
         String, nullable=False, default="baseline", server_default=text("'baseline'")
     )
     noise_std = Column(Float, nullable=True)  # NULL for CLEAN mode
+    budget = Column(Integer, nullable=True)  # Evaluation budget per iteration
+    max_iterations = Column(Integer, nullable=True)  # Max synthesis iterations for the run
 
     true_optimum = Column(Float)
 
