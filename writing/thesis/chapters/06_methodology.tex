@@ -7,67 +7,80 @@
 This chapter details the architectural design, software orchestration, and mathematical formulation of the non-deterministic automated algorithm design pipeline implemented in this thesis. To isolate the adaptive mechanics of Large Language Model code discovery under fitness uncertainty, our framework tightly couples generative foundation models with a controlled, noise-injected execution sandbox. The pipeline operates as a closed-loop evolutionary system designed to transition Python source-code structures from deterministic assumptions to noise-resilient operational behaviors. The following sections delineate our environmental wrapper implementation, the closed-loop evolutionary orchestration strategy, the structural code sanitization and tracking layers, and the statistical evaluation metrics designed to measure cross-environment generalizability.
 
 %-------------------------------------------------------------------------------
-\section{The Stochastic Sandbox and Landscape-Scaled Noise Framework}\label{sec:method_sandbox}
+\section{The Stochastic Sandbox and Optimality-Gap Heteroscedastic Noise}\label{sec:method_sandbox}
 
-To systematically evaluate whether Large Language Models can design optimization heuristics capable of surviving real-world sensory uncertainty, candidate code must be subjected to controlled, non-deterministic operational conditions \cite{Jin2005}. This research utilizes the continuous Black-Box Optimization Benchmark (BBOB) suite as its foundational testbed \cite{Hansen2010}. However, because standard benchmark instances are strictly deterministic, evaluating noise resilience required formulating an environmental noise injection model over the objective functions.
+To systematically evaluate whether Large Language Models can design optimization heuristics capable of surviving real-world sensory uncertainty, candidate code must be subjected to controlled, non-deterministic operational conditions \cite{Jin2005}. This research utilizes the continuous Black-Box Optimization Benchmark (BBOB) suite as its foundational testbed \cite{Hansen2010}. However, because standard benchmark instances are strictly deterministic, evaluating noise resilience required formulating an environmental noise injection wrapper over objective evaluations.
 
 In continuous stochastic optimization literature, sensory uncertainty is predominantly simulated using either static additive white Gaussian noise \cite{Jin2005},
 \begin{equation}\label{eq:static_noise_lit}
     f_{\text{noisy}}(x) = f_{\text{clean}}(x) + \mathcal{N}(0, \sigma^2)
 \end{equation}
-or point-wise proportional noise,
-\begin{equation}\label{eq:proportional_noise_lit}
-    f_{\text{noisy}}(x) = f_{\text{clean}}(x) \cdot \left(1 + \mathcal{N}(0, \sigma^2)\right)
+or naive point-wise multiplicative noise \cite{Jin2005},
+\begin{equation}\label{eq:naive_multiplicative_lit}
+    f_{\text{noisy}}(x) = f_{\text{clean}}(x) \cdot \left(1 + \mathcal{N}(0, \text{CV}^2)\right)
 \end{equation}
-where $x \in \mathbb{R}^D$ denotes a $D$-dimensional coordinate vector in the search space, $f_{\text{clean}}(x) \in \mathbb{R}$ represents the true deterministic objective evaluation, $\sigma^2 \in \mathbb{R}^+$ is a fixed scalar variance, and $f_{\text{noisy}}(x) \in \mathbb{R}$ is the corrupted observation returned to the search heuristic.
+where $x \in \mathbb{R}^D$ denotes a $D$-dimensional coordinate vector in the search space, $f_{\text{clean}}(x) \in \mathbb{R}$ represents the true deterministic objective evaluation, $\sigma^2 \in \mathbb{R}^+$ is a fixed scalar variance, $\text{CV} \in \mathbb{R}^+$ is the dimensionless Coefficient of Variation ($\text{CV} = \sigma / \mu$), and $f_{\text{noisy}}(x) \in \mathbb{R}$ is the corrupted observation returned to the search heuristic.
 
-When applied across a heterogeneous suite of continuous functions, however, both standard models exhibit fundamental theoretical breakdowns \cite{Hansen2010}. Static unscaled noise applies a fixed variance $\sigma^2$ regardless of objective magnitude. On flat, separable landscapes, such as function $f_1$ where objective values near the optimum approach $10^{-5}$, a static variance of $\sigma = 0.05$ creates an overwhelmingly low Signal-to-Noise Ratio (SNR), swamping the true gradient signal in random static. Conversely, on steep, ill-scaled landscapes, such as function $f_{10}$ where objective values scale to $10^6$, an additive noise magnitude of $0.05$ represents less than $0.000005\%$ of the objective range. This renders uncertainty mathematically imperceptible, allowing algorithms to exploit clean gradients without acquiring genuine noise tolerance. On the other hand, point-wise proportional noise maintains the Signal-to-Noise Ratio across scales but introduces a zero-noise sanctuary near convergence. As candidate search trajectories approach the global minimum $f(x^*)$ or roots where $f_{\text{clean}}(x) \to 0$, local noise variance mathematically vanishes,
+When applied across a heterogeneous suite of continuous functions, both standard models exhibit fundamental theoretical breakdowns \cite{Hansen2010}. Static unscaled noise (Equation~\ref{eq:static_noise_lit}) applies a fixed variance $\sigma^2$ regardless of objective magnitude. On flat landscapes where objective values near the optimum approach $10^{-5}$, static noise creates an overwhelmingly low Signal-to-Noise Ratio (SNR), swamping the true gradient signal. Conversely, on steep landscapes where objective values scale to $10^6$, an additive noise magnitude represents a negligible fraction of the objective range, allowing algorithms to exploit clean gradients without acquiring genuine noise tolerance \cite{Hansen2010}.
+
+On the other hand, naive multiplicative noise (Equation~\ref{eq:naive_multiplicative_lit}) treats noise as proportional to the \textit{coordinate system artifact} of the function—the raw value $f_{\text{clean}}(x)$. Because $f_{\text{clean}}(x)$ includes the arbitrary constant shift of the global optimum $f(x^*)$, it contains no genuine information regarding spatial distance to the minimum. If a landscape is redefined as $g(x) = f(x) + 10,000$, naive multiplicative noise explodes by orders of magnitude with no scientific justification, obliterating the underlying basin topology.
+
+To explicitly demonstrate this structural collapse, consider BBOB Function $f_{21}$ (Gallagher's Gaussian 101 Peaks). The true optimum is shifted to $f(x^*) \approx 40.78$, and the function's dynamic range spans roughly $50$ units (from $40$ to $90$). Under naive multiplicative noise with a coefficient of $\text{CV} = 0.05$, a candidate evaluation sitting deep within the global optimum basin at $f_{\text{clean}}(x) = 41.0$ receives a standard deviation of:
+\begin{equation}\label{eq:f21_naive_std}
+    \sigma = 0.05 \cdot 41.0 = 2.05
+\end{equation}
+A perturbation of $\pm 2.05$ represents $4\%$ of the entire dynamic range of the function. For a highly multimodal landscape where height differences between local Gaussian peaks are often just $2$ to $5$ units, this noise level completely obliterates the basin topology. If an LLM-generated algorithm evaluates two candidate solutions, $x_a$ ($f = 41.5$) and $x_b$ ($f = 42.0$), the naive formula generates extreme overlapping distributions: $f_{\text{noisy}}(x_a) \sim \mathcal{N}(41.5, 2.075^2)$ and $f_{\text{noisy}}(x_b) \sim \mathcal{N}(42.0, 2.1^2)$. The noise frequently inverts the objective ranking, providing the search heuristic with zero useful gradient signal.
+
+Furthermore, while standard point-wise proportional noise maintains constant SNR across macro-scales, pure multiplicative noise introduces a zero-noise sanctuary near convergence. As candidate search trajectories approach $f(x^*) = 0$, local noise variance mathematically vanishes:
 \begin{equation}\label{eq:vanishing_variance}
-    \lim_{f(x) \to 0} \operatorname{Var}\left(f_{\text{noisy}}(x)\right) = 0
+    \lim_{f(x) \to f(x^*)} \operatorname{Var}\left(f_{\text{noisy}}(x)\right) = 0
 \end{equation}
-where $\operatorname{Var}(\cdot)$ denotes the mathematical variance operator. This vanishing variance allows optimizers to exploit uncorrupted signals precisely at the point of convergence, defeating the purpose of the stochastic benchmark.
+where $\operatorname{Var}(\cdot)$ denotes the mathematical variance operator. This vanishing variance allows optimizers to exploit uncorrupted signals precisely at the point of convergence, defeating the purpose of a stochastic benchmark.
 
-To resolve these limitations, this thesis formulates a Landscape-Scaled Additive Gaussian Noise model. The foundational premise is that noise variance must be scaled relative to the macro-scale magnitude of each problem's bounded domain, rather than fixed globally or scaled locally point-by-point. 
+To resolve these limitations, this thesis formulates the \textbf{Optimality-Gap Heteroscedastic Noise Model with a Non-Zero Baseline Noise Floor}. We propose replacing raw-value multiplicative noise with a gap-anchored formulation. For any evaluation coordinate $x_k \in \mathbb{R}^D$ generated at step $k$, the point-wise standard deviation $\sigma_{\text{dynamic}}(x_k)$ scales strictly with absolute objective elevation relative to the known global minimum $f(x^*)$, while enforcing a positive noise floor $\sigma_{\text{floor}} > 0$:
+\begin{equation}\label{eq:proportional_dynamic_std}
+    \sigma_{\text{dynamic}}(x_k) = \text{CV} \cdot \left| f_{\text{clean}}(x_k) - f(x^*) \right| + \sigma_{\text{floor}}
+\end{equation}
+where $\text{CV} \ge 0$ parameterizes the relative noise intensity, $\left| f_{\text{clean}}(x_k) - f(x^*) \right|$ represents the true objective distance to the global optimum, and $\sigma_{\text{floor}} = 10^{-8}$ prevents Equation~\ref{eq:vanishing_variance} from establishing an artificial zero-noise sanctuary.
 
-Because the BBOB suite is a controlled benchmarking environment, the absolute global minimum $f(x^*)$ is known \textit{a priori} to the evaluation sandbox (acting as an omniscient wrapper). This allows the sandbox to calibrate environmental difficulty before the candidate algorithm begins its search, without leaking spatial information to the optimizer. The baseline magnitude of a problem landscape is quantified by a scale parameter $S \in \mathbb{R}^+$, which measures the average objective height and overall vertical scale of the function across its domain. Mathematically, $S$ is defined theoretically as the expected absolute objective deviation across the bounded search domain $\mathcal{S} = \prod_{d=1}^D [\text{lb}_d, \text{ub}_d] \subset \mathbb{R}^D$:
-\begin{equation}\label{eq:landscape_scale_theory}
-    S = \mathbb{E}_{x \sim \mathcal{U}(\mathcal{S})} \left[ \left| f(x) - f(x^*) \right| \right]
+Because the BBOB suite is a controlled benchmarking testbed, $f(x^*)$ is known \textit{a priori} to the evaluation sandbox (acting as an omniscient wrapper) but remains strictly hidden from the candidate algorithm. The corrupted evaluation observation returned to the candidate search logic at step $k$ is formulated as:
+\begin{equation}\label{eq:proportional_gaussian_noise}
+    f_{\text{noisy}}(x_k) = f_{\text{clean}}(x_k) + z_k, \quad z_k \sim \mathcal{N}\left(0, \sigma_{\text{dynamic}}^2(x_k)\right)
 \end{equation}
-where $\mathcal{S}$ represents the search space bounded by lower spatial limits $\text{lb}_d$ and upper spatial limits $\text{ub}_d$ in dimension $d$, $\mathcal{U}(\mathcal{S})$ denotes a continuous uniform probability distribution over $\mathcal{S}$, $x^* \in \mathbb{R}^D$ is the known global optimum coordinate vector, and $f(x^*) \in \mathbb{R}$ is the optimal objective value.
+where $z_k \in \mathbb{R}$ is a zero-mean Gaussian random perturbation variable sampled independently at evaluation step $k$.
 
-Evaluating Equation~\ref{eq:landscape_scale_theory} analytically or via deterministic numerical quadrature over a $D$-dimensional continuous space is computationally intractable. Quadrature methods suffer from the curse of dimensionality, requiring an exponential grid evaluation cost of $\mathcal{O}(m^D)$ where $m$ is the grid resolution per dimension. To prevent evaluation pre-processing from dominating runtime budgets, $S$ is approximated via a computationally lightweight Monte Carlo sampling proxy:
-\begin{equation}\label{eq:landscape_scale_approx}
-    S \approx \frac{1}{N} \sum_{i=1}^{N} \left| f_{\text{clean}}(x_i) - f(x^*) \right|
+The continuous probability density function $p(z_k)$ governing the additive perturbation $z_k$ at evaluation step $k$ is formally expressed as:
+\begin{equation}\label{eq:gaussian_pdf_dynamic}
+    p(z_k) = \frac{1}{\sqrt{2\pi \sigma_{\text{dynamic}}^2(x_k)}} \exp\left( -\frac{z_k^2}{2\sigma_{\text{dynamic}}^2(x_k)} \right)
 \end{equation}
-where $N = 20$ specifies the number of Monte Carlo sampling points, and $x_i \in \mathbb{R}^D$ represents the $i$-th coordinate vector sampled uniformly at random ($x_i \sim \mathcal{U}(\mathcal{S})$) directly from the objective function. While $N = 20$ is too small for fine numerical integration, Monte Carlo estimation error scales as $\mathcal{O}(1/\sqrt{N})$ independent of dimensionality $D$. Thus, $N = 20$ provides an extremely efficient, dimension-agnostic proxy that reliably extracts the function's structural order of magnitude (e.g., distinguishing $10^1$ from $10^3$ or $10^6$) in milliseconds before the search loop begins. To guarantee strict deterministic reproducibility of $S$ across independent evolutionary runs, this Monte Carlo sampling procedure utilizes a fixed random initialization seed (\texttt{seed=42}).
-
-Given the domain scale factor $S$ and a configurable dimensionless noise intensity parameter $\gamma \ge 0$, the wrapper computes an instance-specific standard deviation $\sigma_{\text{scaled}} \in \mathbb{R}^+$:
-\begin{equation}\label{eq:scaled_std}
-    \sigma_{\text{scaled}} = \gamma \cdot S
-\end{equation}
-where $\gamma$ acts as a user-controlled global noise multiplier. Crucially, $\sigma_{\text{scaled}}$ remains constant for the duration of the algorithm's execution on that specific problem instance. The evaluation of any spatial coordinate $x_k \in \mathbb{R}^D$ at step $k$ under stochastic noise is modeled by adding a continuous zero-mean Gaussian random variable $z \sim \mathcal{N}\left(0, \sigma_{\text{scaled}}^2\right)$ to the deterministic objective value $f_{\text{clean}}(x_k)$:
-\begin{equation}\label{eq:scaled_gaussian_noise}
-    f_{\text{noisy}}(x_k) = f_{\text{clean}}(x_k) + z
-\end{equation}
-where $x_k$ is the $k$-th coordinate vector generated by the algorithm, $f_{\text{clean}}(x_k)$ is the true objective value, $z \in \mathbb{R}$ is the sampled stochastic perturbation, and $f_{\text{noisy}}(x_k)$ is the corrupted value returned to the search logic.
-
-The continuous probability density function $p(z)$ governing the additive perturbation variable $z$ is formally expressed as:
-\begin{equation}\label{eq:gaussian_pdf}
-    p(z) = \frac{1}{\sqrt{2\pi \sigma_{\text{scaled}}^2}} \exp\left( -\frac{z^2}{2\sigma_{\text{scaled}}^2} \right)
-\end{equation}
-where $\pi \approx 3.14159$ represents the mathematical constant pi. Because the probability density function $p(z)$ is symmetric around zero ($\mathbb{E}[z] = 0$), the noisy objective expectation remains completely unbiased:
+where $\pi \approx 3.14159$ represents the mathematical constant pi. Because $p(z_k)$ is symmetric around zero ($\mathbb{E}[z_k] = 0$), the noisy objective feedback remains an unbiased estimator of true objective elevation:
 \begin{equation}\label{eq:unbiased_expectation}
     \mathbb{E}[f_{\text{noisy}}(x_k)] = f_{\text{clean}}(x_k)
 \end{equation}
-By scaling the noise variance directly with $S$, Equation~\ref{eq:scaled_gaussian_noise} normalizes environmental uncertainty across all benchmark topological groups.
 
-To explicitly demonstrate the physical mechanics and mathematical application of this noise model, consider a detailed case study on BBOB Function $f_8$. In the official benchmark taxonomy \cite{Hansen2010}, instance transformations apply spatial translations $x^* \in \mathbb{R}^D$ and orthonormal rotation matrices $R \in \mathbb{R}^{D \times D}$ to prevent algorithm over-specialization to coordinate axes. The mathematical formulation of $f_8$ is defined by:
+Anchoring the variance dynamically to the optimality gap via Equation~\ref{eq:proportional_dynamic_std} establishes three mathematically vital properties for Automated Algorithm Design:
+\begin{enumerate}
+    \item \textbf{Oracle Preservation:} As search trajectories approach the global minimum ($f_{\text{clean}}(x) \to f(x^*)$), the variance smoothly transitions to $\sigma_{\text{floor}} = 10^{-8}$. The true optimum remains uniquely identifiable and statistically distinguishable at all noise levels, ensuring optimizers that successfully converge are rewarded with quiet, accurate readings.
+    \item \textbf{Scale-Invariance:} The Signal-to-Noise Ratio (SNR) at any point is bounded by $1/\text{CV}$ regardless of whether the problem is $f_8$ (with a dynamic range of $\sim 10^3$) or $f_{21}$ (with a dynamic range of $\sim 50$). This standardizes environmental pressure across all benchmark topological classes without requiring per-function calibration.
+    \item \textbf{Structured Difficulty:} Exploration regions far from the optimum carry high uncertainty, while exploitation regions near the optimum carry low uncertainty. This reflects highly realistic physical noise models where measurement error scales with a system's deviation from equilibrium.
+\end{enumerate}
+
+Re-evaluating the $f_{21}$ (Gallagher 101) case study under this gap-anchored model ($\text{CV} = 0.05$), the two points $x_a$ ($f = 41.5$) and $x_b$ ($f = 42.0$) yield vastly superior signal integrity:
+\begin{equation}\label{eq:f21_gap_std_a}
+    \sigma_{\text{dynamic}}(x_a) = 0.05 \cdot |41.5 - 40.78| + 10^{-8} \approx 0.036
+\end{equation}
+\begin{equation}\label{eq:f21_gap_std_b}
+    \sigma_{\text{dynamic}}(x_b) = 0.05 \cdot |42.0 - 40.78| + 10^{-8} \approx 0.061
+\end{equation}
+The resulting distributions, $f_{\text{noisy}}(x_a) \sim \mathcal{N}(41.5, 0.036^2)$ and $f_{\text{noisy}}(x_b) \sim \mathcal{N}(42.0, 0.061^2)$, strictly preserve the algorithmic ranking. The basin topology remains intact, allowing intelligently designed heuristics to filter uncertainty and navigate toward convergence.
+
+To explicitly demonstrate the physical mechanics across contrasting topological classes, consider BBOB Function $f_8$ (Rosenbrock). In the official benchmark taxonomy \cite{Hansen2010}, instance transformations apply spatial translations $x^* \in \mathbb{R}^D$ and orthonormal rotation matrices $R \in \mathbb{R}^{D \times D}$ to prevent algorithm over-specialization to coordinate axes. The mathematical formulation of $f_8$ is defined by:
 \begin{equation}\label{eq:bbob_f8_formula}
     f_8(x) = \sum_{i=1}^{D-1} \left[ 100 \cdot \left( y_{i+1} - y_i^2 \right)^2 + (1 - y_i)^2 \right] + f_{\text{opt}}
 \end{equation}
 where $y \in \mathbb{R}^D$ represents the transformed spatial coordinate vector calculated via $y = \max\left(1, \frac{\sqrt{D}}{8}\right) R (x - x^*) + \mathbf{1}$, $\mathbf{1} \in \mathbb{R}^D$ is a vector of ones, and $f_{\text{opt}} \in \mathbb{R}$ represents the shifted global minimum value.
 
-As visualized in Figure~\ref{fig:f8_3d_landscape}, the quadratic term $100 \cdot (y_{i+1} - y_i^2)^2$ constructs a steep parabolic valley curving across the search domain, driving baseline objective deviations $f_{\text{clean}}(x_i) - f_{\text{opt}}$ to magnitudes on the order of $10^3$ near domain boundaries.
+As visualized in Figure~\ref{fig:f8_3d_landscape}, the quadratic term $100 \cdot (y_{i+1} - y_i^2)^2$ constructs a steep parabolic valley curving across the search domain, driving objective deviations $f_{\text{clean}}(x_k) - f_{\text{opt}}$ to magnitudes on the order of $10^3$ near domain boundaries.
 
 %-------------------------------------------------------------------------------
 % Figure: BBOB Function f8 3D Surface Landscape
@@ -79,26 +92,17 @@ As visualized in Figure~\ref{fig:f8_3d_landscape}, the quadratic term $100 \cdot
 \label{fig:f8_3d_landscape}
 \end{figure}
 
-Applying Equation~\ref{eq:landscape_scale_approx} over uniform Monte Carlo samples on BBOB function $f_8$ computes a baseline landscape scale factor on the order of:
-\begin{equation}\label{eq:f8_scale_value}
-    S_{f_8} \approx 10^3
+Under the proportional gap-anchored model ($\text{CV} = 0.1$), when a candidate algorithm explores domain boundaries on $f_8$ where $f_{\text{clean}}(x_k) - f_{\text{opt}} \approx 10^3$, the local noise standard deviation adapts to:
+\begin{equation}\label{eq:f8_dynamic_std_boundary}
+    \sigma_{\text{dynamic}}(x_k) = 0.1 \cdot 10^3 + 10^{-8} \approx 10^2
 \end{equation}
-In contrast, evaluating Equation~\ref{eq:landscape_scale_approx} on BBOB function $f_1$ (an isotropic quadratic basin defined by $f_1(x) = \|R(x - x^*)\|^2 + f_{\text{opt}}$) yields a significantly smaller baseline scale factor:
-\begin{equation}\label{eq:f1_scale_value}
-    S_{f_1} \approx 10^1
+As the candidate trajectory converges into the parabolic valley where $f_{\text{clean}}(x_k) - f_{\text{opt}} \approx 10^1$, the standard deviation automatically scales down:
+\begin{equation}\label{eq:f8_dynamic_std_valley}
+    \sigma_{\text{dynamic}}(x_k) = 0.1 \cdot 10^1 + 10^{-8} \approx 10^0
 \end{equation}
+In contrast, exploring an isotropic shallow landscape such as BBOB function $f_1$ ($f_1(x) = \|R(x - x^*)\|^2 + f_{\text{opt}}$) near domain boundaries yields typical objective elevations $f_{\text{clean}}(x_k) - f_{\text{opt}} \approx 10^1$, resulting in $\sigma_{\text{dynamic}} \approx 10^0$. 
 
-If a traditional static noise model (Equation~\ref{eq:static_noise_lit}) with $\sigma_{\text{static}} = 0.05$ were applied to $f_8$, the injected noise magnitude of $\pm 0.05$ relative to $S_{f_8} \approx 10^3$ would represent a variance ratio of less than $0.005\%$, rendering noise mathematically imperceptible and allowing algorithms to navigate uncorrupted gradients.
-
-Under the proposed landscape-scaled model, setting a noise intensity parameter of $\gamma = 0.1$ applies Equation~\ref{eq:scaled_std} to compute fixed, function-specific standard deviations:
-\begin{equation}\label{eq:f8_scaled_std_calc}
-    \sigma_{\text{scaled}, f_8} = 0.1 \cdot S_{f_8} \approx 10^2
-\end{equation}
-\begin{equation}\label{eq:f1_scaled_std_calc}
-    \sigma_{\text{scaled}, f_1} = 0.1 \cdot S_{f_1} \approx 10^0
-\end{equation}
-
-Substituting Equation~\ref{eq:f8_scaled_std_calc} and Equation~\ref{eq:f1_scaled_std_calc} into Equation~\ref{eq:scaled_gaussian_noise} generates constant noise perturbations $z_{f_8} \sim \mathcal{N}(0, \sigma_{\text{scaled}, f_8}^2)$ and $z_{f_1} \sim \mathcal{N}(0, \sigma_{\text{scaled}, f_1}^2)$ that persist throughout the optimization run. This step-by-step application proves how the model preserves Signal-to-Noise Ratio (SNR) equivalence: $f_8$ receives noise scaled to its steep parabolic topology, while $f_1$ receives noise scaled to its shallow basin, as illustrated in Figure~\ref{fig:landscape_noise_comparison}.
+Substituting these point-wise standard deviations into Equation~\ref{eq:proportional_gaussian_noise} generates noise perturbations $z_k \sim \mathcal{N}(0, \sigma_{\text{dynamic}}^2(x_k))$ that preserve Signal-to-Noise Ratio (SNR) equivalence across both steep and flat functions, as illustrated in Figure~\ref{fig:landscape_noise_comparison}.
 
 %-------------------------------------------------------------------------------
 % Figure 4.1: Landscape Noise Comparison
@@ -106,11 +110,11 @@ Substituting Equation~\ref{eq:f8_scaled_std_calc} and Equation~\ref{eq:f1_scaled
 \begin{figure}[htbp]
 \centering
 \input{figures/landscape_noise_comparison}
-\caption{Comparison of noise injection models. Static noise (a, b) causes severe Signal-to-Noise Ratio imbalances across different function scales. The proposed Landscape-Scaled Noise model (c) dynamically scales noise variance via Equation~\ref{eq:landscape_scale_approx}, establishing standardized uncertainty pressure across all benchmark topologies.}
+\caption{Comparison of noise injection models. Static noise (a, b) causes severe Signal-to-Noise Ratio imbalances across different function scales. The proposed Proportional Noise model with noise floor (c) dynamically scales noise variance via Equation~\ref{eq:proportional_dynamic_std}, establishing standardized uncertainty pressure across all benchmark topologies.}
 \label{fig:landscape_noise_comparison}
 \end{figure}
 
-Having established a normalized stochastic environment, it is equally critical to define how algorithmic progress is measured within it. To evaluate true optimization capability without corrupting performance tracking with stochastic variance, the experimental framework separates the feedback signal provided to the candidate algorithm from the benchmark's progress measurement. Exposing candidate algorithms to corrupted observations $f_{\text{noisy}}(x_k)$ is necessary to force the discovery of noise-resilient search logic. However, using noisy values to evaluate spatial progress would distort empirical measurement, as an algorithm could receive an unusually favorable negative noise draw that falsely suggests convergence toward $f(x^*)$. To preserve scientific rigor, candidate algorithms rely exclusively on $f_{\text{noisy}}(x_k)$ to guide internal search trajectories and step-size adaptations, while evaluation metrics record the ground-truth distance to the optimum:
+Having established a normalized, structurally sound stochastic environment, it is equally critical to define how algorithmic progress is measured within it. To evaluate true optimization capability without corrupting performance tracking with stochastic variance, the experimental framework separates the feedback signal provided to the candidate algorithm from the benchmark's progress measurement. Exposing candidate algorithms to corrupted observations $f_{\text{noisy}}(x_k)$ is necessary to force the discovery of noise-resilient search logic. However, using noisy values to evaluate spatial progress would distort empirical measurement, as an algorithm could receive an unusually favorable negative noise draw ($z_k \ll 0$) that falsely suggests convergence toward $f(x^*)$. To preserve scientific rigor, candidate algorithms rely exclusively on $f_{\text{noisy}}(x_k)$ to guide internal search trajectories and step-size adaptations, while evaluation metrics record the ground-truth distance to the optimum:
 \begin{equation}\label{eq:clean_distance_metric}
     \Delta f(x_k) = f_{\text{clean}}(x_k) - f(x^*)
 \end{equation}
@@ -122,7 +126,7 @@ where $\Delta f(x_k) \in \mathbb{R}^+$ measures the uncorrupted objective distan
 \begin{figure}[htbp]
 \centering
 \input{figures/landscape_noise_injection}
-\caption{Mathematical pipeline of the Landscape-Scaled Additive Gaussian Noise model. Phase 1 calculates the baseline domain scale $S$ via Equation~\ref{eq:landscape_scale_approx}. Phase 2 evaluates the true objective $f_{\text{clean}}(x_k)$, constructs variance $\sigma_{\text{scaled}} = \gamma \cdot S$ via Equation~\ref{eq:scaled_std}, and injects a Gaussian draw $z \sim \mathcal{N}(0, \sigma_{\text{scaled}}^2)$ to form the noisy observation $f_{\text{noisy}}(x_k)$ via Equation~\ref{eq:scaled_gaussian_noise}.}
+\caption{Mathematical pipeline of the Proportional Multiplicative Noise model. Phase 1 evaluates true objective $f_{\text{clean}}(x_k)$ and constructs variance $\sigma_{\text{dynamic}}(x_k) = \text{CV} \cdot |f_{\text{clean}}(x_k) - f(x^*)| + \sigma_{\text{floor}}$ via Equation~\ref{eq:proportional_dynamic_std}. Phase 2 injects a Gaussian draw $z_k \sim \mathcal{N}(0, \sigma_{\text{dynamic}}^2(x_k))$ to form noisy observation $f_{\text{noisy}}(x_k)$ via Equation~\ref{eq:proportional_gaussian_noise}.}
 \label{fig:landscape_noise_injection}
 \end{figure}
 
@@ -133,13 +137,13 @@ To enable foundation models to autonomously discover optimization heuristics spe
 
 Rather than synthesizing generic algorithms across pooled benchmark suites, our pipeline executes LLaMEA on each target BBOB objective problem individually. This problem-specific evolutionary setup enables the language model to discover bespoke search logic tailored to the unique geometric and topological properties of a given landscape. The architecture implements a single-offspring $(1+1)$ Evolution Strategy executed directly within the language model's natural language context window. In each generation cycle $g \in \{1 \dots G\}$, where $G = 20$ denotes the maximum evolutionary generation horizon, the language model acts as a code-level mutation operator, generating exactly one candidate child algorithm $\mathcal{A}_{\text{child}}$ derived from the incumbent parent algorithm $\mathcal{A}_{\text{parent}}$. By evaluating a single child per generation, the language model receives an immediate, isolated feedback signal comparing the specific code modifications made in $\mathcal{A}_{\text{child}}$ against the resulting performance differential, enabling precise credit assignment during semantic reflection.
 
-For a targeted continuous objective function $f$, the candidate algorithm $\mathcal{A}$ is allocated a high evaluation budget of $B = 100,000$ function evaluations. During execution, the candidate algorithm interacts exclusively with noisy observations $f_{\text{noisy}}(x_k)$ to guide its internal search decisions. Simultaneously, the background diagnostic layer tracks the uncorrupted objective distance to the global minimum, $\Delta f(x_k) = f_{\text{clean}}(x_k) - f(x^*)$, across all evaluation steps $k \in \{1 \dots B\}$. The scalar fitness score assigned to algorithm $\mathcal{A}$ on problem $f$ is defined as the logarithmic minimum uncorrupted distance achieved over its trajectory:
+For a targeted continuous objective function $f$, the candidate algorithm $\mathcal{A}$ is allocated a high evaluation budget of $B = 100,000$ function evaluations, executed via the \texttt{IOHexperimenter} platform harness \cite{deNobel2024}. During execution, the candidate algorithm interacts exclusively with noisy observations $f_{\text{noisy}}(x_k)$ to guide its internal search decisions. Simultaneously, the background diagnostic layer tracks the uncorrupted objective distance to the global minimum, $\Delta f(x_k) = f_{\text{clean}}(x_k) - f(x^*)$, across all evaluation steps $k \in \{1 \dots B\}$. The scalar fitness score assigned to algorithm $\mathcal{A}$ on problem $f$ is defined as the logarithmic minimum uncorrupted distance achieved over its trajectory:
 \begin{equation}\label{eq:individual_fitness}
     \text{Fitness}(\mathcal{A}) = \log_{10} \left( \min_{k \in \{1 \dots B\}} \Delta f(x_k) \right)
 \end{equation}
 where $B = 100,000$ represents the budget boundary, $\Delta f(x_k) \in \mathbb{R}^+$ is the true objective distance at evaluation step $k$, and $\text{Fitness}(\mathcal{A}) \in \mathbb{R}$ is the scalar score returned to LLaMEA. Because the task is minimization, lower fitness values indicate superior spatial convergence toward $f(x^*)$.
 
-Under deterministic conditions ($\gamma = 0$), evolutionary selection is strictly greedy: $\mathcal{A}_{\text{child}}$ replaces $\mathcal{A}_{\text{parent}}$ if and only if $\text{Fitness}(\mathcal{A}_{\text{child}}) < \text{Fitness}(\mathcal{A}_{\text{parent}})$. However, when operating inside a non-deterministic evaluation sandbox ($\gamma > 0$), standard greedy selection is vulnerable to stochastic anomalies. A poorly designed child algorithm may evaluate a sequence of coordinates $x_k$ that happen to receive exceptionally favorable negative noise draws ($z \ll 0$), yielding an artificially superior (lower) fitness score. If this over-evaluated child replaces the parent, it becomes an un-killable statistical ghost parent. Subsequent, structurally superior offspring will be repeatedly rejected because they cannot match the ghost parent's mathematically unachievable, noise-inflated baseline.
+Under deterministic conditions ($\text{CV} = 0$), evolutionary selection is strictly greedy: $\mathcal{A}_{\text{child}}$ replaces $\mathcal{A}_{\text{parent}}$ if and only if $\text{Fitness}(\mathcal{A}_{\text{child}}) < \text{Fitness}(\mathcal{A}_{\text{parent}})$. However, when operating inside a non-deterministic evaluation sandbox ($\text{CV} > 0$), standard greedy selection is vulnerable to stochastic anomalies. A poorly designed child algorithm may evaluate a sequence of coordinates $x_k$ that happen to receive exceptionally favorable negative noise draws ($z_k \ll 0$), yielding an artificially superior (lower) fitness score. If this over-evaluated child replaces the parent, it becomes an un-killable statistical ghost parent. Subsequent, structurally superior offspring will be repeatedly rejected because they cannot match the ghost parent's mathematically unachievable, noise-inflated baseline.
 
 To eliminate this bottleneck, the evolutionary pipeline enforces a mandatory Stochastic Parent Resampling Policy. At the conclusion of every generation cycle $g$, the incumbent parent algorithm $\mathcal{A}_{\text{parent}}$ is re-evaluated across $K$ independent stochastic passes on problem $f$, dynamically updating its stored baseline fitness to the sample mean score:
 \begin{equation}\label{eq:parent_resampling}
@@ -172,12 +176,12 @@ To verify whether the autonomously designed heuristics have acquired generalized
 
 Validation is conducted across representative continuous benchmark functions from the Black-Box Optimization Benchmark suite \cite{Hansen2010}. The experimental protocol benchmarks candidate algorithms across three distinct origin classes:
 \begin{enumerate}
-    \item \textbf{Clean-Evolved Champions ($\mathcal{A}_{\text{clean}}$):} Algorithms discovered by the language model on problem $f$ when the sandbox is configured with zero environmental noise ($\gamma = 0$).
-    \item \textbf{Noise-Evolved Champions ($\mathcal{A}_{\text{noisy}}$):} Algorithms discovered by the language model on problem $f$ when the sandbox injects dynamic landscape-scaled Gaussian noise ($\gamma = 0.1$).
+    \item \textbf{Clean-Evolved Champions ($\mathcal{A}_{\text{clean}}$):} Algorithms discovered by the language model on problem $f$ when the sandbox is configured with zero environmental noise ($\text{CV} = 0$).
+    \item \textbf{Noise-Evolved Champions ($\mathcal{A}_{\text{noisy}}$):} Algorithms discovered by the language model on problem $f$ when the sandbox injects dynamic proportional Gaussian noise ($\text{CV} = 0.1$).
     \item \textbf{Classical Human Baselines ($\mathcal{A}_{\text{baseline}}$):} Standard mathematical implementations of Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001}, Differential Evolution \cite{Storn1997}, and Particle Swarm Optimization \cite{Kennedy1995}.
 \end{enumerate}
 
-As detailed in the experimental matrix in Table~\ref{tab:cross_matrix}, these algorithm classes are cross-evaluated in both deterministic ($\gamma = 0$) and stochastic ($\gamma = 0.1$) testing modes across independent random seed replicates.
+As detailed in the experimental matrix in Table~\ref{tab:cross_matrix}, these algorithm classes are cross-evaluated in both deterministic ($\text{CV} = 0$) and stochastic ($\text{CV} = 0.1$) testing modes across independent random seed replicates.
 
 \begin{table}[htbp]
 \centering
@@ -186,7 +190,7 @@ As detailed in the experimental matrix in Table~\ref{tab:cross_matrix}, these al
 \small
 \begin{tabularx}{\textwidth}{l X X}
 \toprule
-Algorithm Origin & Testing Mode 1: Deterministic ($\gamma = 0$) & Testing Mode 2: Stochastic ($\gamma = 0.1$) \\
+Algorithm Origin & Testing Mode 1: Deterministic ($\text{CV} = 0$) & Testing Mode 2: Stochastic ($\text{CV} = 0.1$) \\
 \midrule
 Clean Evolved ($\mathcal{A}_{\text{clean}}$) & Establishes Baseline Deterministic Capability & Assesses Vulnerability and Noise Breakdown \\
 Noise Evolved ($\mathcal{A}_{\text{noisy}}$) & Verifies Zero-Shot Deterministic Retention & Proves Generalized Noise Robustness \\
