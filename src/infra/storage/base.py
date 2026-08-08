@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 
-from core.domain.experiment import ExperimentSummary
-from core.domain.iteration import IterationMetadata
+from domain.entities import ExperimentSummary
+from domain.enums import ProblemMode
+from domain.vos import IterationMetadata, ProblemProfile
 
 
 class ExperimentRepository(ABC):
@@ -30,19 +31,16 @@ class ExperimentRepository(ABC):
     @abstractmethod
     def create_experiment(
         self,
-        problem_id: int,
-        dim: int,
-        mode: str,
+        problem: ProblemProfile,
+        mode: ProblemMode | str,
         llm_name: str,
-        noise_std: float,
-        true_optimum: float,
-        instance_id: int = 1,
         prompt_strategy: str = "baseline",
         budget: int = 1000,
         iterations: int = 10,
     ) -> int:
         """Creates the experiment DB row and returns its id."""
         pass
+
 
     @abstractmethod
     def append_iteration(

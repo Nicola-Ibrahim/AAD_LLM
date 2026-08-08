@@ -2,20 +2,21 @@ import time
 import traceback
 from typing import Any
 
+import numpy as np
 from llamea import Solution
 
-from core.domain.iteration import IterationMetadata
-from core.domain.metrics import (
-    CodeMetrics,
-    ConvergenceProfile,
-    ErrorProfile,
-    ExecutionProfile,
-    FitnessMetrics,
+from domain.interfaces import BaseProblem
+from domain.vos import (
+    Code,
+    Convergence,
+    Error,
+    Execution,
+    Fitness,
+    IterationMetadata,
+    ProblemProfile,
 )
-from core.domain.problem import ProblemProfile
-from core.llamea.exceptions import AlgorithmTimeoutException
-from core.llamea.executor import AlgorithmExecutor
-from core.problems.bbob import BBOBProblem
+from synthesis.execution.exceptions import AlgorithmTimeoutException
+from synthesis.execution import AlgorithmExecutor
 from infra.storage.base import ExperimentRepository
 from infra.storage.code.repository import CodeRepository
 
@@ -49,19 +50,19 @@ class Evaluator:
 
     def __init__(
         self,
-        problem: BBOBProblem,
+        problem: BaseProblem,
         db_repo: ExperimentRepository,
         code_repo: CodeRepository,
         budget: int = 1000,
         timeout_seconds: float = 10.0,
         experiment_id: int = 1,
         initial_iteration: int = 0,
-        experiment_meta: dict[str, Any] | None = None,
+        convergence_threshold: float = 1e-6,
     ) -> None:
         """Initialize the evaluator.
 
         Args:
-            problem: Fully-configured BBOB problem instance.
+            problem: Fully-configured optimization problem instance implementing BaseProblem interface.
             db_repo: ExperimentRepository to persist incremental iteration records.
             code_repo: CodeRepository to persist algorithm source code per iteration.
             budget: Maximum allowed objective function evaluations passed to the algorithm
@@ -71,7 +72,7 @@ class Evaluator:
                 by default 10.0.
             experiment_id: Globally unique experiment primary key, by default 1.
             initial_iteration: Starting iteration counter (e.g. from warm start), by default 0.
-            experiment_meta: Metadata about the active experiment, by default None.
+            convergence_threshold: Target error threshold required to consider a run converged, by default 1e-6.
         """
         self._problem = problem
         self._db_repo = db_repo
@@ -79,9 +80,9 @@ class Evaluator:
         self._budget = budget
         self._timeout_seconds = timeout_seconds
         self._experiment_id = experiment_id
-        self._experiment_meta = experiment_meta or {}
         self._executor = AlgorithmExecutor(timeout_seconds=self._timeout_seconds)
         self._current_iteration = initial_iteration
+        self._convergence_threshold = convergence_threshold
 
     @property
     def problem_profile(self) -> ProblemProfile:
@@ -90,6 +91,7 @@ class Evaluator:
             problem_id=self._problem.problem_id,
             dim=self._problem.dim,
             noise_std=self._problem.noise_std,
+            noise_model=self._problem.noise_model,
             instance_id=self._problem.instance_id,
             true_optimum=self._problem.true_optimum,
         )
@@ -97,6 +99,7 @@ class Evaluator:
     def _calculate_fitness_and_feedback(
         self,
         algorithm_returned_fitness: float,
+        best_x: np.ndarray | None,
         algorithm_name: str,
         runtime_seconds: float,
         evaluations_used: int,
@@ -106,13 +109,30 @@ class Evaluator:
     ) -> tuple[float, str, IterationMetadata]:
         """
         Compute final error, fitness score, feedback message, and metadata object.
+        Re-evaluates best_x on the clean underlying problem to calculate an unbiased final error.
         """
         true_optimum = self._problem.true_optimum
-        final_error = abs(algorithm_returned_fitness - true_optimum)
+
+        if best_x is not None:
+            if len(best_x) != self._problem.dim:
+                raise ValueError(
+                    f"Returned best_x has dimension {len(best_x)}, expected problem dimension {self._problem.dim}."
+                )
+            if not self._problem.is_in_bounds(best_x):
+                lb_val, ub_val = self._problem.lb[0], self._problem.ub[0]
+                raise ValueError(
+                    f"Returned best_x {best_x.tolist()} is outside search space bounds [{lb_val}, {ub_val}]. "
+                    "Ensure your algorithm clips candidate solutions to domain bounds using problem.clip(x) or np.clip(x, lb, ub)."
+                )
+            clean_y = float(self._problem._clean_problem(best_x.tolist()))
+        else:
+            clean_y = algorithm_returned_fitness
+
+        final_error = abs(clean_y - true_optimum)
 
         feedback = (
-            f"The algorithm achieved a final error of {final_error:.4f} from the true optimum ({true_optimum:.4f}) "
-            f"on BBOB Problem {self._problem.problem_id} (additive noise std: {self._problem.noise_std}). "
+            f"The algorithm achieved a final clean error of {final_error:.4f} from the true optimum ({true_optimum:.4f}) "
+            f"on BBOB Problem {self._problem.problem_id} (noise model: {self._problem.noise_model}, noise std: {self._problem.noise_std}). "
             "Improve convergence speed and resilience to minimize the final error."
         )
 
@@ -120,11 +140,10 @@ class Evaluator:
         relative_error = (final_error / abs(true_optimum)) if true_optimum != 0.0 else final_error
         evals_per_second = (evaluations_used / runtime_seconds) if runtime_seconds > 0.0 else 0.0
         error_per_evaluation = (final_error / evaluations_used) if evaluations_used > 0 else None
-        converged = final_error < 1e-6
 
         metadata = IterationMetadata(
             algorithm_name=algorithm_name,
-            execution=ExecutionProfile(
+            execution=Execution(
                 timed_out=False,
                 runtime_seconds=runtime_seconds,
                 llm_generation_time=llm_generation_time,
@@ -132,26 +151,23 @@ class Evaluator:
                 budget_consumed_pct=budget_consumed_pct,
                 evals_per_second=evals_per_second,
             ),
-            fitness=FitnessMetrics(
+            fitness=Fitness(
                 raw_fitness=algorithm_returned_fitness,
                 final_error=final_error,
                 relative_error=relative_error,
                 error_per_evaluation=error_per_evaluation,
             ),
-            code=CodeMetrics(
+            code=Code(
                 code_lines=code_lines,
                 code_length=code_length,
                 code_path=None,
             ),
-            error=ErrorProfile(
+            error=Error(
                 error_type=None,
                 error_message=None,
                 error_traceback=None,
             ),
-            convergence=ConvergenceProfile(
-                converged=converged,
-                convergence_threshold=1e-6,
-            ),
+            convergence=Convergence.evaluate(final_error, self._convergence_threshold),
         )
 
         # LLaMEA expects a fitness score where higher is better.
@@ -171,7 +187,7 @@ class Evaluator:
         """Compile, execute algorithm run with exception handling, and return metrics/feedback."""
         problem_fn = self._problem.get_objective_fn()
         try:
-            algorithm_returned_fitness = self._executor.execute_algorithm(
+            best_x, algorithm_returned_fitness = self._executor.execute_algorithm(
                 code=solution.code,
                 name=solution.name,
                 dim=self._problem.dim,
@@ -183,6 +199,7 @@ class Evaluator:
 
             return self._calculate_fitness_and_feedback(
                 algorithm_returned_fitness,
+                best_x,
                 solution.name,
                 elapsed_time,
                 evals_used,
@@ -252,7 +269,7 @@ class Evaluator:
 
         return IterationMetadata(
             algorithm_name=algorithm_name,
-            execution=ExecutionProfile(
+            execution=Execution(
                 timed_out=is_timeout,
                 runtime_seconds=elapsed_time,
                 llm_generation_time=llm_gen_time,
@@ -260,26 +277,23 @@ class Evaluator:
                 budget_consumed_pct=budget_consumed_pct,
                 evals_per_second=evals_per_second,
             ),
-            fitness=FitnessMetrics(
+            fitness=Fitness(
                 raw_fitness=None,
                 final_error=None,
                 relative_error=None,
                 error_per_evaluation=None,
             ),
-            code=CodeMetrics(
+            code=Code(
                 code_lines=code_lines,
                 code_length=code_length,
                 code_path=None,
             ),
-            error=ErrorProfile(
+            error=Error(
                 error_type=type(error).__name__,
                 error_message=str(error),
                 error_traceback=error_traceback,
             ),
-            convergence=ConvergenceProfile(
-                converged=False,
-                convergence_threshold=1e-6,
-            ),
+            convergence=Convergence.evaluate(None, self._convergence_threshold),
         )
 
     def _persist_iteration(self, solution: Solution, metadata: IterationMetadata) -> None:

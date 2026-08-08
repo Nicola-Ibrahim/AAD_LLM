@@ -1,15 +1,7 @@
-"""
-Centralized domain exception hierarchy for LLaMEA core framework.
-"""
+from domain.exceptions import BaseDomainException
 
 
-class LLaMEAException(Exception):
-    """Base exception for all LLaMEA domain exceptions."""
-
-    pass
-
-
-class AlgorithmExecutionException(LLaMEAException):
+class AlgorithmExecutionException(BaseDomainException):
     """Base exception for all candidate algorithm execution failures."""
 
     pass

@@ -1,9 +1,8 @@
 from pydantic import Field
 
-from core.domain.base import ValueObject
+from domain.base import ValueObject
 
-
-class ExecutionProfile(ValueObject):
+class Execution(ValueObject):
     """Timing and throughput metrics for candidate algorithm execution."""
 
     timed_out: bool = Field(
@@ -32,7 +31,7 @@ class ExecutionProfile(ValueObject):
     )
 
 
-class FitnessMetrics(ValueObject):
+class Fitness(ValueObject):
     """Objective values, errors, and noise properties for candidate execution."""
 
     raw_fitness: float | None = Field(
@@ -57,7 +56,7 @@ class FitnessMetrics(ValueObject):
     )
 
 
-class CodeMetrics(ValueObject):
+class Code(ValueObject):
     """Metadata regarding generated Python source code."""
 
     code_lines: int = Field(
@@ -74,7 +73,7 @@ class CodeMetrics(ValueObject):
     )
 
 
-class ErrorProfile(ValueObject):
+class Error(ValueObject):
     """Exception traceback details if evaluation failed."""
 
     error_type: str | None = Field(
@@ -94,7 +93,7 @@ class ErrorProfile(ValueObject):
     )
 
 
-class ConvergenceProfile(ValueObject):
+class Convergence(ValueObject):
     """Resiliency and convergence details for candidate executions."""
 
     converged: bool = Field(
@@ -105,3 +104,10 @@ class ConvergenceProfile(ValueObject):
         description="The target error difference threshold needed to consider a run converged.",
         examples=[1e-06],
     )
+
+    @classmethod
+    def evaluate(cls, current_error: float | None, threshold: float = 1e-6) -> "Convergence":
+        """Evaluates convergence based on the provided error and threshold."""
+        converged = False if current_error is None else current_error < threshold
+        return cls(converged=converged, convergence_threshold=threshold)
+

@@ -5,18 +5,21 @@ from typing import Any
 
 from llamea import LLaMEA
 
-from core.config import DATA_DIR
-from core.llamea.evaluator import Evaluator
-from core.llamea.prompts import (
+from config import DATA_DIR
+from domain.interfaces import BaseProblem
+from domain.vos import ProblemProfile
+from synthesis.evaluator import Evaluator
+from synthesis.prompts import (
     EXAMPLE_PROMPT,
     FORMAT_PROMPT,
     PromptStrategy,
     build_task_prompt,
 )
-from core.problems.bbob import BBOBProblem
 from infra.llm.client import LLMClient
+from infra.problems.bbob import BBOBProblem
 from infra.storage.base import ExperimentRepository
 from infra.storage.code.repository import CodeRepository
+from domain.services.noise_strategy import NoiseStrategyFactory
 
 
 @dataclass
@@ -77,7 +80,7 @@ class LLaMEASession:
 
     def __init__(
         self,
-        problem: BBOBProblem,
+        problem: BaseProblem,
         experiment_id: int,
         initial_iteration: int,
         prompt_strategy: PromptStrategy,
@@ -115,7 +118,7 @@ class LLaMEASession:
     @classmethod
     def create(
         cls,
-        problem: BBOBProblem,
+        problem: BaseProblem,
         llm_client: LLMClient,
         db_repo: ExperimentRepository,
         code_repo: CodeRepository,
@@ -131,14 +134,18 @@ class LLaMEASession:
         strategy = (
             PromptStrategy(prompt_strategy) if isinstance(prompt_strategy, str) else prompt_strategy
         )
-        exp_id = db_repo.create_experiment(
+        problem_profile = ProblemProfile(
             problem_id=problem.problem_id,
-            instance_id=problem.instance_id,
             dim=problem.dim,
+            noise_std=problem.noise_std,
+            noise_model=problem.noise_model,
+            instance_id=problem.instance_id,
+            true_optimum=problem.true_optimum,
+        )
+        exp_id = db_repo.create_experiment(
+            problem=problem_profile,
             mode=problem.mode,
             llm_name=llm_client.model.name,
-            noise_std=problem.noise_std,
-            true_optimum=problem.true_optimum,
             prompt_strategy=strategy,
             budget=budget,
             iterations=iterations,
@@ -176,11 +183,16 @@ class LLaMEASession:
                 f"Cannot resume experiment {experiment_id} because its status is '{exp.status}'."
             )
 
+        strat = NoiseStrategyFactory.create(
+            noise_model=exp.problem.noise_model,
+            noise_std=exp.problem.noise_std or 0.0,
+        )
+
         problem = BBOBProblem(
             problem_id=exp.problem.problem_id,
             dim=exp.problem.dim,
             instance_id=exp.problem.instance_id,
-            noise_std=exp.problem.noise_std,
+            noise_strategy=strat,
         )
         strategy = PromptStrategy(exp.prompt_strategy)
         budget = exp.budget if exp.budget is not None else 1000
@@ -321,15 +333,6 @@ class LLaMEASession:
             budget=self._budget,
             experiment_id=self._experiment_id,
             initial_iteration=self._initial_iteration,
-            experiment_meta={
-                "experiment_id": self._experiment_id,
-                "problem_id": self._problem.problem_id,
-                "dim": self._problem.dim,
-                "mode": self._problem.mode,
-                "noise_std": self._problem.noise_std,
-                "llm_name": self._llm_client.model.name,
-                "instance_id": self._problem.instance_id,
-            },
         )
 
     def _print_report(

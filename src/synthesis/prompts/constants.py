@@ -1,35 +1,7 @@
-from enum import StrEnum
-from pathlib import Path
-
-import numpy as np
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-
-
-class PromptMode(StrEnum):
-    CLEAN = "clean"
-    NOISY = "noisy"
-
-
-class PromptStrategy(StrEnum):
-    BASELINE = "baseline"
-    THINKING = "thinking"
-    VECTORIZATION = "vectorization"
-    GUIDED = "guided"
-
-
-_TEMPLATES_DIR = Path(__file__).parent / "templates"
-_jinja_env = Environment(
-    loader=FileSystemLoader(_TEMPLATES_DIR),
-    autoescape=select_autoescape([]),
-    trim_blocks=True,
-    lstrip_blocks=True,
-)
-
-
 EXAMPLE_PROMPT = """
 Your algorithm will be instantiated and called as follows:
     optimizer = AlgorithmName()
-    best_y = optimizer(problem, budget)
+    best_x, best_y = optimizer(problem, budget)
 
 You MUST use the following class skeleton — fill in your algorithm logic in the marked section only.
 Do NOT change the class structure, method signatures, or return statement:
@@ -59,7 +31,7 @@ Do NOT change the class structure, method signatures, or return statement:
             # Update best_x and best_y when you find improvement.
             # --- YOUR ALGORITHM LOGIC ABOVE ---
 
-            return float(best_y)  # MUST return a float scalar
+            return best_x, float(best_y)  # MUST return tuple: (best_x_ndarray, best_y_float)
 """
 
 FORMAT_PROMPT = """
@@ -77,30 +49,9 @@ STRICT Rules — violating any rule will cause execution failure:
 - `__init__(self)` MUST take NO extra arguments beyond `self`.
 - `__init__(self)` MUST have a non-empty body (use `pass` if nothing to initialize).
 - The class MUST have a `__call__(self, problem, budget)` method.
-- `__call__` MUST return `float(best_y)` — a scalar Python float.
+- `__call__` MUST return `(best_x, float(best_y))` — a tuple of the best search coordinates array and best scalar float value.
+- Do NOT import or call `scipy.optimize` (e.g. `scipy.optimize.minimize`, `differential_evolution`, etc.) — pre-built solver wrappers are strictly banned. Write your search algorithm logic from scratch using NumPy.
 - Every variable you use MUST be defined before use. Never reference undefined names.
 - Do NOT store `problem` or `budget` in `__init__` — they are provided to `__call__` directly.
 - Do NOT include `if __name__ == '__main__':` blocks.
 """
-
-
-def build_task_prompt(
-    problem_id: int,
-    dim: int,
-    lower_bound: np.ndarray,
-    upper_bound: np.ndarray,
-    mode: PromptMode | str = PromptMode.CLEAN,
-    strategy: PromptStrategy | str = PromptStrategy.BASELINE,
-) -> str:
-    """Constructs the structured task prompt based on explicit problem parameters, PromptMode enum, and prompt strategy."""
-    mode_enum = PromptMode(mode) if isinstance(mode, str) else mode
-    strategy_enum = PromptStrategy(strategy) if isinstance(strategy, str) else strategy
-    template_name = "task_noisy.j2" if mode_enum == PromptMode.NOISY else "task_clean.j2"
-    return _jinja_env.get_template(template_name).render(
-        problem_id=problem_id,
-        dim=dim,
-        lower_bound=lower_bound.tolist(),
-        upper_bound=upper_bound.tolist(),
-        mode=mode_enum,
-        strategy=strategy_enum,
-    )

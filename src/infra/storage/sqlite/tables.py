@@ -41,6 +41,9 @@ class ExperimentORM(Base):
         String, nullable=False, default="baseline", server_default=text("'baseline'")
     )
     noise_std = Column(Float, nullable=True)  # NULL for CLEAN mode
+    noise_model = Column(
+        String, nullable=False, default="multiplicative", server_default=text("'multiplicative'")
+    )
     budget = Column(Integer, nullable=True)  # Evaluation budget per iteration
     max_iterations = Column(Integer, nullable=True)  # Max synthesis iterations for the run
 

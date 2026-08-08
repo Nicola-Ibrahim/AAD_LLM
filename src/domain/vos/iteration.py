@@ -1,12 +1,12 @@
 from pydantic import Field
 
-from core.domain.base import ValueObject
-from core.domain.metrics import (
-    CodeMetrics,
-    ConvergenceProfile,
-    ErrorProfile,
-    ExecutionProfile,
-    FitnessMetrics,
+from domain.base import ValueObject
+from domain.vos.metrics import (
+    Code,
+    Convergence,
+    Error,
+    Execution,
+    Fitness,
 )
 
 
@@ -23,18 +23,19 @@ class IterationMetadata(ValueObject):
         examples=["NoisyHillClimber", "RandomSearchAlgorithm"],
     )
 
-    execution: ExecutionProfile = Field(
+    execution: Execution = Field(
         description="Timing and throughput metrics for the iteration's execution run."
     )
-    fitness: FitnessMetrics = Field(
+    fitness: Fitness = Field(
         description="Fitness metrics and errors achieved by the candidate algorithm."
     )
-    code: CodeMetrics = Field(
+    code: Code = Field(
         description="Attributes and metadata about the candidate algorithm code."
     )
-    error: ErrorProfile = Field(
+    error: Error = Field(
         description="Traceback and exception info if the candidate algorithm failed."
     )
-    convergence: ConvergenceProfile = Field(
+    convergence: Convergence = Field(
         description="Details about convergence of the execution run."
     )
+

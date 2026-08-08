@@ -1,6 +1,7 @@
 from pydantic import Field
 
-from core.domain.base import ValueObject
+from domain.base import ValueObject
+from domain.enums import NoiseModelEnum
 
 
 class ProblemProfile(ValueObject):
@@ -13,10 +14,16 @@ class ProblemProfile(ValueObject):
         description="Dimension of the search space of the BBOB problem.", examples=[2, 5, 10, 20]
     )
     noise_std: float = Field(
-        description="Standard deviation of the Gaussian noise added to the clean evaluations.",
+        description="Standard deviation factor of the Gaussian noise added to the clean evaluations.",
         examples=[0.0, 0.1, 1.0],
     )
+    noise_model: NoiseModelEnum = Field(
+        default=NoiseModelEnum.MULTIPLICATIVE,
+        description="Noise strategy applied for noisy evaluation.",
+        examples=[NoiseModelEnum.MULTIPLICATIVE, NoiseModelEnum.HOMOSCEDASTIC_ADDITIVE, NoiseModelEnum.AWGN],
+    )
     instance_id: int = Field(
+        default=1,
         description="The BBOB instance ID chosen for this problem execution run.", examples=[1, 5]
     )
     true_optimum: float | None = Field(

@@ -3,9 +3,9 @@ from typing import Any
 
 from pydantic import Field, field_validator
 
-from core.domain.base import DomainEntity
-from core.domain.iteration import IterationMetadata
-from core.domain.problem import ProblemProfile
+from domain.base import DomainEntity
+from domain.vos.iteration import IterationMetadata
+from domain.vos.problem_profile import ProblemProfile
 
 
 class ExperimentSummary(DomainEntity):

@@ -4,16 +4,17 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload, sessionmaker
 
-from core.domain.experiment import ExperimentSummary
-from core.domain.iteration import (
-    CodeMetrics,
-    ConvergenceProfile,
-    ErrorProfile,
-    ExecutionProfile,
-    FitnessMetrics,
+from domain.entities import ExperimentSummary
+from domain.enums import NoiseModelEnum, ProblemMode
+from domain.vos import (
+    Code,
+    Convergence,
+    Error,
+    Execution,
+    Fitness,
     IterationMetadata,
+    ProblemProfile,
 )
-from core.domain.problem import ProblemProfile
 from infra.storage.base import ExperimentRepository
 from infra.storage.sqlite.tables import ErrorLogORM, ExperimentMode, ExperimentORM, IterationORM
 
@@ -37,30 +38,33 @@ class SQLiteExperimentRepository(ExperimentRepository):
 
     def create_experiment(
         self,
-        problem_id: int,
-        dim: int,
-        mode: str,
+        problem: ProblemProfile,
+        mode: ProblemMode | str,
         llm_name: str,
-        noise_std: float,
-        true_optimum: float,
-        instance_id: int = 1,
         prompt_strategy: str = "baseline",
         budget: int = 1000,
         iterations: int = 10,
     ) -> int:
         """Creates the experiment DB row and returns its id."""
+        mode_str = mode.value if hasattr(mode, "value") else str(mode)
+        noise_model_str = (
+            problem.noise_model.value
+            if hasattr(problem.noise_model, "value")
+            else str(problem.noise_model)
+        )
         with self.SessionLocal() as session:
             experiment = ExperimentORM(
-                problem_id=problem_id,
-                instance_id=instance_id,
-                dim=dim,
-                mode=ExperimentMode(mode),
+                problem_id=problem.problem_id,
+                instance_id=problem.instance_id,
+                dim=problem.dim,
+                mode=ExperimentMode(mode_str),
                 llm_name=llm_name,
                 prompt_strategy=prompt_strategy,
-                noise_std=noise_std,
+                noise_std=problem.noise_std,
+                noise_model=noise_model_str,
                 budget=budget,
                 max_iterations=iterations,
-                true_optimum=true_optimum,
+                true_optimum=problem.true_optimum,
                 status="running",
                 started_at=datetime.now(timezone.utc).isoformat(),
             )
@@ -245,6 +249,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
                     problem_id=exp.problem_id,
                     dim=exp.dim,
                     noise_std=exp.noise_std or 0.0,
+                    noise_model=NoiseModelEnum(exp.noise_model) if exp.noise_model else NoiseModelEnum.MULTIPLICATIVE,
                     instance_id=exp.instance_id,
                     true_optimum=exp.true_optimum,
                 )
@@ -288,7 +293,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
         return IterationMetadata(
             algorithm_name=it.algorithm_name,
             iteration=iteration_number,
-            execution=ExecutionProfile(
+            execution=Execution(
                 timed_out=it.timed_out,
                 runtime_seconds=it.runtime_seconds,
                 llm_generation_time=it.llm_generation_time,
@@ -296,19 +301,19 @@ class SQLiteExperimentRepository(ExperimentRepository):
                 budget_consumed_pct=it.budget_consumed_pct,
                 evals_per_second=it.evals_per_second,
             ),
-            fitness=FitnessMetrics(
+            fitness=Fitness(
                 raw_fitness=it.raw_fitness,
                 final_error=it.final_error,
                 relative_error=it.relative_error,
                 error_per_evaluation=it.error_per_evaluation,
             ),
-            code=CodeMetrics(
+            code=Code(
                 code_lines=it.code_lines,
                 code_length=it.code_length,
                 code_path=it.code_path,
             ),
-            error=ErrorProfile(**error_fields),
-            convergence=ConvergenceProfile(
+            error=Error(**error_fields),
+            convergence=Convergence(
                 converged=it.converged,
                 convergence_threshold=it.convergence_threshold,
             ),

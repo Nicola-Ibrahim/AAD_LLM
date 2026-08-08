@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from core.config import DATA_DIR, PROJECT_ROOT
+from config import DATA_DIR, PROJECT_ROOT
 
 
 class CodeRepository:

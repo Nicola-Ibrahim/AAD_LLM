@@ -10,15 +10,14 @@ The `budget` is the maximum number of times you can evaluate `problem`.
 The domain bounds for the search space are [{{ lower_bound }}, {{ upper_bound }}] for all dimensions (accessible via `problem.lower_bound` and `problem.upper_bound` or `problem.lb` and `problem.ub`).
 
 {% block strategy_blocks %}
+Do NOT use pre-built, off-the-shelf optimizer solvers or wrapper functions (such as `scipy.optimize.minimize`, `differential_evolution`, `basinhopping`, etc.) — pre-built optimizers are strictly banned. You MUST design and write your own custom optimization search logic.
+
 {% if strategy in ['thinking', 'vectorization', 'guided'] %}
-Design your algorithm to maintain a population of candidate solutions. At each step, balance exploration (probing new regions of the search space) and exploitation (refining the most promising solutions found so far). You may use standard mathematical and numerical computation libraries (`numpy` / `np`, `math`, `random`).
+Design your algorithm to maintain a population of candidate solutions. At each step, balance exploration (probing new regions of the search space) and exploitation (refining the most promising solutions found so far). You may use standard mathematical and numerical computation libraries (`numpy` / `np`, `math`, `random`, `scipy.linalg`, `scipy.stats`).
 {% endif %}
 {% if strategy in ['vectorization', 'guided'] %}
 Implement your algorithm using NumPy matrix operations on populations of shape `(pop_size, dim)` — batch candidate generation, batch evaluation, and vectorized updates — rather than scalar Python loops over individual solutions.
 {% endif %}
-{% if strategy == 'guided' %}
-Do NOT use pre-built, off-the-shelf optimizer solvers or wrapper functions — you MUST design and write your own custom optimization search logic.
-{% endif %}
 {% endblock %}
 
-Your goal is to find and return the lowest possible value of `problem(x)` within the budget.
+Your goal is to find and return a tuple `(best_x, float(best_y))` containing the best candidate search point coordinates array `best_x` and its best observed objective value `best_y` within the budget.

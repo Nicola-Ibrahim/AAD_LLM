@@ -1,20 +1,14 @@
-"""
-BBOB problem wrapper with validation and noise injection.
-"""
-
-from enum import StrEnum
-
 import numpy as np
 from ioh import ProblemClass, get_problem
 
 
-class ProblemMode(StrEnum):
-    CLEAN = "clean"
-    NOISY = "noisy"
+from domain.enums import ProblemMode
+from domain.interfaces import BaseProblem
+from domain.services.noise_strategy import BaseNoiseStrategy, NoNoiseStrategy
 
 
-class BBOBProblem:
-    """BBOB problem wrapper with a configurable noise level.
+class BBOBProblem(BaseProblem):
+    """BBOB problem wrapper with strategy pattern for noise injection.
 
     Loads the clean IOH problem instance once, stores the global optimum
     and problem parameters, and provides clean and noisy evaluation methods.
@@ -23,19 +17,11 @@ class BBOBProblem:
         problem_id: The BBOB function ID. Must be an integer in [1, 24].
         dim: The search space dimensionality.
         instance_id: The BBOB instance ID, by default 1.
-        noise_std: Standard deviation factor for additive Gaussian noise
-            scaled to the problem landscape. 0.0 means clean (no noise), by default 0.0.
+        noise_strategy: Noise strategy instance. Defaults to NoNoiseStrategy().
+        seed: Random seed for landscape scale estimation.
 
     Raises:
         ValueError: If `problem_id` is not in the range [1, 24].
-
-    Examples:
-        >>> clean_problem = BBOBProblem(problem_id=1, dim=3, noise_std=0.0)
-        >>> noisy_problem = BBOBProblem(problem_id=1, dim=3, noise_std=0.05)
-        >>> import numpy as np
-        >>> y_clean = clean_problem(np.zeros(3))   # clean float
-        >>> y_noisy = noisy_problem(np.zeros(3))   # noisy float
-        >>> clean_problem.true_optimum              # float: global minimum
     """
 
     VALID_IDS: range = range(1, 25)  # Valid BBOB problem IDs: 1 to 24 inclusive
@@ -45,7 +31,8 @@ class BBOBProblem:
         problem_id: int,
         dim: int,
         instance_id: int = 1,
-        noise_std: float = 0.0,
+        noise_strategy: BaseNoiseStrategy | None = None,
+        seed: int = 42,
     ):
         if problem_id not in self.VALID_IDS:
             raise ValueError(
@@ -54,7 +41,6 @@ class BBOBProblem:
         self.problem_id = problem_id
         self.dim = dim
         self.instance_id = instance_id
-        self.noise_std = float(noise_std)
 
         # Load the underlying clean IOH problem once
         self._clean_problem = get_problem(problem_id, instance_id, dim, ProblemClass.BBOB)
@@ -63,36 +49,19 @@ class BBOBProblem:
         self._lb = np.array(self._clean_problem.bounds.lb, dtype=float)
         self._ub = np.array(self._clean_problem.bounds.ub, dtype=float)
 
-        # Estimate the "Landscape Scale" by sampling random points
-        # This gives us a problem-specific magnitude to base our noise on.
-        np.random.seed(42)  # Fixed seed so the scale is consistent every run
-        sample_points = np.random.uniform(self._lb, self._ub, (20, self.dim))
-        sample_y = [self._clean_problem(x.tolist()) for x in sample_points]
+        # Explicit Noise Strategy injection
+        self.noise_strategy: BaseNoiseStrategy = (
+            noise_strategy if noise_strategy is not None else NoNoiseStrategy()
+        )
+        self.noise_strategy.setup(
+            self._clean_problem, self._lb, self._ub, self.true_optimum, seed=seed
+        )
+        self.noise_std: float = self.noise_strategy.noise_std
+        self.noise_model: str = self.noise_strategy.name
 
-        # The scale is the average distance from the optimum across the whole space
-        self._landscape_scale = float(np.mean([abs(y - self.true_optimum) for y in sample_y]))
-
-        # Reset internal evaluation counter after initialization samples
-        self._clean_problem.reset()
-
-    def _add_noise(self, true_value: float, noise_std: float) -> float:
-        """Inject constant additive Gaussian noise, scaled to the problem's overall landscape.
-
-        Args:
-            true_value: The clean objective value.
-            noise_std: The standard deviation factor to apply (e.g., 0.05).
-
-        Returns:
-            float: The noisy objective value.
-        """
-        if noise_std <= 0.0:
-            return true_value
-
-        # The standard deviation is now fixed for the whole problem,
-        # but relative to the specific problem's massive (or tiny) scale.
-        dynamic_std = noise_std * self._landscape_scale
-
-        return true_value + np.random.normal(0.0, dynamic_std)
+    def _add_noise(self, true_value: float) -> float:
+        """Inject noise into the objective value by delegating to configured noise_strategy."""
+        return self.noise_strategy.add_noise(true_value)
 
     def __call__(self, x: np.ndarray) -> float:
         """Evaluate the objective function at point `x`.
@@ -107,7 +76,7 @@ class BBOBProblem:
         if self.noise_std <= 0.0:
             return f_clean
 
-        return self._add_noise(f_clean, self.noise_std)
+        return self._add_noise(f_clean)
 
     @property
     def mode(self) -> ProblemMode:
@@ -161,6 +130,15 @@ class BBOBProblem:
     def upper_bound(self) -> np.ndarray:
         """Return upper bounds vector for the search space."""
         return self._ub
+
+    def is_in_bounds(self, x: np.ndarray, tol: float = 1e-5) -> bool:
+        """Check if candidate point x lies within search space bounds [lb - tol, ub + tol]."""
+        arr = np.asarray(x, dtype=float)
+        return bool(np.all(arr >= self._lb - tol) and np.all(arr <= self._ub + tol))
+
+    def clip(self, x: np.ndarray) -> np.ndarray:
+        """Clip candidate search point x to fit within search space bounds [lb, ub]."""
+        return np.clip(np.asarray(x, dtype=float), self._lb, self._ub)
 
     @property
     def name(self) -> str:

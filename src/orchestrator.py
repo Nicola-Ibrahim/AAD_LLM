@@ -3,13 +3,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from core.config import DATA_DIR
-from core.llamea.prompts import PromptStrategy
-from core.llamea.session import LLaMEASession, SessionResult
-from core.problems.bbob import BBOBProblem
+from config import DATA_DIR
+from domain.interfaces import BaseProblem
 from infra.llm.client import LLMClient
 from infra.storage.code.repository import CodeRepository
 from infra.storage.sqlite.factory import initialize_sqlite_storage, setup_storage_environment
+from synthesis.prompts import PromptStrategy
+from synthesis.session import LLaMEASession, SessionResult
 
 
 @dataclass
@@ -21,7 +21,7 @@ class EvolutionTask:
     """
 
     key: str
-    problem: BBOBProblem | None = None
+    problem: BaseProblem | None = None
     llm_client: LLMClient | None = None
     budget: int = 1000
     iterations: int | None = None
