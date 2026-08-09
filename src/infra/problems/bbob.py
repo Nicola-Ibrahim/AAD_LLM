@@ -1,10 +1,13 @@
+from pathlib import Path
+
+import ioh
 import numpy as np
 from ioh import ProblemClass, get_problem
 
 
 from domain.enums import ProblemMode
 from domain.interfaces import BaseProblem
-from domain.services.noise_strategy import BaseNoiseStrategy, NoNoiseStrategy
+from domain.services.noise_strategy import BaseNoiseStrategy
 
 
 class BBOBProblem(BaseProblem):
@@ -30,8 +33,9 @@ class BBOBProblem(BaseProblem):
         self,
         problem_id: int,
         dim: int,
+        noise_strategy: BaseNoiseStrategy,
+        ioh_logger: ioh.logger.Analyzer | None = None,
         instance_id: int = 1,
-        noise_strategy: BaseNoiseStrategy | None = None,
         seed: int = 42,
     ):
         if problem_id not in self.VALID_IDS:
@@ -49,10 +53,13 @@ class BBOBProblem(BaseProblem):
         self._lb = np.array(self._clean_problem.bounds.lb, dtype=float)
         self._ub = np.array(self._clean_problem.bounds.ub, dtype=float)
 
+        # Attach IOH logger
+        self._ioh_logger = ioh_logger
+        if ioh_logger is not None:
+            self._clean_problem.attach_logger(ioh_logger)
+
         # Explicit Noise Strategy injection
-        self.noise_strategy: BaseNoiseStrategy = (
-            noise_strategy if noise_strategy is not None else NoNoiseStrategy()
-        )
+        self.noise_strategy: BaseNoiseStrategy = noise_strategy
         self.noise_strategy.setup(
             self._clean_problem, self._lb, self._ub, self.true_optimum, seed=seed
         )
@@ -141,6 +148,50 @@ class BBOBProblem(BaseProblem):
         return np.clip(np.asarray(x, dtype=float), self._lb, self._ub)
 
     @property
+    def evaluations(self) -> int:
+        """Return cumulative function evaluation count."""
+        return self._clean_problem.state.evaluations
+
+    def eval_clean(self, x: np.ndarray) -> float:
+        """Evaluate candidate point x on un-noised ground truth objective."""
+        arr = np.asarray(x, dtype=float)
+        return float(self._clean_problem(arr.tolist()))
+
+    def attach_logger(self, logger: object) -> None:
+        """Attach an experiment logger to the clean underlying problem."""
+        self._ioh_logger = logger
+        if logger is not None and getattr(self, "_clean_problem", None) is not None:
+            self._clean_problem.attach_logger(logger)
+
+    def attach_analyzer(
+        self,
+        log_dir: str | Path,
+        folder_name: str,
+        algorithm_name: str,
+    ) -> object | None:
+        """Initialize and attach an IOH Analyzer logger directly to the problem."""
+        try:
+            logger = ioh.logger.Analyzer(
+                root=Path(log_dir),
+                folder_name=folder_name,
+                algorithm_name=algorithm_name,
+            )
+            self.attach_logger(logger)
+            return logger
+        except Exception as e:
+            print(f"[!] Could not attach IOH Logger: {e}")
+            return None
+
+    def close_logger(self) -> None:
+        """Safely close any attached experiment logger."""
+        if getattr(self, "_ioh_logger", None) is not None:
+            try:
+                self._ioh_logger.close()
+            except Exception:
+                pass
+            self._ioh_logger = None
+
+    @property
     def name(self) -> str:
         """Return the BBOB function name (e.g. 'BentCigar', 'Sphere')."""
         return self._clean_problem.meta_data.name
@@ -161,8 +212,9 @@ class BBOBProblem(BaseProblem):
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        # Exclude C++ unpicklable wrapper
+        # Exclude C++ unpicklable wrappers
         state["_clean_problem"] = None
+        state["_ioh_logger"] = None
         return state
 
     def __setstate__(self, state):
@@ -171,3 +223,5 @@ class BBOBProblem(BaseProblem):
         self._clean_problem = get_problem(
             self.problem_id, self.instance_id, self.dim, ProblemClass.BBOB
         )
+        if getattr(self, "_ioh_logger", None) is not None:
+            self._clean_problem.attach_logger(self._ioh_logger)

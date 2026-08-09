@@ -85,6 +85,11 @@ class Evaluator:
         self._convergence_threshold = convergence_threshold
 
     @property
+    def _ioh_logger(self) -> Any | None:
+        """Access the underlying problem's IOH logger if available."""
+        return getattr(self._problem, "_ioh_logger", None)
+
+    @property
     def problem_profile(self) -> ProblemProfile:
         """Expose the configured BBOB problem profile."""
         return ProblemProfile(
@@ -124,7 +129,7 @@ class Evaluator:
                     f"Returned best_x {best_x.tolist()} is outside search space bounds [{lb_val}, {ub_val}]. "
                     "Ensure your algorithm clips candidate solutions to domain bounds using problem.clip(x) or np.clip(x, lb, ub)."
                 )
-            clean_y = float(self._problem._clean_problem(best_x.tolist()))
+            clean_y = self._problem.eval_clean(best_x)
         else:
             clean_y = algorithm_returned_fitness
 
@@ -195,7 +200,7 @@ class Evaluator:
                 budget=self._budget,
             )
             elapsed_time = time.perf_counter() - start_time
-            evals_used = self._problem._clean_problem.state.evaluations
+            evals_used = self._problem.evaluations
 
             return self._calculate_fitness_and_feedback(
                 algorithm_returned_fitness,
@@ -223,7 +228,7 @@ class Evaluator:
     ) -> tuple[float, str, IterationMetadata]:
         """Handle execution timeout or runtime error, generating failure feedback and metadata."""
         elapsed_time = time.perf_counter() - start_time
-        evals_used = self._problem._clean_problem.state.evaluations
+        evals_used = self._problem.evaluations
         is_timeout = isinstance(error, AlgorithmTimeoutException)
 
         if is_timeout:

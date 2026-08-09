@@ -13,7 +13,10 @@
 #SBATCH --job-name=llamea_bbob
 #SBATCH --output=logs/slurm_%j.log
 #SBATCH --error=logs/slurm_%j.log
-#SBATCH --time=24:00:00
+#SBATCH -A hpc-prf-genui
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:a100:1
+#SBATCH --time=02:00:00
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=16
 #SBATCH --nodes=1

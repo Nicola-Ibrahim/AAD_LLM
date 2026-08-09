@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 import numpy as np
 
@@ -68,4 +69,35 @@ class BaseProblem(ABC):
     @abstractmethod
     def clip(self, x: np.ndarray) -> np.ndarray:
         """Clip candidate search point x to fit within search space bounds."""
+        ...
+
+    @property
+    @abstractmethod
+    def evaluations(self) -> int:
+        """Return cumulative evaluation count."""
+        ...
+
+    @abstractmethod
+    def eval_clean(self, x: np.ndarray) -> float:
+        """Evaluate candidate point x on un-noised ground truth objective."""
+        ...
+
+    @abstractmethod
+    def attach_logger(self, logger: object) -> None:
+        """Attach an experiment logger to the problem."""
+        ...
+
+    @abstractmethod
+    def attach_analyzer(
+        self,
+        log_dir: str | Path,
+        folder_name: str,
+        algorithm_name: str,
+    ) -> object | None:
+        """Initialize and attach an IOH Analyzer logger directly to the problem."""
+        ...
+
+    @abstractmethod
+    def close_logger(self) -> None:
+        """Safely close any attached experiment logger."""
         ...
