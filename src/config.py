@@ -1,7 +1,7 @@
 from pathlib import Path
 
 # Root directory of the project
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 # Common directories
 DATA_DIR = PROJECT_ROOT / "data"
