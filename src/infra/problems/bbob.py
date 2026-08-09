@@ -172,7 +172,7 @@ class BBOBProblem(BaseProblem):
         """Initialize and attach an IOH Analyzer logger directly to the problem."""
         try:
             logger = ioh.logger.Analyzer(
-                root=Path(log_dir),
+                root=str(log_dir),
                 folder_name=folder_name,
                 algorithm_name=algorithm_name,
             )
