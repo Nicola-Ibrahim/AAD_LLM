@@ -250,13 +250,14 @@ print("  Done.")
 EOF
                 echo -e "  ${GREEN}✓ All data cleared. Schema intact.${NC}"
                 echo ""
-                if confirm "Also delete evolution_state archives and generated code files?"; then
+                if confirm "Also delete evolution_state archives, generated code files, and ioh_logs?"; then
                     echo -e "  ${YELLOW}Cleaning cached data files...${NC}"
                     find "$PROJECT_ROOT/data/evolution_state" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/evolution_state"/* 2>/dev/null || true
                     find "$PROJECT_ROOT/data/code" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/code"/* 2>/dev/null || true
-                    rm -rf "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code"
-                    mkdir -p "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code"
-                    echo -e "  ${GREEN}✓ Evolution state archives and code files cleaned.${NC}"
+                    find "$PROJECT_ROOT/data/ioh_logs" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/ioh_logs"/* 2>/dev/null || true
+                    rm -rf "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code" "$PROJECT_ROOT/data/ioh_logs"
+                    mkdir -p "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code" "$PROJECT_ROOT/data/ioh_logs"
+                    echo -e "  ${GREEN}✓ Evolution state archives, code files, and ioh_logs cleaned.${NC}"
                 fi
             else
                 echo -e "  ${YELLOW}Confirmation did not match. Aborted.${NC}"
@@ -281,13 +282,14 @@ EOF
                 (cd "$PROJECT_ROOT" && $ALEMBIC_CMD upgrade head)
                 echo -e "  ${GREEN}✓ Database reset complete. Fresh schema applied.${NC}"
                 echo ""
-                if confirm "Also delete evolution_state archives and generated code files?"; then
+                if confirm "Also delete evolution_state archives, generated code files, and ioh_logs?"; then
                     echo -e "  ${YELLOW}Cleaning cached data files...${NC}"
                     find "$PROJECT_ROOT/data/evolution_state" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/evolution_state"/* 2>/dev/null || true
                     find "$PROJECT_ROOT/data/code" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/code"/* 2>/dev/null || true
-                    rm -rf "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code"
-                    mkdir -p "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code"
-                    echo -e "  ${GREEN}✓ Evolution state archives and code files cleaned.${NC}"
+                    find "$PROJECT_ROOT/data/ioh_logs" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/ioh_logs"/* 2>/dev/null || true
+                    rm -rf "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code" "$PROJECT_ROOT/data/ioh_logs"
+                    mkdir -p "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code" "$PROJECT_ROOT/data/ioh_logs"
+                    echo -e "  ${GREEN}✓ Evolution state archives, code files, and ioh_logs cleaned.${NC}"
                 fi
             else
                 echo -e "  ${YELLOW}Confirmation did not match. Aborted.${NC}"

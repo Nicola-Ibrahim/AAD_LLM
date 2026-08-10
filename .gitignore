@@ -82,6 +82,7 @@ celerybeat.pid
 /contexts/
 /diagnostics/
 /reports/
+/figures/
 /node_modules/
 
 # Agent Tools

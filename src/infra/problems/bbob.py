@@ -79,7 +79,8 @@ class BBOBProblem(BaseProblem):
         Returns:
             float: Evaluated objective value (noisy if self.noise_std > 0 else clean).
         """
-        f_clean = self._clean_problem(x.tolist())
+        arr = np.asarray(x, dtype=float)
+        f_clean = self._clean_problem(arr.tolist())
         if self.noise_std <= 0.0:
             return f_clean
 
@@ -168,13 +169,19 @@ class BBOBProblem(BaseProblem):
         log_dir: str | Path,
         folder_name: str,
         algorithm_name: str,
+        algorithm_info: str = "",
+        store_positions: bool = False,
     ) -> object | None:
         """Initialize and attach an IOH Analyzer logger directly to the problem."""
         try:
+            self._triggers = [ioh.logger.trigger.OnImprovement()]
             logger = ioh.logger.Analyzer(
+                triggers=self._triggers,
                 root=str(log_dir),
                 folder_name=folder_name,
                 algorithm_name=algorithm_name,
+                algorithm_info=algorithm_info or "algorithm_info",
+                store_positions=store_positions,
             )
             self.attach_logger(logger)
             return logger
@@ -190,6 +197,7 @@ class BBOBProblem(BaseProblem):
             except Exception:
                 pass
             self._ioh_logger = None
+            self._triggers = None
 
     @property
     def name(self) -> str:
@@ -215,6 +223,7 @@ class BBOBProblem(BaseProblem):
         # Exclude C++ unpicklable wrappers
         state["_clean_problem"] = None
         state["_ioh_logger"] = None
+        state["_triggers"] = None
         return state
 
     def __setstate__(self, state):

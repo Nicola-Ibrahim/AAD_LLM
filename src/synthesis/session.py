@@ -44,6 +44,13 @@ class SessionResult:
     problem_profile: Any = None
 
 
+def _sanitise_llm_name(name: str) -> str:
+    """Derive a clean, filesystem-safe short identifier from an LLM model name string."""
+    clean = name.removesuffix(".gguf").removesuffix(".bin")
+    clean = clean.replace("-instruct", "").replace("_q4_k_m", "").replace("/", "_")
+    return clean[:30]
+
+
 class LLaMEASession:
     """
     Manages the lifecycle of a single LLaMEA synthesis session on a BBOB problem.
@@ -114,7 +121,9 @@ class LLaMEASession:
         self._archive_dir = (
             DATA_DIR
             / "evolution_state"
-            / self._experiment_name
+            / f"{self._problem.dim}D"
+            / f"std_{self._problem.noise_std}"
+            / f"f{self._problem.problem_id}"
             / f"experiment_{self._experiment_id}"
         )
         self._archive_dir.mkdir(parents=True, exist_ok=True)
@@ -131,19 +140,24 @@ class LLaMEASession:
         log_dir = (
             DATA_DIR
             / "ioh_logs"
-            / f"f{problem.problem_id}_{problem.dim}D_std{noise_std}"
+            / f"{problem.dim}D"
+            / f"std_{noise_std}"
+            / f"f{problem.problem_id}"
         )
-        folder_name = f"{llm_name}_exp{exp_id}"
+        short_llm = _sanitise_llm_name(llm_name)
+        folder_name = f"llamea_{short_llm}"
         strat_str = (
             prompt_strategy.value
             if hasattr(prompt_strategy, "value")
             else str(prompt_strategy)
         )
         algo_name = f"{llm_name}_{strat_str}"
+        algo_info = f"exp_{exp_id}, strategy={strat_str}"
         problem.attach_analyzer(
             log_dir=log_dir,
             folder_name=folder_name,
             algorithm_name=algo_name,
+            algorithm_info=algo_info,
         )
 
     @classmethod

@@ -93,6 +93,8 @@ class BaseProblem(ABC):
         log_dir: str | Path,
         folder_name: str,
         algorithm_name: str,
+        algorithm_info: str = "",
+        store_positions: bool = False,
     ) -> object | None:
         """Initialize and attach an IOH Analyzer logger directly to the problem."""
         ...
