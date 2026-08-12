@@ -1,8 +1,16 @@
 import math
 import shutil
+import warnings
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
+
+# Suppress joblib warning when LLaMEA passes timeout to SequentialBackend
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message=r".*SequentialBackend.*does not support timeout.*",
+)
 
 from llamea import LLaMEA
 
