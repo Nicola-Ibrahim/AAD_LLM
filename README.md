@@ -54,16 +54,16 @@ Open your Jupyter interface and navigate to the `notebooks/` directory to run co
 
 To run the optimization pipeline locally without relying on external APIs or tools like LMStudio, this project includes a built-in automated LLM server (powered by `llama.cpp` and `huggingface_hub`).
 
-1. **Install Dependencies**:
-   ```bash
-     bash scripts/env.sh
-    ```
+ 1. **Install Dependencies**:
+    ```bash
+      bash scripts/env.sh
+     ```
  2. **Start the Server**:
     ```bash
-    bash scripts/llm_server.sh
+    bash scripts/llm.sh start
    ```
 
-**Changing the Model**: By default, the system uses the `qwen2.5-coder-1.5b-instruct-q4_k_m.gguf` model. To use a different model, edit the variables in your `.env` file. 
+**Changing the Model**: By default, the system uses the `qwen2.5-coder-1.5b-instruct-q4_k_m.gguf` model. To use a different model, edit the variables in your `.env` file or use `bash scripts/llm.sh download`. 
 For a complete explanation of configuration variables and ready-to-use presets, refer to [docs/MODEL_CONFIGURATION.md](docs/MODEL_CONFIGURATION.md).
 
 ## Running Experiments
@@ -77,12 +77,6 @@ All experiment execution and analysis are driven interactively from Jupyter Note
    ```
 2. Open and run the evolution notebooks sequentially in `notebooks/`.
 
-### HPC SLURM Cluster Execution
-To submit a batch job on a SLURM cluster:
-```bash
-sbatch scripts/slurm_submit.sh
-```
-
 ## Database Migrations
 We use a relational SQLite database schema with a split-storage strategy (storing lightweight metadata in SQLite and saving heavy Python code files as disk blobs). 
 
@@ -93,6 +87,12 @@ bash scripts/db.sh
 
 # Or execute a command directly (e.g. upgrade, status, reset)
 bash scripts/db.sh upgrade
+```
+
+## Cleaning Artifacts & Logs
+To safely clean generated code artifacts, evolution state archives, or log files:
+```bash
+bash scripts/clean.sh
 ```
 
 ## Project Structure
@@ -108,10 +108,9 @@ bash scripts/db.sh upgrade
   - `03_results_analysis.ipynb` — Comprehensive database analysis dashboard, stats builder, and interactive plots.
 - `scripts/` — Execution and orchestration scripts:
   - `env.sh` — Initializes environment, checks env vars, and syncs dependencies via uv.
-  - `llm_manage.sh` — Interactive CLI to download configured GGUF model, list cached models, or delete them.
-  - `llm_server.sh` — Interactive CLI to start, stop, or check the status of the local model server.
-  - `slurm_submit.sh` — Batch job script for SLURM cluster execution.
-  - `db.sh` — Interactive CLI to manage database migrations, clear table data, reset DB, and show stats.
+  - `llm.sh` — Interactive CLI for model serving, downloading, listing, and cache cleanup.
+  - `db.sh` — Interactive CLI to manage database schema migrations, table truncation, and DB status.
+  - `clean.sh` — Interactive CLI to safely clean generated file artifacts and log files.
 - `src/` — Source code library:
   - `llm/` — LLM provider bindings (`client.py`) and prompt constants (`prompts.py`).
   - `problems/` — Additive Gaussian noise wrapper around BBOB functions (`bbob.py`).

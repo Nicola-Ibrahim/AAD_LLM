@@ -136,32 +136,6 @@ show_pid_stats() {
     fi
 }
 
-scan_models() {
-    MODEL_PATHS=()
-    MODEL_NAMES=()
-    MODEL_SIZES=()
-
-    if [ -d "$TARGET_DIR" ]; then
-        while IFS= read -r item; do
-            [ -z "$item" ] && continue
-            MODEL_PATHS+=("$item")
-            MODEL_NAMES+=("Local Link/File: $(basename "$item")")
-            MODEL_SIZES+=("$(du -sh "$item" 2>/dev/null | cut -f1)")
-        done < <(find "$TARGET_DIR" -mindepth 1 -maxdepth 1 2>/dev/null || true)
-    fi
-
-    if [ -d "$HF_CACHE_DIR" ]; then
-        while IFS= read -r item; do
-            [ -z "$item" ] && continue
-            local clean_name
-            clean_name=$(basename "$item" | sed 's/^models--//' | sed 's/--/\//g')
-            MODEL_PATHS+=("$item")
-            MODEL_NAMES+=("Hugging Face Cache: $clean_name")
-            MODEL_SIZES+=("$(du -sh "$item" 2>/dev/null | cut -f1)")
-        done < <(find "$HF_CACHE_DIR" -mindepth 1 -maxdepth 1 -name "models--*" 2>/dev/null || true)
-    fi
-}
-
 # ─── Parse CLI Command ─────────────────────────────────────
 COMMAND=""
 if [[ $# -gt 0 ]]; then
@@ -290,42 +264,9 @@ start_server() {
         fi
     fi
 
-    LOCAL_MODELS=()
-    LOCAL_PATHS=()
-    LOCAL_SIZES=()
-
-    register_local_model() {
-        local file=$1
-        local path=$2
-        local size=$3
-        
-        local i
-        for ((i=0; i<${#LOCAL_MODELS[@]}; i++)); do
-            if [ "${LOCAL_MODELS[i]}" = "$file" ]; then
-                return
-            fi
-        done
-        
-        LOCAL_MODELS+=("$file")
-        LOCAL_PATHS+=("$path")
-        LOCAL_SIZES+=("$size")
-    }
-
-    if [ -d "$TARGET_DIR" ]; then
-        while IFS= read -r item; do
-            [ -z "$item" ] && continue
-            register_local_model "$(basename "$item")" "$item" "$(du -sh "$item" 2>/dev/null | cut -f1)"
-        done < <(find "$TARGET_DIR" -mindepth 1 -maxdepth 1 -name "*.gguf" 2>/dev/null || true)
-    fi
-
-    if [ -d "$HF_CACHE_DIR" ]; then
-        while IFS= read -r item; do
-            [ -z "$item" ] && continue
-            register_local_model "$(basename "$item")" "$item" "$(du -sh "$item" 2>/dev/null | cut -f1)"
-        done < <(find "$HF_CACHE_DIR" -name "*.gguf" 2>/dev/null || true)
-    fi
-
-    local total_count=${#LOCAL_MODELS[@]}
+    MODELS_JSON=$("$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --hf-cache-dir "$HF_CACHE_DIR" --gguf-only --format json)
+    local total_count
+    total_count=$("$PYTHON_CMD" -c "import json; print(len(json.loads('''$MODELS_JSON''')))")
     local selected_model=""
     local selected_path=""
 
@@ -333,16 +274,9 @@ start_server() {
         if [ "$total_count" -gt 0 ]; then
             while true; do
                 print_header
-                echo -e "  ${CYAN}[i] Available LLM Models:${NC}"
-                echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
-                local i
-                for ((i=0; i<${#LOCAL_MODELS[@]}; i++)); do
-                    num=$((i + 1))
-                    printf "    ${BOLD}%2d)${NC} %-52s [${YELLOW}%s${NC}]\n" "$num" "${LOCAL_MODELS[i]}" "${LOCAL_SIZES[i]}"
-                    echo -e "        ${BOLD}Path:${NC} ${LOCAL_PATHS[i]}"
-                done
-                echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
-                echo ""
+                echo -e "  ${CYAN}[i] Available LLM Models (sorted by parameter size):${NC}"
+                "$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --hf-cache-dir "$HF_CACHE_DIR" --gguf-only --format card
+                
                 echo -e "  ${BOLD}Options:${NC}"
                 echo -e "    - Type the number of the model to serve (e.g. ${CYAN}'1'${NC})."
                 echo -e "    - Press ${YELLOW}Enter${NC}, type ${YELLOW}'q'${NC}, or press ${YELLOW}Ctrl+C${NC} to cancel."
@@ -358,8 +292,8 @@ start_server() {
                 fi
                 
                 if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$total_count" ]; then
-                    selected_model="${LOCAL_MODELS[$((choice - 1))]}"
-                    selected_path="${LOCAL_PATHS[$((choice - 1))]}"
+                    selected_model=$("$PYTHON_CMD" -c "import json; print(json.loads('''$MODELS_JSON''')[$((choice - 1))]['name'])")
+                    selected_path=$("$PYTHON_CMD" -c "import json; print(json.loads('''$MODELS_JSON''')[$((choice - 1))]['path'])")
                     break
                 else
                     echo -e "  ${RED}✗ ERROR: Invalid choice '$choice'. Please choose a number between 1 and $total_count.${NC}"
@@ -378,19 +312,10 @@ start_server() {
     else
         if [ -n "${HF_FILE:-}" ]; then
             selected_model="$HF_FILE"
-            local i
-            for ((i=0; i<${#LOCAL_MODELS[@]}; i++)); do
-                if [ "${LOCAL_MODELS[i]}" = "$selected_model" ]; then
-                    selected_path="${LOCAL_PATHS[i]}"
-                    break
-                fi
-            done
-            if [ -z "$selected_path" ]; then
-                selected_path="$TARGET_DIR/$selected_model"
-            fi
+            selected_path="$TARGET_DIR/$selected_model"
         elif [ "$total_count" -gt 0 ]; then
-            selected_model="${LOCAL_MODELS[0]}"
-            selected_path="${LOCAL_PATHS[0]}"
+            selected_model=$("$PYTHON_CMD" -c "import json; print(json.loads('''$MODELS_JSON''')[0]['name'])")
+            selected_path=$("$PYTHON_CMD" -c "import json; print(json.loads('''$MODELS_JSON''')[0]['path'])")
             echo -e "  ${CYAN}[i] Non-interactive mode: Automatically selecting first available model: $selected_model${NC}"
         else
             echo -e "  ${RED}✗ ERROR: No GGUF model files found and no model specified in non-interactive mode.${NC}"
@@ -790,30 +715,13 @@ case "$COMMAND" in
 
     list)
         print_header
-        scan_models
-        total_count=${#MODEL_PATHS[@]}
-        
-        if [ "$total_count" -eq 0 ]; then
-            echo -e "  ${GREEN}✓ No downloaded models found in ~/models or Hugging Face cache.${NC}"
-            echo ""
-            exit 0
-        fi
-
-        echo -e "  ${CYAN}[i] Locally cached model files:${NC}"
-        echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
-        for i in "${!MODEL_PATHS[@]}"; do
-            num=$((i + 1))
-            printf "    ${BOLD}%2d)${NC} %-52s [${YELLOW}%s${NC}]\n" "$num" "${MODEL_NAMES[$i]}" "${MODEL_SIZES[$i]}"
-            echo -e "        ${BOLD}Path:${NC} ${MODEL_PATHS[$i]}"
-        done
-        echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
-        echo ""
+        "$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --hf-cache-dir "$HF_CACHE_DIR" --format card
         ;;
 
     cleanup)
         print_header
-        scan_models
-        total_count=${#MODEL_PATHS[@]}
+        MODELS_JSON=$("$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --hf-cache-dir "$HF_CACHE_DIR" --format json)
+        total_count=$("$PYTHON_CMD" -c "import json; print(len(json.loads('''$MODELS_JSON''')))")
         
         if [ "$total_count" -eq 0 ]; then
             echo -e "  ${GREEN}✓ No downloaded models found to delete.${NC}"
@@ -822,15 +730,7 @@ case "$COMMAND" in
         fi
 
         while true; do
-            echo -e "  ${CYAN}[i] Found $total_count model(s) in cache:${NC}"
-            echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
-            for i in "${!MODEL_PATHS[@]}"; do
-                num=$((i + 1))
-                printf "    ${BOLD}%2d)${NC} %-52s [${YELLOW}%s${NC}]\n" "$num" "${MODEL_NAMES[$i]}" "${MODEL_SIZES[$i]}"
-                echo -e "        ${BOLD}Path:${NC} ${MODEL_PATHS[$i]}"
-            done
-            echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
-            echo ""
+            "$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --hf-cache-dir "$HF_CACHE_DIR" --format card
             
             echo -e "  ${BOLD}Options:${NC}"
             echo -e "    - Type ${CYAN}'all'${NC} (or ${CYAN}'a'${NC}) to delete ALL listed models."
@@ -851,7 +751,7 @@ case "$COMMAND" in
             INVALID_INPUT=false
 
             if [ "$choice" = "all" ] || [ "$choice" = "a" ]; then
-                for i in "${!MODEL_PATHS[@]}"; do
+                for ((i=0; i<total_count; i++)); do
                     TO_DELETE+=("$i")
                 done
             else
@@ -882,8 +782,8 @@ case "$COMMAND" in
             echo ""
             echo -e "  ${RED}${BOLD}Deleting selected models...${NC}"
             for idx in "${TO_DELETE[@]}"; do
-                path="${MODEL_PATHS[$idx]}"
-                name="${MODEL_NAMES[$idx]}"
+                path=$("$PYTHON_CMD" -c "import json; m = json.loads('''$MODELS_JSON''')[$idx]; print(m['path'])")
+                name=$("$PYTHON_CMD" -c "import json; m = json.loads('''$MODELS_JSON''')[$idx]; print(m['display_name'])")
                 echo -e "    ${RED}-${NC} Removing: $name"
                 rm -rf "$path"
             done
