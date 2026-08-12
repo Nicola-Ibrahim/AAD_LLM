@@ -78,4 +78,11 @@ class AlgorithmExecutor:
                 "Expected (best_x, float(best_y)) or float(best_y)."
             )
 
+        import math
+        if not math.isfinite(algorithm_returned_fitness):
+            raise ValueError(
+                f"[INVALID RETURN] Algorithm returned a non-finite value: {algorithm_returned_fitness}. "
+                "Ensure __call__ returns a valid float (no NaN or inf)."
+            )
+
         return best_x, algorithm_returned_fitness

@@ -1,3 +1,4 @@
+import math
 import time
 import traceback
 from typing import Any
@@ -47,6 +48,8 @@ class Evaluator:
                                 ▼
                          Return solution
     """
+
+    FAILURE_FITNESS: float = -1e9
 
     def __init__(
         self,
@@ -101,23 +104,12 @@ class Evaluator:
             true_optimum=self._problem.true_optimum,
         )
 
-    def _calculate_fitness_and_feedback(
+    def _resolve_clean_objective(
         self,
-        algorithm_returned_fitness: float,
         best_x: np.ndarray | None,
-        algorithm_name: str,
-        runtime_seconds: float,
-        evaluations_used: int,
-        code_lines: int,
-        code_length: int,
-        llm_generation_time: float | None = None,
-    ) -> tuple[float, str, IterationMetadata]:
-        """
-        Compute final error, fitness score, feedback message, and metadata object.
-        Re-evaluates best_x on the clean underlying problem to calculate an unbiased final error.
-        """
-        true_optimum = self._problem.true_optimum
-
+        algorithm_returned_fitness: float,
+    ) -> float:
+        """Validate best_x dimension/bounds if present, re-evaluate clean objective value, and check finite return."""
         if best_x is not None:
             if len(best_x) != self._problem.dim:
                 raise ValueError(
@@ -133,20 +125,41 @@ class Evaluator:
         else:
             clean_y = algorithm_returned_fitness
 
-        final_error = abs(clean_y - true_optimum)
+        if not math.isfinite(clean_y):
+            raise ValueError(
+                f"[INVALID RETURN] Algorithm returned a non-finite value ({clean_y}). "
+                "Ensure __call__ returns a valid float — no NaN or inf."
+            )
 
-        feedback = (
+        return clean_y
+
+    def _build_success_feedback(self, final_error: float, true_optimum: float) -> str:
+        """Build feedback string for a successful algorithm run."""
+        return (
             f"The algorithm achieved a final clean error of {final_error:.4f} from the true optimum ({true_optimum:.4f}) "
             f"on BBOB Problem {self._problem.problem_id} (noise model: {self._problem.noise_model}, noise std: {self._problem.noise_std}). "
             "Improve convergence speed and resilience to minimize the final error."
         )
 
+    def _build_success_metadata(
+        self,
+        algorithm_name: str,
+        algorithm_returned_fitness: float,
+        final_error: float,
+        runtime_seconds: float,
+        evaluations_used: int,
+        code_lines: int,
+        code_length: int,
+        llm_generation_time: float | None = None,
+    ) -> IterationMetadata:
+        """Construct IterationMetadata object for successful algorithm executions."""
+        true_optimum = self._problem.true_optimum
         budget_consumed_pct = (evaluations_used / self._budget * 100) if self._budget > 0 else 0.0
         relative_error = (final_error / abs(true_optimum)) if true_optimum != 0.0 else final_error
         evals_per_second = (evaluations_used / runtime_seconds) if runtime_seconds > 0.0 else 0.0
         error_per_evaluation = (final_error / evaluations_used) if evaluations_used > 0 else None
 
-        metadata = IterationMetadata(
+        return IterationMetadata(
             algorithm_name=algorithm_name,
             execution=Execution(
                 timed_out=False,
@@ -173,6 +186,37 @@ class Evaluator:
                 error_traceback=None,
             ),
             convergence=Convergence.evaluate(final_error, self._convergence_threshold),
+        )
+
+    def _calculate_fitness_and_feedback(
+        self,
+        algorithm_returned_fitness: float,
+        best_x: np.ndarray | None,
+        algorithm_name: str,
+        runtime_seconds: float,
+        evaluations_used: int,
+        code_lines: int,
+        code_length: int,
+        llm_generation_time: float | None = None,
+    ) -> tuple[float, str, IterationMetadata]:
+        """
+        Compute final error, fitness score, feedback message, and metadata object.
+        Re-evaluates best_x on the clean underlying problem to calculate an unbiased final error.
+        """
+        true_optimum = self._problem.true_optimum
+        clean_y = self._resolve_clean_objective(best_x, algorithm_returned_fitness)
+        final_error = abs(clean_y - true_optimum)
+
+        feedback = self._build_success_feedback(final_error, true_optimum)
+        metadata = self._build_success_metadata(
+            algorithm_name=algorithm_name,
+            algorithm_returned_fitness=algorithm_returned_fitness,
+            final_error=final_error,
+            runtime_seconds=runtime_seconds,
+            evaluations_used=evaluations_used,
+            code_lines=code_lines,
+            code_length=code_length,
+            llm_generation_time=llm_generation_time,
         )
 
         # LLaMEA expects a fitness score where higher is better.
@@ -217,6 +261,38 @@ class Evaluator:
                 error, solution.name, start_time, code_lines, code_length, llm_gen_time
             )
 
+    def _generate_error_feedback(self, error: Exception, is_timeout: bool) -> str:
+        """Generate categorized feedback message based on exception type."""
+        if is_timeout:
+            return (
+                f"[TIMEOUT] Execution failed: Your algorithm exceeded the {self._timeout_seconds}-second time limit. "
+                "Please optimize your loops and make the code more efficient."
+            )
+        elif isinstance(error, (SyntaxError, IndentationError)):
+            return (
+                f"[SYNTAX ERROR] The generated code has a Python syntax error:\n"
+                f"{traceback.format_exc()}\n"
+                "Please fix the syntax error."
+            )
+        elif isinstance(error, (ZeroDivisionError, OverflowError)):
+            return (
+                f"[MATH ERROR] Execution failed with math exception ({type(error).__name__}): {error}.\n"
+                f"{traceback.format_exc()}\n"
+                "Please add mathematical guards (e.g. avoid dividing by zero or overflow)."
+            )
+        elif isinstance(error, (ValueError, TypeError)):
+            return (
+                f"[RUNTIME ERROR] Execution failed with {type(error).__name__}: {error}.\n"
+                f"{traceback.format_exc()}\n"
+                "Please check array shapes, types, and return values."
+            )
+        else:
+            return (
+                f"[RUNTIME ERROR] Execution failed with the following Python error:\n"
+                f"{traceback.format_exc()}\n"
+                "Please fix the bugs."
+            )
+
     def _score_failed_algorithm(
         self,
         error: Exception,
@@ -231,18 +307,7 @@ class Evaluator:
         evals_used = self._problem.evaluations
         is_timeout = isinstance(error, AlgorithmTimeoutException)
 
-        if is_timeout:
-            feedback = (
-                f"Execution failed: Your algorithm exceeded the {self._timeout_seconds}-second time limit. "
-                "Please optimize your loops and make the code more efficient."
-            )
-        else:
-            feedback = (
-                "Execution failed with the following Python error:\n"
-                f"{traceback.format_exc()}\n"
-                "Please fix the bugs."
-            )
-
+        feedback = self._generate_error_feedback(error, is_timeout)
         metadata = self._build_error_metadata(
             algorithm_name=solution_name,
             elapsed_time=elapsed_time,
@@ -254,7 +319,7 @@ class Evaluator:
             error=error,
         )
 
-        return float("-inf"), feedback, metadata
+        return self.FAILURE_FITNESS, feedback, metadata
 
     def _build_error_metadata(
         self,
@@ -350,6 +415,9 @@ class Evaluator:
         fitness_score, feedback, metadata = self._run_and_score_algorithm(
             solution, start_time, code_lines, code_length, llm_gen_time
         )
+
+        if not math.isfinite(fitness_score):
+            fitness_score = self.FAILURE_FITNESS
 
         solution.set_scores(fitness_score, feedback)
         self._persist_iteration(solution, metadata)

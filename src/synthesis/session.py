@@ -308,8 +308,8 @@ class LLaMEASession:
 
         if (
             fitness_score is not None
-            and not math.isnan(fitness_score)
-            and not math.isinf(fitness_score)
+            and math.isfinite(fitness_score)
+            and fitness_score > Evaluator.FAILURE_FITNESS
         ):
             best_error = -fitness_score
             raw_fitness = self._db_repo.get_best_raw_fitness(self._experiment_id)
@@ -335,10 +335,8 @@ class LLaMEASession:
             problem_profile=evaluator.problem_profile,
         )
 
-    def run(self) -> SessionResult:
-        """Runs the complete evolution loop for the problem."""
-        self._print_start_banner()
-
+    def _execute_loop(self) -> tuple[LLaMEA, Evaluator]:
+        """Executes the LLaMEA evolutionary loop with lifecycle status tracking and logger cleanup."""
         try:
             task_prompt = build_task_prompt(
                 problem_id=self._problem.problem_id,
@@ -350,17 +348,23 @@ class LLaMEASession:
             )
             evaluator = self._setup_evaluator()
             synthesis_engine = self._create_synthesis_engine(evaluator, task_prompt)
-
             synthesis_engine.run()
         except Exception as e:
             self._db_repo.mark_failed(self._experiment_id, str(e))
             raise
         else:
             self._db_repo.mark_completed(self._experiment_id)
-            self._cleanup_archive_dir()
-            return self._process_session_result(synthesis_engine, evaluator)
+            return synthesis_engine, evaluator
         finally:
             self._problem.close_logger()
+
+    def run(self) -> SessionResult:
+        """Runs the complete evolution loop for the problem."""
+        self._print_start_banner()
+        synthesis_engine, evaluator = self._execute_loop()
+
+        self._cleanup_archive_dir()
+        return self._process_session_result(synthesis_engine, evaluator)
 
     def _create_synthesis_engine(
         self, evaluator: Evaluator, task_prompt: str
@@ -428,14 +432,17 @@ class LLaMEASession:
     ) -> None:
         """Prints a human-readable console report highlighting objective value and error metrics of the best candidate."""
         true_opt = self._problem.true_optimum
-        fit_val = -final_error if final_error is not None else float("-inf")
         raw_str = (
             f"{raw_fitness:.6f}"
             if raw_fitness is not None
             else "N/A (All Executions Failed)"
         )
         err_str = f"{final_error:.6e}" if final_error is not None else "N/A"
-        fit_str = f"{fit_val:.6e}" if fit_val != float("-inf") else "-inf"
+        fit_str = (
+            f"{-final_error:.6e}"
+            if final_error is not None
+            else "N/A (All Executions Failed)"
+        )
 
         print("\n" + "=" * 70)
         print(
