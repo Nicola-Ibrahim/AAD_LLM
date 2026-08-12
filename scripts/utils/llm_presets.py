@@ -89,7 +89,12 @@ def cmd_list_models(args):
 def cmd_download(args):
     try:
         from huggingface_hub import hf_hub_download
-        cache_path = hf_hub_download(repo_id=args.repo, filename=args.file)
+        target_dir = os.path.expanduser(args.target_dir) if args.target_dir else None
+        if target_dir:
+            os.makedirs(target_dir, exist_ok=True)
+            cache_path = hf_hub_download(repo_id=args.repo, filename=args.file, local_dir=target_dir)
+        else:
+            cache_path = hf_hub_download(repo_id=args.repo, filename=args.file)
         print(cache_path)
     except Exception as e:
         sys.stderr.write(f"Error downloading model: {e}\n")
@@ -112,7 +117,7 @@ def cmd_get_active_model(args):
     print("(none/server offline)")
 
 
-# ─── Model Scanning & Sorting ─────────────────────────────────
+# ─── Model Scanning, Sorting & Formatting ─────────────────────
 
 def extract_param_size(name: str) -> tuple[float | None, str]:
     """Extract parameter count in billions from model name (e.g. '1.5B' -> 1.5, '7B' -> 7.0)."""
@@ -164,14 +169,83 @@ def shorten_path(path_str: str) -> str:
     return path_str
 
 
+def find_hf_repo_id(path: Path) -> str | None:
+    """Finds Hugging Face repository ID (e.g. 'Qwen/Qwen2.5-Coder-7B-Instruct-GGUF') from path."""
+    try:
+        resolved = path.resolve()
+    except Exception:
+        resolved = path
+
+    for part in [path] + list(path.parents) + [resolved] + list(resolved.parents):
+        if part.name.startswith("models--"):
+            return part.name.replace("models--", "").replace("--", "/")
+    return None
+
+
+def get_model_key(path: Path) -> str:
+    """Returns a unique canonical key for deduplication."""
+    repo_id = find_hf_repo_id(path)
+    if repo_id:
+        return f"repo:{repo_id.lower()}"
+    try:
+        return f"file:{path.resolve()}"
+    except Exception:
+        return f"file:{path}"
+
+
 def cmd_scan_models(args):
     target_dir = Path(os.path.expanduser(args.target_dir))
     hf_cache_dir = Path(os.path.expanduser(args.hf_cache_dir))
 
-    models = []
-    seen_paths = set()
+    models_by_key = {}
 
-    # 1. Scan target directory (~/models)
+    def process_item(item: Path, is_primary_target: bool):
+        try:
+            resolved_path = item.resolve()
+        except Exception:
+            resolved_path = item
+
+        key = get_model_key(item)
+        repo_id = find_hf_repo_id(item)
+
+        if item.is_file() or item.is_symlink():
+            file_name = item.name
+        else:
+            ggufs = list(item.rglob("*.gguf"))
+            file_name = ggufs[0].name if ggufs else item.name
+
+        search_str = f"{repo_id or ''} {file_name}"
+        param_val, param_tag = extract_param_size(search_str)
+        size_bytes = get_path_size(item)
+
+        display_name = file_name if is_primary_target else (repo_id or file_name)
+
+        model_entry = {
+            "key": key,
+            "source": "Local Directory" if is_primary_target else "Hugging Face Cache",
+            "name": file_name,
+            "repo_id": repo_id or "",
+            "display_name": display_name,
+            "file_name": file_name,
+            "param_val": param_val,
+            "param_tag": param_tag,
+            "size_bytes": size_bytes,
+            "size_formatted": format_size_bytes(size_bytes),
+            "path": str(item),
+            "short_path": shorten_path(str(item)),
+            "resolved_path": str(resolved_path),
+            "is_primary": is_primary_target
+        }
+
+        # Deduplication: prefer models in target_dir over HF cache fallback
+        if key in models_by_key:
+            existing = models_by_key[key]
+            if is_primary_target and not existing["is_primary"]:
+                models_by_key[key] = model_entry
+        else:
+            models_by_key[key] = model_entry
+
+    # 1. Primary scan: target directory (~/models)
     if target_dir.is_dir():
         if args.gguf_only:
             items = list(target_dir.glob("*.gguf"))
@@ -179,77 +253,21 @@ def cmd_scan_models(args):
             items = [p for p in target_dir.iterdir() if p.name != ".DS_Store"]
 
         for item in items:
-            abs_path = str(item.resolve())
-            if abs_path in seen_paths:
-                continue
-            seen_paths.add(abs_path)
+            process_item(item, is_primary_target=True)
 
-            raw_name = item.name
-            param_val, param_tag = extract_param_size(raw_name)
-            size_bytes = get_path_size(item)
-
-            models.append({
-                "source": "Local File / Symlink",
-                "name": raw_name,
-                "display_name": raw_name,
-                "param_val": param_val,
-                "param_tag": param_tag,
-                "size_bytes": size_bytes,
-                "size_formatted": format_size_bytes(size_bytes),
-                "path": str(item),
-                "short_path": shorten_path(str(item))
-            })
-
-    # 2. Scan Hugging Face cache
+    # 2. Secondary scan: HF cache (fallback only if target_dir has no models or unlinked items)
     if hf_cache_dir.is_dir():
         if args.gguf_only:
             items = list(hf_cache_dir.rglob("*.gguf"))
-            for item in items:
-                abs_path = str(item.resolve())
-                if abs_path in seen_paths:
-                    continue
-                seen_paths.add(abs_path)
-
-                raw_name = item.name
-                param_val, param_tag = extract_param_size(raw_name)
-                size_bytes = get_path_size(item)
-
-                models.append({
-                    "source": "Hugging Face Cache",
-                    "name": raw_name,
-                    "display_name": raw_name,
-                    "param_val": param_val,
-                    "param_tag": param_tag,
-                    "size_bytes": size_bytes,
-                    "size_formatted": format_size_bytes(size_bytes),
-                    "path": str(item),
-                    "short_path": shorten_path(str(item))
-                })
         else:
             items = list(hf_cache_dir.glob("models--*"))
-            for item in items:
-                abs_path = str(item.resolve())
-                if abs_path in seen_paths:
-                    continue
-                seen_paths.add(abs_path)
 
-                clean_name = item.name.replace("models--", "").replace("--", "/")
-                param_val, param_tag = extract_param_size(clean_name)
-                size_bytes = get_path_size(item)
+        for item in items:
+            process_item(item, is_primary_target=False)
 
-                models.append({
-                    "source": "Hugging Face Cache",
-                    "name": item.name,
-                    "display_name": clean_name,
-                    "param_val": param_val,
-                    "param_tag": param_tag,
-                    "size_bytes": size_bytes,
-                    "size_formatted": format_size_bytes(size_bytes),
-                    "path": str(item),
-                    "short_path": shorten_path(str(item))
-                })
+    models = list(models_by_key.values())
 
-    # Sort models by parameter count ascending (0.5B -> 1.5B -> 7B -> 14B -> 32B), then by disk size
+    # Sort models by parameter count ascending (0.5B -> 1.5B -> 7B -> 14B -> 32B), then by size
     models.sort(key=lambda m: (
         m["param_val"] if m["param_val"] is not None else float("inf"),
         m["size_bytes"],
@@ -275,8 +293,10 @@ def cmd_scan_models(args):
     for m in models:
         idx_str = f"[{m['index']:2d}]"
         param_str = f" ({YELLOW}{m['param_tag']}{NC})" if m['param_tag'] else ""
+        
         print(f"  {CYAN}{BOLD}{idx_str}{NC} {BOLD}{m['display_name']}{NC}{param_str}")
-        print(f"       • {BOLD}Source:{NC}    {m['source']}")
+        if m['repo_id'] and m['file_name'] != m['display_name']:
+            print(f"       • {BOLD}Repo:{NC}      {m['repo_id']}")
         print(f"       • {BOLD}Disk Size:{NC} {GREEN}{m['size_formatted']}{NC}")
         print(f"       • {BOLD}Location:{NC}  {m['short_path']}")
         print("")
@@ -301,6 +321,7 @@ def main():
     p_dl = subparsers.add_parser("download")
     p_dl.add_argument("--repo", required=True, help="Hugging Face repo ID")
     p_dl.add_argument("--file", required=True, help="GGUF filename")
+    p_dl.add_argument("--target-dir", default=None, help="Target download directory")
 
     # get-active-model
     p_act = subparsers.add_parser("get-active-model")

@@ -628,11 +628,10 @@ download_model() {
         echo -e "    ${BOLD}Destination:${NC} $TARGET_DIR"
         echo ""
 
-        if CACHE_PATH=$("$PYTHON_CMD" "$PRESETS_PY" download --repo "$MODEL_REPO" --file "$MODEL_FILE"); then
-            if [ -f "$CACHE_PATH" ]; then
-                ln -sf "$CACHE_PATH" "$target_path"
-                echo -e "\n  ${GREEN}✓ Model download and link completed successfully!${NC}"
-                echo -e "    ${BOLD}Local Path:${NC} $target_path"
+        if DOWNLOADED_PATH=$("$PYTHON_CMD" "$PRESETS_PY" download --repo "$MODEL_REPO" --file "$MODEL_FILE" --target-dir "$TARGET_DIR"); then
+            if [ -f "$DOWNLOADED_PATH" ]; then
+                echo -e "\n  ${GREEN}✓ Model download completed successfully!${NC}"
+                echo -e "    ${BOLD}Local Path:${NC} $DOWNLOADED_PATH"
                 echo ""
                 echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════╗${NC}"
                 echo -e "  ${GREEN}✓ Setup complete! Ready to serve.${NC}"
@@ -640,7 +639,7 @@ download_model() {
                 echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════╝${NC}"
                 echo ""
             else
-                echo -e "  ${RED}✗ ERROR: Cache path '$CACHE_PATH' does not resolve to a file.${NC}"
+                echo -e "  ${RED}✗ ERROR: Downloaded path '$DOWNLOADED_PATH' does not resolve to a file.${NC}"
                 exit 1
             fi
         else
