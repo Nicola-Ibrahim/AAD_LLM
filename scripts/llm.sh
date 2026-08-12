@@ -437,13 +437,15 @@ start_server() {
 
 # ─── Download Logic ────────────────────────────────────────
 download_model() {
+    local MODELS_TO_DOWNLOAD=()
+
     if [[ -z "$MODEL_REPO" || -z "$MODEL_FILE" ]]; then
         if [[ -t 0 ]]; then
             while true; do
                 print_header
                 echo -e "  ${BOLD}Select download method:${NC}"
                 echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
-                echo -e "    ${BOLD}1)${NC} Select and download a model preset"
+                echo -e "    ${BOLD}1)${NC} Select and download model preset(s)"
                 echo -e "    ${BOLD}2)${NC} Download from custom Hugging Face repo & file"
                 echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
                 echo ""
@@ -510,7 +512,7 @@ download_model() {
                             MODEL_COUNT=$("$PYTHON_CMD" -c "import json; print(len(json.loads('''$FILTERED_MODELS''')))")
 
                             print_header
-                            echo -e "  ${BOLD}Select a model from family '$SELECTED_CAT' to download:${NC}"
+                            echo -e "  ${BOLD}Select model(s) from family '$SELECTED_CAT' to download:${NC}"
                             echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
                             for ((i=0; i<MODEL_COUNT; i++)); do
                                 name=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$i]; print(m.get('name', ''))")
@@ -520,13 +522,14 @@ download_model() {
                             echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
                             echo ""
                             echo -e "  ${BOLD}Options:${NC}"
-                            echo -e "    - Type the number of the model to download."
+                            echo -e "    - Type space or comma separated numbers (e.g. ${CYAN}'1'${NC}, ${CYAN}'1, 3'${NC}) or ${CYAN}'all'${NC}."
                             echo -e "    - Type ${YELLOW}'b'${NC} (or ${YELLOW}'back'${NC}) to return to the family list."
                             echo -e "    - Press ${YELLOW}Enter${NC}, type ${YELLOW}'q'${NC}, or press ${YELLOW}Ctrl+C${NC} to cancel."
                             echo ""
 
-                            CHOSEN_MODEL_INDEX=""
                             GO_BACK=false
+                            SELECTED_INDICES=()
+
                             while true; do
                                 read -rp "$(echo -e "  ${BOLD}Your choice:${NC} ")" preset_choice || { echo -e "\n  ${YELLOW}Cancelled.${NC}"; exit 0; }
                                 preset_choice=$(echo "$preset_choice" | tr '[:upper:]' '[:lower:]' | xargs)
@@ -540,13 +543,34 @@ download_model() {
                                     GO_BACK=true
                                     break
                                 fi
-                                
-                                if [[ "$preset_choice" =~ ^[0-9]+$ ]] && [ "$preset_choice" -ge 1 ] && [ "$preset_choice" -le "$MODEL_COUNT" ]; then
-                                    CHOSEN_MODEL_INDEX=$((preset_choice - 1))
-                                    break
+
+                                INVALID_INPUT=false
+                                SELECTED_INDICES=()
+
+                                if [ "$preset_choice" = "all" ] || [ "$preset_choice" = "a" ]; then
+                                    for ((i=0; i<MODEL_COUNT; i++)); do
+                                        SELECTED_INDICES+=("$i")
+                                    done
                                 else
-                                    echo -e "  ${RED}✗ ERROR: Invalid choice '$preset_choice'. Please choose a number between 1 and $MODEL_COUNT.${NC}"
+                                    IFS=', ' read -r -a nums <<< "$preset_choice"
+                                    for n in "${nums[@]}"; do
+                                        if [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le "$MODEL_COUNT" ]; then
+                                            SELECTED_INDICES+=("$((n - 1))")
+                                        else
+                                            echo -e "  ${RED}✗ ERROR: Invalid selection '$n'. Please choose numbers between 1 and $MODEL_COUNT or 'all'.${NC}"
+                                            INVALID_INPUT=true
+                                            break
+                                        fi
+                                    done
+                                fi
+
+                                if [ "$INVALID_INPUT" = true ]; then
                                     sleep 1.5
+                                    continue
+                                fi
+
+                                if [ "${#SELECTED_INDICES[@]}" -gt 0 ]; then
+                                    break
                                 fi
                             done
 
@@ -554,8 +578,11 @@ download_model() {
                                 continue
                             fi
 
-                            MODEL_REPO=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$CHOSEN_MODEL_INDEX]; print(m.get('repo', ''))")
-                            MODEL_FILE=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$CHOSEN_MODEL_INDEX]; print(m.get('file', ''))")
+                            for idx in "${SELECTED_INDICES[@]}"; do
+                                repo=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$idx]; print(m.get('repo', ''))")
+                                file=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$idx]; print(m.get('file', ''))")
+                                MODELS_TO_DOWNLOAD+=("$repo|$file")
+                            done
                             break
                         done
                         break
@@ -576,8 +603,7 @@ download_model() {
                                 echo -e "  ${RED}✗ ERROR: Repository and filename cannot be empty. Please try again.${NC}"
                                 sleep 1
                             else
-                                MODEL_REPO="$custom_repo"
-                                MODEL_FILE="$custom_file"
+                                MODELS_TO_DOWNLOAD+=("$custom_repo|$custom_file")
                                 break
                             fi
                         done
@@ -594,52 +620,55 @@ download_model() {
             echo -e "    Please specify MODEL_REPO and MODEL_FILE env variables.${NC}" >&2
             exit 1
         fi
+    else
+        MODELS_TO_DOWNLOAD+=("$MODEL_REPO|$MODEL_FILE")
     fi
 
-    print_header
-    target_path="$TARGET_DIR/$MODEL_FILE"
     mkdir -p "$TARGET_DIR"
+    local total_dl=${#MODELS_TO_DOWNLOAD[@]}
 
-    if [ -f "$target_path" ]; then
-        echo -e "  ${GREEN}✓ Model file already exists locally:${NC}"
-        echo -e "    ${BOLD}Path:${NC} $target_path"
-        echo ""
-        echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════╗${NC}"
-        echo -e "  ${GREEN}✓ Setup complete! Ready to serve.${NC}"
-        echo -e "  ${BOLD}Next:${NC}  bash scripts/llm.sh start"
-        echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════╝${NC}"
-        echo ""
-    else
-        if ! "$PYTHON_CMD" -c "import huggingface_hub" &> /dev/null; then
-            echo -e "  ${CYAN}[i] huggingface_hub not found. Running env.sh...${NC}"
-            bash "$SCRIPT_DIR/env.sh"
-        fi
+    if ! "$PYTHON_CMD" -c "import huggingface_hub" &> /dev/null; then
+        echo -e "  ${CYAN}[i] huggingface_hub not found. Running env.sh...${NC}"
+        bash "$SCRIPT_DIR/env.sh"
+    fi
 
-        echo -e "  ${CYAN}[i] Downloading LLM model from Hugging Face...${NC}"
-        echo -e "    ${BOLD}Repository:${NC}  $MODEL_REPO"
-        echo -e "    ${BOLD}File:${NC}        $MODEL_FILE"
+    for ((idx=0; idx<total_dl; idx++)); do
+        IFS='|' read -r repo_id file_name <<< "${MODELS_TO_DOWNLOAD[$idx]}"
+        target_path="$TARGET_DIR/$file_name"
+        
+        print_header
+        echo -e "  ${CYAN}[i] Processing model $((idx + 1)) of $total_dl:${NC}"
+        echo -e "    ${BOLD}Repository:${NC}  $repo_id"
+        echo -e "    ${BOLD}File:${NC}        $file_name"
         echo -e "    ${BOLD}Destination:${NC} $TARGET_DIR"
         echo ""
 
-        if DOWNLOADED_PATH=$("$PYTHON_CMD" "$PRESETS_PY" download --repo "$MODEL_REPO" --file "$MODEL_FILE" --target-dir "$TARGET_DIR"); then
+        if [ -f "$target_path" ]; then
+            echo -e "  ${GREEN}✓ Model file already exists locally:${NC} $target_path (skipping download)"
+            echo ""
+            continue
+        fi
+
+        echo -e "  ${CYAN}[i] Downloading from Hugging Face...${NC}"
+        if DOWNLOADED_PATH=$("$PYTHON_CMD" "$PRESETS_PY" download --repo "$repo_id" --file "$file_name" --target-dir "$TARGET_DIR"); then
             if [ -f "$DOWNLOADED_PATH" ]; then
-                echo -e "\n  ${GREEN}✓ Model download completed successfully!${NC}"
-                echo -e "    ${BOLD}Local Path:${NC} $DOWNLOADED_PATH"
-                echo ""
-                echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════╗${NC}"
-                echo -e "  ${GREEN}✓ Setup complete! Ready to serve.${NC}"
-                echo -e "  ${BOLD}Next:${NC}  bash scripts/llm.sh start"
-                echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════╝${NC}"
+                echo -e "  ${GREEN}✓ Downloaded successfully:${NC} $DOWNLOADED_PATH"
                 echo ""
             else
                 echo -e "  ${RED}✗ ERROR: Downloaded path '$DOWNLOADED_PATH' does not resolve to a file.${NC}"
                 exit 1
             fi
         else
-            echo -e "  ${RED}✗ ERROR: Failed to download model using huggingface_hub.${NC}"
+            echo -e "  ${RED}✗ ERROR: Failed to download model '$file_name' from Hugging Face.${NC}"
             exit 1
         fi
-    fi
+    done
+
+    echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════╗${NC}"
+    echo -e "  ${GREEN}✓ Setup complete for $total_dl model(s)! Ready to serve.${NC}"
+    echo -e "  ${BOLD}Next:${NC}  bash scripts/llm.sh start"
+    echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════╝${NC}"
+    echo ""
 }
 
 # ─── Execute Command ───────────────────────────────────────
