@@ -24,8 +24,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="$PROJECT_ROOT/logs"
 PID_FILE="$LOG_DIR/server.pid"
 LOG_FILE="$LOG_DIR/model_server.log"
-TARGET_DIR="$HOME/models"
-HF_CACHE_DIR="$HOME/.cache/huggingface/hub"
+TARGET_DIR="${MODELS_DIR:-$HOME/models}"
 
 # Clean signal handling for interrupts (Ctrl+C)
 trap 'echo -e "\n  \033[1;33mExiting.\033[0m"; exit 0' INT
@@ -154,6 +153,7 @@ if [[ -z "$COMMAND" ]]; then
             print_header
             echo -e "  ${CYAN}${BOLD}Active Configuration Settings:${NC}"
             echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
+            echo -e "    • ${BOLD}Models Folder:${NC} $TARGET_DIR"
             echo -e "    • ${BOLD}API Endpoint:${NC}  http://$HOST:$PORT/v1"
             echo -e "    • ${BOLD}Context Size:${NC}  $N_CTX tokens"
             echo -e "    • ${BOLD}CPU Threads:${NC}   $N_THREADS"
@@ -264,7 +264,7 @@ start_server() {
         fi
     fi
 
-    MODELS_JSON=$("$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --hf-cache-dir "$HF_CACHE_DIR" --gguf-only --format json)
+    MODELS_JSON=$("$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --gguf-only --format json)
     local total_count
     total_count=$("$PYTHON_CMD" -c "import json; print(len(json.loads('''$MODELS_JSON''')))")
     local selected_model=""
@@ -275,7 +275,7 @@ start_server() {
             while true; do
                 print_header
                 echo -e "  ${CYAN}[i] Available LLM Models (sorted by parameter size):${NC}"
-                "$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --hf-cache-dir "$HF_CACHE_DIR" --gguf-only --format card
+                "$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --gguf-only --format card
                 
                 echo -e "  ${BOLD}Options:${NC}"
                 echo -e "    - Type the number of the model to serve (e.g. ${CYAN}'1'${NC})."
@@ -301,12 +301,8 @@ start_server() {
                 fi
             done
         else
-            echo -e "  ${RED}✗ ERROR: No GGUF model files found.${NC}"
-            echo -e "  Scanned locations:"
-            echo -e "    • ${BOLD}$TARGET_DIR${NC}"
-            echo -e "    • ${BOLD}$HF_CACHE_DIR${NC}"
-            echo -e ""
-            echo -e "  Please download a model first using scripts/llm.sh download."
+            echo -e "  ${RED}✗ ERROR: No GGUF model files found in: $TARGET_DIR${NC}"
+            echo -e "  Please download a model first using: bash scripts/llm.sh download"
             exit 1
         fi
     else
@@ -318,10 +314,7 @@ start_server() {
             selected_path=$("$PYTHON_CMD" -c "import json; print(json.loads('''$MODELS_JSON''')[0]['path'])")
             echo -e "  ${CYAN}[i] Non-interactive mode: Automatically selecting first available model: $selected_model${NC}"
         else
-            echo -e "  ${RED}✗ ERROR: No GGUF model files found and no model specified in non-interactive mode.${NC}"
-            echo -e "  Scanned locations:"
-            echo -e "    • ${BOLD}$TARGET_DIR${NC}"
-            echo -e "    • ${BOLD}$HF_CACHE_DIR${NC}"
+            echo -e "  ${RED}✗ ERROR: No GGUF model files found in: $TARGET_DIR${NC}"
             exit 1
         fi
     fi
@@ -714,22 +707,22 @@ case "$COMMAND" in
 
     list)
         print_header
-        "$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --hf-cache-dir "$HF_CACHE_DIR" --format card
+        "$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --format card
         ;;
 
     cleanup)
         print_header
-        MODELS_JSON=$("$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --hf-cache-dir "$HF_CACHE_DIR" --format json)
+        MODELS_JSON=$("$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --format json)
         total_count=$("$PYTHON_CMD" -c "import json; print(len(json.loads('''$MODELS_JSON''')))")
         
         if [ "$total_count" -eq 0 ]; then
-            echo -e "  ${GREEN}✓ No downloaded models found to delete.${NC}"
+            echo -e "  ${GREEN}✓ No downloaded models found to delete in: $TARGET_DIR${NC}"
             echo ""
             exit 0
         fi
 
         while true; do
-            "$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --hf-cache-dir "$HF_CACHE_DIR" --format card
+            "$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --format card
             
             echo -e "  ${BOLD}Options:${NC}"
             echo -e "    - Type ${CYAN}'all'${NC} (or ${CYAN}'a'${NC}) to delete ALL listed models."
