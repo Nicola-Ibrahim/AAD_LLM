@@ -22,6 +22,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Clean signal handling for interrupts (Ctrl+C)
+trap 'echo -e "\n  \033[1;33mExiting.\033[0m"; exit 0' INT
+
 # ─── Load Environment ──────────────────────────────────────
 ENV_FILE="$PROJECT_ROOT/.env"
 if [ -r "$ENV_FILE" ]; then
@@ -42,16 +45,33 @@ NC='\033[0m' # No Color
 confirm() {
     local prompt="${1:-Are you sure?}"
     local answer
-    read -rp "$(echo -e "${YELLOW}${prompt} [y/N]: ${NC}")" answer
-    [[ "$answer" =~ ^[Yy]$ ]]
+    while true; do
+        read -rp "$(echo -e "${YELLOW}${prompt} [y/N]: ${NC}")" answer || return 1
+        answer=$(echo "$answer" | tr '[:upper:]' '[:lower:]' | xargs)
+        if [[ "$answer" =~ ^[Yy]$ ]]; then
+            return 0
+        elif [[ "$answer" =~ ^[Nn]$ ]] || [ -z "$answer" ] || [ "$answer" = "q" ] || [ "$answer" = "quit" ]; then
+            return 1
+        else
+            echo -e "  ${RED}✗ Please enter 'y' for yes or 'n' for no.${NC}"
+        fi
+    done
 }
 
 confirm_type() {
-    # Require the user to type a specific word to confirm a destructive action
     local word="$1"
     local answer
-    read -rp "$(echo -e "${RED}  Type '${word}' to confirm: ${NC}")" answer
-    [[ "$answer" == "$word" ]]
+    while true; do
+        read -rp "$(echo -e "${RED}  Type '${word}' to confirm: ${NC}")" answer || return 1
+        answer=$(echo "$answer" | xargs)
+        if [[ "$answer" == "$word" ]]; then
+            return 0
+        elif [ "$answer" = "q" ] || [ "$answer" = "quit" ] || [ "$answer" = "exit" ]; then
+            return 1
+        else
+            echo -e "  ${RED}✗ Confirmation text did not match '${word}'. Try again or type 'q' to cancel.${NC}"
+        fi
+    done
 }
 
 print_header() {
@@ -103,10 +123,10 @@ if [[ -z "$COMMAND" ]]; then
             echo ""
             echo -e "  ${BOLD}Options:${NC}"
             echo -e "    - Type the number of the option to execute (e.g. ${CYAN}'1'${NC})."
-            echo -e "    - Press ${YELLOW}Enter${NC} or type ${YELLOW}'q'${NC} to exit."
+            echo -e "    - Press ${YELLOW}Enter${NC}, type ${YELLOW}'q'${NC}, or press ${YELLOW}Ctrl+C${NC} to exit."
             echo ""
 
-            read -rp "$(echo -e "  ${BOLD}Your choice:${NC} ")" choice
+            read -rp "$(echo -e "  ${BOLD}Your choice:${NC} ")" choice || { echo -e "\n  ${YELLOW}Exiting.${NC}"; exit 0; }
             choice=$(echo "$choice" | tr '[:upper:]' '[:lower:]' | xargs)
 
             if [ -z "$choice" ] || [ "$choice" = "q" ] || [ "$choice" = "quit" ] || [ "$choice" = "exit" ]; then
@@ -119,14 +139,14 @@ if [[ -z "$COMMAND" ]]; then
                 2) COMMAND="rollback"; break ;;
                 3)
                     COMMAND="revision"
-                    read -rp "  Enter migration message [auto_migration]: " MIGRATE_MSG
+                    read -rp "  Enter migration message [auto_migration]: " MIGRATE_MSG || { echo -e "\n  ${YELLOW}Exiting.${NC}"; exit 0; }
                     MIGRATE_MSG="${MIGRATE_MSG:-auto_migration}"
                     set -- -m "$MIGRATE_MSG"
                     break
                     ;;
                 4)
                     COMMAND="both"
-                    read -rp "  Enter migration message [auto_migration]: " MIGRATE_MSG
+                    read -rp "  Enter migration message [auto_migration]: " MIGRATE_MSG || { echo -e "\n  ${YELLOW}Exiting.${NC}"; exit 0; }
                     MIGRATE_MSG="${MIGRATE_MSG:-auto_migration}"
                     set -- -m "$MIGRATE_MSG"
                     break
@@ -135,14 +155,12 @@ if [[ -z "$COMMAND" ]]; then
                 6) COMMAND="reset";  break ;;
                 7) COMMAND="status"; break ;;
                 *)
-                    echo -e "  ${RED}✗ ERROR: Invalid choice. Please choose a number between 1 and 8.${NC}"
-                    echo ""
-                    sleep 1
+                    echo -e "  ${RED}✗ ERROR: Invalid choice '$choice'. Please choose a number between 1 and 7.${NC}"
+                    sleep 1.5
                     ;;
             esac
         done
     else
-        # Non-interactive: default to upgrade
         COMMAND="upgrade"
     fi
 fi
@@ -155,10 +173,7 @@ if [[ ! "$DB_PATH" = /* ]]; then
     DB_PATH="$PROJECT_ROOT/$DB_PATH"
 fi
 
-# Ensure the parent directory exists
 mkdir -p "$(dirname "$DB_PATH")"
-
-# Export for Alembic env.py
 export DATABASE_URL="sqlite:///$DB_PATH"
 
 # ─── Locate Python ─────────────────────────────────────────
@@ -168,6 +183,8 @@ if [ -f "$PROJECT_ROOT/.venv/bin/python" ]; then
 elif command -v uv &> /dev/null; then
     PYTHON_CMD="uv run python"
 fi
+
+DB_OPS_PY="$SCRIPT_DIR/utils/db_ops.py"
 
 # ─── Locate Alembic ────────────────────────────────────────
 ALEMBIC_CMD="alembic"
@@ -229,38 +246,12 @@ case "$COMMAND" in
         if confirm "Are you sure you want to clear ALL data?"; then
             if confirm_type "CLEAR"; then
                 echo -e "\n  ${YELLOW}Clearing all rows...${NC}"
-                $PYTHON_CMD - <<EOF
-import sys, os
-sys.path.insert(0, "$PROJECT_ROOT/src")
-os.environ["DATABASE_URL"] = "sqlite:///$DB_PATH"
-from sqlalchemy import create_engine, text, inspect
-
-engine = create_engine("sqlite:///$DB_PATH")
-with engine.begin() as conn:
-    conn.execute(text("PRAGMA foreign_keys = OFF"))
-    inspector = inspect(engine)
-    tables = inspector.get_table_names()
-    # Skip alembic version table
-    tables = [t for t in tables if t != "alembic_version"]
-    for table in tables:
-        conn.execute(text(f"DELETE FROM {table}"))
-        print(f"    Cleared table: {table}")
-    conn.execute(text("PRAGMA foreign_keys = ON"))
-print("  Done.")
-EOF
+                "$PYTHON_CMD" "$DB_OPS_PY" clear-data --db "$DB_PATH"
                 echo -e "  ${GREEN}✓ All data cleared. Schema intact.${NC}"
+                echo -e "  ${CYAN}[i] Note: To clean cached data files, use: bash scripts/clean.sh${NC}"
                 echo ""
-                if confirm "Also delete evolution_state archives, generated code files, and ioh_logs?"; then
-                    echo -e "  ${YELLOW}Cleaning cached data files...${NC}"
-                    find "$PROJECT_ROOT/data/evolution_state" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/evolution_state"/* 2>/dev/null || true
-                    find "$PROJECT_ROOT/data/code" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/code"/* 2>/dev/null || true
-                    find "$PROJECT_ROOT/data/ioh_logs" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/ioh_logs"/* 2>/dev/null || true
-                    rm -rf "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code" "$PROJECT_ROOT/data/ioh_logs"
-                    mkdir -p "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code" "$PROJECT_ROOT/data/ioh_logs"
-                    echo -e "  ${GREEN}✓ Evolution state archives, code files, and ioh_logs cleaned.${NC}"
-                fi
             else
-                echo -e "  ${YELLOW}Confirmation did not match. Aborted.${NC}"
+                echo -e "  ${YELLOW}Aborted.${NC}"
             fi
         else
             echo "  Aborted."
@@ -281,18 +272,10 @@ EOF
                 echo -e "  ${YELLOW}Re-applying all migrations...${NC}"
                 (cd "$PROJECT_ROOT" && $ALEMBIC_CMD upgrade head)
                 echo -e "  ${GREEN}✓ Database reset complete. Fresh schema applied.${NC}"
+                echo -e "  ${CYAN}[i] Note: To clean cached data files, use: bash scripts/clean.sh${NC}"
                 echo ""
-                if confirm "Also delete evolution_state archives, generated code files, and ioh_logs?"; then
-                    echo -e "  ${YELLOW}Cleaning cached data files...${NC}"
-                    find "$PROJECT_ROOT/data/evolution_state" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/evolution_state"/* 2>/dev/null || true
-                    find "$PROJECT_ROOT/data/code" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/code"/* 2>/dev/null || true
-                    find "$PROJECT_ROOT/data/ioh_logs" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/ioh_logs"/* 2>/dev/null || true
-                    rm -rf "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code" "$PROJECT_ROOT/data/ioh_logs"
-                    mkdir -p "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code" "$PROJECT_ROOT/data/ioh_logs"
-                    echo -e "  ${GREEN}✓ Evolution state archives, code files, and ioh_logs cleaned.${NC}"
-                fi
             else
-                echo -e "  ${YELLOW}Confirmation did not match. Aborted.${NC}"
+                echo -e "  ${YELLOW}Aborted.${NC}"
             fi
         else
             echo "  Aborted."
@@ -309,26 +292,13 @@ EOF
         (cd "$PROJECT_ROOT" && $ALEMBIC_CMD history --verbose) || true
         if [[ -f "$DB_PATH" ]]; then
             echo ""
-            echo -e "  ${BOLD}Row Counts:${NC}"
-            $PYTHON_CMD - <<EOF
-import sys, os
-sys.path.insert(0, "$PROJECT_ROOT/src")
-from sqlalchemy import create_engine, text, inspect
-
-engine = create_engine("sqlite:///$DB_PATH")
-inspector = inspect(engine)
-tables = [t for t in inspector.get_table_names() if t != "alembic_version"]
-with engine.connect() as conn:
-    for table in tables:
-        count = conn.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
-        print(f"    {table:<25} {count:>6} rows")
-EOF
+            "$PYTHON_CMD" "$DB_OPS_PY" table-stats --db "$DB_PATH"
         fi
         ;;
 
     *)
         echo -e "  ${RED}Unknown command: '$COMMAND'${NC}"
-        echo "  Valid commands: upgrade, rollback, revision, both, clear, reset, clean-files, status"
+        echo "  Valid commands: upgrade, rollback, revision, both, clear, reset, status"
         exit 1
         ;;
 esac

@@ -1,6 +1,8 @@
 import math
+import re
 import time
 import traceback
+import warnings
 from typing import Any
 
 import numpy as np
@@ -133,13 +135,61 @@ class Evaluator:
 
         return clean_y
 
-    def _build_success_feedback(self, final_error: float, true_optimum: float) -> str:
+    def _extract_code_context_from_traceback(self, tb_str: str, candidate_code: str) -> str:
+        """Extract lines of generated candidate code referenced in the exception traceback."""
+        if not candidate_code or not tb_str:
+            return ""
+
+        code_lines = candidate_code.splitlines()
+        matches = re.findall(r'File "<string>", line (\d+)', tb_str) or re.findall(
+            r'File "[^"]*<string>[^"]*", line (\d+)', tb_str
+        )
+        if not matches:
+            return ""
+
+        context_blocks = []
+        seen_lines: set[int] = set()
+        for line_str in matches:
+            line_num = int(line_str)
+            if line_num in seen_lines:
+                continue
+            seen_lines.add(line_num)
+
+            idx = line_num - 1
+            if 0 <= idx < len(code_lines):
+                start = max(0, idx - 2)
+                end = min(len(code_lines), idx + 3)
+                snippet_lines = []
+                for i in range(start, end):
+                    prefix = "->" if i == idx else "  "
+                    snippet_lines.append(f"  {prefix} line {i+1:3d}: {code_lines[i]}")
+                context_blocks.append("\n".join(snippet_lines))
+
+        if not context_blocks:
+            return ""
+
+        return "\nRelevant code lines from your algorithm:\n" + "\n---\n".join(context_blocks)
+
+    def _build_success_feedback(
+        self,
+        final_error: float,
+        true_optimum: float,
+        captured_warnings: list[str] | None = None,
+    ) -> str:
         """Build feedback string for a successful algorithm run."""
-        return (
+        msg = (
             f"The algorithm achieved a final clean error of {final_error:.4f} from the true optimum ({true_optimum:.4f}) "
             f"on BBOB Problem {self._problem.problem_id} (noise model: {self._problem.noise_model}, noise std: {self._problem.noise_std}). "
             "Improve convergence speed and resilience to minimize the final error."
         )
+        if captured_warnings:
+            warn_str = "\n".join(f"  - {w}" for w in captured_warnings)
+            msg += (
+                f"\n\nNumPy/Runtime Warnings raised during execution (these may indicate silent bugs):\n"
+                f"{warn_str}\n"
+                "Check that your code never passes negative values to sqrt, log, or similar functions."
+            )
+        return msg
 
     def _build_success_metadata(
         self,
@@ -198,6 +248,7 @@ class Evaluator:
         code_lines: int,
         code_length: int,
         llm_generation_time: float | None = None,
+        captured_warnings: list[str] | None = None,
     ) -> tuple[float, str, IterationMetadata]:
         """
         Compute final error, fitness score, feedback message, and metadata object.
@@ -207,7 +258,9 @@ class Evaluator:
         clean_y = self._resolve_clean_objective(best_x, algorithm_returned_fitness)
         final_error = abs(clean_y - true_optimum)
 
-        feedback = self._build_success_feedback(final_error, true_optimum)
+        feedback = self._build_success_feedback(
+            final_error, true_optimum, captured_warnings=captured_warnings
+        )
         metadata = self._build_success_metadata(
             algorithm_name=algorithm_name,
             algorithm_returned_fitness=algorithm_returned_fitness,
@@ -245,6 +298,7 @@ class Evaluator:
             )
             elapsed_time = time.perf_counter() - start_time
             evals_used = self._problem.evaluations
+            captured = getattr(self._executor, "last_captured_warnings", [])
 
             return self._calculate_fitness_and_feedback(
                 algorithm_returned_fitness,
@@ -255,43 +309,84 @@ class Evaluator:
                 code_lines,
                 code_length,
                 llm_generation_time=llm_gen_time,
+                captured_warnings=captured,
             )
         except Exception as error:
+            captured = getattr(self._executor, "last_captured_warnings", [])
             return self._score_failed_algorithm(
-                error, solution.name, start_time, code_lines, code_length, llm_gen_time
+                error,
+                solution.name,
+                start_time,
+                code_lines,
+                code_length,
+                llm_gen_time,
+                candidate_code=solution.code,
+                captured_warnings=captured,
             )
 
-    def _generate_error_feedback(self, error: Exception, is_timeout: bool) -> str:
+    def _generate_error_feedback(
+        self,
+        error: Exception,
+        is_timeout: bool,
+        candidate_code: str = "",
+        captured_warnings: list[str] | None = None,
+    ) -> str:
         """Generate categorized feedback message based on exception type."""
         if is_timeout:
-            return (
+            msg = (
                 f"[TIMEOUT] Execution failed: Your algorithm exceeded the {self._timeout_seconds}-second time limit. "
                 "Please optimize your loops and make the code more efficient."
             )
         elif isinstance(error, (SyntaxError, IndentationError)):
-            return (
+            msg = (
                 f"[SYNTAX ERROR] The generated code has a Python syntax error:\n"
                 f"{traceback.format_exc()}\n"
                 "Please fix the syntax error."
             )
         elif isinstance(error, (ZeroDivisionError, OverflowError)):
-            return (
+            msg = (
                 f"[MATH ERROR] Execution failed with math exception ({type(error).__name__}): {error}.\n"
                 f"{traceback.format_exc()}\n"
                 "Please add mathematical guards (e.g. avoid dividing by zero or overflow)."
             )
         elif isinstance(error, (ValueError, TypeError)):
-            return (
+            msg = (
                 f"[RUNTIME ERROR] Execution failed with {type(error).__name__}: {error}.\n"
                 f"{traceback.format_exc()}\n"
                 "Please check array shapes, types, and return values."
             )
         else:
-            return (
+            msg = (
                 f"[RUNTIME ERROR] Execution failed with the following Python error:\n"
                 f"{traceback.format_exc()}\n"
                 "Please fix the bugs."
             )
+
+        # Option A: Extract traceback code context if available
+        tb_str = traceback.format_exc() if not is_timeout else ""
+        code_context = self._extract_code_context_from_traceback(tb_str, candidate_code)
+        if code_context:
+            msg += f"\n{code_context}"
+
+        # Option D: Append captured warnings if any
+        if captured_warnings:
+            warn_str = "\n".join(f"  - {w}" for w in captured_warnings)
+            msg += (
+                f"\n\nNumPy/Runtime Warnings raised during execution (these may indicate silent bugs):\n"
+                f"{warn_str}\n"
+                "Check that your code never passes negative values to sqrt, log, or similar functions."
+            )
+
+        # Option B: Append problem context footer
+        lb_val = self._problem.lb[0] if hasattr(self._problem, "lb") else -5.0
+        ub_val = self._problem.ub[0] if hasattr(self._problem, "ub") else 5.0
+        msg += (
+            f"\n\nProblem context: BBOB-{self._problem.problem_id}, dim={self._problem.dim}, bounds=[{lb_val}, {ub_val}]. "
+            f"Ensure your algorithm handles small dimensionality (dim={self._problem.dim}) correctly, "
+            "especially matrix operations (e.g. covariance matrices, eigenvectors) that may degenerate when dim is 1, 2, or 3."
+        )
+
+        return msg
 
     def _score_failed_algorithm(
         self,
@@ -301,13 +396,20 @@ class Evaluator:
         code_lines: int,
         code_length: int,
         llm_gen_time: float | None,
+        candidate_code: str = "",
+        captured_warnings: list[str] | None = None,
     ) -> tuple[float, str, IterationMetadata]:
         """Handle execution timeout or runtime error, generating failure feedback and metadata."""
         elapsed_time = time.perf_counter() - start_time
         evals_used = self._problem.evaluations
         is_timeout = isinstance(error, AlgorithmTimeoutException)
 
-        feedback = self._generate_error_feedback(error, is_timeout)
+        feedback = self._generate_error_feedback(
+            error,
+            is_timeout,
+            candidate_code=candidate_code,
+            captured_warnings=captured_warnings,
+        )
         metadata = self._build_error_metadata(
             algorithm_name=solution_name,
             elapsed_time=elapsed_time,

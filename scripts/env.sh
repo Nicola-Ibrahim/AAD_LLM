@@ -20,6 +20,9 @@
 
 set -euo pipefail
 
+# Clean signal handling for interrupts (Ctrl+C)
+trap 'echo -e "\n  \033[1;33mExiting.\033[0m"; exit 0' INT
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -48,7 +51,7 @@ if [ ! -f "$PROJECT_ROOT/.env" ]; then
         "# ---------------------------------------------------------------------" \
         "LLM_PROVIDER=local" \
         "DATABASE_URL=sqlite:///data/db.sqlite3" \
-        "# Model selection is managed on server startup — use: bash scripts/llm_server.sh start" \
+        "# Model selection is managed on server startup — use: bash scripts/llm.sh start" \
         "LOCAL_LLM_BASE_URL=http://localhost:1234/v1" \
         "LOCAL_LLM_API_KEY=not-needed" \
         "" \
@@ -109,10 +112,10 @@ if [[ -z "$COMMAND" ]]; then
             echo ""
             echo -e "  ${BOLD}Options:${NC}"
             echo -e "    - Type the number of the option to execute (e.g. ${CYAN}'3'${NC})."
-            echo -e "    - Press ${YELLOW}Enter${NC} or type ${YELLOW}'q'${NC} to exit."
+            echo -e "    - Press ${YELLOW}Enter${NC}, type ${YELLOW}'q'${NC}, or press ${YELLOW}Ctrl+C${NC} to exit."
             echo ""
 
-            read -rp "$(echo -e "  ${BOLD}Your choice:${NC} ")" choice
+            read -rp "$(echo -e "  ${BOLD}Your choice:${NC} ")" choice || { echo -e "\n  ${YELLOW}Exiting.${NC}"; exit 0; }
             choice=$(echo "$choice" | tr '[:upper:]' '[:lower:]' | xargs)
 
             if [ -z "$choice" ] || [ "$choice" = "q" ] || [ "$choice" = "quit" ] || [ "$choice" = "exit" ]; then
@@ -132,7 +135,7 @@ if [[ -z "$COMMAND" ]]; then
                     echo -e "    ${BOLD}1)${NC} Minimal (Core dependencies only)"
                     echo -e "    ${BOLD}2)${NC} Full    (Core + gemini, llama, notebook)"
                     echo ""
-                    read -rp "$(echo -e "  ${BOLD}Your choice [1-2, default: 1]:${NC} ")" mode_choice
+                    read -rp "$(echo -e "  ${BOLD}Your choice [1-2, default: 1]:${NC} ")" mode_choice || { echo -e "\n  ${YELLOW}Exiting.${NC}"; exit 0; }
                     mode_choice=$(echo "$mode_choice" | xargs)
                     if [[ "$mode_choice" == "2" ]]; then
                         INSTALL_EXTRAS="true"
@@ -144,9 +147,9 @@ if [[ -z "$COMMAND" ]]; then
                 4) COMMAND="inspect"; break ;;
                 5) COMMAND="gpu";     break ;;
                 *)
-                    echo -e "  ${RED}✗ ERROR: Invalid choice. Please choose a number between 1 and 5.${NC}"
+                    echo -e "  ${RED}✗ ERROR: Invalid choice '$choice'. Please choose a number between 1 and 5.${NC}"
                     echo ""
-                    sleep 1
+                    sleep 1.5
                     ;;
             esac
         done
@@ -255,21 +258,7 @@ show_inspect() {
         echo ""
         echo -e "  ${BOLD}llama-cpp-python GPU Build:${NC}"
         local llama_check
-        llama_check=$("$python_cmd" -c "
-import importlib.util, sys
-spec = importlib.util.find_spec('llama_cpp')
-if spec is None:
-    print('NOT_INSTALLED')
-else:
-    try:
-        from llama_cpp import llama_cpp as lib
-        so_path = getattr(lib, '_lib_base_name', 'unknown')
-        print('FOUND')
-    except OSError as e:
-        print(f'LOAD_ERROR:{e}')
-    except Exception as e:
-        print(f'ERROR:{e}')
-" 2>/dev/null || echo "NOT_INSTALLED")
+        llama_check=$("$python_cmd" "$SCRIPT_DIR/utils/env_check.py" check-llama-cpp 2>/dev/null || echo "NOT_INSTALLED")
         case "$llama_check" in
             FOUND)
                 echo -e "  ${GREEN}✓ llama_cpp importable (library loads cleanly)${NC}" ;;
@@ -420,5 +409,5 @@ esac
 
 echo -e "  ${GREEN}${BOLD}Done.${NC}"
 echo -e "${BOLD}========================================================${NC}"
-echo -e "  ${BOLD}Next:${NC} ${YELLOW}bash scripts/llm_server.sh start${NC}"
+echo -e "  ${BOLD}Next:${NC} ${YELLOW}bash scripts/llm.sh start${NC}"
 echo -e "${BOLD}========================================================${NC}"

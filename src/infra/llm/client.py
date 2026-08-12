@@ -58,7 +58,7 @@ class LLMClient:
                 f"Could not connect to the {provider_name} LLM server at '{base_url}'.\n"
                 f"Error details: {e}\n"
                 f"Troubleshooting:\n"
-                f"  1. Is your model server running? Start it using: bash scripts/llm_server.sh\n"
+                f"  1. Is your model server running? Start it using: bash scripts/llm.sh\n"
                 f"  2. Check if the port and URL in your .env are correct: {base_url}\n"
                 f"  3. Check if any VPN or proxy is blocking localhost connections."
             ) from None

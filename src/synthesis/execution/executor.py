@@ -1,4 +1,5 @@
-from typing import Callable
+import warnings
+from typing import Any, Callable
 
 import numpy as np
 from func_timeout import FunctionTimedOut, func_timeout
@@ -27,6 +28,7 @@ class AlgorithmExecutor:
         """
         self._timeout_seconds = timeout_seconds
         self._compiler = compiler or CodeCompiler()
+        self.last_captured_warnings: list[str] = []
 
     def execute_algorithm(
         self, code: str, name: str, dim: int, problem: Callable[..., float], budget: int
@@ -46,10 +48,27 @@ class AlgorithmExecutor:
                 (if returned by the algorithm) and the best observed fitness value.
         """
         algorithm = self._compiler.compile(code, name, dim)
+        self.last_captured_warnings = []
+        captured_warnings = self.last_captured_warnings
+
+        def _runner(p: Callable[..., float], b: int) -> Any:
+            with warnings.catch_warnings(record=True) as recorded:
+                warnings.simplefilter("always")
+                old_errstate = np.seterr(all="warn")
+                try:
+                    return algorithm(p, b)
+                finally:
+                    np.seterr(**old_errstate)
+                    for w in recorded:
+                        msg = f"{w.category.__name__}: {w.message}"
+                        if w.filename == "<string>" or "string" in str(w.filename):
+                            msg = f"line {w.lineno}: {msg}"
+                        if msg not in captured_warnings:
+                            captured_warnings.append(msg)
 
         try:
             result = func_timeout(
-                self._timeout_seconds, algorithm, args=(problem, budget)
+                self._timeout_seconds, _runner, args=(problem, budget)
             )
         except FunctionTimedOut as e:
             raise AlgorithmTimeoutException(

@@ -24,13 +24,13 @@ Our scripts and environment templates are fully decoupled from hardcoded models.
 
 ## 📋 Serving a Model
 
-To start the model server, run the LLM Server management script:
+To start the model server, run the LLM management script:
 
 ```bash
-bash scripts/llm_server.sh start
+bash scripts/llm.sh start
 ```
 
-If multiple GGUF models are found in your `~/models` directory, the script will show an interactive selection menu allowing you to choose which model to start:
+If multiple GGUF models are found in your `~/models` directory or Hugging Face cache, the script will show an interactive selection menu allowing you to choose which model to start:
 
 ```
 Select a GGUF model to serve:
@@ -42,17 +42,25 @@ Select a GGUF model to serve:
 Once running, the active model name can be verified dynamically using:
 
 ```bash
-bash scripts/llm_server.sh status
+bash scripts/llm.sh status
 ```
 
 ---
 
 ## 💾 Downloading and Managing Models
 
-To download or clean up GGUF model files, use the Cache Manager script:
+To download or clean up GGUF model files, use the interactive LLM CLI:
 
 ```bash
-bash scripts/llm_manage.sh
+bash scripts/llm.sh
+```
+
+or directly invoke download/cleanup commands:
+
+```bash
+bash scripts/llm.sh download
+bash scripts/llm.sh list
+bash scripts/llm.sh cleanup
 ```
 
 This interactive tool lets you:
