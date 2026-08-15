@@ -24,6 +24,16 @@ from infra.storage.base import ExperimentRepository
 from infra.storage.code.repository import CodeRepository
 
 
+_DIVERSITY_INJECTION_MSG = (
+    "\n\n[META-FEEDBACK] Your last {n} algorithms all failed to execute correctly on "
+    "this noisy optimization problem. You MUST try a completely different algorithm "
+    "family — do NOT generate another DE or GA variant. Consider: Particle Swarm "
+    "Optimization (PSO), Simulated Annealing, CMA-style covariance updates, "
+    "or a hill-climber with noise-averaged comparisons. The root issue is that your "
+    "algorithm is not accounting for the stochastic nature of the objective function."
+)
+
+
 class Evaluator:
     """
     LLaMEA-compatible evaluator for BBOB optimization problems.
@@ -52,6 +62,13 @@ class Evaluator:
     """
 
     FAILURE_FITNESS: float = -1e9
+    RUNTIME_FAILURE_FITNESS: float = -7e8
+    TIMEOUT_FAILURE_FITNESS: float = -5e8
+
+    @classmethod
+    def is_failure(cls, score: float) -> bool:
+        """Returns True if the score represents any failure tier (crash, runtime, or timeout)."""
+        return not math.isfinite(score) or score <= -4e8
 
     def __init__(
         self,
@@ -63,6 +80,7 @@ class Evaluator:
         experiment_id: int = 1,
         initial_iteration: int = 0,
         convergence_threshold: float = 1e-6,
+        stagnation_threshold: int = 3,
     ) -> None:
         """Initialize the evaluator.
 
@@ -78,6 +96,7 @@ class Evaluator:
             experiment_id: Globally unique experiment primary key, by default 1.
             initial_iteration: Starting iteration counter (e.g. from warm start), by default 0.
             convergence_threshold: Target error threshold required to consider a run converged, by default 1e-6.
+            stagnation_threshold: Number of consecutive failure iterations before triggering diversity injection, by default 3.
         """
         self._problem = problem
         self._db_repo = db_repo
@@ -88,6 +107,8 @@ class Evaluator:
         self._executor = AlgorithmExecutor(timeout_seconds=self._timeout_seconds)
         self._current_iteration = initial_iteration
         self._convergence_threshold = convergence_threshold
+        self._stagnation_threshold = stagnation_threshold
+        self._consecutive_failures = 0
 
     @property
     def _ioh_logger(self) -> Any | None:
@@ -177,11 +198,19 @@ class Evaluator:
         captured_warnings: list[str] | None = None,
     ) -> str:
         """Build feedback string for a successful algorithm run."""
+        noise_desc = f" (noise model: {self._problem.noise_model})" if self._problem.noise_std > 0 else ""
         msg = (
             f"The algorithm achieved a final clean error of {final_error:.4f} from the true optimum ({true_optimum:.4f}) "
-            f"on BBOB Problem {self._problem.problem_id} (noise model: {self._problem.noise_model}, noise std: {self._problem.noise_std}). "
+            f"on BBOB Problem {self._problem.problem_id}{noise_desc}. "
             "Improve convergence speed and resilience to minimize the final error."
         )
+        if self._problem.noise_std > 0 and final_error > self._convergence_threshold * 100:
+            msg += (
+                "\n\n[NOISY PROBLEM] Your algorithm returned a large error on a noisy objective function. "
+                "This typically happens when selection decisions are made from a single noisy observation. "
+                "Use re-evaluation: call problem(x) multiple times per candidate and compare means/medians "
+                "instead of raw values. Budget re-evaluations to stay within 20% of your total budget."
+            )
         if captured_warnings:
             warn_str = "\n".join(f"  - {w}" for w in captured_warnings)
             msg += (
@@ -386,6 +415,17 @@ class Evaluator:
             "especially matrix operations (e.g. covariance matrices, eigenvectors) that may degenerate when dim is 1, 2, or 3."
         )
 
+        if self._problem.noise_std > 0:
+            msg += (
+                "\n\n[NOISY PROBLEM CONTEXT] This is a stochastic objective — common causes of failure:\n"
+                "1. Corrupted best_y: storing a smoothed/mixed value as best_y (e.g. 0.9*best_y + 0.1*trial_y) "
+                "returns an invalid objective value. Always store raw evaluations, never smoothed.\n"
+                "2. Hidden budget exhaustion: problem(x) calls inside min(key=...) or list comprehensions "
+                "are not tracked by your evaluations counter. Count every call explicitly.\n"
+                "3. Misplaced counter: evaluations += 1 must be directly after every problem(x) call, "
+                "not once per outer loop iteration."
+            )
+
         return msg
 
     def _score_failed_algorithm(
@@ -404,6 +444,16 @@ class Evaluator:
         evals_used = self._problem.evaluations
         is_timeout = isinstance(error, AlgorithmTimeoutException)
 
+        if is_timeout:
+            internal_score = self.TIMEOUT_FAILURE_FITNESS
+        elif isinstance(
+            error,
+            (ValueError, TypeError, ZeroDivisionError, OverflowError, FloatingPointError),
+        ):
+            internal_score = self.RUNTIME_FAILURE_FITNESS
+        else:
+            internal_score = self.FAILURE_FITNESS
+
         feedback = self._generate_error_feedback(
             error,
             is_timeout,
@@ -421,7 +471,7 @@ class Evaluator:
             error=error,
         )
 
-        return self.FAILURE_FITNESS, feedback, metadata
+        return internal_score, feedback, metadata
 
     def _build_error_metadata(
         self,
@@ -521,7 +571,18 @@ class Evaluator:
         if not math.isfinite(fitness_score):
             fitness_score = self.FAILURE_FITNESS
 
-        solution.set_scores(fitness_score, feedback)
+        if self.is_failure(fitness_score):
+            self._consecutive_failures += 1
+        else:
+            self._consecutive_failures = 0
+
+        diversity_text = ""
+        if self._consecutive_failures >= self._stagnation_threshold:
+            diversity_text = _DIVERSITY_INJECTION_MSG.format(n=self._stagnation_threshold)
+            self._consecutive_failures = 0
+
+        final_feedback = feedback + diversity_text
+        solution.set_scores(fitness_score, final_feedback)
         self._persist_iteration(solution, metadata)
 
         return solution

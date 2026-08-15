@@ -108,6 +108,7 @@ class LLaMEASession:
         code_repo: CodeRepository,
         budget: int,
         iterations: int,
+        stagnation_threshold: int = 3,
     ):
         """Initializes the synthesis session instance directly with fully resolved domain objects.
 
@@ -125,6 +126,7 @@ class LLaMEASession:
         self._code_repo = code_repo
         self._budget = budget
         self._iterations = iterations
+        self._stagnation_threshold = stagnation_threshold
 
         self._archive_dir = (
             DATA_DIR
@@ -178,6 +180,7 @@ class LLaMEASession:
         budget: int = DEFAULT_BUDGET,
         iterations: int = DEFAULT_MAX_ITERATIONS,
         prompt_strategy: PromptStrategy | str = PromptStrategy.BASELINE,
+        stagnation_threshold: int = 3,
     ) -> "LLaMEASession":
         """Factory method for creating a brand-new synthesis session."""
         if llm_client is None:
@@ -224,6 +227,7 @@ class LLaMEASession:
             code_repo=code_repo,
             budget=budget,
             iterations=iterations,
+            stagnation_threshold=stagnation_threshold,
         )
 
     @classmethod
@@ -234,6 +238,7 @@ class LLaMEASession:
         db_repo: ExperimentRepository,
         code_repo: CodeRepository,
         iterations: int | None = None,
+        stagnation_threshold: int = 3,
     ) -> "LLaMEASession":
         """Factory method for resuming an existing synthesis session from database state."""
         if llm_client is None:
@@ -290,6 +295,7 @@ class LLaMEASession:
             code_repo=code_repo,
             budget=budget,
             iterations=total_iterations,
+            stagnation_threshold=stagnation_threshold,
         )
 
     @property
@@ -317,7 +323,7 @@ class LLaMEASession:
         if (
             fitness_score is not None
             and math.isfinite(fitness_score)
-            and fitness_score > Evaluator.FAILURE_FITNESS
+            and not Evaluator.is_failure(fitness_score)
         ):
             best_error = -fitness_score
             raw_fitness = self._db_repo.get_best_raw_fitness(self._experiment_id)
@@ -353,6 +359,7 @@ class LLaMEASession:
                 upper_bound=self._problem.upper_bound,
                 mode=self._problem.mode,
                 strategy=self._prompt_strategy,
+                budget_hint=self._budget,
             )
             evaluator = self._setup_evaluator()
             synthesis_engine = self._create_synthesis_engine(evaluator, task_prompt)
@@ -430,6 +437,7 @@ class LLaMEASession:
             budget=self._budget,
             experiment_id=self._experiment_id,
             initial_iteration=self._initial_iteration,
+            stagnation_threshold=self._stagnation_threshold,
         )
 
     def _print_report(

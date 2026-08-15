@@ -1,0 +1,12 @@
+Landscape Characteristics:
+The objective function is stochastic — every call to problem(x) returns a different value even at the same point x, due to random noise injected into the true objective value.
+
+A single comparison `if y_new < y_best` may accept or reject candidates based on noise rather than true quality.
+
+Common patterns that silently break under noise:
+- Single-shot acceptance: `if trial_y < best_y` -> unreliable; may accept noise artifacts.
+- Smoothed tracking: `best_y = 0.9*best_y + 0.1*trial_y` -> corrupts best_y; return becomes invalid.
+- Hidden calls: `min(a, b, c, key=lambda x: problem(x))` -> uncounted budget calls per use.
+- Misplaced counter: `evaluations += 1` outside the innermost problem() call -> budget count mismatch.
+
+You MUST design a noise-resilient strategy where candidate selection decisions are based on more than a single noisy observation.

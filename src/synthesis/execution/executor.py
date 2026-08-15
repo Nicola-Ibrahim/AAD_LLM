@@ -48,7 +48,9 @@ class AlgorithmExecutor:
                 (if returned by the algorithm) and the best observed fitness value.
         """
         algorithm = self._compiler.compile(code, name, dim)
-        self.last_captured_warnings = []
+        self.last_captured_warnings = list(
+            getattr(self._compiler, "last_compiler_warnings", [])
+        )
         captured_warnings = self.last_captured_warnings
 
         def _runner(p: Callable[..., float], b: int) -> Any:
@@ -102,6 +104,14 @@ class AlgorithmExecutor:
             raise ValueError(
                 f"[INVALID RETURN] Algorithm returned a non-finite value: {algorithm_returned_fitness}. "
                 "Ensure __call__ returns a valid float (no NaN or inf)."
+            )
+
+        actual_evals = getattr(problem, "evaluations", None)
+        if actual_evals is not None and actual_evals > budget * 1.10:
+            captured_warnings.append(
+                f"[BUDGET OVERRUN] Algorithm used {actual_evals} problem() calls but budget={budget}. "
+                "Your evaluations counter is not tracking all calls to problem(). "
+                "Fix: increment evaluations for every call to problem()."
             )
 
         return best_x, algorithm_returned_fitness

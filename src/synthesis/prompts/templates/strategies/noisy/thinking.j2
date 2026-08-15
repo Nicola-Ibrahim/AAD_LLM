@@ -1,0 +1,9 @@
+Strategy Guidance:
+Design your algorithm to maintain a population of candidate solutions. At each step, balance exploration (probing new regions of the search space) and exploitation (refining the most promising solutions found so far).
+
+Before writing any code, reason through the following questions:
+1. If a single evaluation at point x is unreliable, what property of a set of evaluations at x would be reliable?
+2. If you cannot trust a single comparison, what statistical summary would let you make a robust ordering decision between two candidates?
+3. How would you design your selection step to use that summary without exhausting your budget?
+
+Your code must reflect the answers to these questions.

@@ -1,0 +1,11 @@
+Strategy Guidance:
+Design your algorithm to maintain a population of candidate solutions. At each step, balance exploration (probing new regions of the search space) and exploitation (refining the most promising solutions found so far).
+
+Implement your algorithm using NumPy matrix operations on populations of shape `(pop_size, dim)` — batch candidate generation, batch evaluation, and vectorized updates — rather than scalar Python loops over individual solutions.
+
+When deciding whether candidate x_new is better than x_best, do not rely on a single evaluation. Use a vectorized re-evaluation pattern:
+
+    k_evals = np.array([problem(x) for _ in range(k)])  # k calls to get a sample
+    score = float(k_evals.mean())                        # robust estimate
+
+Each call to problem() inside this pattern counts against your budget. Choose k carefully so that re-evaluation stays within a reasonable fraction of your total budget (e.g., <= 20%).

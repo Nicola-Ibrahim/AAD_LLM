@@ -1,0 +1,18 @@
+Strategy Guidance:
+Design your algorithm to maintain a population of candidate solutions. At each step, balance exploration (probing new regions of the search space) and exploitation (refining the most promising solutions found so far).
+
+Implement your algorithm using NumPy matrix operations on populations of shape `(pop_size, dim)` — batch candidate generation, batch evaluation, and vectorized updates — rather than scalar Python loops over individual solutions.
+
+Use a re-evaluation strategy: call problem(x) k times per candidate and use the mean as your fitness estimate. Limit re-evaluation to at most 20% of your total budget. For example, if budget = 1,000,000 and pop_size = 50 and k = 3, you use 3 * pop_size = 150 calls per generation, far within budget.
+
+Algorithm families that are naturally suited to noisy optimization:
+- Population-based methods: noise averages over candidates across generations.
+- Simulated annealing: accepts worse solutions probabilistically, robust to single-noise acceptance.
+- CMA-ES / Covariance-adaptation variants: covariance adaptation smooths over noisy gradients.
+
+A concrete starter for the selection step:
+    def _robust_eval(x, k):
+        return float(np.mean([problem(x) for _ in range(k)]))
+    # Always compare _robust_eval(new_x, k) vs _robust_eval(best_x, k), not raw problem(x)
+
+Do NOT return a smoothed/averaged value as best_y. Return float(problem(best_x)) — a single fresh evaluation — as the second element of the returned tuple.

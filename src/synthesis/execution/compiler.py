@@ -101,6 +101,25 @@ class CodeCompiler:
                         "Pre-built scipy optimizers are banned. Write your search algorithm logic from scratch using NumPy."
                     )
 
+    def _check_budget_leak_patterns(self, tree: ast.AST) -> list[str]:
+        """
+        Scan AST for common budget leak patterns (e.g. min(..., key=lambda x: problem(x))).
+        Returns advisory warning strings (non-blocking).
+        """
+        warnings_list: list[str] = []
+        for node in ast.walk(tree):
+            # Check min/max with key=lambda calling problem
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("min", "max"):
+                for kw in node.keywords:
+                    if kw.arg == "key" and isinstance(kw.value, ast.Lambda):
+                        for inner in ast.walk(kw.value):
+                            if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name) and "problem" in inner.func.id:
+                                warnings_list.append(
+                                    f"line {node.lineno}: Possible hidden problem(x) calls in `{node.func.id}(..., key=...)` lambda. "
+                                    "These calls are not counted in your evaluations counter. Make all problem calls explicit."
+                                )
+        return warnings_list
+
     def _validate_code(self, code: str, isolated_globals: dict[str, Any], name: str = "") -> type:
         """
         Validate LLM-generated code through four stages:
@@ -112,9 +131,11 @@ class CodeCompiler:
         Returns the resolved algorithm class if valid.
         Raises CodeValidationException if invalid.
         """
+        self.last_compiler_warnings: list[str] = []
         try:
             tree = ast.parse(code)
             self._check_banned_imports_and_calls(tree)
+            self.last_compiler_warnings = self._check_budget_leak_patterns(tree)
         except SyntaxError as e:
             raise CodeValidationException(
                 f"Generated code has a Python syntax error:\n"

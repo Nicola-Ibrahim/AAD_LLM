@@ -1,0 +1,15 @@
+Strategy Guidance:
+Design your algorithm to maintain a population of candidate solutions. At each step, balance exploration (probing new regions of the search space) and exploitation (refining the most promising solutions found so far).
+
+Implement your algorithm using NumPy matrix operations on populations of shape `(pop_size, dim)` — batch candidate generation, batch evaluation, and vectorized updates — rather than scalar Python loops over individual solutions.
+
+Algorithm families that excel on continuous deterministic BBOB landscapes:
+- Differential Evolution (DE/rand/1/bin or DE/current-to-best/1): vectors `v = x_r1 + F * (x_r2 - x_r3)` with binomial crossover.
+- Covariance Matrix Adaptation / Adaptive Step-size search: adapting search distributions towards successful update vectors.
+- Hybrid Global-Local search: global population exploration followed by local pattern search around top candidates.
+
+A concrete vectorized update pattern:
+    mutants = pop[r1] + F * (pop[r2] - pop[r3])
+    mask = np.random.rand(pop_size, dim) < CR
+    trials = np.where(mask, mutants, pop)
+    trials = np.clip(trials, lb, ub)

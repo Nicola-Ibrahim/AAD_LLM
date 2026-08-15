@@ -1,0 +1,19 @@
+Respond with EXACTLY the following format — no extra code blocks:
+
+Feedback: <your reasoning and description of the algorithm>
+Code:
+```python
+<your complete class and any required imports>
+```
+
+STRICT Rules — violating any rule will cause execution failure:
+- There must be exactly ONE ```python ... ``` block in your response.
+- The class MUST be named exactly one word (e.g., `class MyOptimizer:`).
+- `__init__(self)` MUST take NO extra arguments beyond `self`.
+- `__init__(self)` MUST have a non-empty body (use `pass` if nothing to initialize).
+- The class MUST have a `__call__(self, problem, budget)` method.
+- `__call__` MUST return `(best_x, float(best_y))` — a tuple of the best search coordinates array and best scalar float value.
+- Do NOT import or call `scipy.optimize` (e.g. `scipy.optimize.minimize`, `differential_evolution`, etc.) — pre-built solver wrappers are strictly banned. Write your search algorithm logic from scratch using NumPy.
+- Every variable you use MUST be defined before use. Never reference undefined names.
+- Do NOT store `problem` or `budget` in `__init__` — they are provided to `__call__` directly.
+- Do NOT include `if __name__ == '__main__':` blocks.

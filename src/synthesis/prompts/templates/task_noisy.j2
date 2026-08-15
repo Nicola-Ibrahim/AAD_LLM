@@ -1,9 +1,0 @@
-{% extends "task_base.j2" %}
-
-{% block problem_nature %}
-Critically, the objective function you are optimizing contains statistical noise. Your algorithm must be resilient to this noise and avoid being trapped by false gradients.
-{% endblock %}
-
-{% block landscape_desc %}this single noisy landscape{% endblock %}
-{% block objective_desc %}noisy objective function{% endblock %}
-{% block return_desc %}noisy float scalar{% endblock %}
