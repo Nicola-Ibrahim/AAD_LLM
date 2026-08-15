@@ -142,13 +142,18 @@ To enable foundation models to autonomously discover optimization heuristics spe
 
 Rather than synthesizing generic algorithms across pooled benchmark suites, our pipeline executes LLaMEA on each target BBOB objective problem individually. This problem-specific evolutionary setup enables the language model to discover bespoke search logic tailored to the unique geometric and topological properties of a given landscape. The architecture implements a single-offspring $(1+1)$ Evolution Strategy executed directly within the language model's natural language context window. In each generation cycle $g \in \{1 \dots G\}$, where $G = 20$ denotes the maximum evolutionary generation horizon, the language model acts as a code-level mutation operator, generating exactly one candidate child algorithm $\mathcal{A}_{\text{child}}$ derived from the incumbent parent algorithm $\mathcal{A}_{\text{parent}}$.
 
-Evolutionary code modification is governed by a structured prompt context assembled at generation $g$ via:
+\subsection{The Reflective Prompt Architecture}
+To harness the LLM effectively, it must be guided through a highly structured, state-aware context formulation rather than operating as a stateless text generator. Evolutionary code modification is governed by a rigidly assembled prompt context at each generation $g$, formalized via:
 \begin{equation}\label{eq:context_assembly}
     \mathcal{C}_g = \left\{ \mathcal{P}_{\text{system}}, \mathcal{H}_{1 \dots g-1}, \mathcal{T}_{\text{feedback}}, F_0 \right\}
 \end{equation}
-where $\mathcal{C}_g$ represents the complete context window prompt at generation $g$. The $\mathcal{P}_{\text{system}}$ enforces the software contract requiring candidate classes to inherit from an abstract base optimizer interface and expose a standard entrypoint taking the problem handle, budget, dimensionality, and spatial bounds. The history log $\mathcal{H}_{1 \dots g-1}$ maintains historical code variants and performance trajectories up to generation $g-1$, while $\mathcal{T}_{\text{feedback}}$ provides reflective runtime feedback. A short directive instruction $F_0$ instructs the model to ``Either refine or redesign to improve the algorithm''.
-
-If candidate code executes successfully, $\mathcal{T}_{\text{feedback}}$ passes scalar convergence metrics; if the code throws a runtime error, such as a matrix singularity, numerical overflow, or zero-division, the raw Python traceback is injected into the context window, enabling the model to self-debug syntax and logic errors in subsequent generations. Finally, candidate scripts undergo Abstract Syntax Tree (AST) validation prior to execution, whitelisting scientific mathematical libraries, rejecting system modules, and enforcing a hard 10-second wall-clock execution timeout.
+This architecture physically concatenates four critical components:
+\begin{enumerate}
+    \item \textbf{Task Description ($\mathcal{P}_{\text{system}}$):} The objective contract establishing the software interface bounds. It strictly requires candidate classes to inherit from an abstract base optimizer and expose a standard entry point taking the problem handle, evaluation budget, dimensionality, and spatial bounds.
+    \item \textbf{Historical Archive ($\mathcal{H}_{1 \dots g-1}$):} Often referred to as "The Graveyard," this component acts as a Tabu Search memory. It injects a continuous list of previously generated algorithm classes alongside their convergence scores, explicitly preventing the LLM from entering infinite loops of identical code generation and forcing exploratory divergence.
+    \item \textbf{Incumbent Information ($\mathcal{T}_{\text{feedback}}$):} This block supplies the full profile of the currently active parent algorithm. It provides the exact Python code of the incumbent, its aggregated AOCC score, score standard deviation over Monte Carlo evaluation passes, and any captured runtime exceptions from the previous iteration.
+    \item \textbf{Directive Instruction ($F_0$):} A strict closing command forcing the LLM to ``Either refine or redesign to improve the algorithm.'' By maintaining an open-ended directive, the framework permits the LLM to independently govern the mutation intensity—choosing between fine-grained parameter tuning or total structural replacement.
+\end{enumerate}
 
 \begin{figure}[htbp]
     \centering
@@ -169,6 +174,22 @@ To eliminate this bottleneck, our methodology enforces a mandatory Stochastic Pa
     \bar{f}_{\text{parent}} = \frac{1}{K} \sum_{k=1}^{K} \text{Fitness}^{(k)}\left(\mathcal{A}_{\text{parent}}\right)
 \end{equation}
 where $K = 3$ specifies the number of Monte Carlo re-evaluation passes, $\text{Fitness}^{(k)}\left(\mathcal{A}_{\text{parent}}\right) \in \mathbb{R}$ denotes the candidate's evaluated convergence score during the $k$-th independent pass, and $\bar{f}_{\text{parent}} \in \mathbb{R}$ represents the updated mean fitness assigned to the incumbent parent. This Monte Carlo resampling policy ensures that transient noise anomalies decay rapidly, guaranteeing that selection pressure favors algorithms possessing genuine structural variance-filtering logic rather than temporary stochastic luck.
+
+%-------------------------------------------------------------------------------
+\section{Execution Sandbox Defenses and Code Extraction}\label{sec:method_sandbox_defenses}
+
+A foundational challenge in Automated Algorithm Design is bridging natural language generation with secure, executable Python environments. Unconstrained LLMs frequently output conversational artifacts or syntactically dangerous code structures. To insulate the pipeline, the framework deploys strict isolation boundaries.
+
+First, candidate responses are processed by a dedicated Regex-based code extraction layer, which strips away surrounding conversational hallucinations (e.g., "Here is the optimized algorithm:") to isolate the pure Python code block. Following extraction, the raw code is passed through a rigid Abstract Syntax Tree (AST) validation protocol. This module strictly whitelists necessary scientific computing libraries (e.g., NumPy, SciPy) while outright rejecting unauthorized OS-level modules, protecting the host system from arbitrary code execution.
+
+Furthermore, flawed algorithmic logic frequently leads to unresolvable execution states. To prevent pipeline stalling, the execution sandbox utilizes the \texttt{func\_timeout} decorator to enforce a strict 10-second wall-clock execution limit on all candidate algorithm evaluations. If the LLM produces an infinite \texttt{while} loop or pathologically slow iterative components, the process is safely terminated and flagged for penalization, proving the architecture's resilience against severe logical failures.
+
+%-------------------------------------------------------------------------------
+\section{Diagnostic Scoring, Traceback Interception, and Penalization}\label{sec:method_diagnostic_scoring}
+
+The pipeline expands beyond mere evaluation through a sophisticated "Evaluate \& Bounce" mechanic, transforming passive code scoring into a proactive, self-teaching diagnostic loop. When executing heavily mutated, experimental mathematics, candidate algorithms frequently crash due to fatal runtime errors such as singular matrix inversions, dimensional mismatch broadcasting, or divide-by-zero occurrences. 
+
+Instead of discarding these failed algorithms, the sandbox intercepts the raw Python exception traceback. The system then explicitly penalizes the failed candidate by immediately assigning it a worst-possible quantitative quality score (zero fitness). Crucially, the captured traceback is compiled into the $\mathcal{T}_{\text{feedback}}$ context variable and injected directly into the next generation's prompt. By feeding the exact point of execution failure back into the LLM, the system initiates a closed-loop self-debugging cycle. This mechanism forces the generative model to internalize its own logical errors, enabling it to iteratively learn and stabilize its programmatic syntax across the 20-generation horizon.
 
 %-------------------------------------------------------------------------------
 \section{Prompt Scaffolding and Architectural Directives}\label{sec:method_prompts}
