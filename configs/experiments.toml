@@ -1,0 +1,32 @@
+# configs/experiments.toml
+# Centralized configuration for LLaMEA evolutionary search experiments
+
+[experiment]
+name = "bbob_comprehensive_matrix"
+budget = 10000                     # Evaluation budget per generated algorithm
+iterations = 10                    # Number of evolutionary generations per run
+runs_per_config = 1                # Independent repeat runs per configuration
+
+# Prompt engineering strategies to evaluate:
+# Options: "baseline", "thinking", "vectorization", "guided"
+prompt_strategies = [
+    "baseline",
+    "thinking",
+    "vectorization",
+    "guided"
+]
+
+[search_space]
+# Target BBOB Problem Suite:
+# 1: Sphere (Separable)
+# 8: Rosenbrock (Moderate Conditioning)
+# 11: Discus (High Conditioning)
+# 15: Rastrigin (Strong Multi-modal)
+# 21: Gallagher 101 (Weak Multi-modal)
+problem_ids = [1, 8, 11, 15, 21]
+
+# Evaluated Search Dimensions:
+dimensions = [2, 3, 5]
+
+# Noise Levels (0.0 = Clean Ground Truth, >0.0 = Multiplicative Noise):
+noise_stds = [0.0, 0.05]

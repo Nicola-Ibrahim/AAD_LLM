@@ -1,6 +1,6 @@
-Dim,Noise Std,Problem ID,Problem Name,Function Class,H-Statistic,p-value,Significant Difference
-3,0.0,f1,Sphere (f1),Separable,35.32709715002687,1.2945924857032142e-06,Yes
-3,0.0,f11,Discus (f11),High Conditioning,57.3304948515445,4.322749187324589e-11,Yes
-3,0.0,f15,Rastrigin (f15),Multi-Modal (Global Struct),40.423766801026744,1.2265344408405283e-07,Yes
-3,0.0,f21,Gallagher 101 Peaks (f21),Multi-Modal (Weak Struct),23.843920874033277,0.00023263053150795288,Yes
-3,0.0,f8,Rosenbrock (f8),Low Conditioning,57.86349667774084,3.35616341459958e-11,Yes
+Dim,Noise Std,Problem ID,Problem Name,Function Class,Solvers Evaluated,H-Statistic,p-value,Significant Difference
+3,0.0,1,Sphere (f1),Separable,4,,,No
+3,0.0,11,Discus (f11),High Conditioning,4,3.0000000000000013,0.39162517627108834,No
+3,0.0,15,Rastrigin (f15),Multi-Modal (Global Structure),4,3.0,0.3916251762710884,No
+3,0.0,21,Gallagher 101 Peaks (f21),Multi-Modal (Weak Structure),4,2.999999999999999,0.39162517627108917,No
+3,0.0,8,Rosenbrock (f8),Low Conditioning,4,3.0000000000000013,0.39162517627108834,No

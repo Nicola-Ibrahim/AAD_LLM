@@ -5,24 +5,12 @@ Dim,Noise Std,Problem ID,Problem Name,Function Class,Comparison Tier,Solver 1,So
 3,0.05,11,Discus (f11),High Conditioning,Tier 1: Classical Baselines,CMAES,DE,0.0,0.0006094144,1.0,0.0,Large,CMAES Ahead (Non-Sig)
 3,0.05,11,Discus (f11),High Conditioning,Tier 1: Classical Baselines,CMAES,PSO,0.0,0.0,,0.5,Negligible,Exact Tie
 3,0.05,11,Discus (f11),High Conditioning,Tier 1: Classical Baselines,DE,PSO,0.0006094144,0.0,1.0,1.0,Large,PSO Ahead (Non-Sig)
-3,0.05,11,Discus (f11),High Conditioning,Tier 2: LLaMEA vs Baselines,LLaMEA (Baseline),CMAES,3.31167e-05,0.0,1.0,1.0,Large,CMAES Ahead (Non-Sig)
-3,0.05,11,Discus (f11),High Conditioning,Tier 2: LLaMEA vs Baselines,LLaMEA (Baseline),DE,3.31167e-05,0.0006094144,1.0,0.0,Large,LLaMEA Ahead (Non-Sig)
-3,0.05,11,Discus (f11),High Conditioning,Tier 2: LLaMEA vs Baselines,LLaMEA (Baseline),PSO,3.31167e-05,0.0,1.0,1.0,Large,PSO Ahead (Non-Sig)
 3,0.05,15,Rastrigin (f15),Multi-Modal (Global Structure),Tier 1: Classical Baselines,CMAES,DE,0.0,2.2998248638,1.0,0.0,Large,CMAES Ahead (Non-Sig)
 3,0.05,15,Rastrigin (f15),Multi-Modal (Global Structure),Tier 1: Classical Baselines,CMAES,PSO,0.0,0.9949597517,1.0,0.0,Large,CMAES Ahead (Non-Sig)
 3,0.05,15,Rastrigin (f15),Multi-Modal (Global Structure),Tier 1: Classical Baselines,DE,PSO,2.2998248638,0.9949597517,1.0,1.0,Large,PSO Ahead (Non-Sig)
-3,0.05,15,Rastrigin (f15),Multi-Modal (Global Structure),Tier 2: LLaMEA vs Baselines,LLaMEA (Baseline),CMAES,0.0018580746,0.0,1.0,1.0,Large,CMAES Ahead (Non-Sig)
-3,0.05,15,Rastrigin (f15),Multi-Modal (Global Structure),Tier 2: LLaMEA vs Baselines,LLaMEA (Baseline),DE,0.0018580746,2.2998248638,1.0,0.0,Large,LLaMEA Ahead (Non-Sig)
-3,0.05,15,Rastrigin (f15),Multi-Modal (Global Structure),Tier 2: LLaMEA vs Baselines,LLaMEA (Baseline),PSO,0.0018580746,0.9949597517,1.0,0.0,Large,LLaMEA Ahead (Non-Sig)
 3,0.05,21,Gallagher 101 Peaks (f21),Multi-Modal (Weak Structure),Tier 1: Classical Baselines,CMAES,DE,0.0,2.1581e-06,1.0,0.0,Large,CMAES Ahead (Non-Sig)
 3,0.05,21,Gallagher 101 Peaks (f21),Multi-Modal (Weak Structure),Tier 1: Classical Baselines,CMAES,PSO,0.0,0.0,,0.5,Negligible,Exact Tie
 3,0.05,21,Gallagher 101 Peaks (f21),Multi-Modal (Weak Structure),Tier 1: Classical Baselines,DE,PSO,2.1581e-06,0.0,1.0,1.0,Large,PSO Ahead (Non-Sig)
-3,0.05,21,Gallagher 101 Peaks (f21),Multi-Modal (Weak Structure),Tier 2: LLaMEA vs Baselines,LLaMEA (Baseline),CMAES,0.000117426,0.0,1.0,1.0,Large,CMAES Ahead (Non-Sig)
-3,0.05,21,Gallagher 101 Peaks (f21),Multi-Modal (Weak Structure),Tier 2: LLaMEA vs Baselines,LLaMEA (Baseline),DE,0.000117426,2.1581e-06,1.0,1.0,Large,DE Ahead (Non-Sig)
-3,0.05,21,Gallagher 101 Peaks (f21),Multi-Modal (Weak Structure),Tier 2: LLaMEA vs Baselines,LLaMEA (Baseline),PSO,0.000117426,0.0,1.0,1.0,Large,PSO Ahead (Non-Sig)
 3,0.05,8,Rosenbrock (f8),Low Conditioning,Tier 1: Classical Baselines,CMAES,DE,0.0,0.0131017048,1.0,0.0,Large,CMAES Ahead (Non-Sig)
 3,0.05,8,Rosenbrock (f8),Low Conditioning,Tier 1: Classical Baselines,CMAES,PSO,0.0,0.0,,0.5,Negligible,Exact Tie
 3,0.05,8,Rosenbrock (f8),Low Conditioning,Tier 1: Classical Baselines,DE,PSO,0.0131017048,0.0,1.0,1.0,Large,PSO Ahead (Non-Sig)
-3,0.05,8,Rosenbrock (f8),Low Conditioning,Tier 2: LLaMEA vs Baselines,LLaMEA (Baseline),CMAES,0.0,0.0,,0.5,Negligible,Exact Tie
-3,0.05,8,Rosenbrock (f8),Low Conditioning,Tier 2: LLaMEA vs Baselines,LLaMEA (Baseline),DE,0.0,0.0131017048,1.0,0.0,Large,LLaMEA Ahead (Non-Sig)
-3,0.05,8,Rosenbrock (f8),Low Conditioning,Tier 2: LLaMEA vs Baselines,LLaMEA (Baseline),PSO,0.0,0.0,,0.5,Negligible,Exact Tie
