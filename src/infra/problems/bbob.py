@@ -1,11 +1,6 @@
-from pathlib import Path
-
-import ioh
 import numpy as np
 from ioh import ProblemClass, get_problem
 
-
-from core.config import DATA_DIR
 from domain.enums import ProblemMode
 from domain.interfaces import BaseProblem
 from domain.services.noise_strategy import BaseNoiseStrategy
@@ -18,17 +13,12 @@ class BBOBProblem(BaseProblem):
     and problem parameters, and provides clean and noisy evaluation methods.
 
     Args:
-        problem_id: The BBOB function ID. Must be an integer in [1, 24].
+        problem_id: The BBOB function ID (1 to 24).
         dim: The search space dimensionality.
-        noise_strategy: Noise strategy instance.
+        noise_strategy: Noise strategy instance (e.g. NoNoiseStrategy()).
         instance_id: The BBOB instance ID, by default 1.
         seed: Random seed for landscape scale estimation.
-
-    Raises:
-        ValueError: If `problem_id` is not in the range [1, 24].
     """
-
-    VALID_IDS: range = range(1, 25)  # Valid BBOB problem IDs: 1 to 24 inclusive
 
     def __init__(
         self,
@@ -38,17 +28,13 @@ class BBOBProblem(BaseProblem):
         instance_id: int = 1,
         seed: int = 42,
     ):
-        if problem_id not in self.VALID_IDS:
-            raise ValueError(
-                f"Invalid BBOB problem_id={problem_id!r}. Must be an integer in [1, 24]."
-            )
         self.problem_id = problem_id
         self.dim = dim
         self.instance_id = instance_id
 
         # Load the underlying clean IOH problem once
         self._clean_problem = get_problem(problem_id, instance_id, dim, ProblemClass.BBOB)
-        self.true_optimum: float = float(self._clean_problem.optimum.y)
+        self.true_optimum: float = self._clean_problem.optimum.y
         # Eagerly cache bounds to avoid deadlocks from dynamic imports in concurrent thread pools
         self._lb = np.array(self._clean_problem.bounds.lb, dtype=float)
         self._ub = np.array(self._clean_problem.bounds.ub, dtype=float)
@@ -152,7 +138,7 @@ class BBOBProblem(BaseProblem):
     def eval_clean(self, x: np.ndarray) -> float:
         """Evaluate candidate point x on un-noised ground truth objective."""
         arr = np.asarray(x, dtype=float)
-        return float(self._clean_problem(arr.tolist()))
+        return self._clean_problem(arr.tolist())
 
     @property
     def clean_problem(self) -> object:
