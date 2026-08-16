@@ -1,18 +1,13 @@
-import numpy as np
-import pytest
 from llamea import Solution
 
-from domain.enums import ProblemMode
-from domain.services.noise_strategy import MultiplicativeNoiseStrategy, NoNoiseStrategy
+from domain.services.noise_strategy import MultiplicativeNoiseStrategy
 from domain.vos import ProblemProfile
 from infra.problems.bbob import BBOBProblem
 from infra.storage.code.repository import CodeRepository
 from infra.storage.sqlite.repository import SQLiteExperimentRepository
-from synthesis.evaluator import Evaluator, _DIVERSITY_INJECTION_MSG
+from synthesis.evaluator import Evaluator
 from synthesis.execution.compiler import CodeCompiler
 from synthesis.execution.executor import AlgorithmExecutor
-from synthesis.execution.exceptions import AlgorithmTimeoutException
-from synthesis.prompts import PromptStrategy, build_task_prompt
 
 
 def test_failure_tiers_and_is_failure():

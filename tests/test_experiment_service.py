@@ -25,7 +25,7 @@ from infra.storage.sqlite.repository import SQLiteExperimentRepository
 from infra.storage.sqlite.tables import Base, ExperimentORM
 from synthesis.evaluator import Evaluator
 from synthesis.session import LLaMEASession, SessionResult
-from orchestrator import (
+from core.orchestrator import (
     EvolutionTask,
     OrchestrationError,
     TaskOrchestrator,

@@ -5,16 +5,9 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
-# Suppress joblib warning when LLaMEA passes timeout to SequentialBackend
-warnings.filterwarnings(
-    "ignore",
-    category=UserWarning,
-    message=r".*SequentialBackend.*does not support timeout.*",
-)
-
 from llamea import LLaMEA
 
-from config import DATA_DIR
+from core.config import DATA_DIR
 from domain.interfaces import BaseProblem
 from domain.services.noise_strategy import NoiseStrategyFactory
 from domain.vos import ProblemProfile
@@ -28,6 +21,13 @@ from synthesis.prompts import (
     FORMAT_PROMPT,
     PromptStrategy,
     build_task_prompt,
+)
+
+# Suppress joblib warning when LLaMEA passes timeout to SequentialBackend
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message=r".*SequentialBackend.*does not support timeout.*",
 )
 
 DEFAULT_BUDGET: int = 1000

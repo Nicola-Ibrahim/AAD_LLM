@@ -75,14 +75,15 @@ celerybeat.pid
 # (Anchored to Root)
 # ==========================================
 
-# Data & Storage (DOCKER VOLUMES)
-/storage/
-/data/
+# Data, Results & Storage
+/data/**
+!/data/**/
+!/data/**/.gitkeep
+!/data/champions.json
+/results/
 /models/
 /contexts/
 /diagnostics/
-/reports/
-/figures/
 /node_modules/
 
 # Agent Tools

@@ -5,7 +5,6 @@ Helper CLI for SQLite database operations (table truncation, row count stats).
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
 

@@ -6,7 +6,6 @@ Helper CLI for inspecting Python environment health, llama-cpp-python CUDA impor
 
 import argparse
 import importlib.util
-import sys
 
 def cmd_check_llama_cpp():
     spec = importlib.util.find_spec("llama_cpp")

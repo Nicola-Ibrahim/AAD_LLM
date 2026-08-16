@@ -3,7 +3,7 @@ from typing import Iterable
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from config import DATA_DIR
+from core.config import DATA_DIR
 from infra.storage.sqlite.connection import build_engine, build_session_factory, ensure_wal_mode
 from infra.storage.sqlite.repository import SQLiteExperimentRepository
 

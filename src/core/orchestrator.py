@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from config import DATA_DIR
+from core.config import DATA_DIR
 from domain.interfaces import BaseProblem
 from infra.llm.client import LLMClient
 from infra.storage.code.repository import CodeRepository
