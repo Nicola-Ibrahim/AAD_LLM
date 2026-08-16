@@ -1,6 +1,8 @@
+from collections.abc import Generator, Iterable
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterable
 
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.config import DATA_DIR
@@ -18,11 +20,27 @@ def setup_storage_environment(db_paths: Iterable[Path]) -> None:
             ensure_wal_mode(db_path)
 
 
+def get_db_engine(path: Path = DATA_DIR / "db.sqlite3") -> Engine:
+    """Returns a configured SQLAlchemy database engine for SQL queries and dataframes."""
+    ensure_wal_mode(path)
+    return build_engine(path)
+
+
+@contextmanager
+def get_db_connection(
+    path: Path = DATA_DIR / "db.sqlite3",
+) -> Generator[Connection, None, None]:
+    """Context manager yielding a live database connection for query execution."""
+    engine = get_db_engine(path)
+    with engine.connect() as conn:
+        yield conn
+
+
 def create_db_session_factory(
     path: Path = DATA_DIR / "db.sqlite3",
 ) -> sessionmaker[Session]:
     """Creates engine and returns a thread-safe session factory for the given SQLite database path."""
-    engine = build_engine(path)
+    engine = get_db_engine(path)
     return build_session_factory(engine)
 
 
