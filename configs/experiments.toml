@@ -3,7 +3,7 @@
 
 [experiment]
 name = "bbob_comprehensive_matrix"
-budget = 10000                     # Evaluation budget per generated algorithm
+budget = 1000000                     # Evaluation budget per generated algorithm
 iterations = 10                    # Number of evolutionary generations per run
 runs_per_config = 1                # Independent repeat runs per configuration
 
