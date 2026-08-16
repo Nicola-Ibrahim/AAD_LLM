@@ -51,7 +51,7 @@ class LLMClient:
             req = urllib.request.Request(
                 models_url, headers={"User-Agent": "AAD-LLM-Connection-Check"}
             )
-            with urllib.request.urlopen(req, timeout=2.0) as _:
+            with urllib.request.urlopen(req, timeout=10.0) as _:
                 pass
         except Exception as e:
             raise ConnectionError(
@@ -72,7 +72,7 @@ class LLMClient:
         models_url = f"{base_url.rstrip('/')}/models"
         try:
             req = urllib.request.Request(models_url, headers={"User-Agent": "AAD-LLM-Model-Check"})
-            with urllib.request.urlopen(req, timeout=1.0) as response:
+            with urllib.request.urlopen(req, timeout=5.0) as response:
                 data = json.loads(response.read().decode("utf-8"))
                 if "data" in data and len(data["data"]) > 0:
                     return data["data"][0].get("id", "local-model")
@@ -139,18 +139,27 @@ class LLMClient:
     ):
         import time
 
-        start_t = time.perf_counter()
-        sol = self._client.sample_solution(
-            session_messages=session_messages,
-            parent_ids=parent_ids,
-            HPO=HPO,
-            base_code=base_code,
-            diff_mode=diff_mode,
-        )
-        elapsed = time.perf_counter() - start_t
-        if hasattr(sol, "add_metadata"):
-            sol.add_metadata("llm_generation_time", elapsed)
-        return sol
+        max_retries = 3
+        backoff = 2.0
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                start_t = time.perf_counter()
+                sol = self._client.sample_solution(
+                    session_messages=session_messages,
+                    parent_ids=parent_ids,
+                    HPO=HPO,
+                    base_code=base_code,
+                    diff_mode=diff_mode,
+                )
+                elapsed = time.perf_counter() - start_t
+                if hasattr(sol, "add_metadata"):
+                    sol.add_metadata("llm_generation_time", elapsed)
+                return sol
+            except Exception:
+                if attempt == max_retries:
+                    raise
+                time.sleep(backoff * attempt)
 
     @property
     def model(self) -> ModelInfo:
@@ -171,7 +180,9 @@ class LLMClient:
 
     def __setstate__(self, state):
         self.provider = state["provider"]
-        self.skip_validation = state["skip_validation"]
+        # Skip blocking healthchecks during multiprocessing worker unpickling
+        self.skip_validation = True
         self.kwargs = state["kwargs"]
         self._client = self._init_client()
-        self._client.model = state["model"]
+        if state.get("model") is not None:
+            self._client.model = state["model"]

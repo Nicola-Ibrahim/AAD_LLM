@@ -1,14 +1,32 @@
-# configs/experiments.toml
-# Centralized configuration for LLaMEA evolutionary search experiments
+# ==============================================================================
+# Centralized Configuration for LLaMEA Evolutionary Search Experiments
+# ==============================================================================
+# This file is the single source of truth for your experiment matrix and runner.
+# You do NOT need to edit any code inside notebooks; adjust the knobs below.
 
 [experiment]
+# Experiment suite identifier (used for logging and directory organization)
 name = "bbob_comprehensive_matrix"
-budget = 1000000                     # Evaluation budget per generated algorithm
-iterations = 10                    # Number of evolutionary generations per run
-runs_per_config = 1                # Independent repeat runs per configuration
 
-# Prompt engineering strategies to evaluate:
-# Options: "baseline", "thinking", "vectorization", "guided"
+# Function Evaluation Budget: Max objective function evaluations allowed per algorithm candidate
+budget = 1000000
+
+# Evolutionary Generations: Number of LLaMEA mutation/selection iterations per experiment run
+#   • 10  = Standard full search run
+#   • 2-3 = Fast quick-test / dry-run
+iterations = 10
+
+# Statistical Replicates: Number of independent repeat runs per unique matrix configuration
+#   • 1   = Single execution per condition (120 total runs)
+#   • 3-5 = Statistical replicates for robust mean/std aggregations (360 - 600 total runs)
+runs_per_config = 1
+
+# Prompt Engineering Strategies: Prompting styles evaluated during algorithm synthesis
+#   Options:
+#     - "baseline"      : Standard evolutionary algorithm prompt
+#     - "thinking"      : Chain-of-thought reasoning prior to Python code generation
+#     - "vectorization" : Prompts emphasizing numpy vectorization and batch operations
+#     - "guided"        : Domain-guided prompts tailored to problem landscape characteristics
 prompt_strategies = [
     "baseline",
     "thinking",
@@ -17,16 +35,46 @@ prompt_strategies = [
 ]
 
 [search_space]
-# Target BBOB Problem Suite:
-# 1: Sphere (Separable)
-# 8: Rosenbrock (Moderate Conditioning)
-# 11: Discus (High Conditioning)
-# 15: Rastrigin (Strong Multi-modal)
-# 21: Gallagher 101 (Weak Multi-modal)
+# Target BBOB Problem Suite IDs:
+#   1  : Sphere (Separable, smooth, unimodal)
+#   8  : Rosenbrock (Moderate conditioning, curved valley)
+#   11 : Discus (High conditioning, asymmetric ridge)
+#   15 : Rastrigin (Strong multi-modal, highly rugged)
+#   21 : Gallagher 101 (Weak multi-modal, deceptive Gaussian peaks)
 problem_ids = [1, 8, 11, 15, 21]
 
-# Evaluated Search Dimensions:
+# Evaluated Search Space Dimensionalities (D):
+#   e.g. [2, 3, 5] (or [2, 5, 10, 20] for high-dimensional testing)
 dimensions = [2, 3, 5]
 
-# Noise Levels (0.0 = Clean Ground Truth, >0.0 = Multiplicative Noise):
+# Noise Levels (Standard Deviation):
+#   • 0.0  = Clean Ground-Truth (No Noise)
+#   • 0.05 = Heteroscedastic Multiplicative Noise (std proportional to distance from optimum)
 noise_stds = [0.0, 0.05]
+
+[execution]
+# ==============================================================================
+# Execution & Multiprocessing Knobs:
+# ==============================================================================
+# max_workers: Number of parallel worker processes in the process pool
+#   • 8   = Utilizes all 8 server CPU cores
+#   • 0   = Auto-detects and uses all available CPU cores
+#   • 1   = Sequential single-core execution (for local debugging)
+max_workers = 8
+
+# auto_resume: Auto-detect and resume interrupted/crashed runs
+#   • true  = (Recommended) Automatically picks up incomplete runs (status = 'running')
+#             from data/db.sqlite3 and continues from the last completed iteration.
+#   • false = Ignores incomplete runs in the DB and creates fresh ones.
+auto_resume = true
+
+# skip_completed: Avoid duplicate work
+#   • true  = (Recommended) Automatically skips matrix configurations that are already
+#             finished (status = 'completed') in the database for the active LLM model.
+#   • false = Forces re-running every configuration from scratch even if already completed.
+skip_completed = true
+
+# only_incomplete: Recovery / triage mode
+#   • true  = ONLY finishes interrupted runs that crashed mid-way (does NOT start new ones).
+#   • false = (Normal) Finishes interrupted runs AND executes all remaining pending matrix tasks.
+only_incomplete = false
