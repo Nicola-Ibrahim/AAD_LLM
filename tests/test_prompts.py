@@ -8,7 +8,7 @@ from synthesis.prompts import PromptStrategy, build_task_prompt
 
 def test_build_task_prompt_with_array_bounds():
     problem = BBOBProblem(
-        problem_id=1, dim=3, noise_strategy=NoNoiseStrategy(), ioh_logger=None, instance_id=1
+        problem_id=1, dim=3, noise_strategy=NoNoiseStrategy(), instance_id=1
     )
     assert isinstance(problem.lower_bound, np.ndarray)
     assert isinstance(problem.upper_bound, np.ndarray)

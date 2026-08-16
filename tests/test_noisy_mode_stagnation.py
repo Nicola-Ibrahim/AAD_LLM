@@ -31,7 +31,6 @@ def test_stagnation_diversity_injection(db_session_factory, tmp_path):
         problem_id=15,
         dim=3,
         noise_strategy=MultiplicativeNoiseStrategy(noise_std=0.5),
-        ioh_logger=None,
     )
     exp_id = repo.create_experiment(
         problem=ProblemProfile(
@@ -87,7 +86,6 @@ def test_evaluator_noisy_feedback_no_noise_std_leak(db_session_factory, tmp_path
         problem_id=15,
         dim=3,
         noise_strategy=MultiplicativeNoiseStrategy(noise_std=0.75),
-        ioh_logger=None,
     )
     exp_id = repo.create_experiment(
         problem=ProblemProfile(

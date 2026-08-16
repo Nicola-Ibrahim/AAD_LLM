@@ -109,10 +109,6 @@ class Evaluator:
         self._stagnation_threshold = stagnation_threshold
         self._consecutive_failures = 0
 
-    @property
-    def _ioh_logger(self) -> Any | None:
-        """Access the underlying problem's IOH logger if available."""
-        return getattr(self._problem, "_ioh_logger", None)
 
     @property
     def problem_profile(self) -> ProblemProfile:

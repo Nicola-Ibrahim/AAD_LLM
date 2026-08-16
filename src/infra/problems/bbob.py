@@ -5,6 +5,7 @@ import numpy as np
 from ioh import ProblemClass, get_problem
 
 
+from core.config import DATA_DIR
 from domain.enums import ProblemMode
 from domain.interfaces import BaseProblem
 from domain.services.noise_strategy import BaseNoiseStrategy
@@ -19,8 +20,8 @@ class BBOBProblem(BaseProblem):
     Args:
         problem_id: The BBOB function ID. Must be an integer in [1, 24].
         dim: The search space dimensionality.
+        noise_strategy: Noise strategy instance.
         instance_id: The BBOB instance ID, by default 1.
-        noise_strategy: Noise strategy instance. Defaults to NoNoiseStrategy().
         seed: Random seed for landscape scale estimation.
 
     Raises:
@@ -34,7 +35,6 @@ class BBOBProblem(BaseProblem):
         problem_id: int,
         dim: int,
         noise_strategy: BaseNoiseStrategy,
-        ioh_logger: ioh.logger.Analyzer | None = None,
         instance_id: int = 1,
         seed: int = 42,
     ):
@@ -52,11 +52,6 @@ class BBOBProblem(BaseProblem):
         # Eagerly cache bounds to avoid deadlocks from dynamic imports in concurrent thread pools
         self._lb = np.array(self._clean_problem.bounds.lb, dtype=float)
         self._ub = np.array(self._clean_problem.bounds.ub, dtype=float)
-
-        # Attach IOH logger
-        self._ioh_logger = ioh_logger
-        if ioh_logger is not None:
-            self._clean_problem.attach_logger(ioh_logger)
 
         # Explicit Noise Strategy injection
         self.noise_strategy: BaseNoiseStrategy = noise_strategy
@@ -110,18 +105,23 @@ class BBOBProblem(BaseProblem):
         self._clean_problem.reset()
 
     @property
-    def bounds(self):
-        """Return the problem bounds object from IOH."""
-        return self._clean_problem.bounds
-
-    @property
     def lb(self) -> np.ndarray:
-        """Return the lower bounds vector for the search space."""
+        """Return cached lower bounds numpy array."""
         return self._lb
 
     @property
     def ub(self) -> np.ndarray:
-        """Return the upper bounds vector for the search space."""
+        """Return cached upper bounds numpy array."""
+        return self._ub
+
+    @property
+    def lower_bound(self) -> np.ndarray:
+        """Alias for `lb`."""
+        return self._lb
+
+    @property
+    def upper_bound(self) -> np.ndarray:
+        """Alias for `ub`."""
         return self._ub
 
     @property
@@ -130,23 +130,19 @@ class BBOBProblem(BaseProblem):
         return np.array(self._clean_problem.optimum.x, dtype=float)
 
     @property
-    def lower_bound(self) -> np.ndarray:
-        """Return lower bounds vector for the search space."""
-        return self._lb
-
-    @property
-    def upper_bound(self) -> np.ndarray:
-        """Return upper bounds vector for the search space."""
-        return self._ub
+    def bounds(self) -> tuple[np.ndarray, np.ndarray]:
+        """Return search space bounds as a (lower_bounds, upper_bounds) tuple."""
+        return self._lb, self._ub
 
     def is_in_bounds(self, x: np.ndarray, tol: float = 1e-5) -> bool:
-        """Check if candidate point x lies within search space bounds [lb - tol, ub + tol]."""
+        """Check if candidate point x lies within search space bounds."""
         arr = np.asarray(x, dtype=float)
-        return bool(np.all(arr >= self._lb - tol) and np.all(arr <= self._ub + tol))
+        return bool(np.all(arr >= (self._lb - tol)) and np.all(arr <= (self._ub + tol)))
 
     def clip(self, x: np.ndarray) -> np.ndarray:
-        """Clip candidate search point x to fit within search space bounds [lb, ub]."""
-        return np.clip(np.asarray(x, dtype=float), self._lb, self._ub)
+        """Clip candidate search point x to fit within search space bounds."""
+        arr = np.asarray(x, dtype=float)
+        return np.clip(arr, self._lb, self._ub)
 
     @property
     def evaluations(self) -> int:
@@ -158,46 +154,15 @@ class BBOBProblem(BaseProblem):
         arr = np.asarray(x, dtype=float)
         return float(self._clean_problem(arr.tolist()))
 
+    @property
+    def clean_problem(self) -> object:
+        """Expose underlying clean IOH problem instance."""
+        return self._clean_problem
+
     def attach_logger(self, logger: object) -> None:
-        """Attach an experiment logger to the clean underlying problem."""
-        self._ioh_logger = logger
+        """Attach an external logger/analyzer to the underlying clean IOH problem."""
         if logger is not None and getattr(self, "_clean_problem", None) is not None:
             self._clean_problem.attach_logger(logger)
-
-    def attach_analyzer(
-        self,
-        log_dir: str | Path,
-        folder_name: str,
-        algorithm_name: str,
-        algorithm_info: str = "",
-        store_positions: bool = False,
-    ) -> object | None:
-        """Initialize and attach an IOH Analyzer logger directly to the problem."""
-        try:
-            self._triggers = [ioh.logger.trigger.OnImprovement()]
-            logger = ioh.logger.Analyzer(
-                triggers=self._triggers,
-                root=str(log_dir),
-                folder_name=folder_name,
-                algorithm_name=algorithm_name,
-                algorithm_info=algorithm_info or "algorithm_info",
-                store_positions=store_positions,
-            )
-            self.attach_logger(logger)
-            return logger
-        except Exception as e:
-            print(f"[!] Could not attach IOH Logger: {e}")
-            return None
-
-    def close_logger(self) -> None:
-        """Safely close any attached experiment logger."""
-        if getattr(self, "_ioh_logger", None) is not None:
-            try:
-                self._ioh_logger.close()
-            except Exception:
-                pass
-            self._ioh_logger = None
-            self._triggers = None
 
     @property
     def name(self) -> str:
@@ -222,8 +187,6 @@ class BBOBProblem(BaseProblem):
         state = self.__dict__.copy()
         # Exclude C++ unpicklable wrappers
         state["_clean_problem"] = None
-        state["_ioh_logger"] = None
-        state["_triggers"] = None
         return state
 
     def __setstate__(self, state):
@@ -232,5 +195,3 @@ class BBOBProblem(BaseProblem):
         self._clean_problem = get_problem(
             self.problem_id, self.instance_id, self.dim, ProblemClass.BBOB
         )
-        if getattr(self, "_ioh_logger", None) is not None:
-            self._clean_problem.attach_logger(self._ioh_logger)

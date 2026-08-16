@@ -82,24 +82,8 @@ class BaseProblem(ABC):
         """Evaluate candidate point x on un-noised ground truth objective."""
         ...
 
-    @abstractmethod
     def attach_logger(self, logger: object) -> None:
-        """Attach an experiment logger to the problem."""
-        ...
+        """Hook to attach an external logger/analyzer to the problem."""
+        pass
 
-    @abstractmethod
-    def attach_analyzer(
-        self,
-        log_dir: str | Path,
-        folder_name: str,
-        algorithm_name: str,
-        algorithm_info: str = "",
-        store_positions: bool = False,
-    ) -> object | None:
-        """Initialize and attach an IOH Analyzer logger directly to the problem."""
-        ...
 
-    @abstractmethod
-    def close_logger(self) -> None:
-        """Safely close any attached experiment logger."""
-        ...

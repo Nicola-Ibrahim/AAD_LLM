@@ -87,14 +87,14 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
     tasks = [
         EvolutionTask(
             key="clean",
-            problem=BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), ioh_logger=None, instance_id=1),
+            problem=BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1),
             llm_client=llm,
             iterations=2,
             db_path=db_path,
         ),
         EvolutionTask(
             key="noisy",
-            problem=BBOBProblem(problem_id=1, dim=2, noise_strategy=MultiplicativeNoiseStrategy(0.5), ioh_logger=None, instance_id=1),
+            problem=BBOBProblem(problem_id=1, dim=2, noise_strategy=MultiplicativeNoiseStrategy(0.5), instance_id=1),
             llm_client=llm,
             iterations=2,
             db_path=db_path,
@@ -183,7 +183,7 @@ def db_session_factory(temp_dir):
 
 
 def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), ioh_logger=None)
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
 
@@ -223,7 +223,7 @@ def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
 
 
 def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory):
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), ioh_logger=None)
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
 
@@ -378,7 +378,7 @@ def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), ioh_logger=None, instance_id=1)
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
     # 1. Run evolution for 2 iterations (budget=2).
     session1 = LLaMEASession.create(
@@ -403,7 +403,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), ioh_logger=None, instance_id=1)
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
     session1 = LLaMEASession.create(
         problem=problem,
@@ -434,7 +434,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
 def test_session_none_llm_guard(temp_dir, db_session_factory):
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), ioh_logger=None, instance_id=1)
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
     with pytest.raises(ValueError, match="LLaMEASession requires a valid LLMClient"):
         LLaMEASession.create(
@@ -449,7 +449,7 @@ def test_session_mark_failed_on_error(temp_dir, db_session_factory):
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), ioh_logger=None, instance_id=1)
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
     session = LLaMEASession.create(
         problem=problem,
@@ -479,7 +479,7 @@ def test_resume_experiment_id_success(temp_dir, db_session_factory):
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), ioh_logger=None, instance_id=1)
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
     exp_id = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
@@ -504,7 +504,7 @@ def test_resume_experiment_id_completed_error(temp_dir, db_session_factory):
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), ioh_logger=None, instance_id=1)
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
     session1 = LLaMEASession.create(
         problem=problem,
@@ -542,7 +542,7 @@ def test_session_create_validation(temp_dir, db_session_factory):
 def test_evaluator_current_iteration_resumes_from_db(temp_dir, db_session_factory):
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), ioh_logger=None, instance_id=1)
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
     exp_id = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0),
@@ -616,7 +616,7 @@ def test_all_executions_failed_session_handling(db_session_factory, tmp_path):
     """Verify LLaMEASession handles cases gracefully when all generated candidate algorithms fail."""
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=tmp_path / "code_store")
-    problem = BBOBProblem(problem_id=24, dim=2, noise_strategy=NoNoiseStrategy(), ioh_logger=None)
+    problem = BBOBProblem(problem_id=24, dim=2, noise_strategy=NoNoiseStrategy())
     mock_llm = FailingLLM()
 
     session = LLaMEASession.create(
@@ -662,7 +662,7 @@ def test_scipy_optimize_banned(tmp_path):
     from synthesis.execution.exceptions import CodeValidationException
 
     executor = AlgorithmExecutor(timeout_seconds=2.0)
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), ioh_logger=None)
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
     problem_fn = problem.get_objective_fn()
 
     banned_code = """
@@ -681,7 +681,7 @@ def test_evaluator_clean_reevaluation_with_tuple_return(db_session_factory, tmp_
     """Verify that Evaluator clean re-evaluates best_x when algorithm returns a (best_x, best_y) tuple."""
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=tmp_path / "code_store")
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=MultiplicativeNoiseStrategy(0.5), ioh_logger=None)
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=MultiplicativeNoiseStrategy(0.5))
     exp_id = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.5, noise_model="multiplicative", true_optimum=problem.true_optimum),
         mode="noisy",
@@ -716,7 +716,7 @@ def test_evaluator_out_of_bounds_best_x_rejected(db_session_factory, tmp_path):
     """Verify that Evaluator marks algorithm as failed if returned best_x is out of search space bounds."""
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=tmp_path / "code_store")
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), ioh_logger=None)
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
     exp_id = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
         mode="clean",
@@ -762,7 +762,7 @@ def test_evaluator_failure_fitness_and_categorized_feedback(db_session_factory, 
     """Verify that failure returns Evaluator failure tiers and categorized feedback prefixes."""
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=tmp_path / "code_store")
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), ioh_logger=None)
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
     exp_id = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
         mode="clean",
@@ -807,7 +807,7 @@ def test_evaluator_enriched_feedback_and_warnings(db_session_factory, tmp_path):
     """Verify code snippet extraction (Option A), problem context footer (Option B), and warning capture (Option D)."""
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=tmp_path / "code_store")
-    problem = BBOBProblem(problem_id=8, dim=3, noise_strategy=NoNoiseStrategy(), ioh_logger=None)
+    problem = BBOBProblem(problem_id=8, dim=3, noise_strategy=NoNoiseStrategy())
     exp_id = repo.create_experiment(
         problem=ProblemProfile(problem_id=8, dim=3, noise_std=0.0, true_optimum=problem.true_optimum),
         mode="clean",
