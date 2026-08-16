@@ -1,0 +1,21 @@
+Dim,Noise Std,Problem ID,Problem Name,Function Class,Baseline,LLaMEA Mean Res,LLaMEA Med Res,Baseline Mean Res,Baseline Med Res,Mann-Whitney p-val,Significant (α=0.05),A12 Effect Size,Effect Magnitude,Outcome
+2,0.0,f1,Sphere (f1),Separable,CMAES,0.0,0.0,0.0,0.0,1.0,No,0.5,Negligible,Exact Tie
+2,0.0,f1,Sphere (f1),Separable,DE,0.0,0.0,0.0,0.0,1.0,No,0.5,Negligible,Exact Tie
+2,0.0,f1,Sphere (f1),Separable,LLaMEA (qwen2.5-coder-7b-q4_k_m),0.0,0.0,12.614833238460001,1.55292159665,6.386444750436982e-05,Yes,0.0,Large,LLaMEA Wins (Sig)
+2,0.0,f1,Sphere (f1),Separable,PSO,0.0,0.0,0.0,0.0,1.0,No,0.5,Negligible,Exact Tie
+2,0.0,f11,Discus (f11),High Conditioning,CMAES,0.0,0.0,0.0,0.0,1.0,No,0.5,Negligible,Exact Tie
+2,0.0,f11,Discus (f11),High Conditioning,DE,0.0,0.0,0.00248101026,0.0011265023,6.386444750436982e-05,Yes,0.0,Large,LLaMEA Wins (Sig)
+2,0.0,f11,Discus (f11),High Conditioning,LLaMEA (qwen2.5-coder-7b-q4_k_m),0.0,0.0,1818931.4440439597,14.652126700450001,6.386444750436982e-05,Yes,0.0,Large,LLaMEA Wins (Sig)
+2,0.0,f11,Discus (f11),High Conditioning,PSO,0.0,0.0,11.65456037409,0.0,0.07671597678760605,No,0.35,Medium,LLaMEA Ahead (Non-Sig)
+2,0.0,f15,Rastrigin (f15),Multi-Modal (Global Struct),CMAES,0.006310924270000001,0.0052468293,2.83664676601,1.5333900932,0.025692444548908212,Yes,0.2,Large,LLaMEA Wins (Sig)
+2,0.0,f15,Rastrigin (f15),Multi-Modal (Global Struct),DE,0.006310924270000001,0.0052468293,2.28840387243,0.994959089,0.1403158334701604,No,0.3,Medium,LLaMEA Ahead (Non-Sig)
+2,0.0,f15,Rastrigin (f15),Multi-Modal (Global Struct),LLaMEA (qwen2.5-coder-7b-q4_k_m),0.006310924270000001,0.0052468293,56.04807072007001,1.9549232614,0.011417221487911742,Yes,0.20999999999999996,Large,LLaMEA Wins (Sig)
+2,0.0,f15,Rastrigin (f15),Multi-Modal (Global Struct),PSO,0.006310924270000001,0.0052468293,0.0,0.0,6.386444750436982e-05,Yes,1.0,Large,PSO Wins (Sig)
+2,0.0,f21,Gallagher 101 Peaks (f21),Multi-Modal (Weak Struct),CMAES,0.9648470514699999,0.90150973715,0.56503049845,0.4621998652,0.3324324149670702,No,0.625,Small,CMAES Ahead (Non-Sig)
+2,0.0,f21,Gallagher 101 Peaks (f21),Multi-Modal (Weak Struct),DE,0.9648470514699999,0.90150973715,0.16218641768,9.806e-07,1.0,No,0.5,Negligible,Exact Tie
+2,0.0,f21,Gallagher 101 Peaks (f21),Multi-Modal (Weak Struct),LLaMEA (qwen2.5-coder-7b-q4_k_m),0.9648470514699999,0.90150973715,5.496178915320001,2.7779888336500003,0.022698345317375895,Yes,0.2,Large,LLaMEA Wins (Sig)
+2,0.0,f21,Gallagher 101 Peaks (f21),Multi-Modal (Weak Struct),PSO,0.9648470514699999,0.90150973715,0.41737059903,0.3459284556,0.33139260830376194,No,0.625,Small,PSO Ahead (Non-Sig)
+2,0.0,f8,Rosenbrock (f8),Low Conditioning,CMAES,7014.83736137708,8471.1052292787,0.0,0.0,5.511059233578697e-05,Yes,1.0,Large,CMAES Wins (Sig)
+2,0.0,f8,Rosenbrock (f8),Low Conditioning,DE,7014.83736137708,8471.1052292787,8.4277e-07,4e-10,0.00015932017674062256,Yes,1.0,Large,DE Wins (Sig)
+2,0.0,f8,Rosenbrock (f8),Low Conditioning,LLaMEA (qwen2.5-coder-7b-q4_k_m),7014.83736137708,8471.1052292787,1165.09621731839,77.39525588045001,0.003601712128644217,Yes,0.885,Large,LLaMEA (qwen2.5-coder-7b-q4_k_m) Wins (Sig)
+2,0.0,f8,Rosenbrock (f8),Low Conditioning,PSO,7014.83736137708,8471.1052292787,0.0,0.0,5.511059233578697e-05,Yes,1.0,Large,PSO Wins (Sig)
