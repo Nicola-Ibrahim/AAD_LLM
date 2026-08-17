@@ -1,6 +1,0 @@
-Dim,Noise Std,Problem ID,Problem Name,Function Class,Solvers Evaluated,H-Statistic,p-value,Significant Difference
-2,0.0,1,Sphere (f1),Separable,4,,,No
-2,0.0,11,Discus (f11),High Conditioning,4,3.0000000000000013,0.39162517627108834,No
-2,0.0,15,Rastrigin (f15),Multi-Modal (Global Structure),4,3.0,0.3916251762710884,No
-2,0.0,21,Gallagher 101 Peaks (f21),Multi-Modal (Weak Structure),4,3.0000000000000013,0.39162517627108834,No
-2,0.0,8,Rosenbrock (f8),Low Conditioning,4,3.0000000000000013,0.39162517627108834,No
