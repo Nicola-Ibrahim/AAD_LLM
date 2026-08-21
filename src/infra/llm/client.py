@@ -5,9 +5,11 @@ Uses underlying LLaMEA LLM provider classes directly, while resolving environmen
 and patching client settings to support custom endpoint URLs.
 """
 
+import json
 import os
 import urllib.request
 from enum import StrEnum
+from pathlib import Path
 
 import openai
 from llamea import LLM, Gemini_LLM, OpenAI_LLM
@@ -25,8 +27,6 @@ class ModelInfo(str):
     @property
     def name(self) -> str:
         """Sanitized model name for directory paths and database logging."""
-        from pathlib import Path
-
         model_base = Path(self).name
         return model_base.replace(":", "_").replace("/", "_").replace("\\", "_")
 
@@ -66,9 +66,6 @@ class LLMClient:
     @staticmethod
     def _get_local_model_name(base_url: str) -> str:
         """Queries the local server's /models endpoint to get the active model name."""
-        import json
-        import urllib.request
-
         models_url = f"{base_url.rstrip('/')}/models"
         try:
             req = urllib.request.Request(models_url, headers={"User-Agent": "AAD-LLM-Model-Check"})
