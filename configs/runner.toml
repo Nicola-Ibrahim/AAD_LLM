@@ -22,10 +22,23 @@ auto_resume = true
 #   • false = Forces re-running every configuration from scratch
 skip_completed = true
 
+# retry_failed_synthesis: Re-synthesize conditions where 0 working algorithms were found
+#   • true  = Automatically detects completed runs that failed all iterations (best_final_error is null/inf)
+#             and re-executes them to find a working champion algorithm
+#   • false = Treats any completed experiment in DB as finished regardless of candidate failure
+retry_failed_synthesis = true
+
 # only_incomplete: Recovery / triage mode
 #   • true  = ONLY finishes interrupted runs that crashed mid-way
 #   • false = Finishes interrupted runs AND executes all remaining pending matrix tasks
 only_incomplete = false
+
+# Optional Selective Execution Filters (leave empty [] to run entire configured matrix):
+filter_problem_ids = []         # e.g., [1, 8] to run specific BBOB functions
+filter_dimensions = []          # e.g., [2, 3, 5] to run specific dimensions
+filter_modes = []               # e.g., ["clean"], ["noisy"] to run specific noise conditions
+filter_prompt_strategies = []   # e.g., ["guided", "thinking"] to run specific strategies
+target_experiment_ids = []      # e.g., [112, 64, 36] to re-run exact DB experiment rows
 
 [evaluation]
 # Standard independent benchmark evaluation runs per condition for champions & baselines:

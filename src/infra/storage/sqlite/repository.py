@@ -42,7 +42,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
         mode: ProblemMode | str,
         llm_name: str,
         prompt_strategy: str = "baseline",
-        budget: int = 1000,
+        budget: int = 1000000,
         iterations: int = 10,
     ) -> int:
         """Creates the experiment DB row and returns its id."""

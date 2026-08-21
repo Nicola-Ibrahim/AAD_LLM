@@ -30,7 +30,7 @@ warnings.filterwarnings(
     message=r".*SequentialBackend.*does not support timeout.*",
 )
 
-DEFAULT_BUDGET: int = 1000
+DEFAULT_BUDGET: int = 1000000
 DEFAULT_MAX_ITERATIONS: int = 10
 
 

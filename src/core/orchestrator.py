@@ -23,7 +23,7 @@ class EvolutionTask:
     key: str
     problem: BaseProblem | None = None
     llm_client: LLMClient | None = None
-    budget: int = 1000
+    budget: int = 1000000
     iterations: int | None = None
     resume_experiment_id: int | None = None
     prompt_strategy: PromptStrategy | str = PromptStrategy.BASELINE

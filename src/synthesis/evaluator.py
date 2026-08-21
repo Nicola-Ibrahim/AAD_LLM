@@ -74,7 +74,7 @@ class Evaluator:
         problem: BaseProblem,
         db_repo: ExperimentRepository,
         code_repo: CodeRepository,
-        budget: int = 1000,
+        budget: int = 1000000,
         timeout_seconds: float = 10.0,
         experiment_id: int = 1,
         initial_iteration: int = 0,
