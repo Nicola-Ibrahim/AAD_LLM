@@ -1,6 +1,8 @@
+from typing import TypeAlias
+
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
-type EntityID = int
+EntityID: TypeAlias = int
 
 
 class ValueObject(BaseModel):
