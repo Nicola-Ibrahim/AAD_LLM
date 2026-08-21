@@ -2,6 +2,7 @@ from pydantic import Field
 
 from domain.base import ValueObject
 
+
 class Execution(ValueObject):
     """Timing and throughput metrics for candidate algorithm execution."""
 
@@ -110,4 +111,3 @@ class Convergence(ValueObject):
         """Evaluates convergence based on the provided error and threshold."""
         converged = False if current_error is None else current_error < threshold
         return cls(converged=converged, convergence_threshold=threshold)
-

@@ -94,9 +94,7 @@ class HomoscedasticAdditiveNoiseStrategy(BaseNoiseStrategy):
         np.random.seed(seed)
         sample_points = np.random.uniform(lb, ub, (samples_count, len(lb)))
         sample_y = [clean_problem(x.tolist()) for x in sample_points]
-        self.landscape_scale = float(
-            np.mean([abs(y - true_optimum) for y in sample_y])
-        )
+        self.landscape_scale = float(np.mean([abs(y - true_optimum) for y in sample_y]))
         clean_problem.reset()
 
     def add_noise(self, true_value: float) -> float:
@@ -148,7 +146,3 @@ class NoiseStrategyFactory:
 
         strategy_cls = cls._STRATEGIES.get(model_str, MultiplicativeNoiseStrategy)
         return strategy_cls(noise_std=noise_std, **kwargs)
-
-
-
-

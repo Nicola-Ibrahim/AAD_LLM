@@ -47,10 +47,6 @@ class BBOBProblem(BaseProblem):
         self.noise_std: float = self.noise_strategy.noise_std
         self.noise_model: str = self.noise_strategy.name
 
-    def _add_noise(self, true_value: float) -> float:
-        """Inject noise into the objective value by delegating to configured noise_strategy."""
-        return self.noise_strategy.add_noise(true_value)
-
     def __call__(self, x: np.ndarray) -> float:
         """Evaluate the objective function at point `x`.
 
@@ -65,7 +61,7 @@ class BBOBProblem(BaseProblem):
         if self.noise_std <= 0.0:
             return f_clean
 
-        return self._add_noise(f_clean)
+        return self.noise_strategy.add_noise(f_clean)
 
     @property
     def mode(self) -> ProblemMode:
@@ -75,10 +71,6 @@ class BBOBProblem(BaseProblem):
     def eval_scalar(self, x: np.ndarray) -> float:
         """Evaluate the objective function at point `x` and return a single scalar float."""
         return self(x)
-
-    def get_objective_fn(self) -> "BBOBProblem":
-        """Return self as the single-scalar objective callable for optimization algorithms."""
-        return self
 
     def __repr__(self) -> str:
         return (
@@ -91,23 +83,13 @@ class BBOBProblem(BaseProblem):
         self._clean_problem.reset()
 
     @property
-    def lb(self) -> np.ndarray:
+    def lower_bound(self) -> np.ndarray:
         """Return cached lower bounds numpy array."""
         return self._lb
 
     @property
-    def ub(self) -> np.ndarray:
-        """Return cached upper bounds numpy array."""
-        return self._ub
-
-    @property
-    def lower_bound(self) -> np.ndarray:
-        """Alias for `lb`."""
-        return self._lb
-
-    @property
     def upper_bound(self) -> np.ndarray:
-        """Alias for `ub`."""
+        """Return cached upper bounds numpy array."""
         return self._ub
 
     @property

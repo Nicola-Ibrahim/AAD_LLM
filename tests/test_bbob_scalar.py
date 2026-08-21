@@ -10,9 +10,7 @@ from infra.problems.bbob import BBOBProblem
 
 
 def test_bbob_eval_scalar_clean(tmp_path):
-    problem = BBOBProblem(
-        problem_id=1, dim=2, noise_strategy=NoNoiseStrategy()
-    )
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
     x = np.zeros(2)
     val = problem.eval_scalar(x)
     assert isinstance(val, float)
@@ -30,9 +28,7 @@ def test_bbob_eval_scalar_noisy(tmp_path):
 
 
 def test_bbob_get_objective_fn(tmp_path):
-    clean_problem = BBOBProblem(
-        problem_id=1, dim=2, noise_strategy=NoNoiseStrategy()
-    )
+    clean_problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
     noisy_problem = BBOBProblem(
         problem_id=1,
         dim=2,
@@ -45,8 +41,8 @@ def test_bbob_get_objective_fn(tmp_path):
     assert clean_fn is clean_problem
     assert noisy_fn is noisy_problem
 
-    assert hasattr(noisy_fn, "lb")
-    assert hasattr(noisy_fn, "ub")
+    assert hasattr(noisy_fn, "lower_bound")
+    assert hasattr(noisy_fn, "upper_bound")
     assert hasattr(noisy_fn, "bounds")
     assert hasattr(noisy_fn, "dim")
 
@@ -79,9 +75,7 @@ def test_bbob_noise_model_strategies(tmp_path):
     v_add = p_add(x)
     assert isinstance(v_add, float)
 
-    p_awgn = BBOBProblem(
-        problem_id=1, dim=2, noise_strategy=AWGNStrategy(0.1)
-    )
+    p_awgn = BBOBProblem(problem_id=1, dim=2, noise_strategy=AWGNStrategy(0.1))
     assert p_awgn.noise_model == "awgn"
     v_awgn = p_awgn(x)
     assert isinstance(v_awgn, float)
@@ -97,8 +91,8 @@ def test_bbob_is_in_bounds_and_clip():
 
     clipped_x = problem.clip(invalid_x)
     assert problem.is_in_bounds(clipped_x) is True
-    assert np.all(clipped_x >= problem.lb)
-    assert np.all(clipped_x <= problem.ub)
+    assert np.all(clipped_x >= problem.lower_bound)
+    assert np.all(clipped_x <= problem.upper_bound)
 
 
 def test_ioh_logger_records_clean_distance(tmp_path):

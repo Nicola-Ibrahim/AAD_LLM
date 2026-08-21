@@ -41,7 +41,6 @@ class ExperimentRepository(ABC):
         """Creates the experiment DB row and returns its id."""
         pass
 
-
     @abstractmethod
     def append_iteration(
         self,

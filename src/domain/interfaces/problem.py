@@ -24,26 +24,14 @@ class BaseProblem(ABC):
 
     @property
     @abstractmethod
-    def lb(self) -> np.ndarray:
+    def lower_bound(self) -> np.ndarray:
         """Lower bounds vector."""
         ...
 
     @property
     @abstractmethod
-    def ub(self) -> np.ndarray:
-        """Upper bounds vector."""
-        ...
-
-    @property
-    @abstractmethod
-    def lower_bound(self) -> np.ndarray:
-        """Lower bounds vector alias."""
-        ...
-
-    @property
-    @abstractmethod
     def upper_bound(self) -> np.ndarray:
-        """Upper bounds vector alias."""
+        """Upper bounds vector."""
         ...
 
     @abstractmethod
@@ -56,10 +44,9 @@ class BaseProblem(ABC):
         """Reset problem state for reuse."""
         ...
 
-    @abstractmethod
     def get_objective_fn(self) -> "BaseProblem":
         """Return objective function callable."""
-        ...
+        return self
 
     @abstractmethod
     def is_in_bounds(self, x: np.ndarray, tol: float = 1e-5) -> bool:
@@ -85,5 +72,3 @@ class BaseProblem(ABC):
     def attach_logger(self, logger: object) -> None:
         """Hook to attach an external logger/analyzer to the problem."""
         pass
-
-

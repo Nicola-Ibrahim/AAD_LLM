@@ -48,9 +48,7 @@ class AlgorithmExecutor:
                 (if returned by the algorithm) and the best observed fitness value.
         """
         algorithm = self._compiler.compile(code, name, dim)
-        self.last_captured_warnings = list(
-            getattr(self._compiler, "last_compiler_warnings", [])
-        )
+        self.last_captured_warnings = list(getattr(self._compiler, "last_compiler_warnings", []))
         captured_warnings = self.last_captured_warnings
 
         def _runner(p: Callable[..., float], b: int) -> Any:
@@ -69,9 +67,7 @@ class AlgorithmExecutor:
                             captured_warnings.append(msg)
 
         try:
-            result = func_timeout(
-                self._timeout_seconds, _runner, args=(problem, budget)
-            )
+            result = func_timeout(self._timeout_seconds, _runner, args=(problem, budget))
         except FunctionTimedOut as e:
             raise AlgorithmTimeoutException(
                 f"Execution failed: Your algorithm exceeded the {self._timeout_seconds}-second time limit."
@@ -100,6 +96,7 @@ class AlgorithmExecutor:
             )
 
         import math
+
         if not math.isfinite(algorithm_returned_fitness):
             raise ValueError(
                 f"[INVALID RETURN] Algorithm returned a non-finite value: {algorithm_returned_fitness}. "

@@ -138,7 +138,6 @@ class LLaMEASession:
         )
         self._archive_dir.mkdir(parents=True, exist_ok=True)
 
-
     @classmethod
     def create(
         cls,
@@ -157,9 +156,7 @@ class LLaMEASession:
         if problem is None:
             raise ValueError("LLaMEASession.create requires a valid problem")
         strategy = (
-            PromptStrategy(prompt_strategy)
-            if isinstance(prompt_strategy, str)
-            else prompt_strategy
+            PromptStrategy(prompt_strategy) if isinstance(prompt_strategy, str) else prompt_strategy
         )
         problem_profile = ProblemProfile(
             problem_id=problem.problem_id,
@@ -206,9 +203,7 @@ class LLaMEASession:
             raise ValueError("LLaMEASession requires a valid LLMClient")
         exps = db_repo.load(experiment_id=experiment_id)
         if not exps:
-            raise ValueError(
-                f"Experiment ID {experiment_id} was not found in the database."
-            )
+            raise ValueError(f"Experiment ID {experiment_id} was not found in the database.")
         exp = exps[0]
         if exp.status != "running":
             raise ValueError(
@@ -232,11 +227,7 @@ class LLaMEASession:
         total_iterations = (
             iterations
             if iterations is not None
-            else (
-                exp.max_iterations
-                if exp.max_iterations is not None
-                else DEFAULT_MAX_ITERATIONS
-            )
+            else (exp.max_iterations if exp.max_iterations is not None else DEFAULT_MAX_ITERATIONS)
         )
 
         return cls(
@@ -347,17 +338,13 @@ class LLaMEASession:
         self._cleanup_archive_dir()
         return self._process_session_result(synthesis_engine, evaluator)
 
-    def _create_synthesis_engine(
-        self, evaluator: Evaluator, task_prompt: str
-    ) -> LLaMEA:
+    def _create_synthesis_engine(self, evaluator: Evaluator, task_prompt: str) -> LLaMEA:
         """Creates a new LLaMEA synthesis engine or resumes from a warm-start session state if it exists."""
         synthesis_engine = None
         state_file = self._archive_dir / "llamea_config.pkl"
 
         if state_file.exists():
-            print(
-                f"[i] Existing session state found — resuming from {self._archive_dir}"
-            )
+            print(f"[i] Existing session state found — resuming from {self._archive_dir}")
             try:
                 synthesis_engine = LLaMEA.warm_start(str(self._archive_dir))
                 if synthesis_engine is not None:
@@ -388,9 +375,7 @@ class LLaMEASession:
                 parallel_backend="sequential",
             )
 
-        synthesis_engine.logger = SimpleNamespace(
-            dirname=str(self._archive_dir)
-        )
+        synthesis_engine.logger = SimpleNamespace(dirname=str(self._archive_dir))
 
         return synthesis_engine
 
@@ -414,16 +399,10 @@ class LLaMEASession:
     ) -> None:
         """Prints a human-readable console report highlighting objective value and error metrics of the best candidate."""
         true_opt = self._problem.true_optimum
-        raw_str = (
-            f"{raw_fitness:.6f}"
-            if raw_fitness is not None
-            else "N/A (All Executions Failed)"
-        )
+        raw_str = f"{raw_fitness:.6f}" if raw_fitness is not None else "N/A (All Executions Failed)"
         err_str = f"{final_error:.6e}" if final_error is not None else "N/A"
         fit_str = (
-            f"{-final_error:.6e}"
-            if final_error is not None
-            else "N/A (All Executions Failed)"
+            f"{-final_error:.6e}" if final_error is not None else "N/A (All Executions Failed)"
         )
 
         print("\n" + "=" * 70)
@@ -434,9 +413,7 @@ class LLaMEASession:
         print(f"  Returned Objective Value (Obj): {raw_str}")
         print(f"  True Global Optimum (Opt):      {true_opt:.6f}")
         print(f"  Final Absolute Error (|Obj-Opt|): {err_str} (Target = 0.0)")
-        print(
-            f"  LLaMEA Fitness Score (-Error):  {fit_str} (Higher is better, Max = 0.0)"
-        )
+        print(f"  LLaMEA Fitness Score (-Error):  {fit_str} (Higher is better, Max = 0.0)")
         print("=" * 70 + "\n")
 
     def _cleanup_archive_dir(self) -> None:

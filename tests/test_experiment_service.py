@@ -87,14 +87,18 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
     tasks = [
         EvolutionTask(
             key="clean",
-            problem=BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1),
+            problem=BBOBProblem(
+                problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1
+            ),
             llm_client=llm,
             iterations=2,
             db_path=db_path,
         ),
         EvolutionTask(
             key="noisy",
-            problem=BBOBProblem(problem_id=1, dim=2, noise_strategy=MultiplicativeNoiseStrategy(0.5), instance_id=1),
+            problem=BBOBProblem(
+                problem_id=1, dim=2, noise_strategy=MultiplicativeNoiseStrategy(0.5), instance_id=1
+            ),
             llm_client=llm,
             iterations=2,
             db_path=db_path,
@@ -188,7 +192,9 @@ def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
     code_repo = CodeRepository(base_dir=temp_dir)
 
     exp_id = repo.create_experiment(
-        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        problem=ProblemProfile(
+            problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
+        ),
         mode="clean",
         llm_name="dummy-llm",
     )
@@ -228,7 +234,9 @@ def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory
     code_repo = CodeRepository(base_dir=temp_dir)
 
     exp_id = repo.create_experiment(
-        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        problem=ProblemProfile(
+            problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
+        ),
         mode="clean",
         llm_name="dummy-llm",
     )
@@ -482,7 +490,9 @@ def test_resume_experiment_id_success(temp_dir, db_session_factory):
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
     exp_id = repo.create_experiment(
-        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        problem=ProblemProfile(
+            problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
+        ),
         mode="clean",
         llm_name=llm.model.name,
         budget=2500,
@@ -683,7 +693,13 @@ def test_evaluator_clean_reevaluation_with_tuple_return(db_session_factory, tmp_
     code_repo = CodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=MultiplicativeNoiseStrategy(0.5))
     exp_id = repo.create_experiment(
-        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.5, noise_model="multiplicative", true_optimum=problem.true_optimum),
+        problem=ProblemProfile(
+            problem_id=1,
+            dim=2,
+            noise_std=0.5,
+            noise_model="multiplicative",
+            true_optimum=problem.true_optimum,
+        ),
         mode="noisy",
         llm_name="test-llm",
     )
@@ -718,7 +734,9 @@ def test_evaluator_out_of_bounds_best_x_rejected(db_session_factory, tmp_path):
     code_repo = CodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
     exp_id = repo.create_experiment(
-        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        problem=ProblemProfile(
+            problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
+        ),
         mode="clean",
         llm_name="test-llm",
     )
@@ -764,7 +782,9 @@ def test_evaluator_failure_fitness_and_categorized_feedback(db_session_factory, 
     code_repo = CodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
     exp_id = repo.create_experiment(
-        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        problem=ProblemProfile(
+            problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
+        ),
         mode="clean",
         llm_name="test-llm",
     )
@@ -809,7 +829,9 @@ def test_evaluator_enriched_feedback_and_warnings(db_session_factory, tmp_path):
     code_repo = CodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(problem_id=8, dim=3, noise_strategy=NoNoiseStrategy())
     exp_id = repo.create_experiment(
-        problem=ProblemProfile(problem_id=8, dim=3, noise_std=0.0, true_optimum=problem.true_optimum),
+        problem=ProblemProfile(
+            problem_id=8, dim=3, noise_std=0.0, true_optimum=problem.true_optimum
+        ),
         mode="clean",
         llm_name="test-llm",
     )
@@ -847,8 +869,3 @@ class BadMatrixOpt:
     # Option D check: numpy warning captured
     assert "NumPy/Runtime Warnings raised during execution" in scored.feedback
     assert "invalid value encountered in sqrt" in scored.feedback
-
-
-
-
-

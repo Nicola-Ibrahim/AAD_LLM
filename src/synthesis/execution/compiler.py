@@ -95,7 +95,11 @@ class CodeCompiler:
                                     "Pre-built scipy optimizers are banned. Write your search algorithm logic from scratch using NumPy."
                                 )
             elif isinstance(node, ast.Attribute):
-                if node.attr == "optimize" and isinstance(node.value, ast.Name) and node.value.id == "scipy":
+                if (
+                    node.attr == "optimize"
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id == "scipy"
+                ):
                     raise CodeValidationException(
                         "Usage of 'scipy.optimize' is strictly prohibited. "
                         "Pre-built scipy optimizers are banned. Write your search algorithm logic from scratch using NumPy."
@@ -109,11 +113,19 @@ class CodeCompiler:
         warnings_list: list[str] = []
         for node in ast.walk(tree):
             # Check min/max with key=lambda calling problem
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("min", "max"):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in ("min", "max")
+            ):
                 for kw in node.keywords:
                     if kw.arg == "key" and isinstance(kw.value, ast.Lambda):
                         for inner in ast.walk(kw.value):
-                            if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name) and "problem" in inner.func.id:
+                            if (
+                                isinstance(inner, ast.Call)
+                                and isinstance(inner.func, ast.Name)
+                                and "problem" in inner.func.id
+                            ):
                                 warnings_list.append(
                                     f"line {node.lineno}: Possible hidden problem(x) calls in `{node.func.id}(..., key=...)` lambda. "
                                     "These calls are not counted in your evaluations counter. Make all problem calls explicit."

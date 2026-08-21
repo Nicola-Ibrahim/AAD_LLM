@@ -7,9 +7,7 @@ from synthesis.prompts import PromptStrategy, build_task_prompt
 
 
 def test_build_task_prompt_with_array_bounds():
-    problem = BBOBProblem(
-        problem_id=1, dim=3, noise_strategy=NoNoiseStrategy(), instance_id=1
-    )
+    problem = BBOBProblem(problem_id=1, dim=3, noise_strategy=NoNoiseStrategy(), instance_id=1)
     assert isinstance(problem.lower_bound, np.ndarray)
     assert isinstance(problem.upper_bound, np.ndarray)
     assert problem.lower_bound.shape == (3,)
@@ -70,17 +68,24 @@ def test_build_task_prompt_noisy_strategies():
     lb = np.array([-5.0] * 3)
     ub = np.array([5.0] * 3)
 
-    baseline_noisy = build_task_prompt(15, 3, lb, ub, mode=ProblemMode.NOISY, strategy=PromptStrategy.BASELINE)
+    baseline_noisy = build_task_prompt(
+        15, 3, lb, ub, mode=ProblemMode.NOISY, strategy=PromptStrategy.BASELINE
+    )
     assert "stochastic" in baseline_noisy
     assert "Single-shot acceptance" in baseline_noisy
 
-    thinking_noisy = build_task_prompt(15, 3, lb, ub, mode=ProblemMode.NOISY, strategy=PromptStrategy.THINKING)
+    thinking_noisy = build_task_prompt(
+        15, 3, lb, ub, mode=ProblemMode.NOISY, strategy=PromptStrategy.THINKING
+    )
     assert "statistical summary" in thinking_noisy
 
-    vector_noisy = build_task_prompt(15, 3, lb, ub, mode=ProblemMode.NOISY, strategy=PromptStrategy.VECTORIZATION)
+    vector_noisy = build_task_prompt(
+        15, 3, lb, ub, mode=ProblemMode.NOISY, strategy=PromptStrategy.VECTORIZATION
+    )
     assert "k_evals = np.array" in vector_noisy
 
-    guided_noisy = build_task_prompt(15, 3, lb, ub, mode=ProblemMode.NOISY, strategy=PromptStrategy.GUIDED)
+    guided_noisy = build_task_prompt(
+        15, 3, lb, ub, mode=ProblemMode.NOISY, strategy=PromptStrategy.GUIDED
+    )
     assert "re-evaluation strategy" in guided_noisy
     assert "_robust_eval" in guided_noisy
-

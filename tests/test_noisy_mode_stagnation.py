@@ -145,6 +145,7 @@ def test_executor_budget_overrun_warning():
         def __init__(self):
             self.evaluations = 150
             self.dim = 3
+
         def __call__(self, x):
             return 0.0
 

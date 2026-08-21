@@ -8,6 +8,7 @@ import argparse
 import sys
 from pathlib import Path
 
+
 def get_engine(db_path: str):
     abs_path = Path(db_path).resolve()
     if not abs_path.exists() and not abs_path.parent.exists():
@@ -15,6 +16,7 @@ def get_engine(db_path: str):
 
     try:
         from sqlalchemy import create_engine
+
         return create_engine(f"sqlite:///{abs_path}")
     except ImportError as e:
         sys.stderr.write(f"Error: SQLAlchemy is required for database operations: {e}\n")
@@ -23,8 +25,9 @@ def get_engine(db_path: str):
 
 def cmd_clear_data(args):
     from sqlalchemy import inspect, text
+
     engine = get_engine(args.db)
-    
+
     with engine.begin() as conn:
         conn.execute(text("PRAGMA foreign_keys = OFF"))
         inspector = inspect(engine)
@@ -38,6 +41,7 @@ def cmd_clear_data(args):
 
 def cmd_table_stats(args):
     from sqlalchemy import inspect, text
+
     abs_path = Path(args.db).resolve()
     if not abs_path.is_file():
         print(f"  (database file does not exist: {abs_path})")

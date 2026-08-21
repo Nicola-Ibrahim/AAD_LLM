@@ -20,11 +20,16 @@ class ProblemProfile(ValueObject):
     noise_model: NoiseModelEnum = Field(
         default=NoiseModelEnum.MULTIPLICATIVE,
         description="Noise strategy applied for noisy evaluation.",
-        examples=[NoiseModelEnum.MULTIPLICATIVE, NoiseModelEnum.HOMOSCEDASTIC_ADDITIVE, NoiseModelEnum.AWGN],
+        examples=[
+            NoiseModelEnum.MULTIPLICATIVE,
+            NoiseModelEnum.HOMOSCEDASTIC_ADDITIVE,
+            NoiseModelEnum.AWGN,
+        ],
     )
     instance_id: int = Field(
         default=1,
-        description="The BBOB instance ID chosen for this problem execution run.", examples=[1, 5]
+        description="The BBOB instance ID chosen for this problem execution run.",
+        examples=[1, 5],
     )
     true_optimum: float | None = Field(
         default=None,

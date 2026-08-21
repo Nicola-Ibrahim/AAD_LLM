@@ -7,6 +7,7 @@ Helper CLI for inspecting Python environment health, llama-cpp-python CUDA impor
 import argparse
 import importlib.util
 
+
 def cmd_check_llama_cpp():
     spec = importlib.util.find_spec("llama_cpp")
     if spec is None:
@@ -14,6 +15,7 @@ def cmd_check_llama_cpp():
     else:
         try:
             from llama_cpp import llama_cpp as lib
+
             _ = getattr(lib, "_lib_base_name", "unknown")
             print("FOUND")
         except OSError as e:

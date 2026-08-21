@@ -7,7 +7,7 @@ This is NOT a general-purpose solver. You are designing a bespoke algorithm tail
 
 Problem Parameters:
 - The search space is {{ dim }}-dimensional.
-- Search Bounds: [{{ lower_bound }}, {{ upper_bound }}] (accessible via `problem.lb` / `problem.ub` or `problem.lower_bound` / `problem.upper_bound`)
+- Search Bounds: [{{ lower_bound }}, {{ upper_bound }}] (accessible via `problem.lower_bound` / `problem.upper_bound`)
 {% if budget_hint %}- Total Evaluation Budget: {{ budget_hint }} calls to problem(x){% endif %}
 {% if strategy_guidance %}
 

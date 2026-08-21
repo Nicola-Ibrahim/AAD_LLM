@@ -249,7 +249,9 @@ class SQLiteExperimentRepository(ExperimentRepository):
                     problem_id=exp.problem_id,
                     dim=exp.dim,
                     noise_std=exp.noise_std or 0.0,
-                    noise_model=NoiseModelEnum(exp.noise_model) if exp.noise_model else NoiseModelEnum.MULTIPLICATIVE,
+                    noise_model=NoiseModelEnum(exp.noise_model)
+                    if exp.noise_model
+                    else NoiseModelEnum.MULTIPLICATIVE,
                     instance_id=exp.instance_id,
                     true_optimum=exp.true_optimum,
                 )

@@ -29,13 +29,8 @@ class IterationMetadata(ValueObject):
     fitness: Fitness = Field(
         description="Fitness metrics and errors achieved by the candidate algorithm."
     )
-    code: Code = Field(
-        description="Attributes and metadata about the candidate algorithm code."
-    )
+    code: Code = Field(description="Attributes and metadata about the candidate algorithm code.")
     error: Error = Field(
         description="Traceback and exception info if the candidate algorithm failed."
     )
-    convergence: Convergence = Field(
-        description="Details about convergence of the execution run."
-    )
-
+    convergence: Convergence = Field(description="Details about convergence of the execution run.")

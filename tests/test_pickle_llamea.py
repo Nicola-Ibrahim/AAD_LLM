@@ -41,9 +41,7 @@ def test_repos(tmp_path):
 
 def test_pickle_llamea(tmp_path, test_repos):
     db_repo, code_repo = test_repos
-    problem = BBOBProblem(
-        problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1
-    )
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
     llm = LLMClient(Provider.LOCAL, skip_validation=True)
 
     evaluator = Evaluator(problem=problem, db_repo=db_repo, code_repo=code_repo, budget=10)
@@ -80,9 +78,7 @@ def test_llm_client_pickling(monkeypatch):
 
 def test_warm_start_rehydration(tmp_path, test_repos):
     db_repo, code_repo = test_repos
-    problem = BBOBProblem(
-        problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1
-    )
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
     llm = LLMClient(Provider.LOCAL, skip_validation=True)
 
     session = LLaMEASession.create(

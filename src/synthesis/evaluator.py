@@ -109,7 +109,6 @@ class Evaluator:
         self._stagnation_threshold = stagnation_threshold
         self._consecutive_failures = 0
 
-
     @property
     def problem_profile(self) -> ProblemProfile:
         """Expose the configured BBOB problem profile."""
@@ -134,7 +133,7 @@ class Evaluator:
                     f"Returned best_x has dimension {len(best_x)}, expected problem dimension {self._problem.dim}."
                 )
             if not self._problem.is_in_bounds(best_x):
-                lb_val, ub_val = self._problem.lb[0], self._problem.ub[0]
+                lb_val, ub_val = self._problem.lower_bound[0], self._problem.upper_bound[0]
                 raise ValueError(
                     f"Returned best_x {best_x.tolist()} is outside search space bounds [{lb_val}, {ub_val}]. "
                     "Ensure your algorithm clips candidate solutions to domain bounds using problem.clip(x) or np.clip(x, lb, ub)."
@@ -178,7 +177,7 @@ class Evaluator:
                 snippet_lines = []
                 for i in range(start, end):
                     prefix = "->" if i == idx else "  "
-                    snippet_lines.append(f"  {prefix} line {i+1:3d}: {code_lines[i]}")
+                    snippet_lines.append(f"  {prefix} line {i + 1:3d}: {code_lines[i]}")
                 context_blocks.append("\n".join(snippet_lines))
 
         if not context_blocks:
@@ -193,7 +192,9 @@ class Evaluator:
         captured_warnings: list[str] | None = None,
     ) -> str:
         """Build feedback string for a successful algorithm run."""
-        noise_desc = f" (noise model: {self._problem.noise_model})" if self._problem.noise_std > 0 else ""
+        noise_desc = (
+            f" (noise model: {self._problem.noise_model})" if self._problem.noise_std > 0 else ""
+        )
         msg = (
             f"The algorithm achieved a final clean error of {final_error:.4f} from the true optimum ({true_optimum:.4f}) "
             f"on BBOB Problem {self._problem.problem_id}{noise_desc}. "
@@ -402,8 +403,8 @@ class Evaluator:
             )
 
         # Option B: Append problem context footer
-        lb_val = self._problem.lb[0] if hasattr(self._problem, "lb") else -5.0
-        ub_val = self._problem.ub[0] if hasattr(self._problem, "ub") else 5.0
+        lb_val = self._problem.lower_bound[0] if hasattr(self._problem, "lower_bound") else -5.0
+        ub_val = self._problem.upper_bound[0] if hasattr(self._problem, "upper_bound") else 5.0
         msg += (
             f"\n\nProblem context: BBOB-{self._problem.problem_id}, dim={self._problem.dim}, bounds=[{lb_val}, {ub_val}]. "
             f"Ensure your algorithm handles small dimensionality (dim={self._problem.dim}) correctly, "

@@ -28,25 +28,25 @@ def parse_toml_fallback(content: str) -> dict:
     current_obj = None
     for line in content.splitlines():
         line = line.strip()
-        if not line or line.startswith('#'):
+        if not line or line.startswith("#"):
             continue
-        if line.startswith('[[') and line.endswith(']]'):
+        if line.startswith("[[") and line.endswith("]]"):
             header = line[2:-2].strip()
-            parts = header.split('.')
+            parts = header.split(".")
             section = parts[0]
             if section not in data:
-                data[section] = {'llms': []}
+                data[section] = {"llms": []}
             current_obj = {}
-            data[section]['llms'].append(current_obj)
+            data[section]["llms"].append(current_obj)
             current_section = None
-        elif line.startswith('[') and line.endswith(']'):
+        elif line.startswith("[") and line.endswith("]"):
             header = line[1:-1].strip()
             if header not in data:
-                data[header] = {'llms': []}
+                data[header] = {"llms": []}
             current_section = header
             current_obj = None
-        elif '=' in line:
-            k, v = line.split('=', 1)
+        elif "=" in line:
+            k, v = line.split("=", 1)
             k = k.strip()
             v = v.strip().strip('"').strip("'")
             if current_obj is not None:
@@ -61,9 +61,10 @@ def load_toml(toml_path: str) -> dict:
     if not path.is_file():
         sys.stderr.write(f"Error: Preset file not found: {toml_path}\n")
         sys.exit(1)
-        
+
     try:
         import tomllib
+
         with open(path, "rb") as f:
             return tomllib.load(f)
     except ImportError:
@@ -89,10 +90,13 @@ def cmd_list_models(args):
 def cmd_download(args):
     try:
         from huggingface_hub import hf_hub_download
+
         target_dir = os.path.expanduser(args.target_dir) if args.target_dir else None
         if target_dir:
             os.makedirs(target_dir, exist_ok=True)
-            cache_path = hf_hub_download(repo_id=args.repo, filename=args.file, local_dir=target_dir)
+            cache_path = hf_hub_download(
+                repo_id=args.repo, filename=args.file, local_dir=target_dir
+            )
         else:
             cache_path = hf_hub_download(repo_id=args.repo, filename=args.file)
         print(cache_path)
@@ -103,6 +107,7 @@ def cmd_download(args):
 
 def cmd_get_active_model(args):
     import urllib.request
+
     models_url = f"{args.url.rstrip('/')}/models"
     try:
         req = urllib.request.Request(models_url, headers={"User-Agent": "AAD-LLM-Model-Check"})
@@ -119,9 +124,10 @@ def cmd_get_active_model(args):
 
 # ─── Model Scanning, Sorting & Formatting ─────────────────────
 
+
 def extract_param_size(name: str) -> tuple[float | None, str]:
     """Extract parameter count in billions from model name (e.g. '1.5B' -> 1.5, '7B' -> 7.0)."""
-    match = re.search(r'(?:^|[^0-9a-zA-Z])([0-9]+(?:\.[0-9]+)?)[bB](?:[^0-9a-zA-Z]|$)', name)
+    match = re.search(r"(?:^|[^0-9a-zA-Z])([0-9]+(?:\.[0-9]+)?)[bB](?:[^0-9a-zA-Z]|$)", name)
     if match:
         val = float(match.group(1))
         tag = f"{val:g}B"
@@ -140,7 +146,7 @@ def get_path_size(path: Path) -> int:
             return 0
     total = 0
     try:
-        for p in path.rglob('*'):
+        for p in path.rglob("*"):
             if p.is_file() and not p.is_symlink():
                 try:
                     total += p.stat().st_size
@@ -165,7 +171,7 @@ def format_size_bytes(bytes_val: int) -> str:
 def shorten_path(path_str: str) -> str:
     home_dir = str(Path.home())
     if path_str.startswith(home_dir):
-        return "~" + path_str[len(home_dir):]
+        return "~" + path_str[len(home_dir) :]
     return path_str
 
 
@@ -207,25 +213,29 @@ def cmd_scan_models(args):
             param_val, param_tag = extract_param_size(search_str)
             size_bytes = get_path_size(item)
 
-            models.append({
-                "name": file_name,
-                "repo_id": repo_id or "",
-                "display_name": file_name,
-                "file_name": file_name,
-                "param_val": param_val,
-                "param_tag": param_tag,
-                "size_bytes": size_bytes,
-                "size_formatted": format_size_bytes(size_bytes),
-                "path": str(item),
-                "short_path": shorten_path(str(item))
-            })
+            models.append(
+                {
+                    "name": file_name,
+                    "repo_id": repo_id or "",
+                    "display_name": file_name,
+                    "file_name": file_name,
+                    "param_val": param_val,
+                    "param_tag": param_tag,
+                    "size_bytes": size_bytes,
+                    "size_formatted": format_size_bytes(size_bytes),
+                    "path": str(item),
+                    "short_path": shorten_path(str(item)),
+                }
+            )
 
     # Sort models by parameter count ascending (0.5B -> 1.5B -> 7B -> 14B -> 32B), then by size
-    models.sort(key=lambda m: (
-        m["param_val"] if m["param_val"] is not None else float("inf"),
-        m["size_bytes"],
-        m["display_name"].lower()
-    ))
+    models.sort(
+        key=lambda m: (
+            m["param_val"] if m["param_val"] is not None else float("inf"),
+            m["size_bytes"],
+            m["display_name"].lower(),
+        )
+    )
 
     # Add 1-based index
     for idx, m in enumerate(models, 1):
@@ -245,10 +255,10 @@ def cmd_scan_models(args):
 
     for m in models:
         idx_str = f"[{m['index']:2d}]"
-        param_str = f" ({YELLOW}{m['param_tag']}{NC})" if m['param_tag'] else ""
-        
+        param_str = f" ({YELLOW}{m['param_tag']}{NC})" if m["param_tag"] else ""
+
         print(f"  {CYAN}{BOLD}{idx_str}{NC} {BOLD}{m['display_name']}{NC}{param_str}")
-        if m['repo_id'] and m['file_name'] != m['repo_id']:
+        if m["repo_id"] and m["file_name"] != m["repo_id"]:
             print(f"       • {BOLD}Repo:{NC}      {m['repo_id']}")
         print(f"       • {BOLD}Disk Size:{NC} {GREEN}{m['size_formatted']}{NC}")
         print(f"       • {BOLD}Location:{NC}  {m['short_path']}")
