@@ -46,8 +46,14 @@ Use this track if you are running on a remote Jupyter Server, custom Conda envir
 ## Running the Notebooks
 Open your Jupyter interface and navigate to the `notebooks/` directory to run code:
 * [notebooks/00_model_test.ipynb](notebooks/00_model_test.ipynb) — Verify connection to your LLM provider.
+* [notebooks/01_noise_analysis.ipynb](notebooks/01_noise_analysis.ipynb) — Validate BBOB benchmark landscapes with multiplicative noise.
 * [notebooks/02_llamea_evolution.ipynb](notebooks/02_llamea_evolution.ipynb) — Run single-problem or multi-problem batch LLaMEA evolution.
-* [notebooks/03_results_analysis.ipynb](notebooks/03_results_analysis.ipynb) — Query the SQLite database, analyze stats, and plot results.
+* [notebooks/03_select_champions.ipynb](notebooks/03_select_champions.ipynb) — Query SQLite and extract clean & noisy champion algorithms.
+* [notebooks/04_experimental_audit.ipynb](notebooks/04_experimental_audit.ipynb) — Audit experimental matrix coverage, detect sample imbalances, and export audit reports.
+* [notebooks/05_evaluate_champions.ipynb](notebooks/05_evaluate_champions.ipynb) — Benchmarking champion algorithms (N=10 runs) with IOH Analyzer logging.
+* [notebooks/06_run_baselines.ipynb](notebooks/06_run_baselines.ipynb) — Execute classical baselines (CMA-ES, DE, PSO).
+* [notebooks/07_statistical_evaluation.ipynb](notebooks/07_statistical_evaluation.ipynb) — Statistical summaries and performance tables.
+* [notebooks/08_publication_figures.ipynb](notebooks/08_publication_figures.ipynb) — Generate thesis & publication figures (Clean/Noisy Trajectories, ECDFs, Robustness, Scaffolding).
 
 
 ## Starting the Local Model Server

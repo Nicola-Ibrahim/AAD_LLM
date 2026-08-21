@@ -1,0 +1,48 @@
+# ==============================================================================
+# Runner Settings Configuration — HOW to Run
+# ==============================================================================
+# Operational settings for Notebooks 02 (evolution), 05 & 06 (evaluation).
+# Defines concurrency, crash-recovery, gap-filling, and benchmark evaluation dials.
+
+[execution]
+# max_workers: Number of parallel worker processes in the process pool
+#   • 8   = Utilizes all 8 server CPU cores
+#   • 0   = Auto-detects and uses all available CPU cores
+#   • 1   = Sequential single-core execution (for local debugging)
+max_workers = 8
+
+# auto_resume: Auto-detect and resume interrupted/crashed runs
+#   • true  = Automatically picks up incomplete runs (status = 'running') from SQLite
+#   • false = Ignores incomplete runs and creates fresh ones
+auto_resume = true
+
+# skip_completed: Avoid duplicate work
+#   • true  = Automatically skips matrix configurations already finished in SQLite
+#             (Runs only missing conditions, e.g. 5D on 7B)
+#   • false = Forces re-running every configuration from scratch
+skip_completed = true
+
+# only_incomplete: Recovery / triage mode
+#   • true  = ONLY finishes interrupted runs that crashed mid-way
+#   • false = Finishes interrupted runs AND executes all remaining pending matrix tasks
+only_incomplete = false
+
+[evaluation]
+# Standard independent benchmark evaluation runs per condition for champions & baselines:
+#   • 10  = Standard publication benchmark sample size (N=10 runs)
+target_eval_runs = 10
+
+# Per-run execution timeout in seconds:
+eval_timeout_seconds = 30.0
+
+# fill_missing_only:
+#   • true  = Scans data/ioh_logs and executes ONLY missing / partial runs (< 10)
+#   • false = Re-evaluates based on notebook filter settings
+fill_missing_only = true
+
+# Classical Baselines evaluated on identical benchmark problems (Notebook 06):
+classical_baselines = [
+    "CMA-ES",
+    "DE",
+    "PSO"
+]
