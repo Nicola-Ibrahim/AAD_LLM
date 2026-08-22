@@ -12,7 +12,7 @@ from domain.interfaces import BaseProblem
 from domain.services.noise_strategy import NoiseStrategyFactory
 from domain.vos import ProblemProfile
 from infra.llm.client import LLMClient
-from infra.problems import BBOBProblem, ProblemAnalyzer
+from infra.problems import BBOBProblem
 from infra.storage.base import ExperimentRepository
 from infra.storage.code.repository import CodeRepository
 from synthesis.evaluator import Evaluator
@@ -50,13 +50,6 @@ class SessionResult:
     error_msg: str | None = None
     best_solution: Any = None
     problem_profile: Any = None
-
-
-def _sanitise_llm_name(name: str) -> str:
-    """Derive a clean, filesystem-safe short identifier from an LLM model name string."""
-    clean = name.removesuffix(".gguf").removesuffix(".bin")
-    clean = clean.replace("-instruct", "").replace("_q4_k_m", "").replace("/", "_")
-    return clean[:30]
 
 
 class LLaMEASession:
@@ -295,40 +288,26 @@ class LLaMEASession:
         )
 
     def _execute_loop(self) -> tuple[LLaMEA, Evaluator]:
-        """Executes the LLaMEA evolutionary loop with lifecycle status tracking and telemetry context."""
-        short_llm = _sanitise_llm_name(self._llm_client.model.name)
-        folder_name = f"llamea_{short_llm}"
-        strat_str = (
-            self._prompt_strategy.value
-            if hasattr(self._prompt_strategy, "value")
-            else str(self._prompt_strategy)
-        )
-        algo_name = f"{self._llm_client.model.name}_{strat_str}"
-
-        with ProblemAnalyzer(
-            self._problem,
-            algorithm_name=algo_name,
-            folder_name=folder_name,
-        ):
-            try:
-                task_prompt = build_task_prompt(
-                    problem_id=self._problem.problem_id,
-                    dim=self._problem.dim,
-                    lower_bound=self._problem.lower_bound,
-                    upper_bound=self._problem.upper_bound,
-                    mode=self._problem.mode,
-                    strategy=self._prompt_strategy,
-                    budget_hint=self._budget,
-                )
-                evaluator = self._setup_evaluator()
-                synthesis_engine = self._create_synthesis_engine(evaluator, task_prompt)
-                synthesis_engine.run()
-            except Exception as e:
-                self._db_repo.mark_failed(self._experiment_id, str(e))
-                raise
-            else:
-                self._db_repo.mark_completed(self._experiment_id)
-                return synthesis_engine, evaluator
+        """Executes the LLaMEA evolutionary loop with lifecycle status tracking."""
+        try:
+            task_prompt = build_task_prompt(
+                problem_id=self._problem.problem_id,
+                dim=self._problem.dim,
+                lower_bound=self._problem.lower_bound,
+                upper_bound=self._problem.upper_bound,
+                mode=self._problem.mode,
+                strategy=self._prompt_strategy,
+                budget_hint=self._budget,
+            )
+            evaluator = self._setup_evaluator()
+            synthesis_engine = self._create_synthesis_engine(evaluator, task_prompt)
+            synthesis_engine.run()
+        except Exception as e:
+            self._db_repo.mark_failed(self._experiment_id, str(e))
+            raise
+        else:
+            self._db_repo.mark_completed(self._experiment_id)
+            return synthesis_engine, evaluator
 
     def run(self) -> SessionResult:
         """Runs the complete evolution loop for the problem."""
