@@ -82,6 +82,7 @@ celerybeat.pid
 !/data/champions.json
 /results/figures/*
 !/results/figures/.gitkeep
+/results/evaluations/
 /models/
 /contexts/
 /diagnostics/
