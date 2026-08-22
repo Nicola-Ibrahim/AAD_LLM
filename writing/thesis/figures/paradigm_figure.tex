@@ -5,51 +5,31 @@
     % --- Node Styles ---
     ioNode/.style={
         rectangle, 
-        rounded corners=5pt, 
+        rounded corners=4pt, 
         draw=gray!70!black, 
         fill=gray!10, 
         thick, 
-        minimum width=7.0cm, 
+        minimum width=7.2cm, 
         minimum height=1.1cm, 
         align=center
     },
-    llmNode/.style={
+    stageNode/.style={
         rectangle, 
-        rounded corners=6pt, 
-        draw=blue!80!black, 
-        fill=blue!8, 
+        rounded corners=5pt, 
+        draw=#1!80!black, 
+        fill=#1!8, 
         thick, 
-        minimum width=7.0cm, 
-        minimum height=1.4cm, 
-        align=center
-    },
-    sandboxNode/.style={
-        rectangle, 
-        rounded corners=6pt, 
-        draw=red!80!black, 
-        fill=red!8, 
-        thick, 
-        minimum width=7.0cm, 
-        minimum height=1.4cm, 
-        align=center
-    },
-    evalNode/.style={
-        rectangle, 
-        rounded corners=6pt, 
-        draw=green!60!black, 
-        fill=green!8, 
-        thick, 
-        minimum width=7.0cm, 
-        minimum height=1.4cm, 
+        minimum width=7.2cm, 
+        minimum height=1.2cm, 
         align=center
     },
     outNode/.style={
         rectangle, 
-        rounded corners=5pt, 
+        rounded corners=4pt, 
         draw=orange!80!black, 
         fill=yellow!20, 
         thick, 
-        minimum width=7.0cm, 
+        minimum width=7.2cm, 
         minimum height=1.1cm, 
         align=center
     },
@@ -57,85 +37,79 @@
     mainArrow/.style={
         ->, 
         very thick, 
-        draw=gray!80!black
+        draw=gray!75!black
     },
     feedbackArrow/.style={
         ->, 
         very thick, 
         draw=blue!80!black, 
         dashed
-    },
-    annotation/.style={
-        font=\footnotesize\sffamily, 
-        text=gray!90!black, 
-        align=center
     }
 ]
 
     % =========================================================================
-    % VERTICAL STACK NODES
+    % VERTICAL PIPELINE NODES
     % =========================================================================
 
     % System Input
     \node (input) [ioNode] {
-        \textbf{System Input}\\[-1pt]
-        \footnotesize Problem Constraints, Search Domain, and API Interfaces
+        \textbf{Problem Specification}\\[-1pt]
+        \footnotesize Problem Definition, Search Bounds, and Interface Template
     };
 
     % Stage 1: LLM Engine
-    \node (llm) [llmNode, below=1.3cm of input] {
-        \textbf{Stage 1: Generative LLM Engine}\\[-1pt]
-        \footnotesize Synthesizes and Mutates Executable Source Code
+    \node (llm) [stageNode=blue, below=1.0cm of input] {
+        \textbf{Stage 1: Generative Model}\\[-1pt]
+        \footnotesize Synthesizes and Modifies Optimization Code
     };
 
     % Stage 2: Sandbox
-    \node (sandbox) [sandboxNode, below=1.3cm of llm] {
-        \textbf{Stage 2: Execution and Evaluation Sandbox}\\[-1pt]
-        \footnotesize Evaluates Candidate Code against Target Benchmarks
+    \node (sandbox) [stageNode=red, below=1.0cm of llm] {
+        \textbf{Stage 2: Execution Sandbox}\\[-1pt]
+        \footnotesize Runs Candidate Algorithm on Target Functions
     };
 
-    % Stage 3: Assessor Module
-    \node (eval) [evalNode, below=1.3cm of sandbox] {
-        \textbf{Stage 3: Assessor Module}\\[-1pt]
-        \footnotesize Computes Quantitative Metrics and Diagnostics
+    % Stage 3: Evaluation Module
+    \node (eval) [stageNode=green!70!black, below=1.0cm of sandbox] {
+        \textbf{Stage 3: Performance Assessment}\\[-1pt]
+        \footnotesize Computes Target Metrics and Logs Runtime Feedback
     };
 
     % System Output
-    \node (output) [outNode, below=1.3cm of eval] {
-        \textbf{Final System Output}\\[-1pt]
-        \footnotesize Evolved, Domain-Adapted Optimization Heuristic
+    \node (output) [outNode, below=1.0cm of eval] {
+        \textbf{Discovered Optimization Algorithm}\\[-1pt]
+        \footnotesize Final Evolved Search Heuristic
     };
 
     % =========================================================================
-    % FORWARD PIPELINE ARROWS
+    % FORWARD ARROWS (NO LABELS)
     % =========================================================================
 
-    \draw [mainArrow] (input) -- node[right=6pt, annotation] {Initial Prompt Setup} (llm);
-    \draw [mainArrow] (llm) -- node[right=6pt, annotation] {Generated Python Class} (sandbox);
-    \draw [mainArrow] (sandbox) -- node[right=6pt, annotation] {Execution Traces} (eval);
-    \draw [mainArrow] (eval) -- node[right=6pt, annotation] {Selection Target Reached} (output);
+    \draw [mainArrow] (input) -- (llm);
+    \draw [mainArrow] (llm) -- (sandbox);
+    \draw [mainArrow] (sandbox) -- (eval);
+    \draw [mainArrow] (eval) -- (output);
 
     % =========================================================================
-    % REFLECTIVE FEEDBACK LOOP (LEFT-HAND CURVE)
+    % EVOLUTIONARY FEEDBACK LOOP
     % =========================================================================
 
     \draw [feedbackArrow] (eval.west) 
-        .. controls ($(eval.west)+(-3.6,0)$) and ($(llm.west)+(-3.6,0)$) .. 
-        node[left=6pt, annotation, text=blue!80!black, xshift=-2pt] {
-            \textbf{Reflective Feedback Loop}\\[2pt]
-            \textbf{(Generations $1 \dots N-1$)}\\[4pt]
-            Performance Metrics $+$\\[2pt]
-            Compiler Tracebacks $+$\\[2pt]
-            Self-Debugging Prompts
+        .. controls ($(eval.west)+(-3.2,0)$) and ($(llm.west)+(-3.2,0)$) .. 
+        node[left=6pt, align=center, text=blue!80!black, font=\footnotesize\sffamily] {
+            \textbf{Evolutionary Feedback Loop}\\[2pt]
+            Generations $1 \dots N-1$\\[3pt]
+            Performance Metrics \&\\
+            Execution Logs
         } (llm.west);
 
     % =========================================================================
-    % DASHED CONTAINER BOX
+    % OUTER CONTAINER
     % =========================================================================
     \node[
-        draw=gray!50, 
+        draw=gray!40, 
         dashed, 
-        inner sep=0.45cm, 
+        inner sep=0.4cm, 
         rounded corners=8pt, 
         fit=(llm) (sandbox) (eval)
     ] {};
