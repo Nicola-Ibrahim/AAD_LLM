@@ -1,6 +1,6 @@
-%-------------------------------------------------------------------------------
+%------------------------------------------------------------------------------
 % Chapter 1: Introduction
-%-------------------------------------------------------------------------------
+%------------------------------------------------------------------------------
 
 \chapter{Introduction}\label{chap:intro}
 
@@ -29,9 +29,9 @@ Early Automated Algorithm Design (AAD) and hyper-heuristic systems used Genetic 
 
 Large Language Models alter this generation dynamic. Modern AAD frameworks embed generative models within closed-loop execution environments that write, test, and debug complete, executable source code files \cite{Romera2023}. This research implements the Large Language Model Evolutionary Algorithm (LLaMEA) \cite{LLaMEA2024}. LLaMEA prompts a model to generate complete Python optimizer classes, runs the code within an isolated benchmarking harness, and passes execution metrics and compiler tracebacks back into the prompt context to drive iterative mutation.
 
-Despite recent progress in frameworks such as FunSearch \cite{Romera2023}, Evolution of Heuristics (EoH) \cite{Liu2024}, and LLaMEA \cite{LLaMEA2024}, existing studies evaluate generated code almost exclusively under deterministic conditions. Candidate algorithms are evolved on noise-free mathematical functions or discrete combinatorial graphs. When a model synthesizes code under clean evaluation feedback, it generates logic optimized for exact objective values. Exposing these deterministic routines to stochastic evaluation noise induces ranking corruption and destabilizes selection. Chapter~\ref{chap:research} reviews these failure mechanics and noise taxonomies in detail.
+Despite recent progress in frameworks such as FunSearch \cite{Romera2023}, Evolution of Heuristics (EoH) \cite{Liu2024}, and LLaMEA \cite{LLaMEA2024}, existing studies evaluate generated code almost exclusively under deterministic conditions. Candidate algorithms are evolved on noise-free mathematical functions or discrete combinatorial graphs. When a model synthesizes code under clean evaluation feedback, it generates logic optimized for exact objective values. Exposing these deterministic routines to stochastic evaluation noise induces ranking corruption and destabilizes selection. Chapter~\ref{chap:background} reviews these failure mechanics and noise taxonomies in detail.
 
-It remains unverified whether closed-loop evolutionary prompts can force foundation models to invent uncertainty-handling logic. Furthermore, the capacity of open-weights models relative to commercial baselines and the transferability of noise-evolved heuristics to unseen deterministic functions remain uncharacterized. This thesis examines the performance and structural adaptation of LLaMEA across continuous black-box optimization functions corrupted by controlled statistical noise.
+It remains unverified whether closed-loop evolutionary feedback can compel foundation models to discover noise-resilient search logic. Furthermore, the capacity of open-weights models relative to commercial proprietary systems, the competitive performance of synthesized heuristics against classical algorithmic baselines (such as CMA-ES and PSO), and their transferability to unseen deterministic landscapes remain uncharacterized. This thesis investigates the performance and structural adaptation of LLaMEA when deployed across continuous black-box optimization landscapes corrupted by controlled statistical noise
 
 Figure~\ref{fig:intro_paradigm} outlines the closed-loop design loop evaluated in this work. The pipeline comprises three operational stages: an LLM generating candidate Python classes from interface specifications, an isolated sandbox executing the algorithms against target benchmarks, and an evaluation module logging runtime statistics and compiler tracebacks. Across generations $1 \dots N-1$, the harness feeds diagnostic metrics back into the model context to drive self-debugging and code mutation.
 
@@ -45,69 +45,77 @@ Figure~\ref{fig:intro_paradigm} outlines the closed-loop design loop evaluated i
 %-------------------------------------------------------------------------------
 \section{Research Objectives}\label{sec:intro_objectives}
 
-This thesis evaluates whether Large Language Models can synthesize continuous optimization heuristics capable of operating under stochastic fitness noise. Three research questions structure the investigation:
+This thesis evaluates whether an open-weights large language model can synthesize continuous optimization heuristics capable of operating under stochastic fitness noise. Three research questions structure the investigation:
 
 \subsection*{Objective 1: Formulating a Stochastic Evaluation Sandbox}
-Evaluating generative models under uncertainty requires transforming deterministic benchmark suites into controlled stochastic surfaces:
+Benchmarking automated algorithm design under uncertainty requires non-deterministic execution environments that prevent candidate optimizers from querying ground-truth analytical fitness:
 
 \begin{quote}
 \textbf{RQ1: How can continuous optimization benchmarks be systematically extended to simulate stochastic landscapes?}
 \end{quote}
 
-This phase constructs a non-deterministic software wrapper around standardized continuous benchmark functions \cite{Jin2005, Hansen2009Noisy}. We implement parameter-controlled statistical noise distributions over objective evaluations. The wrapper isolates the candidate optimizer from exact analytical metrics, generating the selection pressure necessary to evaluate stochastic adaptation during code generation.
+We construct a software evaluation harness over standardized continuous benchmark functions \cite{Jin2005, Hansen2009Noisy}. The layer intercepts objective function calls during runtime and applies parameter-controlled statistical noise distributions directly to candidate evaluations. True analytical states remain hidden from the candidate optimizer. The wrapper decouples internal noisy feedback $f_{\text{noisy}}(x_k)$ from diagnostic logging of the true spatial error $\Delta f(x_k) = f_{\text{clean}}(x_k) - f(x^*)$, generating the selection pressure necessary to evaluate stochastic adaptation during code generation.
 
 \subsection*{Objective 2: Autonomous Synthesis of Noise-Resilient Heuristics}
 Prior studies confirm that generative loops discover competitive optimizers for noiseless functions. Whether language models adapt their code structures under stochastic disruption remains an open question:
 
 \begin{quote}
-\textbf{RQ2: Can Large Language Models, across open-weights and proprietary architectures, autonomously synthesize optimization heuristics that are resilient to noise?}
+\textbf{RQ2: Can localized Large Language Models autonomously synthesize continuous optimization heuristics that are resilient to noise?}
 \end{quote}
 
-We deploy the LLaMEA framework across continuous benchmark functions using both open-weights models and commercial API baselines. The harness routes runtime tracebacks back to the context window across successive generations. By analyzing structural modifications in the generated Python classes, we evaluate whether closed-loop selection guides the LLMs to write dedicated variance-filtering mechanisms.
+We deploy the LLaMEA framework across continuous benchmark functions using a localized open-weights language model acting as a semantic variation operator inside a $(1+1)$ Evolution Strategy. The orchestrator intercepts syntax errors, broadcasting exceptions, and numerical instability at runtime via AST verification, piping raw execution tracebacks $\mathcal{T}_{\text{feedback}}$ back into the prompt context for subsequent generations. Analyzing structural modifications across generated Python classes reveals whether closed-loop selection guides the LLM to write explicit noise-mitigation mechanisms, such as dynamic sampling, statistical fitness tracking, or momentum damping.
 
 \subsection*{Objective 3: Empirical Benchmarking and Cross-Environment Analysis}
-Characterizing evolved heuristics requires measuring solution precision and convergence rates across varying noise settings:
+Characterizing evolved heuristics requires measuring solution precision, sample efficiency, and convergence rates across varying noise settings:
 
 \begin{quote}
 \textbf{RQ3: How does the cross-environment robustness of noise-evolved heuristics compare against noiseless baselines?}
 \end{quote}
 
-We benchmark the champion algorithms against control variants evolved on clean surfaces and classical baselines, including CMA-ES and Differential Evolution. Testing these solvers across identical stochastic conditions isolates the performance difference attributable to noise-aware evolution. Finally, we compare empirical convergence profiles against baseline literature to establish the structural boundaries of LLM-generated search logic under uncertainty.
+We benchmark the champion heuristics discovered by the framework across representative continuous problem instances spanning unimodal, ill-conditioned, and multimodal topologies. Candidate solvers run against classical human-engineered baselines—including CMA-ES, Differential Evolution, and Particle Swarm Optimization—alongside control heuristics synthesized under deterministic conditions. Performance is measured across repeated independent trials under varying noise regimes, tracking empirical convergence trajectories (AOCC), success rates, and precision attainment distributions to determine whether the generated algorithms exhibit systematic advantages over traditional search methods.
 
 %-------------------------------------------------------------------------------
 \section{Summary of Key Contributions}\label{sec:intro_contributions}
 
-This research evaluates Automated Algorithm Design under physical measurement constraints. The primary contributions comprise:
+This thesis establishes an empirical framework for evaluating automated code synthesis under non-deterministic continuous optimization constraints. The primary methodological and experimental contributions are:
 
 \begin{enumerate}
-    \item \textbf{Stochastic Benchmark Sandbox Environment:} An extensible evaluation wrapper built over continuous BBOB benchmark functions. The software injects parameter-controlled statistical noise directly into objective queries, establishing a standardized harness for testing algorithms under fitness space uncertainty.
+    \item \textbf{Heteroscedastic Benchmark Sandbox Wrapper:} An extensible evaluation environment constructed over continuous BBOB benchmark functions. The software layer injects parameter-controlled statistical noise directly into runtime objective queries, decoupling noisy evaluation feedback from ground-truth convergence logging to evaluate heuristic adaptation under fitness space uncertainty.
     
-    \item \textbf{Closed-Loop Autonomous Discovery Pipeline:} An implementation extending LLaMEA to stochastic environments. The system routes compiler tracebacks and empirical convergence data back to open-weights and proprietary foundation models to drive automated code mutation.
+    \item \textbf{Closed-Loop Stochastic Discovery Pipeline:} An adaptation of the LLaMEA framework engineered for non-deterministic environments. The orchestration loop interfaces an open-weights foundation model within a $(1+1)$ Evolution Strategy, employing multi-pass parent resampling ($K=3$) to suppress false elitism alongside AST-based traceback error handling for autonomous inter-generational debugging.
     
-    \item \textbf{Comprehensive Empirical Robustness Evaluation:} A systematic benchmarking suite comparing LLM-generated heuristics against clean-evolved control models and classical solvers (CMA-ES, Differential Evolution). The evaluation tracks solution quality, runtime convergence, and programmatic syntax under non-deterministic conditions.
+    \item \textbf{Cross-Environment Performance and Transferability Evaluation:} A systematic validation protocol benchmarking synthesized heuristics against clean-evolved control variants and classical baselines, including CMA-ES, Differential Evolution, and Particle Swarm Optimization. The analysis measures empirical convergence rates, target precision attainment distributions, and dimensional scalability ($D \in \{5, 10, 20\}$) under controlled noise regimes.
+    
 \end{enumerate}
+
 
 %-------------------------------------------------------------------------------
 \section{Scope and Limitations}\label{sec:intro_scope}
 
-The operational boundaries of this thesis are defined as follows:
+The experimental scope rests on explicit boundaries regarding problem classes, noise models, and compute allocations:
 
 \begin{itemize}
-    \item \textbf{Problem Domain:} The study focuses on unconstrained, single-objective continuous black-box problems $f: \mathbb{R}^D \rightarrow \mathbb{R}$. To manage compute budgets during iterative LLM generation, we select five representative functions from the Black-Box Optimization Benchmark (BBOB) suite covering separable, ill-conditioned, and multi-modal geometries ($f_1, f_8, f_{10}, f_{15}, f_{21}$). Combinatorial, multi-objective, and explicitly constrained optimization problems remain outside this scope.
-    
-    \item \textbf{Noise Taxonomy:} Uncertainty is restricted to stochastic noise in the objective fitness space. We apply a landscape-scaled additive Gaussian noise model. Before optimization starts, the baseline scale $S$ is estimated by sampling the mean absolute deviation of uniformly distributed points from the known minimum. Additive Gaussian noise is injected as $\mathcal{N}(0, (\gamma \cdot S)^2)$, where $\gamma$ controls the standard deviation multiplier. This formulation scales noise variance relative to the objective range. Parameter uncertainty in coordinate vectors $x$ and time-varying dynamic environments are excluded.
-    
-    \item \textbf{Evaluation Limits:} Fixed function evaluation budgets and generational limits cap each LLaMEA execution run, managing API token expenditure and compute latency.
+    \item \textbf{Problem Domain:} The investigation is limited to unconstrained, single-objective continuous black-box optimization. Benchmark selections draw from the continuous BBOB suite across separable, moderately conditioned, ill-conditioned, and multi-modal fitness surfaces. Discrete search spaces, explicit constraints, and multi-objective Pareto formulations fall outside this setup.
+
+    \item \textbf{Noise Taxonomy:} Perturbations occur exclusively within the objective evaluation layer. The test sandbox implements a dynamic Gaussian noise model scaled to the local function magnitude, applying uniform uncertainty across heterogeneous surface topographies. Spatial coordinate jitter, decision vector actuator noise, and time-varying fitness drift are omitted from the protocol.
+
+    \item \textbf{Execution Budgets and Compute Bounds:} Evolutionary synthesis cycles inside LLaMEA terminate at a fixed generational ceiling for each discovery run. Individual Python search routines operate under an evaluation query cap. Abstract Syntax Tree parsing isolates process execution and enforces a strict wall-clock timeout to cut off non-terminating loops and numerical stalls.
 \end{itemize}
+
 
 %-------------------------------------------------------------------------------
 \section{Thesis Outline}\label{sec:intro_outline}
 
-The thesis is organized as follows:
+The remainder of this thesis is structured as follows:
 
 \begin{itemize}
-    \item \textbf{Chapter~\ref{chap:research} (Related Work):} Reviews continuous black-box optimization, classical metaheuristics, mathematical noise models, and the progression of Automated Algorithm Design from Genetic Programming to reflective LLM systems.
-    \item \textbf{Chapter~\ref{chap:methodology} (Methodology):} Details the orchestration architecture, the non-deterministic sandbox, the $(1+1)$ Evolution Strategy in LLaMEA, model selection, and prompt context specifications.
-    \item \textbf{Chapter~\ref{chap:experiments} (Experiments and Results):} Presents quantitative benchmark data, Empirical Cumulative Distribution Functions (ECDFs), anytime convergence trajectories, cross-environment transfer results, and code inspections of generated algorithms.
-    \item \textbf{Chapter~\ref{chap:discussion} (Discussion and Conclusion):} Discusses empirical findings, compares token and compute costs between open and commercial architectures, addresses system limitations, and outlines directions for future algorithm discovery pipelines.
+    \item \textbf{Chapter~\ref{chap:background} (Background and Related Work):} Formalizes continuous black-box optimization, mathematical models of fitness space uncertainty, and the mechanics of classical metaheuristics. It reviews the evolution of Automated Algorithm Design from Genetic Programming to Large Language Models and analyzes native LLaMEA operations alongside the theoretical failure modes of single-parent evolution under noise.
+    
+    \item \textbf{Chapter~\ref{chap:methodology} (Methodology and Implementation):} Delineates the architecture of the proposed stochastic discovery framework, detailing the optimality-gap heteroscedastic noise model, AST security sandbox, stochastic parent resampling policy, prompt scaffolding configurations, and dual-evaluation decoupling.
+    
+    \item \textbf{Chapter~\ref{chap:setup} (Experimental Design and Benchmarking):} Specifies the empirical testing configuration across five representative BBOB continuous problem topologies, detailing local model parameters, budget limits, classical baseline implementations, and statistical evaluation protocols.
+    
+    \item \textbf{Chapter~\ref{chap:results} (Results and Empirical Analysis):} Reports the experimental outcomes, evaluating prompt scaffolding performance, anytime convergence profiles, empirical cumulative distribution functions (ECDFs), and non-parametric hypothesis testing across varying noise regimes and dimensionality scales.
+    
+    \item \textbf{Chapter~\ref{chap:discussion} (Discussion and Conclusion):} Synthesizes empirical findings relative to the three research questions, evaluates structural code adaptations synthesized by the foundation models, discusses computational limitations, and presents directions for future research.
 \end{itemize}
