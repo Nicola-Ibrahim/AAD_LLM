@@ -34,7 +34,7 @@ class BaseNoiseStrategy(ABC):
 class NoNoiseStrategy(BaseNoiseStrategy):
     """Clean strategy with no noise injection."""
 
-    name: str = NoiseModelEnum.MULTIPLICATIVE.value
+    name: str = NoiseModelEnum.NONE.value
 
     def __init__(self, noise_std: float = 0.0):
         super().__init__(noise_std=0.0)
@@ -43,10 +43,10 @@ class NoNoiseStrategy(BaseNoiseStrategy):
         return true_value
 
 
-class MultiplicativeNoiseStrategy(BaseNoiseStrategy):
-    """Multiplicative Gaussian Noise relative to true optimum gap (Heteroscedastic / CV noise: N(true_val, (noise_std * |true_val - true_optimum|)^2))."""
+class HeteroscedasticNoiseStrategy(BaseNoiseStrategy):
+    """Heteroscedastic Gaussian Noise relative to true optimum gap: N(true_val, (noise_std * |true_val - true_optimum|)^2)."""
 
-    name: str = NoiseModelEnum.MULTIPLICATIVE.value
+    name: str = NoiseModelEnum.HETEROSCEDASTIC.value
 
     def __init__(self, noise_std: float = 0.0):
         super().__init__(noise_std=noise_std)
@@ -122,27 +122,33 @@ class NoiseStrategyFactory:
     """Factory for instantiating noise strategy objects."""
 
     _STRATEGIES: dict[str, type[BaseNoiseStrategy]] = {
-        NoiseModelEnum.MULTIPLICATIVE.value: MultiplicativeNoiseStrategy,
+        NoiseModelEnum.HETEROSCEDASTIC.value: HeteroscedasticNoiseStrategy,
         NoiseModelEnum.HOMOSCEDASTIC_ADDITIVE.value: HomoscedasticAdditiveNoiseStrategy,
         NoiseModelEnum.AWGN.value: AWGNStrategy,
+        NoiseModelEnum.NONE.value: NoNoiseStrategy,
     }
 
     @classmethod
     def create(
         cls,
-        noise_model: str | NoiseModelEnum | None = None,
+        noise_model: str | NoiseModelEnum,
         noise_std: float = 0.0,
         **kwargs,
     ) -> BaseNoiseStrategy:
         """Create a BaseNoiseStrategy instance based on noise_model string/enum and noise_std value."""
-        if noise_std <= 0.0 or noise_model is None:
-            return NoNoiseStrategy()
-
         model_str = (
             noise_model.value
             if isinstance(noise_model, NoiseModelEnum)
             else str(noise_model).lower()
         )
 
-        strategy_cls = cls._STRATEGIES.get(model_str, MultiplicativeNoiseStrategy)
+        if noise_std <= 0.0 or model_str == NoiseModelEnum.NONE.value:
+            return NoNoiseStrategy()
+
+        if model_str not in cls._STRATEGIES:
+            raise ValueError(
+                f"Unknown noise model '{model_str}'. Available models: {list(cls._STRATEGIES.keys())}"
+            )
+
+        strategy_cls = cls._STRATEGIES[model_str]
         return strategy_cls(noise_std=noise_std, **kwargs)

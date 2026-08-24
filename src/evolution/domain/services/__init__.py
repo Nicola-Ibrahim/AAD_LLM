@@ -1,8 +1,8 @@
 from evolution.domain.services.noise_strategy import (
     AWGNStrategy,
     BaseNoiseStrategy,
+    HeteroscedasticNoiseStrategy,
     HomoscedasticAdditiveNoiseStrategy,
-    MultiplicativeNoiseStrategy,
     NoNoiseStrategy,
     NoiseStrategyFactory,
 )
@@ -10,7 +10,7 @@ from evolution.domain.services.noise_strategy import (
 __all__ = [
     "BaseNoiseStrategy",
     "NoNoiseStrategy",
-    "MultiplicativeNoiseStrategy",
+    "HeteroscedasticNoiseStrategy",
     "HomoscedasticAdditiveNoiseStrategy",
     "AWGNStrategy",
     "NoiseStrategyFactory",

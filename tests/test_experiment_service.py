@@ -17,7 +17,7 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
-from evolution.domain.services.noise_strategy import MultiplicativeNoiseStrategy, NoNoiseStrategy
+from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy, NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.sqlite.connection import build_engine
@@ -97,7 +97,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
         EvolutionTask(
             key="noisy",
             problem=BBOBProblem(
-                problem_id=1, dim=2, noise_strategy=MultiplicativeNoiseStrategy(0.5), instance_id=1
+                problem_id=1, dim=2, noise_strategy=HeteroscedasticNoiseStrategy(0.5), instance_id=1
             ),
             llm_client=llm,
             iterations=2,
@@ -691,13 +691,13 @@ def test_evaluator_clean_reevaluation_with_tuple_return(db_session_factory, tmp_
     """Verify that Evaluator clean re-evaluates best_x when algorithm returns a (best_x, best_y) tuple."""
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=tmp_path / "code_store")
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=MultiplicativeNoiseStrategy(0.5))
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=HeteroscedasticNoiseStrategy(0.5))
     exp_id = repo.create_experiment(
         problem=ProblemProfile(
             problem_id=1,
             dim=2,
             noise_std=0.5,
-            noise_model="multiplicative",
+            noise_model="heteroscedastic",
             true_optimum=problem.true_optimum,
         ),
         mode="noisy",

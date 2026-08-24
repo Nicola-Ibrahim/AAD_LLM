@@ -12,7 +12,7 @@ Integrate IOHanalyzer into the experimental pipeline so that LLM-generated algor
 | Target BBOB problems | `f1, f8, f11, f15, f21` | User confirmed |
 | Noise level | `noise_std = 0.05` (CV) | User confirmed |
 | Dimensionality | `dim = 5` | Existing setup |
-| Noise model | `MultiplicativeNoiseStrategy` | Existing codebase |
+| Noise model | `HeteroscedasticNoiseStrategy` | Existing codebase |
 | Baseline algorithms | CMA-ES, DE, PSO | Professor requirement |
 | IOH `raw_y` = `Δf = f_clean - f_opt` | ✅ Verified via live code experiment | — |
 | Logger fires before noise | ✅ Verified via live code experiment | — |
@@ -158,7 +158,7 @@ Algorithms:
 
 #### [MODIFY] `tests/test_bbob_scalar.py`
 - `test_ioh_logger_records_clean_distance`: attach logger to noisy problem, confirm `.dat` `raw_y` = `f_clean - f_opt`, not `f_noisy - f_opt`.
-- `test_ioh_logger_noisy_problem_does_not_corrupt_trajectory`: verify that `MultiplicativeNoiseStrategy` being active has zero effect on logger output.
+- `test_ioh_logger_noisy_problem_does_not_corrupt_trajectory`: verify that `HeteroscedasticNoiseStrategy` being active has zero effect on logger output.
 
 ---
 

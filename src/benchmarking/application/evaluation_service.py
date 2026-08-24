@@ -22,7 +22,7 @@ from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
 from benchmarking.infra.storage.sqlite_repository import SQLiteBenchmarkReadRepository
 from evolution.domain.services.noise_strategy import (
-    MultiplicativeNoiseStrategy,
+    HeteroscedasticNoiseStrategy,
     NoNoiseStrategy,
 )
 from evolution.infra.problems.bbob import BBOBProblem
@@ -243,7 +243,7 @@ class BenchmarkEvaluationService:
         noise_strat = (
             NoNoiseStrategy()
             if noise_std == 0.0
-            else MultiplicativeNoiseStrategy(noise_std=noise_std)
+            else HeteroscedasticNoiseStrategy(noise_std=noise_std)
         )
         problem = BBOBProblem(
             problem_id=p_id,
@@ -311,7 +311,7 @@ class BenchmarkEvaluationService:
         noise_strat = (
             NoNoiseStrategy()
             if noise_std == 0.0
-            else MultiplicativeNoiseStrategy(noise_std=noise_std)
+            else HeteroscedasticNoiseStrategy(noise_std=noise_std)
         )
         logger_ioh = ioh.logger.Analyzer(
             root=str(target_dir.parent),
@@ -413,7 +413,7 @@ class BenchmarkEvaluationService:
         noise_strat = (
             NoNoiseStrategy()
             if noise_std == 0.0
-            else MultiplicativeNoiseStrategy(noise_std=noise_std)
+            else HeteroscedasticNoiseStrategy(noise_std=noise_std)
         )
         logger_ioh = ioh.logger.Analyzer(
             root=str(target_dir.parent),

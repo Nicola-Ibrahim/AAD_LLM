@@ -7,8 +7,8 @@ from evolution.domain.interfaces.problem import BaseProblem
 from evolution.domain.services.noise_strategy import (
     AWGNStrategy,
     BaseNoiseStrategy,
+    HeteroscedasticNoiseStrategy,
     HomoscedasticAdditiveNoiseStrategy,
-    MultiplicativeNoiseStrategy,
     NoNoiseStrategy,
     NoiseStrategyFactory,
 )
@@ -35,7 +35,7 @@ __all__ = [
     "NoiseModelEnum",
     "BaseNoiseStrategy",
     "NoNoiseStrategy",
-    "MultiplicativeNoiseStrategy",
+    "HeteroscedasticNoiseStrategy",
     "HomoscedasticAdditiveNoiseStrategy",
     "AWGNStrategy",
     "NoiseStrategyFactory",

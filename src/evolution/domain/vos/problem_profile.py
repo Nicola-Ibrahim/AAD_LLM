@@ -18,12 +18,13 @@ class ProblemProfile(ValueObject):
         examples=[0.0, 0.1, 1.0],
     )
     noise_model: NoiseModelEnum = Field(
-        default=NoiseModelEnum.MULTIPLICATIVE,
+        default=NoiseModelEnum.HETEROSCEDASTIC,
         description="Noise strategy applied for noisy evaluation.",
         examples=[
-            NoiseModelEnum.MULTIPLICATIVE,
+            NoiseModelEnum.HETEROSCEDASTIC,
             NoiseModelEnum.HOMOSCEDASTIC_ADDITIVE,
             NoiseModelEnum.AWGN,
+            NoiseModelEnum.NONE,
         ],
     )
     instance_id: int = Field(

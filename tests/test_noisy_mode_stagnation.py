@@ -1,6 +1,6 @@
 from llamea import Solution
 
-from evolution.domain.services.noise_strategy import MultiplicativeNoiseStrategy
+from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.code.repository import CodeRepository
@@ -30,14 +30,14 @@ def test_stagnation_diversity_injection(db_session_factory, tmp_path):
     problem = BBOBProblem(
         problem_id=15,
         dim=3,
-        noise_strategy=MultiplicativeNoiseStrategy(noise_std=0.5),
+        noise_strategy=HeteroscedasticNoiseStrategy(noise_std=0.5),
     )
     exp_id = repo.create_experiment(
         problem=ProblemProfile(
             problem_id=15,
             dim=3,
             noise_std=0.5,
-            noise_model="multiplicative",
+            noise_model="heteroscedastic",
             true_optimum=problem.true_optimum,
         ),
         mode="noisy",
@@ -85,14 +85,14 @@ def test_evaluator_noisy_feedback_no_noise_std_leak(db_session_factory, tmp_path
     problem = BBOBProblem(
         problem_id=15,
         dim=3,
-        noise_strategy=MultiplicativeNoiseStrategy(noise_std=0.75),
+        noise_strategy=HeteroscedasticNoiseStrategy(noise_std=0.75),
     )
     exp_id = repo.create_experiment(
         problem=ProblemProfile(
             problem_id=15,
             dim=3,
             noise_std=0.75,
-            noise_model="multiplicative",
+            noise_model="heteroscedastic",
             true_optimum=problem.true_optimum,
         ),
         mode="noisy",

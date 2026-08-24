@@ -3,7 +3,7 @@ import numpy as np
 from evolution.domain.services.noise_strategy import (
     AWGNStrategy,
     HomoscedasticAdditiveNoiseStrategy,
-    MultiplicativeNoiseStrategy,
+    HeteroscedasticNoiseStrategy,
     NoNoiseStrategy,
 )
 from evolution.infra.problems.bbob import BBOBProblem
@@ -20,7 +20,7 @@ def test_bbob_eval_scalar_noisy(tmp_path):
     problem = BBOBProblem(
         problem_id=1,
         dim=2,
-        noise_strategy=MultiplicativeNoiseStrategy(0.05),
+        noise_strategy=HeteroscedasticNoiseStrategy(0.05),
     )
     x = np.zeros(2)
     val = problem.eval_scalar(x)
@@ -32,7 +32,7 @@ def test_bbob_get_objective_fn(tmp_path):
     noisy_problem = BBOBProblem(
         problem_id=1,
         dim=2,
-        noise_strategy=MultiplicativeNoiseStrategy(0.1),
+        noise_strategy=HeteroscedasticNoiseStrategy(0.1),
     )
 
     clean_fn = clean_problem.get_objective_fn()
@@ -60,9 +60,9 @@ def test_bbob_noise_model_strategies(tmp_path):
     p_mult = BBOBProblem(
         problem_id=1,
         dim=2,
-        noise_strategy=MultiplicativeNoiseStrategy(0.1),
+        noise_strategy=HeteroscedasticNoiseStrategy(0.1),
     )
-    assert p_mult.noise_model == "multiplicative"
+    assert p_mult.noise_model == "heteroscedastic"
     v_mult = p_mult(x)
     assert isinstance(v_mult, float)
 
@@ -105,7 +105,7 @@ def test_ioh_logger_records_clean_distance(tmp_path):
     problem = BBOBProblem(
         problem_id=1,
         dim=2,
-        noise_strategy=MultiplicativeNoiseStrategy(0.05),
+        noise_strategy=HeteroscedasticNoiseStrategy(0.05),
     )
 
     x = np.array([1.0, 1.0])
@@ -158,7 +158,7 @@ def test_ioh_logger_noisy_problem_does_not_corrupt_trajectory(tmp_path):
     p_noisy = BBOBProblem(
         problem_id=1,
         dim=2,
-        noise_strategy=MultiplicativeNoiseStrategy(0.50),
+        noise_strategy=HeteroscedasticNoiseStrategy(0.50),
     )
     with ProblemAnalyzer(
         problem=p_noisy,
