@@ -1,13 +1,13 @@
 from llamea import Solution
 
-from domain.services.noise_strategy import MultiplicativeNoiseStrategy
-from domain.vos import ProblemProfile
-from infra.problems.bbob import BBOBProblem
-from infra.storage.code.repository import CodeRepository
-from infra.storage.sqlite.repository import SQLiteExperimentRepository
-from synthesis.evaluator import Evaluator
-from synthesis.execution.compiler import CodeCompiler
-from synthesis.execution.executor import AlgorithmExecutor
+from evolution.domain.services.noise_strategy import MultiplicativeNoiseStrategy
+from evolution.domain.vos import ProblemProfile
+from evolution.infra.problems.bbob import BBOBProblem
+from evolution.infra.storage.code.repository import CodeRepository
+from evolution.infra.storage.sqlite.repository import SQLiteExperimentRepository
+from evolution.synthesis.evaluator import Evaluator
+from evolution.synthesis.execution.compiler import CodeCompiler
+from evolution.synthesis.execution.executor import AlgorithmExecutor
 
 
 def test_failure_tiers_and_is_failure():

@@ -7,8 +7,8 @@ import pytest
 from llamea import Solution
 from sqlalchemy.orm import sessionmaker
 
-from domain.entities import ExperimentSummary
-from domain.vos import (
+from evolution.domain.entities import ExperimentSummary
+from evolution.domain.vos import (
     Code,
     Convergence,
     Error,
@@ -17,15 +17,15 @@ from domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
-from domain.services.noise_strategy import MultiplicativeNoiseStrategy, NoNoiseStrategy
-from infra.problems.bbob import BBOBProblem
-from infra.storage.code.repository import CodeRepository
-from infra.storage.sqlite.connection import build_engine
-from infra.storage.sqlite.repository import SQLiteExperimentRepository
-from infra.storage.sqlite.tables import Base, ExperimentORM
-from synthesis.evaluator import Evaluator
-from synthesis.session import LLaMEASession, SessionResult
-from core.orchestrator import (
+from evolution.domain.services.noise_strategy import MultiplicativeNoiseStrategy, NoNoiseStrategy
+from evolution.infra.problems.bbob import BBOBProblem
+from evolution.infra.storage.code.repository import CodeRepository
+from evolution.infra.storage.sqlite.connection import build_engine
+from evolution.infra.storage.sqlite.repository import SQLiteExperimentRepository
+from evolution.infra.storage.sqlite.tables import Base, ExperimentORM
+from evolution.synthesis.evaluator import Evaluator
+from evolution.synthesis.session import LLaMEASession, SessionResult
+from evolution.orchestration.orchestrator import (
     EvolutionTask,
     OrchestrationError,
     TaskOrchestrator,
@@ -41,8 +41,8 @@ class _SuccessTaskSpec:
         self.db_path = db_path
 
     def __call__(self) -> SessionResult:
-        from infra.storage.sqlite.connection import build_engine, build_session_factory
-        from infra.storage.sqlite.repository import SQLiteExperimentRepository
+        from evolution.infra.storage.sqlite.connection import build_engine, build_session_factory
+        from evolution.infra.storage.sqlite.repository import SQLiteExperimentRepository
 
         engine = build_engine(self.db_path)
         sf = build_session_factory(engine)
@@ -668,8 +668,8 @@ def test_prompt_strategy_persisted(db_session_factory, tmp_path):
 
 def test_scipy_optimize_banned(tmp_path):
     """Verify that generated code attempting to use scipy.optimize fails execution or compilation."""
-    from synthesis.execution import AlgorithmExecutor
-    from synthesis.execution.exceptions import CodeValidationException
+    from evolution.synthesis.execution import AlgorithmExecutor
+    from evolution.synthesis.execution.exceptions import CodeValidationException
 
     executor = AlgorithmExecutor(timeout_seconds=2.0)
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())

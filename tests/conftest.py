@@ -5,26 +5,26 @@ from pathlib import Path
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from infra.storage.sqlite.connection import build_engine
-from infra.storage.sqlite.tables import Base
+from evolution.infra.storage.sqlite.connection import build_engine
+from evolution.infra.storage.sqlite.tables import Base
 
 
 @pytest.fixture(autouse=True)
 def isolate_test_data_dir(tmp_path, monkeypatch):
     """Ensure tests write temporary logs and state to an isolated tmp directory."""
-    import core.config
-    import infra.problems.analyzer
-    import synthesis.session
+    import evolution.infra.problems.analyzer
+    import evolution.synthesis.session
+    import shared.config
 
-    monkeypatch.setattr(core.config, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(infra.problems.analyzer, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(synthesis.session, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(shared.config, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(evolution.infra.problems.analyzer, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(evolution.synthesis.session, "DATA_DIR", tmp_path)
 
 
 def pytest_sessionfinish(session, exitstatus):
     """Clean up any dummy test artifacts left in data directory."""
     import shutil
-    from core.config import DATA_DIR
+    from shared.config import DATA_DIR
 
     for d in DATA_DIR.glob("**/llamea_dummy*"):
         if d.is_dir():
@@ -43,8 +43,16 @@ def temp_dir():
 
 @pytest.fixture
 def db_session_factory(temp_dir):
+    """File-backed SQLite database session factory for isolated testing."""
     db_path = temp_dir / "test.db"
     engine = build_engine(db_path)
     Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    return Session
+    return sessionmaker(bind=engine)
+
+
+@pytest.fixture
+def test_db_session_factory():
+    """In-memory SQLite database session factory for fast isolated testing."""
+    engine = build_engine(Path(":memory:"))
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine)

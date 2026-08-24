@@ -4,15 +4,15 @@ import pytest
 from llamea import LLaMEA
 from sqlalchemy.orm import sessionmaker
 
-from domain.services.noise_strategy import NoNoiseStrategy
-from infra.problems.bbob import BBOBProblem
-from synthesis.evaluator import Evaluator
-from synthesis.session import LLaMEASession
-from infra.llm.client import LLMClient, Provider
-from infra.storage.code.repository import CodeRepository
-from infra.storage.sqlite.connection import build_engine
-from infra.storage.sqlite.repository import SQLiteExperimentRepository
-from infra.storage.sqlite.tables import Base
+from evolution.domain.services.noise_strategy import NoNoiseStrategy
+from evolution.infra.problems.bbob import BBOBProblem
+from evolution.synthesis.evaluator import Evaluator
+from evolution.synthesis.session import LLaMEASession
+from evolution.infra.llm.client import LLMClient, Provider
+from evolution.infra.storage.code.repository import CodeRepository
+from evolution.infra.storage.sqlite.connection import build_engine
+from evolution.infra.storage.sqlite.repository import SQLiteExperimentRepository
+from evolution.infra.storage.sqlite.tables import Base
 
 
 # Mock logger

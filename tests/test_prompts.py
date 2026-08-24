@@ -1,9 +1,9 @@
 import numpy as np
 
-from domain.enums import ProblemMode
-from domain.services.noise_strategy import NoNoiseStrategy
-from infra.problems.bbob import BBOBProblem
-from synthesis.prompts import PromptStrategy, build_task_prompt
+from evolution.domain.enums import ProblemMode
+from evolution.domain.services.noise_strategy import NoNoiseStrategy
+from evolution.infra.problems.bbob import BBOBProblem
+from evolution.synthesis.prompts import PromptStrategy, build_task_prompt
 
 
 def test_build_task_prompt_with_array_bounds():
