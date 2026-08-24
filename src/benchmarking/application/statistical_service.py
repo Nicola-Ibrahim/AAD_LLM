@@ -156,6 +156,124 @@ class StatisticalEvaluationService:
         """Compute Pearson correlation between synthesis error and empirical evaluation error."""
         return self.engine.compute_synthesis_transfer_correlation(df_exp)
 
+    def compute_success_rate(
+        self,
+        runs: list[tuple[np.ndarray, np.ndarray]],
+        threshold: float = 1e-8,
+    ) -> float:
+        """Compute empirical success rate (fraction of runs reaching delta_y <= threshold)."""
+        return self.engine.compute_success_rate(runs, threshold=threshold)
+
+    def compute_fragility_matrix(
+        self,
+        benchmark_data: dict[tuple[int, float, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]],
+        dim: int,
+        solvers: list[str],
+        problem_ids: list[int],
+        clean_std: float = 0.0,
+        noisy_std: float = 0.05,
+        threshold: float = 1e-8,
+    ) -> tuple[np.ndarray, list[str]]:
+        """Compute the Fragility Index matrix (Clean Success Rate - Noisy Success Rate) per problem & solver."""
+        return self.engine.compute_fragility_matrix(
+            benchmark_data=benchmark_data,
+            dim=dim,
+            solvers=solvers,
+            problem_ids=problem_ids,
+            clean_std=clean_std,
+            noisy_std=noisy_std,
+            threshold=threshold,
+        )
+
+    def compute_hardness_success_rates(
+        self,
+        benchmark_data: dict[tuple[int, float, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]],
+        dim: int,
+        solvers_list: list[str],
+        noise_level: float,
+        threshold: float = 1e-8,
+    ) -> pd.DataFrame:
+        """Aggregate solver success rates grouped by BBOB landscape hardness class."""
+        return self.engine.compute_hardness_success_rates(
+            benchmark_data=benchmark_data,
+            dim=dim,
+            solvers_list=solvers_list,
+            noise_level=noise_level,
+            threshold=threshold,
+        )
+
+    def compute_validation_medians(
+        self,
+        benchmark_data: dict[tuple[int, float, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]],
+        dim: int,
+        problem_ids: list[int],
+        clean_std: float = 0.0,
+        noisy_std: float = 0.05,
+    ) -> tuple[list[float], list[float], list[str]]:
+        """Compute median terminal error across all solvers for Clean vs. Noisy validation."""
+        return self.engine.compute_validation_medians(
+            benchmark_data=benchmark_data,
+            dim=dim,
+            problem_ids=problem_ids,
+            clean_std=clean_std,
+            noisy_std=noisy_std,
+        )
+
+    def compute_trajectory_and_ecdf(
+        self,
+        runs: list[tuple[np.ndarray, np.ndarray]],
+        eval_grid: np.ndarray,
+        targets: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Compute convergence trajectory (median, Q25, Q75) and ECDF empirical curve."""
+        return self.engine.compute_trajectory_and_ecdf(
+            runs=runs,
+            eval_grid=eval_grid,
+            targets=targets,
+        )
+
+    def compute_robustness_profile(
+        self,
+        benchmark_data: dict[tuple[int, float, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]],
+        dim: int,
+        solvers_order: list[str],
+        problem_ids: list[int],
+        clean_std: float = 0.0,
+        noisy_std: float = 0.05,
+        threshold: float = 1e-8,
+    ) -> tuple[list[str], list[float], list[float], list[float]]:
+        """Compute clean vs. noisy success rates and delta robustness drops across solvers."""
+        return self.engine.compute_robustness_profile(
+            benchmark_data=benchmark_data,
+            dim=dim,
+            solvers_order=solvers_order,
+            problem_ids=problem_ids,
+            clean_std=clean_std,
+            noisy_std=noisy_std,
+            threshold=threshold,
+        )
+
+    def compute_scaffolding_ablation(
+        self,
+        benchmark_data: dict[tuple[int, float, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]],
+        dim: int,
+        solvers_list: list[str],
+        problem_ids: list[int],
+        clean_std: float = 0.0,
+        noisy_std: float = 0.05,
+        threshold: float = 1e-8,
+    ) -> tuple[list[str], list[float], list[float]]:
+        """Compute prompt scaffolding ablation success rates for a model family."""
+        return self.engine.compute_scaffolding_ablation(
+            benchmark_data=benchmark_data,
+            dim=dim,
+            solvers_list=solvers_list,
+            problem_ids=problem_ids,
+            clean_std=clean_std,
+            noisy_std=noisy_std,
+            threshold=threshold,
+        )
+
     def generate_markdown_report(
         self,
         df_omnibus: pd.DataFrame | None = None,

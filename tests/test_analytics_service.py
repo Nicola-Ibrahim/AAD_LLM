@@ -4,20 +4,27 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from benchmarking import (
-    StatisticalEngine,
+from benchmarking.application.audit_service import BenchmarkAuditService
+from benchmarking.application.selection_service import ChampionSelectionService
+from benchmarking.application.statistical_service import generate_markdown_report
+from benchmarking.domain.resolvers import (
     format_db_solver_name,
     get_clean_model_label,
     get_model_slug,
     resolve_folder_solver_name,
+)
+from benchmarking.domain.statistics import StatisticalEngine
+from benchmarking.domain.taxonomy import (
     BBOB_CLASSES,
     BBOB_CLASSES_ORDER,
     BBOB_METADATA,
     BBOB_NAMES,
     get_bbob_class,
     get_bbob_name,
-    generate_markdown_report,
 )
+from benchmarking.infra.io.trace_repository import IOHTraceReader
+from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
+from benchmarking.infra.storage.sqlite_repository import SQLiteBenchmarkReadRepository
 from shared.config import DATA_DIR, RESULTS_DIR
 
 
@@ -134,7 +141,6 @@ class TestStatisticalEngine:
 
 class TestApplicationServicesIntegration:
     def test_selection_service(self):
-        from benchmarking import ChampionSelectionService
         service = ChampionSelectionService(DATA_DIR / "db.sqlite3")
         summary, count = service.get_experiment_balance()
         if (DATA_DIR / "db.sqlite3").exists():
@@ -142,8 +148,6 @@ class TestApplicationServicesIntegration:
             assert count >= 0
 
     def test_audit_service(self):
-        from benchmarking import BenchmarkAuditService
-        from shared.config import RESULTS_DIR
         service = BenchmarkAuditService(DATA_DIR / "db.sqlite3", RESULTS_DIR / "evaluations" / "traces")
         if (DATA_DIR / "db.sqlite3").exists():
             matrix, summary = service.get_audit_matrix()

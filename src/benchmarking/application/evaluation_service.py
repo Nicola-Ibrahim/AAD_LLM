@@ -70,6 +70,7 @@ class BenchmarkEvaluationService:
         filter_strategies: list[str] | None = None,
         filter_modes: list[str] | None = None,
         filter_dims: list[int] | None = None,
+        filter_noise: list[float] | None = None,
     ) -> pd.DataFrame:
         """Audit LLM champions completion, code validity, and hash integrity."""
         if champions_flat is None:
@@ -98,6 +99,8 @@ class BenchmarkEvaluationService:
             if filter_modes and mode not in filter_modes:
                 is_filtered = True
             if filter_dims and dim not in filter_dims:
+                is_filtered = True
+            if filter_noise and noise_std not in filter_noise:
                 is_filtered = True
 
             raw_code_path = Path(info["code_path"])
@@ -263,9 +266,11 @@ class BenchmarkEvaluationService:
     def run_champion_trials(
         self,
         champion_info: dict[str, Any],
+        n_runs: int | None = None,
         force_rerun: bool = False,
     ) -> dict[str, Any]:
         """Execute N empirical trials for a single LLM champion algorithm."""
+        effective_n_runs = n_runs if n_runs is not None else self.n_runs
         p_id = int(champion_info["problem_id"])
         dim = int(champion_info["dim"])
         noise_std = float(champion_info.get("noise_std", 0.0))
@@ -294,8 +299,8 @@ class BenchmarkEvaluationService:
             try:
                 prov = json.loads(prov_path.read_text(encoding="utf-8"))
                 if prov.get("code_hash") == code_hash and (
-                    prov.get("n_runs", 0) >= self.n_runs
-                    or self.trace_repo.get_run_count(target_dir) >= self.n_runs
+                    prov.get("n_runs", 0) >= effective_n_runs
+                    or self.trace_repo.get_run_count(target_dir) >= effective_n_runs
                 ):
                     return {"status": "CACHED", "median_clean_error": prov.get("median_clean_error")}
             except Exception:
@@ -320,7 +325,7 @@ class BenchmarkEvaluationService:
             store_positions=False,
         )
 
-        for run_idx in range(1, self.n_runs + 1):
+        for run_idx in range(1, effective_n_runs + 1):
             prob = BBOBProblem(
                 problem_id=p_id,
                 dim=dim,
@@ -383,9 +388,11 @@ class BenchmarkEvaluationService:
         dim: int,
         noise_std: float,
         p_id: int,
+        n_runs: int | None = None,
         force_rerun: bool = False,
     ) -> dict[str, Any]:
         """Execute N empirical trials for a classical baseline algorithm."""
+        effective_n_runs = n_runs if n_runs is not None else self.n_runs
         if baseline_slug not in BASELINES:
             raise ValueError(f"Unknown baseline: {baseline_slug}. Available: {list(BASELINES.keys())}")
 
@@ -397,8 +404,8 @@ class BenchmarkEvaluationService:
             try:
                 prov = json.loads(prov_path.read_text(encoding="utf-8"))
                 if (
-                    prov.get("n_runs", 0) >= self.n_runs
-                    or self.trace_repo.get_run_count(target_dir) >= self.n_runs
+                    prov.get("n_runs", 0) >= effective_n_runs
+                    or self.trace_repo.get_run_count(target_dir) >= effective_n_runs
                 ):
                     return {"status": "CACHED", "median_clean_error": prov.get("median_clean_error")}
             except Exception:
@@ -422,7 +429,7 @@ class BenchmarkEvaluationService:
             store_positions=False,
         )
 
-        for run_idx in range(1, self.n_runs + 1):
+        for run_idx in range(1, effective_n_runs + 1):
             prob = BBOBProblem(
                 problem_id=p_id,
                 dim=dim,
@@ -449,7 +456,7 @@ class BenchmarkEvaluationService:
             "dim": dim,
             "noise_std": noise_std,
             "budget": budget,
-            "n_runs": self.n_runs,
+            "n_runs": effective_n_runs,
             "median_clean_error": median_err,
             "clean_errors": clean_errors,
             "runtimes": runtimes,
@@ -466,6 +473,8 @@ class BenchmarkEvaluationService:
         filter_strategies: list[str] | None = None,
         filter_modes: list[str] | None = None,
         filter_dims: list[int] | None = None,
+        filter_noise: list[float] | None = None,
+        n_runs: int | None = None,
         force_rerun: bool = False,
     ) -> pd.DataFrame:
         """Run all pending/filtered LLM champion evaluations and return results summary."""
@@ -476,6 +485,7 @@ class BenchmarkEvaluationService:
             filter_strategies=filter_strategies,
             filter_modes=filter_modes,
             filter_dims=filter_dims,
+            filter_noise=filter_noise,
         )
 
         active = df_audit[~df_audit["is_filtered"] & (df_audit["status"] != "MISSING_CODE")]
@@ -490,7 +500,7 @@ class BenchmarkEvaluationService:
                 continue
             champ = matching_items[0]
 
-            res = self.run_champion_trials(champ, force_rerun=force_rerun)
+            res = self.run_champion_trials(champ, n_runs=n_runs, force_rerun=force_rerun)
             results.append({
                 "model": row["model"],
                 "key": row["key"],
@@ -511,6 +521,7 @@ class BenchmarkEvaluationService:
         filter_dims: list[int] | None = None,
         filter_noise: list[float] | None = None,
         filter_problems: list[int] | None = None,
+        n_runs: int | None = None,
         force_rerun: bool = False,
     ) -> pd.DataFrame:
         """Run all pending/filtered baseline evaluations and return results summary."""
@@ -536,6 +547,7 @@ class BenchmarkEvaluationService:
                 dim=dim,
                 noise_std=noise_std,
                 p_id=p_id,
+                n_runs=n_runs,
                 force_rerun=force_rerun,
             )
             results.append({
@@ -549,3 +561,4 @@ class BenchmarkEvaluationService:
             })
 
         return pd.DataFrame(results)
+

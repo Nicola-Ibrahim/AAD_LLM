@@ -5,6 +5,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 # Common directories
 CONFIGS_DIR = PROJECT_ROOT / "configs"
+CONFIG_DIR = CONFIGS_DIR
 DATA_DIR = PROJECT_ROOT / "data"
 NOTEBOOKS_DIR = PROJECT_ROOT / "notebooks"
 SCRIPTS_DIR = PROJECT_ROOT / "scripts"

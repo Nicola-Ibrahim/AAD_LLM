@@ -1,6 +1,6 @@
 # 📋 Experimental Matrix Coverage & Sample Imbalance Audit Report
 
-**Generated:** `notebooks/06_experimental_audit.ipynb` | 2026-08-24 22:37:08
+**Generated:** `notebooks/06_experimental_audit.ipynb` | 2026-08-24 23:30:49
 
 ### 📊 High-Level Status Breakdown
 - **Total Experimental Cells Planned:** `330`
