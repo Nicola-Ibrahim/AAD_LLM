@@ -27,7 +27,7 @@ from evolution.domain.services.noise_strategy import (
 )
 from evolution.infra.problems.bbob import BBOBProblem
 from shared.execution import AlgorithmExecutor
-from shared.config import DATA_DIR, PROJECT_ROOT, RESULTS_DIR
+from shared.config import PROJECT_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -37,28 +37,21 @@ class BenchmarkEvaluationService:
 
     def __init__(
         self,
-        db_path: Path = DATA_DIR / "db.sqlite3",
-        eval_dir: Path | None = None,
+        sqlite_repo: SQLiteBenchmarkReadRepository,
+        champions_repo: ChampionsReadRepository,
+        trace_repo: IOHTraceReader,
         project_root: Path = PROJECT_ROOT,
-        champions_path: Path = DATA_DIR / "champions.json",
         n_runs: int = 10,
         budget_multiplier: int = 10000,
         trial_timeout_seconds: int = 300,
-        sqlite_repo: SQLiteBenchmarkReadRepository | None = None,
-        champions_repo: ChampionsReadRepository | None = None,
-        trace_repo: IOHTraceReader | None = None,
     ):
-        self.db_path = Path(db_path)
-        self.eval_dir = Path(eval_dir) if eval_dir is not None else (RESULTS_DIR / "evaluations" / "traces")
+        self.sqlite_repo = sqlite_repo
+        self.champions_repo = champions_repo
+        self.trace_repo = trace_repo
         self.project_root = Path(project_root)
-        self.champions_path = Path(champions_path)
         self.n_runs = n_runs
         self.budget_multiplier = budget_multiplier
         self.trial_timeout_seconds = trial_timeout_seconds
-
-        self.sqlite_repo = sqlite_repo or SQLiteBenchmarkReadRepository(self.db_path)
-        self.champions_repo = champions_repo or ChampionsReadRepository(self.db_path, self.champions_path)
-        self.trace_repo = trace_repo or IOHTraceReader(self.eval_dir)
 
     # ── Workload Auditing ────────────────────────────────────────────────────────
 
@@ -115,7 +108,7 @@ class BenchmarkEvaluationService:
             model_slug = get_model_slug(llm_name)
             folder_name = f"{model_slug}_{strat}"
             target_log_folder = (
-                self.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder_name
+                self.trace_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder_name
             )
             prov_path = target_log_folder / "provenance.json"
 
@@ -198,7 +191,7 @@ class BenchmarkEvaluationService:
                     is_filtered = True
 
                 target_folder = (
-                    self.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / b_slug
+                    self.trace_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / b_slug
                 )
                 prov_path = target_folder / "provenance.json"
                 status = "PENDING"
@@ -292,7 +285,7 @@ class BenchmarkEvaluationService:
 
         model_slug = get_model_slug(llm_name)
         folder_name = f"{model_slug}_{strat}"
-        target_dir = self.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder_name
+        target_dir = self.trace_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder_name
         prov_path = target_dir / "provenance.json"
 
         if not force_rerun and target_dir.exists() and prov_path.exists():
@@ -397,7 +390,7 @@ class BenchmarkEvaluationService:
             raise ValueError(f"Unknown baseline: {baseline_slug}. Available: {list(BASELINES.keys())}")
 
         baseline_fn = BASELINES[baseline_slug]
-        target_dir = self.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / baseline_slug
+        target_dir = self.trace_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / baseline_slug
         prov_path = target_dir / "provenance.json"
 
         if not force_rerun and target_dir.exists() and prov_path.exists():

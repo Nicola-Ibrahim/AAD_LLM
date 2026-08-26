@@ -10,7 +10,6 @@ import pandas as pd
 
 from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
 from benchmarking.infra.storage.sqlite_repository import SQLiteBenchmarkReadRepository
-from shared.config import DATA_DIR
 
 
 class ChampionSelectionService:
@@ -18,13 +17,11 @@ class ChampionSelectionService:
 
     def __init__(
         self,
-        db_path: Path = DATA_DIR / "db.sqlite3",
-        champions_path: Path = DATA_DIR / "champions.json",
-        sqlite_repo: SQLiteBenchmarkReadRepository | None = None,
-        champions_repo: ChampionsReadRepository | None = None,
+        sqlite_repo: SQLiteBenchmarkReadRepository,
+        champions_repo: ChampionsReadRepository,
     ):
-        self.sqlite_repo = sqlite_repo or SQLiteBenchmarkReadRepository(db_path)
-        self.champions_repo = champions_repo or ChampionsReadRepository(db_path, champions_path)
+        self.sqlite_repo = sqlite_repo
+        self.champions_repo = champions_repo
 
     def get_experiment_balance(self) -> tuple[pd.DataFrame, int]:
         """Query DB for completed experiments balance summary."""

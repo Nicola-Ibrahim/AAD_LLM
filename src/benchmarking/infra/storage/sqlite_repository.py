@@ -1,19 +1,17 @@
 """SQLite read repository for benchmarking experiments, balance queries, and matrix data."""
 
-from pathlib import Path
 import pandas as pd
 from sqlalchemy import func, select
+from sqlalchemy.orm import sessionmaker
 
-from shared.config import DATA_DIR
-from shared.database import get_db_connection
 from shared.tables import ExperimentORM, IterationORM
 
 
 class SQLiteBenchmarkReadRepository:
     """Read-only infrastructure repository managing SQLite queries for benchmark experiments."""
 
-    def __init__(self, db_path: Path = DATA_DIR / "db.sqlite3"):
-        self.db_path = Path(db_path)
+    def __init__(self, session_factory: sessionmaker):
+        self.SessionLocal = session_factory
 
     def get_experiment_balance(self) -> tuple[pd.DataFrame, int]:
         """Query DB for completed experiments grouped by condition.
@@ -44,7 +42,8 @@ class SQLiteBenchmarkReadRepository:
             )
         )
 
-        with get_db_connection(self.db_path) as conn:
+        with self.SessionLocal() as session:
+            conn = session.connection()
             df_summary = pd.read_sql_query(stmt, conn)
             total_completed = int(df_summary["count"].sum()) if not df_summary.empty else 0
             return df_summary, total_completed
@@ -66,7 +65,8 @@ class SQLiteBenchmarkReadRepository:
             )
         )
 
-        with get_db_connection(self.db_path) as conn:
+        with self.SessionLocal() as session:
+            conn = session.connection()
             df_db = pd.read_sql_query(stmt, conn)
             return [
                 (int(r["dim"]), float(r["noise_std"]), int(r["problem_id"]))
@@ -78,7 +78,8 @@ class SQLiteBenchmarkReadRepository:
         stmt_exp = select(ExperimentORM).where(ExperimentORM.status == "completed")
         stmt_iter = select(IterationORM)
 
-        with get_db_connection(self.db_path) as conn:
+        with self.SessionLocal() as session:
+            conn = session.connection()
             df_exp = pd.read_sql_query(stmt_exp, conn)
             df_iter = pd.read_sql_query(stmt_iter, conn)
             return df_exp, df_iter
@@ -102,5 +103,6 @@ class SQLiteBenchmarkReadRepository:
             )
         )
 
-        with get_db_connection(self.db_path) as conn:
+        with self.SessionLocal() as session:
+            conn = session.connection()
             return pd.read_sql_query(stmt, conn)

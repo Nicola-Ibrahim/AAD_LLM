@@ -12,7 +12,6 @@ from benchmarking.domain.resolvers import resolve_folder_solver_name
 from benchmarking.domain.statistics import StatisticalEngine
 from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage.sqlite_repository import SQLiteBenchmarkReadRepository
-from shared.config import DATA_DIR, RESULTS_DIR
 
 
 from typing import Any
@@ -93,16 +92,12 @@ class StatisticalEvaluationService:
 
     def __init__(
         self,
-        db_path: Path = DATA_DIR / "db.sqlite3",
-        eval_dir: Path = RESULTS_DIR / "evaluations",
-        sqlite_repo: SQLiteBenchmarkReadRepository | None = None,
-        trace_repo: IOHTraceReader | None = None,
+        sqlite_repo: SQLiteBenchmarkReadRepository,
+        trace_repo: IOHTraceReader,
         engine: StatisticalEngine | None = None,
     ):
-        self.db_path = Path(db_path)
-        self.eval_dir = Path(eval_dir)
-        self.sqlite_repo = sqlite_repo or SQLiteBenchmarkReadRepository(self.db_path)
-        self.trace_repo = trace_repo or IOHTraceReader(self.eval_dir)
+        self.sqlite_repo = sqlite_repo
+        self.trace_repo = trace_repo
         self.engine = engine or StatisticalEngine()
 
     def get_synthesis_dataframes(self) -> tuple[pd.DataFrame, pd.DataFrame]:

@@ -63,7 +63,19 @@ def test_nb02_evolutionary_synthesis_pipeline():
 def test_nb03_benchmark_evaluations_pipeline():
     """Verify Notebook 03 (Champion Selection + Evaluations Audit & Dispatch)."""
     print("Testing NB03 logic with ChampionSelectionService & BenchmarkEvaluationService...")
-    champ_service = ChampionSelectionService()
+    from benchmarking.infra.io.trace_repository import IOHTraceReader
+    from benchmarking.infra.storage import (
+        ChampionsReadRepository,
+        SQLiteBenchmarkReadRepository,
+    )
+    from shared.database import create_db_session_factory
+
+    session_factory = create_db_session_factory()
+    sqlite_repo = SQLiteBenchmarkReadRepository(session_factory)
+    champions_repo = ChampionsReadRepository(session_factory)
+    trace_repo = IOHTraceReader()
+
+    champ_service = ChampionSelectionService(sqlite_repo=sqlite_repo, champions_repo=champions_repo)
     summary, total = champ_service.get_experiment_balance()
     assert total > 0, "No completed experiments found!"
     print(f"  • Completed experiments: {total}")
@@ -73,7 +85,11 @@ def test_nb03_benchmark_evaluations_pipeline():
     total_champs = sum(len(v) for v in champions.values())
     print(f"  • Champions discovered: {total_champs} across {len(champions)} models")
 
-    eval_service = BenchmarkEvaluationService()
+    eval_service = BenchmarkEvaluationService(
+        sqlite_repo=sqlite_repo,
+        champions_repo=champions_repo,
+        trace_repo=trace_repo,
+    )
     champions_path = DATA_DIR / "champions.json"
     assert champions_path.exists(), "champions.json does not exist!"
     with open(champions_path, "r", encoding="utf-8") as f:
@@ -89,7 +105,15 @@ def test_nb03_benchmark_evaluations_pipeline():
 def test_nb04_experimental_matrix_audit_pipeline():
     """Verify Notebook 04 (Experimental Matrix Audit)."""
     print("\nTesting NB04 logic with BenchmarkAuditService...")
-    service = BenchmarkAuditService()
+    from benchmarking.infra.io.trace_repository import IOHTraceReader
+    from benchmarking.infra.storage import SQLiteBenchmarkReadRepository
+    from shared.database import create_db_session_factory
+
+    session_factory = create_db_session_factory()
+    sqlite_repo = SQLiteBenchmarkReadRepository(session_factory)
+    trace_repo = IOHTraceReader()
+
+    service = BenchmarkAuditService(sqlite_repo=sqlite_repo, trace_repo=trace_repo)
     audit_data = service.get_global_audit_matrix()
     assert len(audit_data.dims) > 0
     assert len(audit_data.all_solvers) > 0
@@ -103,7 +127,15 @@ def test_nb04_experimental_matrix_audit_pipeline():
 def test_nb05_statistical_analysis_and_figures_pipeline():
     """Verify Notebook 05 (Statistical Hypothesis Testing, Reports & Figure Data)."""
     print("\nTesting NB05 logic with StatisticalEvaluationService...")
-    service = StatisticalEvaluationService()
+    from benchmarking.infra.io.trace_repository import IOHTraceReader
+    from benchmarking.infra.storage import SQLiteBenchmarkReadRepository
+    from shared.database import create_db_session_factory
+
+    session_factory = create_db_session_factory()
+    sqlite_repo = SQLiteBenchmarkReadRepository(session_factory)
+    trace_repo = IOHTraceReader()
+
+    service = StatisticalEvaluationService(sqlite_repo=sqlite_repo, trace_repo=trace_repo)
     df_exp, df_iter = service.get_synthesis_dataframes()
     all_benchmark_data = service.load_evaluation_traces()
     assert len(all_benchmark_data) > 0

@@ -34,7 +34,22 @@ def test_baselines_callables():
 def test_service_baseline_execution(tmp_path: Path):
     """Test BenchmarkEvaluationService executing classical baselines, caching, and dashboard."""
     eval_dir = tmp_path / "evaluations"
-    service = BenchmarkEvaluationService(eval_dir=eval_dir, n_runs=2, budget_multiplier=50)
+    from benchmarking.infra.io.trace_repository import IOHTraceReader
+    from benchmarking.infra.storage import ChampionsReadRepository, SQLiteBenchmarkReadRepository
+    from shared.database import create_db_session_factory
+
+    session_factory = create_db_session_factory()
+    sqlite_repo = SQLiteBenchmarkReadRepository(session_factory)
+    champions_repo = ChampionsReadRepository(session_factory)
+    trace_repo = IOHTraceReader(eval_dir=eval_dir)
+
+    service = BenchmarkEvaluationService(
+        sqlite_repo=sqlite_repo,
+        champions_repo=champions_repo,
+        trace_repo=trace_repo,
+        n_runs=2,
+        budget_multiplier=50,
+    )
 
     # 1. Run evaluation
     res = service.run_baseline_trials(dim=2, noise_std=0.0, p_id=1, baseline_slug="pso")
@@ -58,6 +73,15 @@ def test_service_champion_execution(tmp_path: Path):
     eval_dir = tmp_path / "evaluations"
     project_root = tmp_path / "project"
     project_root.mkdir()
+
+    from benchmarking.infra.io.trace_repository import IOHTraceReader
+    from benchmarking.infra.storage import ChampionsReadRepository, SQLiteBenchmarkReadRepository
+    from shared.database import create_db_session_factory
+
+    session_factory = create_db_session_factory()
+    sqlite_repo = SQLiteBenchmarkReadRepository(session_factory)
+    champions_repo = ChampionsReadRepository(session_factory)
+    trace_repo = IOHTraceReader(eval_dir=eval_dir)
 
     # Create dummy champion algorithm script conforming to (problem, budget) contract
     dummy_code = """
@@ -85,7 +109,9 @@ class RandomOptimizer:
     code_path.write_text(dummy_code, encoding="utf-8")
 
     service = BenchmarkEvaluationService(
-        eval_dir=eval_dir,
+        sqlite_repo=sqlite_repo,
+        champions_repo=champions_repo,
+        trace_repo=trace_repo,
         project_root=project_root,
         n_runs=2,
         trial_timeout_seconds=5,

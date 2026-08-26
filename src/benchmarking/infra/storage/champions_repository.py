@@ -1,13 +1,11 @@
-"""Champions read repository for extracting, formatting, and serializing champion algorithms."""
-
 import json
 from pathlib import Path
 from typing import Any
 import pandas as pd
 from sqlalchemy import select
+from sqlalchemy.orm import sessionmaker
 
 from shared.config import DATA_DIR
-from shared.database import get_db_connection
 from shared.tables import ExperimentORM, IterationORM
 
 
@@ -16,10 +14,10 @@ class ChampionsReadRepository:
 
     def __init__(
         self,
-        db_path: Path = DATA_DIR / "db.sqlite3",
+        session_factory: sessionmaker,
         champions_path: Path = DATA_DIR / "champions.json",
     ):
-        self.db_path = Path(db_path)
+        self.SessionLocal = session_factory
         self.champions_path = Path(champions_path)
 
     def extract_champions(self) -> dict[str, dict[str, Any]]:
@@ -54,7 +52,8 @@ class ChampionsReadRepository:
             )
         )
 
-        with get_db_connection(self.db_path) as conn:
+        with self.SessionLocal() as session:
+            conn = session.connection()
             df = pd.read_sql_query(stmt, conn)
 
         champions: dict[str, dict[str, Any]] = {}

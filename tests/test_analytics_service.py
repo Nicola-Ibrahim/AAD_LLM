@@ -6,7 +6,10 @@ import pytest
 
 from benchmarking.application.audit_service import BenchmarkAuditService
 from benchmarking.application.selection_service import ChampionSelectionService
-from benchmarking.application.statistical_service import generate_markdown_report
+from benchmarking.application.statistical_service import (
+    StatisticalEvaluationService,
+    generate_markdown_report,
+)
 from benchmarking.domain.resolvers import (
     format_db_solver_name,
     get_clean_model_label,
@@ -26,6 +29,7 @@ from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
 from benchmarking.infra.storage.sqlite_repository import SQLiteBenchmarkReadRepository
 from shared.config import DATA_DIR, RESULTS_DIR
+from shared.database import create_db_session_factory
 
 
 class TestDomainTaxonomy:
@@ -141,33 +145,52 @@ class TestStatisticalEngine:
 
 class TestApplicationServicesIntegration:
     def test_selection_service(self):
-        service = ChampionSelectionService(DATA_DIR / "db.sqlite3")
+        session_factory = create_db_session_factory()
+        sqlite_repo = SQLiteBenchmarkReadRepository(session_factory)
+        champions_repo = ChampionsReadRepository(session_factory)
+        service = ChampionSelectionService(sqlite_repo=sqlite_repo, champions_repo=champions_repo)
         summary, count = service.get_experiment_balance()
         if (DATA_DIR / "db.sqlite3").exists():
             assert isinstance(summary, pd.DataFrame)
             assert count >= 0
 
     def test_audit_service(self):
-        service = BenchmarkAuditService(DATA_DIR / "db.sqlite3", RESULTS_DIR / "evaluations" / "traces")
+        session_factory = create_db_session_factory()
+        sqlite_repo = SQLiteBenchmarkReadRepository(session_factory)
+        service = BenchmarkAuditService(sqlite_repo=sqlite_repo, trace_repo=IOHTraceReader(RESULTS_DIR / "evaluations" / "traces"))
         if (DATA_DIR / "db.sqlite3").exists():
             matrix, summary = service.get_audit_matrix()
             assert isinstance(matrix, pd.DataFrame)
             assert isinstance(summary, dict)
             assert "coverage_pct" in summary
 
+    def test_statistical_service(self):
+        session_factory = create_db_session_factory()
+        sqlite_repo = SQLiteBenchmarkReadRepository(session_factory)
+        trace_repo = IOHTraceReader(RESULTS_DIR / "evaluations" / "traces")
+        service = StatisticalEvaluationService(sqlite_repo=sqlite_repo, trace_repo=trace_repo)
+        if (DATA_DIR / "db.sqlite3").exists():
+            df_exp, df_iter = service.get_synthesis_dataframes()
+            assert isinstance(df_exp, pd.DataFrame)
+            assert isinstance(df_iter, pd.DataFrame)
+            traces = service.load_evaluation_traces()
+            assert isinstance(traces, dict)
+
 
 class TestConcreteInfraRepositories:
     def test_sqlite_benchmark_read_repository(self):
-        repo = SQLiteBenchmarkReadRepository(DATA_DIR / "db.sqlite3")
-        if repo.db_path.exists():
+        session_factory = create_db_session_factory()
+        repo = SQLiteBenchmarkReadRepository(session_factory)
+        if (DATA_DIR / "db.sqlite3").exists():
             df, count = repo.get_experiment_balance()
             assert isinstance(df, pd.DataFrame)
             conditions = repo.get_target_conditions()
             assert isinstance(conditions, list)
 
     def test_champions_read_repository(self):
-        repo = ChampionsReadRepository(DATA_DIR / "db.sqlite3", DATA_DIR / "champions.json")
-        if repo.db_path.exists():
+        session_factory = create_db_session_factory()
+        repo = ChampionsReadRepository(session_factory)
+        if (DATA_DIR / "db.sqlite3").exists():
             champs = repo.extract_champions()
             assert isinstance(champs, dict)
             flat = repo.get_champions_flat(champs)

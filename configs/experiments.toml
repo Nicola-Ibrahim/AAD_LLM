@@ -84,21 +84,3 @@ only_incomplete = false
 # target_experiment_ids: Re-run specific DB experiment IDs (leave empty [] to run entire configured matrix)
 # e.g., [112, 64, 36] to re-run exact DB experiment rows
 target_experiment_ids = []
-
-# ==============================================================================
-# 4. BENCHMARK EVALUATIONS (Notebooks 03-06)
-# ==============================================================================
-[evaluation]
-# Standard independent benchmark evaluation runs per condition for champions & baselines (N=10)
-target_eval_runs = 10
-
-# Per-run execution timeout in seconds
-eval_timeout_seconds = 30.0
-
-# fill_missing_only:
-#   • true  = Scans data/ioh_logs and executes ONLY missing / partial runs (< 10)
-#   • false = Re-evaluates based on notebook filter settings
-fill_missing_only = true
-
-# Classical Baselines evaluated on identical benchmark problems (Notebook 06)
-classical_baselines = ["CMA-ES", "DE", "PSO"]

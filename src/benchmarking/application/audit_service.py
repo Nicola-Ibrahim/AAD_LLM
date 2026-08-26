@@ -3,7 +3,6 @@
 Coordinates multi-model, multi-strategy coverage matrix analysis across all 30 BBOB conditions.
 """
 
-from pathlib import Path
 import re
 from typing import Any
 import pandas as pd
@@ -13,7 +12,6 @@ from benchmarking.domain.resolvers import get_clean_model_label, get_model_slug
 from benchmarking.domain.taxonomy import get_bbob_class, get_bbob_name
 from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage.sqlite_repository import SQLiteBenchmarkReadRepository
-from shared.config import DATA_DIR, RESULTS_DIR
 
 
 class AuditCoverageSummary(BaseModel):
@@ -52,15 +50,11 @@ class BenchmarkAuditService:
 
     def __init__(
         self,
-        db_path: Path = DATA_DIR / "db.sqlite3",
-        eval_dir: Path | None = None,
-        sqlite_repo: SQLiteBenchmarkReadRepository | None = None,
-        trace_repo: IOHTraceReader | None = None,
+        sqlite_repo: SQLiteBenchmarkReadRepository,
+        trace_repo: IOHTraceReader,
     ):
-        self.db_path = Path(db_path)
-        self.eval_dir = Path(eval_dir) if eval_dir is not None else (RESULTS_DIR / "evaluations" / "traces")
-        self.sqlite_repo = sqlite_repo or SQLiteBenchmarkReadRepository(self.db_path)
-        self.trace_repo = trace_repo or IOHTraceReader(self.eval_dir)
+        self.sqlite_repo = sqlite_repo
+        self.trace_repo = trace_repo
 
     def get_audit_matrix(
         self,
@@ -101,7 +95,7 @@ class BenchmarkAuditService:
             # 1. Classical Baselines
             for b in baselines:
                 total_cells += 1
-                b_dir = self.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / b
+                b_dir = self.trace_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / b
                 runs = self.trace_repo.get_run_count(b_dir) if b_dir.exists() else 0
                 col_name = f"Baseline / {b.upper()}"
 
@@ -124,7 +118,7 @@ class BenchmarkAuditService:
                     total_cells += 1
                     col_name = f"{m_label} / {strat}"
                     folder_name = f"{m_slug}_{strat}"
-                    s_dir = self.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder_name
+                    s_dir = self.trace_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder_name
                     runs = self.trace_repo.get_run_count(s_dir) if s_dir.exists() else 0
 
                     if runs >= target_runs:

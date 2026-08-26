@@ -5,11 +5,13 @@ from benchmarking.infra.io import (
     compute_code_hash,
 )
 from benchmarking.infra.storage import (
+    BenchmarkConfigRepository,
     ChampionsReadRepository,
     SQLiteBenchmarkReadRepository,
 )
 
 __all__ = [
+    "BenchmarkConfigRepository",
     "SQLiteBenchmarkReadRepository",
     "ChampionsReadRepository",
     "IOHTraceReader",
