@@ -356,13 +356,12 @@ class StatisticalEngine:
         eval_grid: np.ndarray,
         targets: np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Compute convergence trajectory (median, Q25, Q75) and ECDF empirical curve."""
+        """Compute convergence trajectory (median, Q25, Q75) and BBOB Empirical Runtime ECDF curve."""
         if not runs:
             nan_arr = np.full(len(eval_grid), np.nan)
-            return nan_arr, nan_arr, nan_arr, np.zeros(len(targets))
+            return nan_arr, nan_arr, nan_arr, np.zeros(len(eval_grid))
 
         interp_matrix = []
-        min_vals = []
         for run in runs:
             if len(run.evaluations) == 0:
                 continue
@@ -375,19 +374,19 @@ class StatisticalEngine:
                 right=cum_best[-1],
             )
             interp_matrix.append(y_interp)
-            min_vals.append(run.best_value)
 
         if not interp_matrix:
             nan_arr = np.full(len(eval_grid), np.nan)
-            return nan_arr, nan_arr, nan_arr, np.zeros(len(targets))
+            return nan_arr, nan_arr, nan_arr, np.zeros(len(eval_grid))
 
         arr = np.array(interp_matrix)
         med = np.median(arr, axis=0)
         q25 = np.percentile(arr, 25, axis=0)
         q75 = np.percentile(arr, 75, axis=0)
 
-        min_arr = np.array(min_vals)
-        ecdf_curve = np.array([np.mean(min_arr <= t) for t in targets])
+        # Standard BBOB/COCO Runtime ECDF:
+        # Proportion of (run, target) pairs solved at or before each evaluation step
+        ecdf_curve = np.mean(arr[:, :, None] <= targets[None, None, :], axis=(0, 2))
         return med, q25, q75, ecdf_curve
 
     def compute_robustness_profile(
@@ -474,3 +473,39 @@ class StatisticalEngine:
             noisy_succ_rates.append(n_succ / max(1, n_tot))
 
         return strat_labels, clean_succ_rates, noisy_succ_rates
+
+    def compute_auc_ecdf_ranking(
+        self,
+        benchmark_data: BenchmarkDataset | Mapping[BenchmarkCondition, dict[str, list[RunTrace]]],
+        solvers: list[str],
+        eval_grid: np.ndarray,
+        targets: np.ndarray,
+    ) -> pd.DataFrame:
+        """Compute Area Under the Runtime ECDF Curve (AUC-ECDF) for each solver across all conditions.
+
+        AUC is integrated over log10(evaluations) using trapezoidal integration and normalized to [0, 1].
+        """
+        log_x = np.log10(eval_grid)
+        x_range = float(log_x[-1] - log_x[0])
+
+        solver_aucs = {s: [] for s in solvers}
+        for cond, s_dict in benchmark_data.items():
+            for s in solvers:
+                runs = s_dict.get(s, [])
+                if runs:
+                    _, _, _, ecdf = self.compute_trajectory_and_ecdf(runs, eval_grid, targets)
+                    auc = float(np.trapezoid(ecdf, log_x) / x_range)
+                    solver_aucs[s].append(auc)
+
+        records = []
+        for s in solvers:
+            aucs = solver_aucs[s]
+            mean_auc = float(np.mean(aucs)) if aucs else 0.0
+            records.append({
+                "Solver": s,
+                "AUC-ECDF": mean_auc,
+                "Type": "Classical Baseline" if " / " not in s else "LLaMEA Evolved",
+            })
+
+        df_auc = pd.DataFrame(records).sort_values(by="AUC-ECDF", ascending=True)
+        return df_auc

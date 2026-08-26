@@ -313,6 +313,21 @@ class StatisticalEvaluationService:
             threshold=threshold,
         )
 
+    def compute_auc_ecdf_ranking(
+        self,
+        benchmark_data: BenchmarkDataset,
+        solvers: list[str],
+        eval_grid: np.ndarray,
+        targets: np.ndarray,
+    ) -> pd.DataFrame:
+        """Compute Area Under the Runtime ECDF Curve (AUC-ECDF) for each solver across all conditions."""
+        return self.engine.compute_auc_ecdf_ranking(
+            benchmark_data=benchmark_data,
+            solvers=solvers,
+            eval_grid=eval_grid,
+            targets=targets,
+        )
+
     def generate_markdown_report(
         self,
         df_omnibus: pd.DataFrame | None = None,
