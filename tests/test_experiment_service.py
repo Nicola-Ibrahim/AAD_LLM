@@ -7,7 +7,6 @@ import pytest
 from llamea import Solution
 from sqlalchemy.orm import sessionmaker
 
-from evolution.domain.entities import ExperimentSummary
 from evolution.domain.vos import (
     Code,
     Convergence,
@@ -24,7 +23,7 @@ from evolution.infra.storage.experiments.repository import SQLiteExperimentRepos
 from shared.database import build_engine
 from shared.tables import Base, ExperimentORM
 from evolution.application.synthesis.evaluator import Evaluator
-from evolution.application.synthesis.session import LLaMEASession, SessionResult
+from evolution.application.synthesis.session import LLaMEASession
 from evolution.application.tasks import (
     EvolutionTask,
     TaskOrchestrator,

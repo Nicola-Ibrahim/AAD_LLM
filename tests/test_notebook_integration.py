@@ -1,12 +1,6 @@
 """Test execution of consolidated 5-notebook pipeline to ensure zero errors and data integrity."""
 
 import json
-from pathlib import Path
-import sys
-
-# Add src to path
-SRC_DIR = Path(__file__).resolve().parents[1] / "src"
-sys.path.insert(0, str(SRC_DIR))
 
 from benchmarking.application.audit_service import BenchmarkAuditService
 from benchmarking.application.evaluation_service import BenchmarkEvaluationService
