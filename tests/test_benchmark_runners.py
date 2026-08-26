@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from benchmarking.application.evaluation_service import BenchmarkEvaluationService
-from benchmarking.domain.baselines import run_cmaes, run_de, run_pso
+from benchmarking.domain.services.baselines import run_cmaes, run_de, run_pso
 from evolution.domain.services.noise_strategy import NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
 

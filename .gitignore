@@ -80,7 +80,9 @@ celerybeat.pid
 !/data/**/
 !/data/**/.gitkeep
 !/data/champions.json
-/results/evaluations/traces/
+/results/ioh_traces/
+/results/evaluations/
+/results/audit/
 /models/
 /contexts/
 /diagnostics/

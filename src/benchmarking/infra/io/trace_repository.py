@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 
+from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 from shared.config import RESULTS_DIR
 
 
@@ -15,12 +16,12 @@ class IOHTraceReader:
     """Read-only infrastructure reader managing filesystem access to IOHprofiler `.dat` and `.json` logs."""
 
     def __init__(self, eval_dir: Path | None = None):
-        self.eval_dir = Path(eval_dir) if eval_dir is not None else (RESULTS_DIR / "evaluations" / "traces")
+        self.eval_dir = Path(eval_dir) if eval_dir is not None else (RESULTS_DIR / "ioh_traces")
 
     @staticmethod
-    def parse_dat_file(dat_path: Path) -> list[tuple[np.ndarray, np.ndarray]]:
-        """Parse an IOHprofiler `.dat` trace file into `(evaluations, raw_objectives)` per run."""
-        runs: list[tuple[np.ndarray, np.ndarray]] = []
+    def parse_dat_file(dat_path: Path) -> list[RunTrace]:
+        """Parse an IOHprofiler `.dat` trace file into `RunTrace` value objects per run."""
+        runs: list[RunTrace] = []
         current_evals: list[float] = []
         current_raw: list[float] = []
 
@@ -34,7 +35,12 @@ class IOHTraceReader:
                     continue
                 if line.startswith(("function", "evaluations", '"evaluations"', "#", "instance")):
                     if current_evals:
-                        runs.append((np.array(current_evals, dtype=float), np.array(current_raw, dtype=float)))
+                        runs.append(
+                            RunTrace(
+                                evaluations=np.array(current_evals, dtype=float),
+                                raw_objectives=np.array(current_raw, dtype=float),
+                            )
+                        )
                         current_evals, current_raw = [], []
                     continue
                 parts = line.split()
@@ -46,7 +52,12 @@ class IOHTraceReader:
                         continue
 
         if current_evals:
-            runs.append((np.array(current_evals, dtype=float), np.array(current_raw, dtype=float)))
+            runs.append(
+                RunTrace(
+                    evaluations=np.array(current_evals, dtype=float),
+                    raw_objectives=np.array(current_raw, dtype=float),
+                )
+            )
 
         return runs
 
@@ -87,12 +98,12 @@ class IOHTraceReader:
         noise_stds: list[float] | None = None,
         solvers: list[str] | None = None,
         solver_resolver: Callable[[str], str] | None = None,
-    ) -> dict[tuple[int, float, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]]:
-        """Scans evaluations directory and loads all .dat runs organized by condition key."""
-        data_store: dict[tuple[int, float, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]] = {}
+    ) -> BenchmarkDataset:
+        """Scans evaluations directory and loads all .dat runs organized in a strongly-typed BenchmarkDataset."""
+        dataset = BenchmarkDataset()
 
         if not self.eval_dir.exists():
-            return data_store
+            return dataset
 
         for json_path in self.eval_dir.glob("**/*.json"):
             if "provenance" in json_path.name:
@@ -124,7 +135,7 @@ class IOHTraceReader:
                 continue
             if problems and p_id is not None and p_id not in problems:
                 continue
-            if noise_stds and noise_std not in noise_stds:
+            if noise_stds and not any(np.isclose(noise_std, n) for n in noise_stds):
                 continue
             if solvers and solver_name not in solvers:
                 continue
@@ -135,16 +146,11 @@ class IOHTraceReader:
                 if p_id is None or dim is None:
                     continue
 
-                key = (dim, noise_std, p_id)
-                if key not in data_store:
-                    data_store[key] = {}
-                if solver_name not in data_store[key]:
-                    data_store[key][solver_name] = []
-
+                cond = BenchmarkCondition(dim=dim, noise_std=noise_std, problem_id=p_id)
                 dat_p = sc.get("path")
                 if dat_p and (json_path.parent / dat_p).exists():
-                    data_store[key][solver_name].extend(
-                        self.parse_dat_file(json_path.parent / dat_p)
-                    )
+                    parsed_runs = self.parse_dat_file(json_path.parent / dat_p)
+                    for r in parsed_runs:
+                        dataset.add_run(cond, solver_name, r)
 
-        return data_store
+        return dataset

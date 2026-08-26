@@ -4,17 +4,18 @@ Coordinates trace dataset ingestion, omnibus Kruskal-Wallis & pairwise FDR tests
 Vargha-Delaney A12 effect size computations, convergence IQR curves, and markdown reporting.
 """
 
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
+
 import numpy as np
 import pandas as pd
 
-from benchmarking.domain.resolvers import resolve_folder_solver_name
-from benchmarking.domain.statistics import StatisticalEngine
+from benchmarking.domain.services.resolvers import resolve_folder_solver_name
+from benchmarking.domain.services.statistics import StatisticalEngine
+from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage.sqlite_repository import SQLiteBenchmarkReadRepository
-
-
-from typing import Any
 
 
 def generate_markdown_report(
@@ -57,34 +58,52 @@ def generate_markdown_report(
             return "\n".join(lines)
 
     if not o_df.empty:
-        total_tests = len(o_df)
-        sig_tests = len(o_df[o_df["Significant"] == "Yes"])
-        sig_pct = (sig_tests / total_tests * 100) if total_tests > 0 else 0.0
+        total_conditions = len(o_df)
+        sig_count = len(o_df[o_df["Significant"] == "Yes"]) if "Significant" in o_df.columns else 0
+        sig_pct = (sig_count / total_conditions) * 100 if total_conditions > 0 else 0.0
 
         report_lines.extend([
-            f"- **Total Experimental Conditions Analyzed**: {total_tests}",
-            f"- **Statistically Significant Differences Found**: {sig_tests} ({sig_pct:.1f}%)",
+            f"- **Total Problem Conditions Tested**: {total_conditions}",
+            f"- **Significant Differences Detected (p < 0.05)**: {sig_count} / {total_conditions} ({sig_pct:.1f}%)",
             "",
             "### Omnibus Results Table",
+            "",
             _df_to_markdown(o_df),
             "",
         ])
+    else:
+        report_lines.extend(["*No omnibus test results available.*", ""])
+
+    report_lines.extend([
+        "## 3. Pairwise Post-Hoc Tests (Mann-Whitney U with FDR Correction)",
+        "",
+    ])
 
     if not p_df.empty:
+        total_pairs = len(p_df)
+        sig_pairs = len(p_df[p_df["Significant (FDR)"] == True]) if "Significant (FDR)" in p_df.columns else 0
+
         report_lines.extend([
-            "## 3. Pairwise Statistical Comparisons (FDR-Corrected)",
+            f"- **Total Pairwise Comparisons**: {total_pairs}",
+            f"- **Statistically Significant After FDR**: {sig_pairs} / {total_pairs}",
             "",
-            _df_to_markdown(p_df.head(25)),
+            "### Pairwise Statistical Comparisons",
+            "",
+            _df_to_markdown(p_df.head(50)),
             "",
         ])
+    else:
+        report_lines.extend(["*No pairwise comparison data available.*", ""])
 
-    full_report = "\n".join(report_lines)
+    report_content = "\n".join(report_lines)
+
     if output_path:
         out_p = Path(output_path)
         out_p.parent.mkdir(parents=True, exist_ok=True)
-        out_p.write_text(full_report, encoding="utf-8")
+        with open(out_p, "w", encoding="utf-8") as f:
+            f.write(report_content)
 
-    return full_report
+    return report_content
 
 
 class StatisticalEvaluationService:
@@ -104,14 +123,20 @@ class StatisticalEvaluationService:
         """Load synthesis experiments and iterations tables into pandas DataFrames."""
         return self.sqlite_repo.get_synthesis_dataframes()
 
-    def load_evaluation_traces(
+    def load_all_traces(self) -> BenchmarkDataset:
+        """Load all available benchmark evaluation traces across all conditions."""
+        return self.trace_repo.load_evaluation_traces(
+            solver_resolver=resolve_folder_solver_name,
+        )
+
+    def load_filtered_traces(
         self,
-        dims: list[int] | None = None,
-        problems: list[int] | None = None,
-        noise_stds: list[float] | None = None,
+        dims: list[int],
+        problems: list[int],
+        noise_stds: list[float],
         solvers: list[str] | None = None,
-    ) -> dict[tuple[int, float, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]]:
-        """Scans evaluations directory and loads all .dat runs organized by condition key."""
+    ) -> BenchmarkDataset:
+        """Load benchmark evaluation traces for explicitly specified dimensions, problems, and noise levels."""
         return self.trace_repo.load_evaluation_traces(
             dims=dims,
             problems=problems,
@@ -120,16 +145,35 @@ class StatisticalEvaluationService:
             solver_resolver=resolve_folder_solver_name,
         )
 
+    def load_evaluation_traces(
+        self,
+        dims: list[int] | None = None,
+        problems: list[int] | None = None,
+        noise_stds: list[float] | None = None,
+        solvers: list[str] | None = None,
+        solver_resolver: Callable[[str], str] | None = None,
+    ) -> BenchmarkDataset:
+        """Scans evaluations directory and loads all .dat runs organized by condition key."""
+        if dims is None and problems is None and noise_stds is None and solvers is None and solver_resolver is None:
+            return self.load_all_traces()
+        return self.trace_repo.load_evaluation_traces(
+            dims=dims,
+            problems=problems,
+            noise_stds=noise_stds,
+            solvers=solvers,
+            solver_resolver=solver_resolver or resolve_folder_solver_name,
+        )
+
     def run_omnibus_kruskal(
         self,
-        benchmark_data: dict[tuple[int, float, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]],
+        benchmark_data: BenchmarkDataset,
     ) -> pd.DataFrame:
         """Execute omnibus Kruskal-Wallis $H$-test across all conditions."""
         return self.engine.run_omnibus_kruskal(benchmark_data)
 
     def run_pairwise_fdr(
         self,
-        benchmark_data: dict[tuple[int, float, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]],
+        benchmark_data: BenchmarkDataset,
         alpha: float = 0.05,
     ) -> pd.DataFrame:
         """Execute pairwise Mann-Whitney U tests with Benjamini-Hochberg FDR correction and A12."""
@@ -137,7 +181,7 @@ class StatisticalEvaluationService:
 
     def compute_convergence_iqr(
         self,
-        runs: list[tuple[np.ndarray, np.ndarray]],
+        runs: Sequence[RunTrace],
         max_evals: int = 1000000,
         n_points: int = 100,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -153,7 +197,7 @@ class StatisticalEvaluationService:
 
     def compute_success_rate(
         self,
-        runs: list[tuple[np.ndarray, np.ndarray]],
+        runs: Sequence[RunTrace],
         threshold: float = 1e-8,
     ) -> float:
         """Compute empirical success rate (fraction of runs reaching delta_y <= threshold)."""
@@ -161,7 +205,7 @@ class StatisticalEvaluationService:
 
     def compute_fragility_matrix(
         self,
-        benchmark_data: dict[tuple[int, float, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]],
+        benchmark_data: BenchmarkDataset,
         dim: int,
         solvers: list[str],
         problem_ids: list[int],
@@ -182,7 +226,7 @@ class StatisticalEvaluationService:
 
     def compute_hardness_success_rates(
         self,
-        benchmark_data: dict[tuple[int, float, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]],
+        benchmark_data: BenchmarkDataset,
         dim: int,
         solvers_list: list[str],
         noise_level: float,
@@ -199,7 +243,7 @@ class StatisticalEvaluationService:
 
     def compute_validation_medians(
         self,
-        benchmark_data: dict[tuple[int, float, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]],
+        benchmark_data: BenchmarkDataset,
         dim: int,
         problem_ids: list[int],
         clean_std: float = 0.0,
@@ -216,7 +260,7 @@ class StatisticalEvaluationService:
 
     def compute_trajectory_and_ecdf(
         self,
-        runs: list[tuple[np.ndarray, np.ndarray]],
+        runs: Sequence[RunTrace],
         eval_grid: np.ndarray,
         targets: np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -229,7 +273,7 @@ class StatisticalEvaluationService:
 
     def compute_robustness_profile(
         self,
-        benchmark_data: dict[tuple[int, float, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]],
+        benchmark_data: BenchmarkDataset,
         dim: int,
         solvers_order: list[str],
         problem_ids: list[int],
@@ -250,7 +294,7 @@ class StatisticalEvaluationService:
 
     def compute_scaffolding_ablation(
         self,
-        benchmark_data: dict[tuple[int, float, int], dict[str, list[tuple[np.ndarray, np.ndarray]]]],
+        benchmark_data: BenchmarkDataset,
         dim: int,
         solvers_list: list[str],
         problem_ids: list[int],

@@ -15,8 +15,8 @@ import ioh
 import numpy as np
 import pandas as pd
 
-from benchmarking.domain.baselines import BASELINES
-from benchmarking.domain.resolvers import get_model_slug
+from benchmarking.domain.services.baselines import BASELINES
+from benchmarking.domain.services.resolvers import get_model_slug
 from benchmarking.infra.io.hashing import compute_code_hash
 from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage.champions_repository import ChampionsReadRepository

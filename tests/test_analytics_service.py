@@ -10,14 +10,16 @@ from benchmarking.application.statistical_service import (
     StatisticalEvaluationService,
     generate_markdown_report,
 )
-from benchmarking.domain.resolvers import (
+from benchmarking.domain.enums import BenchmarkStrategy, ClassicalSolver
+from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
+from benchmarking.domain.services.resolvers import (
     format_db_solver_name,
     get_clean_model_label,
     get_model_slug,
     resolve_folder_solver_name,
 )
-from benchmarking.domain.statistics import StatisticalEngine
-from benchmarking.domain.taxonomy import (
+from benchmarking.domain.services.statistics import StatisticalEngine
+from benchmarking.domain.services.taxonomy import (
     BBOB_CLASSES,
     BBOB_CLASSES_ORDER,
     BBOB_METADATA,
@@ -109,14 +111,13 @@ class TestStatisticalEngine:
         assert mag_eq == "negligible"
 
     def test_omnibus_and_pairwise_fdr_tests(self, engine):
-        # Synthetic benchmark dataset
-        bench_data = {
-            (2, 0.0, 1): {
-                "CMA-ES": [(np.array([1, 10]), np.array([10.0, 0.1])) for _ in range(5)],
-                "DE": [(np.array([1, 10]), np.array([10.0, 0.5])) for _ in range(5)],
-                "LLaMEA-14B / baseline": [(np.array([1, 10]), np.array([10.0, 0.01])) for _ in range(5)],
-            }
-        }
+        # Strongly-typed BenchmarkDataset
+        bench_data = BenchmarkDataset()
+        cond = BenchmarkCondition(dim=2, noise_std=0.0, problem_id=1)
+        for _ in range(5):
+            bench_data.add_run(cond, "CMA-ES", RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 0.1])))
+            bench_data.add_run(cond, "DE", RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 0.5])))
+            bench_data.add_run(cond, "LLaMEA-14B / baseline", RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 0.01])))
 
         df_omni = engine.run_omnibus_kruskal(bench_data)
         assert not df_omni.empty
@@ -132,9 +133,9 @@ class TestStatisticalEngine:
 
     def test_compute_convergence_iqr(self, engine):
         runs = [
-            (np.array([1, 5, 10]), np.array([100.0, 50.0, 1.0])),
-            (np.array([1, 5, 10]), np.array([100.0, 40.0, 2.0])),
-            (np.array([1, 5, 10]), np.array([100.0, 60.0, 0.5])),
+            RunTrace(evaluations=np.array([1, 5, 10]), raw_objectives=np.array([100.0, 50.0, 1.0])),
+            RunTrace(evaluations=np.array([1, 5, 10]), raw_objectives=np.array([100.0, 40.0, 2.0])),
+            RunTrace(evaluations=np.array([1, 5, 10]), raw_objectives=np.array([100.0, 60.0, 0.5])),
         ]
         eval_grid, med, q25, q75 = engine.compute_convergence_iqr(runs, n_points=10)
         assert len(eval_grid) == 10
@@ -157,7 +158,7 @@ class TestApplicationServicesIntegration:
     def test_audit_service(self):
         session_factory = create_db_session_factory()
         sqlite_repo = SQLiteBenchmarkReadRepository(session_factory)
-        service = BenchmarkAuditService(sqlite_repo=sqlite_repo, trace_repo=IOHTraceReader(RESULTS_DIR / "evaluations" / "traces"))
+        service = BenchmarkAuditService(sqlite_repo=sqlite_repo, trace_repo=IOHTraceReader(RESULTS_DIR / "ioh_traces"))
         if (DATA_DIR / "db.sqlite3").exists():
             matrix, summary = service.get_audit_matrix()
             assert isinstance(matrix, pd.DataFrame)
@@ -167,14 +168,14 @@ class TestApplicationServicesIntegration:
     def test_statistical_service(self):
         session_factory = create_db_session_factory()
         sqlite_repo = SQLiteBenchmarkReadRepository(session_factory)
-        trace_repo = IOHTraceReader(RESULTS_DIR / "evaluations" / "traces")
+        trace_repo = IOHTraceReader(RESULTS_DIR / "ioh_traces")
         service = StatisticalEvaluationService(sqlite_repo=sqlite_repo, trace_repo=trace_repo)
         if (DATA_DIR / "db.sqlite3").exists():
             df_exp, df_iter = service.get_synthesis_dataframes()
             assert isinstance(df_exp, pd.DataFrame)
             assert isinstance(df_iter, pd.DataFrame)
             traces = service.load_evaluation_traces()
-            assert isinstance(traces, dict)
+            assert isinstance(traces, (dict, BenchmarkDataset))
 
 
 class TestConcreteInfraRepositories:
@@ -197,7 +198,7 @@ class TestConcreteInfraRepositories:
             assert isinstance(flat, dict)
 
     def test_trace_reader(self):
-        repo = IOHTraceReader(RESULTS_DIR / "evaluations" / "traces")
+        repo = IOHTraceReader(RESULTS_DIR / "ioh_traces")
         assert hasattr(repo, "load_evaluation_traces")
         assert hasattr(repo, "get_run_count")
         assert hasattr(repo, "parse_dat_file")

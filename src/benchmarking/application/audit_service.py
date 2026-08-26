@@ -8,8 +8,8 @@ from typing import Any
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
-from benchmarking.domain.resolvers import get_clean_model_label, get_model_slug
-from benchmarking.domain.taxonomy import get_bbob_class, get_bbob_name
+from benchmarking.domain.services.resolvers import get_clean_model_label, get_model_slug
+from benchmarking.domain.services.taxonomy import get_bbob_class, get_bbob_name
 from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage.sqlite_repository import SQLiteBenchmarkReadRepository
 

@@ -144,9 +144,9 @@ def test_nb05_statistical_analysis_and_figures_pipeline():
     print(f"  • Synthesis transfer correlation: r = {r_val:.3f} (p = {p_val:.3e})")
 
     # Verify figure computing methods
-    solvers = sorted(list(set(s for cond in all_benchmark_data.values() for s in cond.keys())))
-    p_ids = sorted(list(set(k[2] for k in all_benchmark_data.keys())))
-    dim = list(all_benchmark_data.keys())[0][0]
+    solvers = all_benchmark_data.solvers
+    p_ids = all_benchmark_data.problem_ids
+    dim = all_benchmark_data.dims[0]
 
     matrix, labels = service.compute_fragility_matrix(all_benchmark_data, dim, solvers, p_ids)
     assert matrix.shape == (len(p_ids), len(solvers))
