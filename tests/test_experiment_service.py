@@ -32,51 +32,36 @@ from evolution.application.tasks import (
 from evolution.domain.exceptions import OrchestrationError
 
 
-def _failing_task_fn():
-    raise ValueError("Job failed")
+class DummyLLM:
+    """Mock LLM that returns a simple dummy search algorithm."""
+
+    def __init__(self):
+        self.model = SimpleNamespace(name="dummy-llm-1.0")
+        self.calls = 0
+
+    def sample_solution(self, prompt, parent_ids=None, **kwargs):
+        self.calls += 1
+        code = """class DummySearch:
+    def __call__(self, problem, budget):
+        import numpy as np
+        best_x = np.zeros(2)
+        best_y = problem(best_x)
+        for _ in range(budget - 1):
+            x = np.random.uniform(-5, 5, 2)
+            y = problem(x)
+            if y < best_y:
+                best_y = y
+        return best_y
+"""
+        sol = Solution(code=code, name="DummySearch", parent_ids=parent_ids or [])
+        sol.add_metadata("llm_generation_time", 0.05)
+        return sol
 
 
-class _SuccessTaskSpec:
-    def __init__(self, db_path: Path):
-        self.db_path = db_path
-
-    def __call__(self) -> SessionResult:
-        from shared.database import build_engine, build_session_factory
-        from evolution.infra.storage.experiments.repository import SQLiteExperimentRepository
-
-        engine = build_engine(self.db_path)
-        sf = build_session_factory(engine)
-        repo = SQLiteExperimentRepository(sf)
-
-        ctx = repo.create_experiment(
-            problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0),
-            mode="clean",
-            llm_name="dummy",
-        )
-        summary = ExperimentSummary(
-            mode="clean",
-            llm_name="dummy",
-            experiment_id=ctx,
-            problem=ProblemProfile(
-                problem_id=1, dim=2, noise_std=0.0, instance_id=1, true_optimum=0.0
-            ),
-            best_iteration=1,
-            best_algorithm="dummy",
-            best_final_error=0.0,
-            iterations=[],
-        )
-        repo.mark_completed(ctx)
-        return SessionResult(
-            problem_id=1,
-            dim=2,
-            mode="clean",
-            noise_std=0.0,
-            best_error=0.0,
-            experiment_id=ctx,
-            run_history=[],
-            llm_name="dummy",
-            problem_profile=summary.problem,
-        )
+class FailingProblem(BBOBProblem):
+    @property
+    def lower_bound(self):
+        raise ValueError("Job failed")
 
 
 def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
@@ -111,17 +96,17 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
     tasks = [
         EvolutionTask(
             key="clean",
-            experiment_id=exp_id_clean,
             problem=problem_clean,
             llm_client=llm,
+            experiment_id=exp_id_clean,
             iterations=2,
             db_path=db_path,
         ),
         EvolutionTask(
             key="noisy",
-            experiment_id=exp_id_noisy,
             problem=problem_noisy,
             llm_client=llm,
+            experiment_id=exp_id_noisy,
             iterations=2,
             db_path=db_path,
         ),
@@ -147,10 +132,53 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
 def test_dispatch_partial_failure(temp_dir, db_session_factory):
     db_path = temp_dir / "test.db"
     repo = SQLiteExperimentRepository(db_session_factory)
+    problem_fail = FailingProblem(
+        problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1
+    )
+    problem_succ = BBOBProblem(
+        problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1
+    )
+
+    exp_id_fail = repo.create_experiment(
+        problem=ProblemProfile(
+            problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0
+        ),
+        mode="clean",
+        llm_name="dummy-llm-1.0",
+        prompt_strategy="baseline",
+        budget=1000,
+        iterations=1,
+    )
+    exp_id_succ = repo.create_experiment(
+        problem=ProblemProfile(
+            problem_id=1, dim=2, noise_std=0.0, true_optimum=problem_succ.true_optimum
+        ),
+        mode="clean",
+        llm_name="dummy-llm-1.0",
+        prompt_strategy="baseline",
+        budget=1000,
+        iterations=1,
+    )
 
     tasks = [
-        EvolutionTask(key="failing", fn=_failing_task_fn),
-        EvolutionTask(key="success", fn=_SuccessTaskSpec(db_path=db_path)),
+        EvolutionTask(
+            key="failing",
+            problem=problem_fail,
+            llm_client=DummyLLM(),
+            experiment_id=exp_id_fail,
+            iterations=1,
+            budget=1000,
+            db_path=db_path,
+        ),
+        EvolutionTask(
+            key="success",
+            problem=problem_succ,
+            llm_client=DummyLLM(),
+            experiment_id=exp_id_succ,
+            iterations=1,
+            budget=1000,
+            db_path=db_path,
+        ),
     ]
 
     with pytest.raises(OrchestrationError) as exc_info:
@@ -163,33 +191,7 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
 
     # Verify success got persisted
     loaded_success = repo.load(problem_id=1, mode="clean")
-    assert len(loaded_success) == 1
-
-
-class DummyLLM:
-    """Mock LLM that returns a simple dummy search algorithm."""
-
-    def __init__(self):
-        self.model = SimpleNamespace(name="dummy-llm-1.0")
-        self.calls = 0
-
-    def sample_solution(self, prompt, parent_ids=None, **kwargs):
-        self.calls += 1
-        code = """class DummySearch:
-    def __call__(self, problem, budget):
-        import numpy as np
-        best_x = np.zeros(2)
-        best_y = problem(best_x)
-        for _ in range(budget - 1):
-            x = np.random.uniform(-5, 5, 2)
-            y = problem(x)
-            if y < best_y:
-                best_y = y
-        return best_y
-"""
-        sol = Solution(code=code, name="DummySearch", parent_ids=parent_ids or [])
-        sol.add_metadata("llm_generation_time", 0.05)
-        return sol
+    assert any(exp.experiment_id == exp_id_succ for exp in loaded_success)
 
 
 @pytest.fixture
@@ -569,18 +571,21 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
 
     task = EvolutionTask(
         key="test_task_1",
-        experiment_id=exp_id,
         problem=problem,
         llm_client=llm,
+        experiment_id=exp_id,
         initial_iteration=0,
         budget=2500,
         iterations=2,
-        db_path=temp_dir / "test_task.db",
+        db_path=temp_dir / "test.db",
     )
     assert task.experiment_id == exp_id
     assert task.problem.problem_id == 1
     assert task.problem.dim == 2
     assert task.budget == 2500
+    res = task()
+    assert res is not None
+    assert res.experiment_id == exp_id
 
 
 def test_session_problem_validation(temp_dir, db_session_factory):

@@ -7,7 +7,6 @@ process pool orchestrator (TaskOrchestrator) for parallel evolutionary campaigns
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
 from shared.config import DATA_DIR
 from shared.database import initialize_sqlite_storage, setup_storage_environment
@@ -27,26 +26,17 @@ class EvolutionTask:
     """
 
     key: str
+    problem: BaseProblem
+    llm_client: LLMClient
     experiment_id: int = 1
-    problem: BaseProblem | None = None
-    llm_client: LLMClient | None = None
     initial_iteration: int = 0
     budget: int = 1000000
     iterations: int = 10
     prompt_strategy: PromptStrategy | str = PromptStrategy.BASELINE
     db_path: Path = field(default_factory=lambda: DATA_DIR / "db.sqlite3")
-    fn: Callable[[], SessionResult] | None = None
 
     def __call__(self) -> SessionResult:
         """Executes the evolution task inside the worker process."""
-        if self.fn is not None:
-            return self.fn()
-
-        if self.problem is None:
-            raise ValueError(f"EvolutionTask '{self.key}' requires a valid problem instance.")
-        if self.llm_client is None:
-            raise ValueError(f"EvolutionTask '{self.key}' requires a valid LLMClient instance.")
-
         db_repo = initialize_sqlite_storage(self.db_path)
         code_repo = CodeRepository()
 

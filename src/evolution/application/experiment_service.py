@@ -47,9 +47,7 @@ class EvolutionExperimentService:
 
         problems, dimensions, noise_stds, prompt_strats = self._resolve_search_space(cfg)
 
-        all_db_exps = (
-            self.sqlite_repo.load(llm_name=llm_name) if self.sqlite_repo else []
-        )
+        all_db_exps = self.sqlite_repo.load(llm_name=llm_name)
         db_comp, db_run, db_fail = self._group_experiments_by_condition(
             experiments=all_db_exps,
             retry_failed_synthesis=do_retry_failed,
@@ -136,11 +134,7 @@ class EvolutionExperimentService:
 
         problems, dimensions, noise_stds, prompt_strats = self._resolve_search_space(cfg)
 
-        all_db_exps = (
-            self.sqlite_repo.load(llm_name=self.llm_client.model.name)
-            if self.sqlite_repo
-            else []
-        )
+        all_db_exps = self.sqlite_repo.load(llm_name=self.llm_client.model.name)
         db_comp, db_run, _ = self._group_experiments_by_condition(
             experiments=all_db_exps,
             retry_failed_synthesis=do_retry_failed,
@@ -273,10 +267,6 @@ class EvolutionExperimentService:
         fallback_iterations: int,
         default_noise_model: str = "heteroscedastic",
     ) -> list[EvolutionTask]:
-        """Builds tasks for specific targeted experiment IDs."""
-        if self.sqlite_repo is None:
-            return []
-
         targeted_experiments = self.sqlite_repo.load_by_ids(target_ids)
         tasks: list[EvolutionTask] = []
         for exp in targeted_experiments:
@@ -301,9 +291,9 @@ class EvolutionExperimentService:
             tasks.append(
                 EvolutionTask(
                     key=f"f{p_id}_{dim}D_{'clean' if noise_std == 0.0 else f'noisy_std_{noise_std}'}_{strat_str}_target_exp{exp.id}",
-                    experiment_id=exp.id,
                     problem=problem,
                     llm_client=self.llm_client,
+                    experiment_id=exp.id,
                     initial_iteration=initial_iter,
                     budget=task_budget,
                     iterations=exp.max_iterations or fallback_iterations,
@@ -339,9 +329,9 @@ class EvolutionExperimentService:
         initial_iter = len(exp.iterations) if exp.iterations else 0
         return EvolutionTask(
             key=f"f{p_id}_{dim}D_{mode_label}_{strat.value}_resume_exp{exp.id}",
-            experiment_id=exp.id,
             problem=resume_problem,
             llm_client=self.llm_client,
+            experiment_id=exp.id,
             initial_iteration=initial_iter,
             budget=task_budget,
             iterations=exp.max_iterations or task_iterations,
@@ -373,24 +363,22 @@ class EvolutionExperimentService:
             noise_strategy=noise_strat,
         )
 
-        exp_id = 1
-        if self.sqlite_repo is not None:
-            problem_profile = ProblemProfile(
-                problem_id=problem.problem_id,
-                dim=problem.dim,
-                noise_std=problem.noise_std,
-                noise_model=problem.noise_model,
-                instance_id=problem.instance_id,
-                true_optimum=problem.true_optimum,
-            )
-            exp_id = self.sqlite_repo.create_experiment(
-                problem=problem_profile,
-                mode=problem.mode,
-                llm_name=self.llm_client.model.name,
-                prompt_strategy=strat.value,
-                budget=task_budget,
-                iterations=task_iterations,
-            )
+        problem_profile = ProblemProfile(
+            problem_id=problem.problem_id,
+            dim=problem.dim,
+            noise_std=problem.noise_std,
+            noise_model=problem.noise_model,
+            instance_id=problem.instance_id,
+            true_optimum=problem.true_optimum,
+        )
+        exp_id = self.sqlite_repo.create_experiment(
+            problem=problem_profile,
+            mode=problem.mode,
+            llm_name=self.llm_client.model.name,
+            prompt_strategy=strat.value,
+            budget=task_budget,
+            iterations=task_iterations,
+        )
 
         key = (
             f"{key_prefix}f{p_id}_{dim}D_{mode_label}_{strat.value}"
@@ -399,9 +387,9 @@ class EvolutionExperimentService:
         )
         return EvolutionTask(
             key=key,
-            experiment_id=exp_id,
             problem=problem,
             llm_client=self.llm_client,
+            experiment_id=exp_id,
             initial_iteration=0,
             budget=task_budget,
             iterations=task_iterations,
