@@ -4,15 +4,16 @@ import pytest
 from llamea import LLaMEA
 from sqlalchemy.orm import sessionmaker
 
+from evolution.application.synthesis.evaluator import Evaluator
+from evolution.application.synthesis.session import LLaMEASession
 from evolution.domain.services.noise_strategy import NoNoiseStrategy
-from evolution.infra.problems.bbob import BBOBProblem
-from evolution.synthesis.evaluator import Evaluator
-from evolution.synthesis.session import LLaMEASession
+from evolution.domain.vos import ProblemProfile
 from evolution.infra.llm.client import LLMClient, Provider
+from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.code.repository import CodeRepository
-from evolution.infra.storage.sqlite.connection import build_engine
-from evolution.infra.storage.sqlite.repository import SQLiteExperimentRepository
-from evolution.infra.storage.sqlite.tables import Base
+from evolution.infra.storage.experiments.repository import SQLiteExperimentRepository
+from shared.database import build_engine
+from shared.tables import Base
 
 
 # Mock logger
@@ -81,8 +82,28 @@ def test_warm_start_rehydration(tmp_path, test_repos):
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
     llm = LLMClient(Provider.LOCAL, skip_validation=True)
 
-    session = LLaMEASession.create(
+    problem_profile = ProblemProfile(
+        problem_id=problem.problem_id,
+        dim=problem.dim,
+        noise_std=problem.noise_std,
+        noise_model=problem.noise_model,
+        instance_id=problem.instance_id,
+        true_optimum=problem.true_optimum,
+    )
+    exp_id = db_repo.create_experiment(
+        problem=problem_profile,
+        mode=problem.mode,
+        llm_name=llm.model.name,
+        prompt_strategy="baseline",
+        budget=1000000,
+        iterations=5,
+    )
+
+    session = LLaMEASession(
         problem=problem,
+        experiment_id=exp_id,
+        initial_iteration=0,
+        prompt_strategy="baseline",
         llm_client=llm,
         db_repo=db_repo,
         code_repo=code_repo,
@@ -98,5 +119,4 @@ def test_warm_start_rehydration(tmp_path, test_repos):
 
     resumed_engine = session._create_synthesis_engine(evaluator, "task_prompt")
     assert resumed_engine is not None
-    assert resumed_engine.logger is not None
-    assert str(resumed_engine.logger.dirname) == str(session._archive_dir)
+    assert resumed_engine.generation == synthesis_engine.generation

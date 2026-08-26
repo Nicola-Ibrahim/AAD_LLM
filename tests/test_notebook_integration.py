@@ -18,11 +18,46 @@ from shared.config import DATA_DIR, RESULTS_DIR
 def test_nb01_noise_landscapes():
     """Verify Notebook 01 data pipeline."""
     from evolution.infra.problems.bbob import BBOBProblem
-    from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy, NoNoiseStrategy
+    from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy
     p = BBOBProblem(problem_id=1, dim=2, noise_strategy=HeteroscedasticNoiseStrategy(0.05))
     val = p([0.0, 0.0])
     assert isinstance(val, float)
     print("✅ NB01 noise landscape pipeline verified.")
+
+
+def test_nb02_evolutionary_synthesis_pipeline():
+    """Verify Notebook 02 (Evolutionary Synthesis Service & Task Construction with DI)."""
+    from evolution.application.experiment_service import EvolutionExperimentService
+    from evolution.infra.llm.client import LLMClient
+    from evolution.infra.storage.campaigns.repository import ExperimentConfigRepository
+    from shared.database import initialize_sqlite_storage
+
+    # Explicit repository dependency injection
+    sqlite_repo = initialize_sqlite_storage()
+    config_repo = ExperimentConfigRepository()
+    llm = LLMClient("local", skip_validation=True)
+    service = EvolutionExperimentService(
+        sqlite_repo=sqlite_repo,
+        config_repo=config_repo,
+        llm_client=llm,
+    )
+
+    assert service.sqlite_repo is sqlite_repo
+    assert service.config_repo is config_repo
+    assert service.llm_client is llm
+
+    cfg = config_repo.load_config()
+    assert "matrix" in cfg
+    assert "budget" in cfg
+
+    matrix_df, summary = service.audit_campaign()
+    assert not matrix_df.empty
+    assert "total_conditions" in summary
+
+    tasks = service.build_tasks()
+    assert len(tasks) > 0
+
+    print(f"✅ NB02 evolutionary synthesis pipeline verified ({len(tasks)} tasks constructed).")
 
 
 def test_nb03_benchmark_evaluations_pipeline():

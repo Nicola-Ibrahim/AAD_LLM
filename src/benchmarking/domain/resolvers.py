@@ -31,13 +31,13 @@ def get_clean_model_label(llm_name: str) -> str:
     if not llm_name:
         return "LLaMEA"
 
-    l = str(llm_name).lower()
-    m = re.search(r"(\d+b)", l)
+    name_lower = str(llm_name).lower()
+    m = re.search(r"(\d+b)", name_lower)
     if m:
         return f"LLaMEA-{m.group(1).upper()}"
 
     clean = (
-        l.removesuffix(".gguf")
+        name_lower.removesuffix(".gguf")
         .replace("-instruct", "")
         .replace("-chat", "")
         .replace("-", " ")
@@ -60,17 +60,17 @@ def get_model_slug(llm_name: str) -> str:
     if not llm_name:
         return "llamea"
 
-    l = str(llm_name).lower()
-    family_m = re.search(r"([a-zA-Z]+)[^a-zA-Z0-9]*.*?(\d+b)", l)
+    name_lower = str(llm_name).lower()
+    family_m = re.search(r"([a-zA-Z]+)[^a-zA-Z0-9]*.*?(\d+b)", name_lower)
     if family_m:
         return f"{family_m.group(1)}_{family_m.group(2)}"
 
-    size_m = re.search(r"(\d+b)", l)
+    size_m = re.search(r"(\d+b)", name_lower)
     if size_m:
         return f"qwen_{size_m.group(1)}"
 
     return (
-        l.removesuffix(".gguf")
+        name_lower.removesuffix(".gguf")
         .replace("-", "_")
         .replace(".", "_")
         .split("/")[-1]

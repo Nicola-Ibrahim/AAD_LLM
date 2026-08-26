@@ -26,7 +26,7 @@ from evolution.domain.services.noise_strategy import (
     NoNoiseStrategy,
 )
 from evolution.infra.problems.bbob import BBOBProblem
-from evolution.synthesis.execution.executor import AlgorithmExecutor
+from shared.execution import AlgorithmExecutor
 from shared.config import DATA_DIR, PROJECT_ROOT, RESULTS_DIR
 
 logger = logging.getLogger(__name__)

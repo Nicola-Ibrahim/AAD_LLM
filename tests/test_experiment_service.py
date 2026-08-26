@@ -20,16 +20,16 @@ from evolution.domain.vos import (
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy, NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.code.repository import CodeRepository
-from evolution.infra.storage.sqlite.connection import build_engine
-from evolution.infra.storage.sqlite.repository import SQLiteExperimentRepository
-from evolution.infra.storage.sqlite.tables import Base, ExperimentORM
-from evolution.synthesis.evaluator import Evaluator
-from evolution.synthesis.session import LLaMEASession, SessionResult
-from evolution.orchestration.orchestrator import (
+from evolution.infra.storage.experiments.repository import SQLiteExperimentRepository
+from shared.database import build_engine
+from shared.tables import Base, ExperimentORM
+from evolution.application.synthesis.evaluator import Evaluator
+from evolution.application.synthesis.session import LLaMEASession, SessionResult
+from evolution.application.tasks import (
     EvolutionTask,
-    OrchestrationError,
     TaskOrchestrator,
 )
+from evolution.domain.exceptions import OrchestrationError
 
 
 def _failing_task_fn():
@@ -41,8 +41,8 @@ class _SuccessTaskSpec:
         self.db_path = db_path
 
     def __call__(self) -> SessionResult:
-        from evolution.infra.storage.sqlite.connection import build_engine, build_session_factory
-        from evolution.infra.storage.sqlite.repository import SQLiteExperimentRepository
+        from shared.database import build_engine, build_session_factory
+        from evolution.infra.storage.experiments.repository import SQLiteExperimentRepository
 
         engine = build_engine(self.db_path)
         sf = build_session_factory(engine)
@@ -84,21 +84,43 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
     repo = SQLiteExperimentRepository(db_session_factory)
     llm = DummyLLM()
 
+    problem_clean = BBOBProblem(
+        problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1
+    )
+    exp_id_clean = repo.create_experiment(
+        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem_clean.true_optimum),
+        mode="clean",
+        llm_name=llm.model.name,
+        prompt_strategy="baseline",
+        budget=1000000,
+        iterations=2,
+    )
+
+    problem_noisy = BBOBProblem(
+        problem_id=1, dim=2, noise_strategy=HeteroscedasticNoiseStrategy(0.5), instance_id=1
+    )
+    exp_id_noisy = repo.create_experiment(
+        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.5, true_optimum=problem_noisy.true_optimum),
+        mode="noisy",
+        llm_name=llm.model.name,
+        prompt_strategy="baseline",
+        budget=1000000,
+        iterations=2,
+    )
+
     tasks = [
         EvolutionTask(
             key="clean",
-            problem=BBOBProblem(
-                problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1
-            ),
+            experiment_id=exp_id_clean,
+            problem=problem_clean,
             llm_client=llm,
             iterations=2,
             db_path=db_path,
         ),
         EvolutionTask(
             key="noisy",
-            problem=BBOBProblem(
-                problem_id=1, dim=2, noise_strategy=HeteroscedasticNoiseStrategy(0.5), instance_id=1
-            ),
+            experiment_id=exp_id_noisy,
+            problem=problem_noisy,
             llm_client=llm,
             iterations=2,
             db_path=db_path,
@@ -388,9 +410,21 @@ def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
+    exp_id = repo.create_experiment(
+        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        mode=problem.mode,
+        llm_name=llm.model.name,
+        prompt_strategy="baseline",
+        budget=1000000,
+        iterations=2,
+    )
+
     # 1. Run evolution for 2 iterations (budget=2).
-    session1 = LLaMEASession.create(
+    session1 = LLaMEASession(
         problem=problem,
+        experiment_id=exp_id,
+        initial_iteration=0,
+        prompt_strategy="baseline",
         llm_client=llm,
         iterations=2,
         db_repo=repo,
@@ -413,8 +447,19 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
-    session1 = LLaMEASession.create(
+    exp_id1 = repo.create_experiment(
+        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        mode=problem.mode,
+        llm_name=llm.model.name,
+        prompt_strategy="baseline",
+        budget=1000000,
+        iterations=2,
+    )
+    session1 = LLaMEASession(
         problem=problem,
+        experiment_id=exp_id1,
+        initial_iteration=0,
+        prompt_strategy="baseline",
         llm_client=llm,
         db_repo=repo,
         code_repo=code_repo,
@@ -422,8 +467,19 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
     )
     res1 = session1.run()
 
-    session2 = LLaMEASession.create(
+    exp_id2 = repo.create_experiment(
+        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        mode=problem.mode,
+        llm_name=llm.model.name,
+        prompt_strategy="baseline",
+        budget=1000000,
+        iterations=2,
+    )
+    session2 = LLaMEASession(
         problem=problem,
+        experiment_id=exp_id2,
+        initial_iteration=0,
+        prompt_strategy="baseline",
         llm_client=llm,
         db_repo=repo,
         code_repo=code_repo,
@@ -445,8 +501,11 @@ def test_session_none_llm_guard(temp_dir, db_session_factory):
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
     with pytest.raises(ValueError, match="LLaMEASession requires a valid LLMClient"):
-        LLaMEASession.create(
+        LLaMEASession(
             problem=problem,
+            experiment_id=1,
+            initial_iteration=0,
+            prompt_strategy="baseline",
             llm_client=None,
             db_repo=repo,
             code_repo=code_repo,
@@ -459,14 +518,25 @@ def test_session_mark_failed_on_error(temp_dir, db_session_factory):
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
-    session = LLaMEASession.create(
+    exp_id = repo.create_experiment(
+        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        mode=problem.mode,
+        llm_name=llm.model.name,
+        prompt_strategy="baseline",
+        budget=1000000,
+        iterations=2,
+    )
+
+    session = LLaMEASession(
         problem=problem,
+        experiment_id=exp_id,
+        initial_iteration=0,
+        prompt_strategy="baseline",
         llm_client=llm,
         db_repo=repo,
         code_repo=code_repo,
         iterations=2,
     )
-    exp_id = session._experiment_id
 
     # Inject an error into _setup_evaluator to force run() to fail
     def bad_setup():
@@ -483,9 +553,8 @@ def test_session_mark_failed_on_error(temp_dir, db_session_factory):
         assert existing.status == "failed"
 
 
-def test_resume_experiment_id_success(temp_dir, db_session_factory):
+def test_evolution_task_execution(temp_dir, db_session_factory):
     repo = SQLiteExperimentRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
@@ -498,51 +567,33 @@ def test_resume_experiment_id_success(temp_dir, db_session_factory):
         budget=2500,
     )
 
-    session = LLaMEASession.resume(
+    task = EvolutionTask(
+        key="test_task_1",
         experiment_id=exp_id,
-        llm_client=llm,
-        db_repo=repo,
-        code_repo=code_repo,
-    )
-    assert session._experiment_id == exp_id
-    assert session._problem.problem_id == 1
-    assert session._problem.dim == 2
-    assert session._budget == 2500
-
-
-def test_resume_experiment_id_completed_error(temp_dir, db_session_factory):
-    repo = SQLiteExperimentRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=temp_dir)
-    llm = DummyLLM()
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
-
-    session1 = LLaMEASession.create(
         problem=problem,
         llm_client=llm,
-        db_repo=repo,
-        code_repo=code_repo,
+        initial_iteration=0,
+        budget=2500,
         iterations=2,
+        db_path=temp_dir / "test_task.db",
     )
-    res = session1.run()
-    exp_id = res.experiment_id
-
-    with pytest.raises(ValueError, match="Cannot resume experiment"):
-        LLaMEASession.resume(
-            experiment_id=exp_id,
-            llm_client=llm,
-            db_repo=repo,
-            code_repo=code_repo,
-        )
+    assert task.experiment_id == exp_id
+    assert task.problem.problem_id == 1
+    assert task.problem.dim == 2
+    assert task.budget == 2500
 
 
-def test_session_create_validation(temp_dir, db_session_factory):
+def test_session_problem_validation(temp_dir, db_session_factory):
     repo = SQLiteExperimentRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
 
-    with pytest.raises(ValueError, match="LLaMEASession.create requires a valid problem"):
-        LLaMEASession.create(
+    with pytest.raises(ValueError, match="LLaMEASession requires a valid problem"):
+        LLaMEASession(
             problem=None,
+            experiment_id=1,
+            initial_iteration=0,
+            prompt_strategy="baseline",
             llm_client=llm,
             db_repo=repo,
             code_repo=code_repo,
@@ -629,8 +680,20 @@ def test_all_executions_failed_session_handling(db_session_factory, tmp_path):
     problem = BBOBProblem(problem_id=24, dim=2, noise_strategy=NoNoiseStrategy())
     mock_llm = FailingLLM()
 
-    session = LLaMEASession.create(
+    exp_id = repo.create_experiment(
+        problem=ProblemProfile(problem_id=24, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        mode=problem.mode,
+        llm_name=mock_llm.model.name,
+        prompt_strategy="baseline",
+        budget=10,
+        iterations=2,
+    )
+
+    session = LLaMEASession(
         problem=problem,
+        experiment_id=exp_id,
+        initial_iteration=0,
+        prompt_strategy="baseline",
         llm_client=mock_llm,
         db_repo=repo,
         code_repo=code_repo,
@@ -668,8 +731,7 @@ def test_prompt_strategy_persisted(db_session_factory, tmp_path):
 
 def test_scipy_optimize_banned(tmp_path):
     """Verify that generated code attempting to use scipy.optimize fails execution or compilation."""
-    from evolution.synthesis.execution import AlgorithmExecutor
-    from evolution.synthesis.execution.exceptions import CodeValidationException
+    from shared.execution import AlgorithmExecutor, CodeValidationException
 
     executor = AlgorithmExecutor(timeout_seconds=2.0)
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())

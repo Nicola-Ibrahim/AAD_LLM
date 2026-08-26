@@ -16,7 +16,7 @@ from evolution.domain.vos import (
     ProblemProfile,
 )
 from evolution.infra.storage.base import ExperimentRepository
-from evolution.infra.storage.sqlite.tables import ErrorLogORM, ExperimentMode, ExperimentORM, IterationORM
+from shared.tables import ErrorLogORM, ExperimentMode, ExperimentORM, IterationORM
 
 
 class SQLiteExperimentRepository(ExperimentRepository):
@@ -242,44 +242,56 @@ class SQLiteExperimentRepository(ExperimentRepository):
 
         with self.SessionLocal() as session:
             experiments = session.scalars(stmt).all()
+            return [self._to_experiment_summary(exp) for exp in experiments]
 
-            summaries: list[ExperimentSummary] = []
-            for exp in experiments:
-                problem_profile = ProblemProfile(
-                    problem_id=exp.problem_id,
-                    dim=exp.dim,
-                    noise_std=exp.noise_std or 0.0,
-                    noise_model=NoiseModelEnum(exp.noise_model)
-                    if exp.noise_model
-                    else NoiseModelEnum.HETEROSCEDASTIC,
-                    instance_id=exp.instance_id,
-                    true_optimum=exp.true_optimum,
-                )
+    def load_by_ids(self, experiment_ids: list[int]) -> list[ExperimentSummary]:
+        """Load experiments matching a specific list of primary key IDs."""
+        if not experiment_ids:
+            return []
+        stmt = (
+            select(ExperimentORM)
+            .options(selectinload(ExperimentORM.iterations).selectinload(IterationORM.error_log))
+            .where(ExperimentORM.id.in_(experiment_ids))
+            .order_by(ExperimentORM.id.asc())
+        )
+        with self.SessionLocal() as session:
+            experiments = session.scalars(stmt).all()
+            return [self._to_experiment_summary(exp) for exp in experiments]
 
-                iterations = [
-                    self._to_iteration_metadata(it, idx)
-                    for idx, it in enumerate(exp.iterations, start=1)
-                ]
+    def _to_experiment_summary(self, exp: ExperimentORM) -> ExperimentSummary:
+        """Helper to convert an ExperimentORM database instance into an ExperimentSummary domain entity."""
+        problem_profile = ProblemProfile(
+            problem_id=exp.problem_id,
+            dim=exp.dim,
+            noise_std=exp.noise_std or 0.0,
+            noise_model=NoiseModelEnum(exp.noise_model)
+            if exp.noise_model
+            else NoiseModelEnum.HETEROSCEDASTIC,
+            instance_id=exp.instance_id,
+            true_optimum=exp.true_optimum,
+        )
 
-                summaries.append(
-                    ExperimentSummary(
-                        mode=exp.mode.value,
-                        llm_name=exp.llm_name,
-                        prompt_strategy=exp.prompt_strategy or "baseline",
-                        budget=exp.budget,
-                        max_iterations=exp.max_iterations,
-                        id=exp.id,
-                        status=exp.status,
-                        started_at=exp.started_at,
-                        finished_at=exp.finished_at,
-                        problem=problem_profile,
-                        best_iteration=exp.best_iteration,
-                        best_algorithm=exp.best_algorithm,
-                        best_final_error=exp.best_final_error,
-                        iterations=iterations,
-                    )
-                )
-        return summaries
+        iterations = [
+            self._to_iteration_metadata(it, idx)
+            for idx, it in enumerate(exp.iterations, start=1)
+        ]
+
+        return ExperimentSummary(
+            mode=exp.mode.value,
+            llm_name=exp.llm_name,
+            prompt_strategy=exp.prompt_strategy or "baseline",
+            budget=exp.budget,
+            max_iterations=exp.max_iterations,
+            id=exp.id,
+            status=exp.status,
+            started_at=exp.started_at,
+            finished_at=exp.finished_at,
+            problem=problem_profile,
+            best_iteration=exp.best_iteration,
+            best_algorithm=exp.best_algorithm,
+            best_final_error=exp.best_final_error,
+            iterations=iterations,
+        )
 
     @staticmethod
     def _to_iteration_metadata(

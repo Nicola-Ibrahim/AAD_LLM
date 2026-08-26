@@ -34,11 +34,13 @@ retry_failed_synthesis = true
 only_incomplete = false
 
 # Optional Selective Execution Filters (leave empty [] to run entire configured matrix):
-filter_problem_ids = []         # e.g., [1, 8] to run specific BBOB functions
-filter_dimensions = []          # e.g., [2, 3, 5] to run specific dimensions
-filter_modes = []               # e.g., ["clean"], ["noisy"] to run specific noise conditions
-filter_prompt_strategies = []   # e.g., ["guided", "thinking"] to run specific strategies
-target_experiment_ids = []      # e.g., [112, 64, 36] to re-run exact DB experiment rows
+filter_problem_ids = [] # e.g., [1, 8] to run specific BBOB functions
+filter_dimensions = [] # e.g., [2, 3, 5] to run specific dimensions
+filter_modes = [] # e.g., ["clean"], ["noisy"] to run specific noise conditions
+filter_prompt_strategies = [
+] # e.g., ["guided", "thinking"] to run specific strategies
+target_experiment_ids = [
+] # e.g., [112, 64, 36] to re-run exact DB experiment rows
 
 [evaluation]
 # Standard independent benchmark evaluation runs per condition for champions & baselines:
@@ -54,8 +56,4 @@ eval_timeout_seconds = 30.0
 fill_missing_only = true
 
 # Classical Baselines evaluated on identical benchmark problems (Notebook 06):
-classical_baselines = [
-    "CMA-ES",
-    "DE",
-    "PSO"
-]
+classical_baselines = ["CMA-ES", "DE", "PSO"]

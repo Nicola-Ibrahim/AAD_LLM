@@ -1,8 +1,15 @@
 from evolution.domain.base import DomainEntity, EntityID, ValueObject
 from evolution.domain.entities.experiment import ExperimentSummary
+from evolution.domain.enums.bbob_function import BBOBFunction
 from evolution.domain.enums.noise_model import NoiseModelEnum
 from evolution.domain.enums.problem_mode import ProblemMode
-from evolution.domain.exceptions import BaseDomainException
+from evolution.domain.enums.prompt_strategy import PromptStrategy
+from evolution.domain.exceptions import (
+    AlgorithmTimeoutException,
+    BaseDomainException,
+    CodeValidationException,
+    OrchestrationError,
+)
 from evolution.domain.interfaces.problem import BaseProblem
 from evolution.domain.services.noise_strategy import (
     AWGNStrategy,
@@ -27,11 +34,16 @@ __all__ = [
     "ValueObject",
     "EntityID",
     "BaseDomainException",
+    "CodeValidationException",
+    "AlgorithmTimeoutException",
+    "OrchestrationError",
     "ExperimentSummary",
     "IterationMetadata",
     "ProblemProfile",
     "ProblemMode",
+    "PromptStrategy",
     "BaseProblem",
+    "BBOBFunction",
     "NoiseModelEnum",
     "BaseNoiseStrategy",
     "NoNoiseStrategy",

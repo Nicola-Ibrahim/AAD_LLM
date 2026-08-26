@@ -4,12 +4,21 @@ Provides LLM-driven evolutionary optimization, code synthesis,
 candidate evaluation, and experiment tracking for continuous optimization problems.
 """
 
+from evolution.application import (
+    EvolutionExperimentService,
+    EvolutionTask,
+    SessionResult,
+    TaskOrchestrator,
+)
+from evolution.application.synthesis import LLaMEASession
 from evolution.domain import (
     AWGNStrategy,
+    AlgorithmTimeoutException,
     BaseDomainException,
     BaseNoiseStrategy,
     BaseProblem,
     Code,
+    CodeValidationException,
     Convergence,
     DomainEntity,
     EntityID,
@@ -23,17 +32,12 @@ from evolution.domain import (
     NoNoiseStrategy,
     NoiseModelEnum,
     NoiseStrategyFactory,
+    OrchestrationError,
     ProblemMode,
     ProblemProfile,
+    PromptStrategy,
     ValueObject,
 )
-from evolution.orchestration import (
-    EvolutionTask,
-    OrchestrationError,
-    TaskOrchestrator,
-)
-from evolution.synthesis.prompts import PromptStrategy
-from evolution.synthesis.session import LLaMEASession, SessionResult
 
 __all__ = [
     # Domain
@@ -41,10 +45,14 @@ __all__ = [
     "ValueObject",
     "EntityID",
     "BaseDomainException",
+    "CodeValidationException",
+    "AlgorithmTimeoutException",
+    "OrchestrationError",
     "ExperimentSummary",
     "IterationMetadata",
     "ProblemProfile",
     "ProblemMode",
+    "PromptStrategy",
     "BaseProblem",
     "NoiseModelEnum",
     "BaseNoiseStrategy",
@@ -58,12 +66,10 @@ __all__ = [
     "Code",
     "Error",
     "Convergence",
-    # Orchestration
+    # Application & Task Execution
+    "EvolutionExperimentService",
     "TaskOrchestrator",
     "EvolutionTask",
-    "OrchestrationError",
-    # Synthesis
     "LLaMEASession",
     "SessionResult",
-    "PromptStrategy",
 ]

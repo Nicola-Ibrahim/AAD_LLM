@@ -8,20 +8,17 @@ from typing import Any
 from llamea import LLaMEA
 
 from shared.config import DATA_DIR
+from evolution.domain.enums import PromptStrategy
 from evolution.domain.interfaces import BaseProblem
-from evolution.domain.services.noise_strategy import NoiseStrategyFactory
-from evolution.domain.vos import ProblemProfile
 from evolution.infra.llm.client import LLMClient
-from evolution.infra.problems import BBOBProblem
-from evolution.infra.storage.base import ExperimentRepository
-from evolution.infra.storage.code.repository import CodeRepository
-from evolution.synthesis.evaluator import Evaluator
-from evolution.synthesis.prompts import (
+from evolution.infra.prompts import (
     EXAMPLE_PROMPT,
     FORMAT_PROMPT,
-    PromptStrategy,
     build_task_prompt,
 )
+from evolution.infra.storage.base import ExperimentRepository
+from evolution.infra.storage.code.repository import CodeRepository
+from evolution.application.synthesis.evaluator import Evaluator
 
 # Suppress joblib warning when LLaMEA passes timeout to SequentialBackend
 warnings.filterwarnings(
@@ -53,41 +50,9 @@ class SessionResult:
 
 
 class LLaMEASession:
-    """
-    Manages the lifecycle of a single LLaMEA synthesis session on a BBOB problem.
+    """Manages the lifecycle and execution of a single LLaMEA synthesis session on an optimization problem.
 
-    Workflow:
-                   LLaMEASession(problem, llm, db, budget, iterations)
-                                        │
-                                        ▼
-                    Initialize DB Experiment (Create / Resume ID)
-                                        │
-                                        ▼
-                                LLaMEASession.run()
-                                        │
-               ┌────────────────────────┴────────────────────────┐
-               ▼                                                 ▼
-       Build Task Prompt                                 Setup Evaluator & Engine
-               │                                                 │
-               └────────────────────────┬────────────────────────┘
-                                        ▼
-               ┌──────────────────────────────────────────────────┐
-               │ ↺ Evolutionary Synthesis Loop (for N iterations) │
-               │                                                  │
-               │   LLM Generates / Mutates Code ─────────┐        │
-               │            ▲                            │        │
-               │            │ (Feedback:                 ▼        │
-               │            │  error / score)   Evaluator Scores  │
-               │            └─────────────────── & Logs Iteration │
-               └────────────────────────┬─────────────────────────┘
-                                        │
-               ┌────────────────────────┴────────────────────────┐
-            Success                                           Failure
-      (mark DB completed)                              (mark DB failed)
-             │                                                 │
-             ▼                                                 ▼
-       Extract Best Solution                            Raise Exception / Log Error
-       Return SessionResult
+    Executes the iterative evolutionary loop for a pre-registered experiment ID and returns a SessionResult.
     """
 
     def __init__(
@@ -95,25 +60,28 @@ class LLaMEASession:
         problem: BaseProblem,
         experiment_id: int,
         initial_iteration: int,
-        prompt_strategy: PromptStrategy,
+        prompt_strategy: PromptStrategy | str,
         llm_client: LLMClient,
         db_repo: ExperimentRepository,
         code_repo: CodeRepository,
-        budget: int,
-        iterations: int,
+        budget: int = DEFAULT_BUDGET,
+        iterations: int = DEFAULT_MAX_ITERATIONS,
         stagnation_threshold: int = 3,
     ):
-        """Initializes the synthesis session instance directly with fully resolved domain objects.
-
-        Note: Use factory methods `LLaMEASession.create(...)` or `LLaMEASession.resume(...)`.
-        """
+        """Initializes the synthesis session with pre-resolved domain objects and database experiment ID."""
         if llm_client is None:
             raise ValueError("LLaMEASession requires a valid LLMClient")
+        if problem is None:
+            raise ValueError("LLaMEASession requires a valid problem")
 
         self._problem = problem
         self._experiment_id = experiment_id
         self._initial_iteration = initial_iteration
-        self._prompt_strategy = prompt_strategy
+        self._prompt_strategy = (
+            PromptStrategy(prompt_strategy)
+            if isinstance(prompt_strategy, str)
+            else prompt_strategy
+        )
         self._llm_client = llm_client
         self._db_repo = db_repo
         self._code_repo = code_repo
@@ -130,111 +98,6 @@ class LLaMEASession:
             / f"experiment_{self._experiment_id}"
         )
         self._archive_dir.mkdir(parents=True, exist_ok=True)
-
-    @classmethod
-    def create(
-        cls,
-        problem: BaseProblem,
-        llm_client: LLMClient,
-        db_repo: ExperimentRepository,
-        code_repo: CodeRepository,
-        budget: int = DEFAULT_BUDGET,
-        iterations: int = DEFAULT_MAX_ITERATIONS,
-        prompt_strategy: PromptStrategy | str = PromptStrategy.BASELINE,
-        stagnation_threshold: int = 3,
-    ) -> "LLaMEASession":
-        """Factory method for creating a brand-new synthesis session."""
-        if llm_client is None:
-            raise ValueError("LLaMEASession requires a valid LLMClient")
-        if problem is None:
-            raise ValueError("LLaMEASession.create requires a valid problem")
-        strategy = (
-            PromptStrategy(prompt_strategy) if isinstance(prompt_strategy, str) else prompt_strategy
-        )
-        problem_profile = ProblemProfile(
-            problem_id=problem.problem_id,
-            dim=problem.dim,
-            noise_std=problem.noise_std,
-            noise_model=problem.noise_model,
-            instance_id=problem.instance_id,
-            true_optimum=problem.true_optimum,
-        )
-        exp_id = db_repo.create_experiment(
-            problem=problem_profile,
-            mode=problem.mode,
-            llm_name=llm_client.model.name,
-            prompt_strategy=strategy,
-            budget=budget,
-            iterations=iterations,
-        )
-
-        return cls(
-            problem=problem,
-            experiment_id=exp_id,
-            initial_iteration=0,
-            prompt_strategy=strategy,
-            llm_client=llm_client,
-            db_repo=db_repo,
-            code_repo=code_repo,
-            budget=budget,
-            iterations=iterations,
-            stagnation_threshold=stagnation_threshold,
-        )
-
-    @classmethod
-    def resume(
-        cls,
-        experiment_id: int,
-        llm_client: LLMClient,
-        db_repo: ExperimentRepository,
-        code_repo: CodeRepository,
-        iterations: int | None = None,
-        stagnation_threshold: int = 3,
-    ) -> "LLaMEASession":
-        """Factory method for resuming an existing synthesis session from database state."""
-        if llm_client is None:
-            raise ValueError("LLaMEASession requires a valid LLMClient")
-        exps = db_repo.load(experiment_id=experiment_id)
-        if not exps:
-            raise ValueError(f"Experiment ID {experiment_id} was not found in the database.")
-        exp = exps[0]
-        if exp.status != "running":
-            raise ValueError(
-                f"Cannot resume experiment {experiment_id} because its status is '{exp.status}'."
-            )
-
-        strat = NoiseStrategyFactory.create(
-            noise_model=exp.problem.noise_model,
-            noise_std=exp.problem.noise_std or 0.0,
-        )
-
-        problem = BBOBProblem(
-            problem_id=exp.problem.problem_id,
-            dim=exp.problem.dim,
-            noise_strategy=strat,
-            instance_id=exp.problem.instance_id,
-        )
-
-        strategy = PromptStrategy(exp.prompt_strategy)
-        budget = exp.budget if exp.budget is not None else DEFAULT_BUDGET
-        total_iterations = (
-            iterations
-            if iterations is not None
-            else (exp.max_iterations if exp.max_iterations is not None else DEFAULT_MAX_ITERATIONS)
-        )
-
-        return cls(
-            problem=problem,
-            experiment_id=experiment_id,
-            initial_iteration=len(exp.iterations),
-            prompt_strategy=strategy,
-            llm_client=llm_client,
-            db_repo=db_repo,
-            code_repo=code_repo,
-            budget=budget,
-            iterations=total_iterations,
-            stagnation_threshold=stagnation_threshold,
-        )
 
     @property
     def _experiment_name(self) -> str:

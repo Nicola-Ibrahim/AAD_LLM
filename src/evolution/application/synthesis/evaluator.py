@@ -17,8 +17,7 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
-from evolution.synthesis.execution.exceptions import AlgorithmTimeoutException
-from evolution.synthesis.execution import AlgorithmExecutor
+from shared.execution import AlgorithmExecutor, AlgorithmTimeoutException
 from evolution.infra.storage.base import ExperimentRepository
 from evolution.infra.storage.code.repository import CodeRepository
 

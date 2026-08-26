@@ -4,10 +4,9 @@ from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrateg
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.code.repository import CodeRepository
-from evolution.infra.storage.sqlite.repository import SQLiteExperimentRepository
-from evolution.synthesis.evaluator import Evaluator
-from evolution.synthesis.execution.compiler import CodeCompiler
-from evolution.synthesis.execution.executor import AlgorithmExecutor
+from evolution.infra.storage.experiments.repository import SQLiteExperimentRepository
+from evolution.application.synthesis.evaluator import Evaluator
+from shared.execution import AlgorithmExecutor, CodeCompiler
 
 
 def test_failure_tiers_and_is_failure():

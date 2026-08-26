@@ -1,17 +1,9 @@
-from enum import StrEnum
 from pathlib import Path
 
 import numpy as np
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from evolution.domain.enums import ProblemMode
-
-
-class PromptStrategy(StrEnum):
-    BASELINE = "baseline"
-    THINKING = "thinking"
-    VECTORIZATION = "vectorization"
-    GUIDED = "guided"
+from evolution.domain.enums import ProblemMode, PromptStrategy
 
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"

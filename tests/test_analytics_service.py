@@ -158,7 +158,6 @@ class TestApplicationServicesIntegration:
 
 class TestConcreteInfraRepositories:
     def test_sqlite_benchmark_read_repository(self):
-        from benchmarking.infra import SQLiteBenchmarkReadRepository
         repo = SQLiteBenchmarkReadRepository(DATA_DIR / "db.sqlite3")
         if repo.db_path.exists():
             df, count = repo.get_experiment_balance()
@@ -167,7 +166,6 @@ class TestConcreteInfraRepositories:
             assert isinstance(conditions, list)
 
     def test_champions_read_repository(self):
-        from benchmarking.infra import ChampionsReadRepository
         repo = ChampionsReadRepository(DATA_DIR / "db.sqlite3", DATA_DIR / "champions.json")
         if repo.db_path.exists():
             champs = repo.extract_champions()
@@ -176,8 +174,6 @@ class TestConcreteInfraRepositories:
             assert isinstance(flat, dict)
 
     def test_trace_reader(self):
-        from benchmarking.infra import IOHTraceReader
-        from shared.config import RESULTS_DIR
         repo = IOHTraceReader(RESULTS_DIR / "evaluations" / "traces")
         assert hasattr(repo, "load_evaluation_traces")
         assert hasattr(repo, "get_run_count")

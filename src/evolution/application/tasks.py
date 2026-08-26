@@ -1,31 +1,38 @@
+"""Application Task Concurrency & Process Pool Orchestration.
+
+Defines self-contained picklable work units (EvolutionTask) and the multi-core
+process pool orchestrator (TaskOrchestrator) for parallel evolutionary campaigns.
+"""
+
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
 from shared.config import DATA_DIR
+from shared.database import initialize_sqlite_storage, setup_storage_environment
+from evolution.domain.enums import PromptStrategy
+from evolution.domain.exceptions import OrchestrationError
 from evolution.domain.interfaces import BaseProblem
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.storage.code.repository import CodeRepository
-from evolution.infra.storage.sqlite.factory import initialize_sqlite_storage, setup_storage_environment
-from evolution.synthesis.prompts import PromptStrategy
-from evolution.synthesis.session import LLaMEASession, SessionResult
+from evolution.application.synthesis.session import LLaMEASession, SessionResult
 
 
 @dataclass
 class EvolutionTask:
-    """A single unit of evolution work to be executed in the process pool.
+    """A single picklable unit of evolution work executed inside a worker process.
 
-    Stores all parameters required to construct and run a LLaMEASession inside a worker process,
-    or a custom picklable fn callable for custom tasks.
+    Stores pre-resolved domain problem specifications and registered experiment IDs.
     """
 
     key: str
+    experiment_id: int = 1
     problem: BaseProblem | None = None
     llm_client: LLMClient | None = None
+    initial_iteration: int = 0
     budget: int = 1000000
-    iterations: int | None = None
-    resume_experiment_id: int | None = None
+    iterations: int = 10
     prompt_strategy: PromptStrategy | str = PromptStrategy.BASELINE
     db_path: Path = field(default_factory=lambda: DATA_DIR / "db.sqlite3")
     fn: Callable[[], SessionResult] | None = None
@@ -35,43 +42,30 @@ class EvolutionTask:
         if self.fn is not None:
             return self.fn()
 
+        if self.problem is None:
+            raise ValueError(f"EvolutionTask '{self.key}' requires a valid problem instance.")
+        if self.llm_client is None:
+            raise ValueError(f"EvolutionTask '{self.key}' requires a valid LLMClient instance.")
+
         db_repo = initialize_sqlite_storage(self.db_path)
         code_repo = CodeRepository()
 
-        if self.resume_experiment_id is not None:
-            session = LLaMEASession.resume(
-                experiment_id=self.resume_experiment_id,
-                llm_client=self.llm_client,
-                db_repo=db_repo,
-                code_repo=code_repo,
-                iterations=self.iterations,
-            )
-        else:
-            session = LLaMEASession.create(
-                problem=self.problem,
-                llm_client=self.llm_client,
-                db_repo=db_repo,
-                code_repo=code_repo,
-                budget=self.budget,
-                iterations=self.iterations or 10,
-                prompt_strategy=self.prompt_strategy,
-            )
+        session = LLaMEASession(
+            problem=self.problem,
+            experiment_id=self.experiment_id,
+            initial_iteration=self.initial_iteration,
+            prompt_strategy=self.prompt_strategy,
+            llm_client=self.llm_client,
+            db_repo=db_repo,
+            code_repo=code_repo,
+            budget=self.budget,
+            iterations=self.iterations,
+        )
         return session.run()
 
 
-class OrchestrationError(RuntimeError):
-    """Exception raised when one or more evolution tasks fail."""
-
-    def __init__(self, errors: dict[str, Exception]):
-        formatted_details = "\n".join(
-            f"  - Task '{key}': {type(err).__name__}: {err}" for key, err in errors.items()
-        )
-        super().__init__(f"Evolution tasks failed:\n{formatted_details}")
-        self.errors = errors
-
-
 def _execute_task(task: EvolutionTask) -> SessionResult:
-    """Worker function that runs the task directly."""
+    """Worker function that runs the task directly inside the worker process."""
     return task()
 
 
@@ -98,7 +92,6 @@ class TaskOrchestrator:
         Raises:
             OrchestrationError: If one or more tasks fail during execution.
         """
-
         results: dict[str, SessionResult] = {}
         errors: dict[str, Exception] = {}
         workers = self.max_workers if self.max_workers is not None else len(tasks)

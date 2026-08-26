@@ -22,12 +22,7 @@ dimensions = [2, 3, 5]
 noise_stds = [0.0, 0.05]
 
 # Prompt Engineering Strategies evaluated during algorithm synthesis:
-prompt_strategies = [
-    "baseline",
-    "thinking",
-    "vectorization",
-    "guided"
-]
+prompt_strategies = ["baseline", "thinking", "vectorization", "guided"]
 
 [evolution]
 # Evolutionary Generations: Number of LLaMEA mutation/selection iterations per experiment run

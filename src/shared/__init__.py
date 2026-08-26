@@ -16,7 +16,14 @@ from shared.database import (
     ensure_wal_mode,
     get_db_connection,
     get_db_engine,
+    initialize_sqlite_storage,
     setup_storage_environment,
+)
+from shared.execution import (
+    AlgorithmExecutor,
+    AlgorithmTimeoutException,
+    CodeCompiler,
+    CodeValidationException,
 )
 from shared.tables import (
     Base,
@@ -39,6 +46,7 @@ __all__ = [
     "get_db_connection",
     "get_db_engine",
     "create_db_session_factory",
+    "initialize_sqlite_storage",
     "ensure_wal_mode",
     "build_engine",
     "build_session_factory",
@@ -49,4 +57,9 @@ __all__ = [
     "IterationORM",
     "ErrorLogORM",
     "ExperimentMode",
+    # Execution Infrastructure
+    "CodeCompiler",
+    "AlgorithmExecutor",
+    "CodeValidationException",
+    "AlgorithmTimeoutException",
 ]

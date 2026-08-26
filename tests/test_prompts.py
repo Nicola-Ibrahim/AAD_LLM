@@ -1,9 +1,9 @@
 import numpy as np
 
-from evolution.domain.enums import ProblemMode
+from evolution.domain.enums import ProblemMode, PromptStrategy
 from evolution.domain.services.noise_strategy import NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
-from evolution.synthesis.prompts import PromptStrategy, build_task_prompt
+from evolution.infra.prompts import build_task_prompt
 
 
 def test_build_task_prompt_with_array_bounds():
