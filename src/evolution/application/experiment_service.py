@@ -102,10 +102,10 @@ class EvolutionExperimentService:
             "retry_failed_synthesis": do_retry_failed,
             "auto_resume": cfg["auto_resume"],
             "skip_completed": cfg["skip_completed"],
-            "filter_problems": cfg["filter_problems"],
-            "filter_dims": cfg["filter_dims"],
-            "filter_modes": cfg["filter_modes"],
-            "filter_strategies": cfg["filter_strategies"],
+            "problem_ids": cfg["problem_ids"],
+            "dimensions": cfg["dimensions"],
+            "noise_stds": cfg["noise_stds"],
+            "prompt_strategies": [s.value for s in prompt_strats],
             "target_exp_ids": cfg["target_exp_ids"],
         }
         return df_matrix, summary
@@ -226,42 +226,14 @@ class EvolutionExperimentService:
         cfg: dict[str, Any],
     ) -> tuple[list[int], list[int], list[float], list[PromptStrategy]]:
         """Resolves active problems, dimensions, noise standard deviations, and strategies from config."""
-        f_problems = cfg.get("filter_problems")
-        f_dims = cfg.get("filter_dims")
-        f_modes = cfg.get("filter_modes")
-        f_strats = cfg.get("filter_strategies")
-
-        matrix_cfg = cfg["matrix"]
-        evolution_cfg = cfg["evolution"]
-
-        raw_strats = matrix_cfg.get(
-            "prompt_strategies", evolution_cfg.get("prompt_strategies", ["baseline"])
-        )
+        raw_strats = cfg.get("prompt_strategies", ["baseline"])
         if isinstance(raw_strats, str):
             raw_strats = [raw_strats]
         prompt_strats = [getattr(PromptStrategy, s.upper()) for s in raw_strats]
-        if f_strats:
-            prompt_strats = [
-                s for s in prompt_strats if s.value.lower() in [f.lower() for f in f_strats]
-            ]
 
-        problems = [int(p) for p in matrix_cfg.get("problem_ids", [1, 8, 11, 15, 21])]
-        if f_problems:
-            problems = [p for p in problems if p in f_problems]
-
-        dimensions = [int(d) for d in matrix_cfg.get("dimensions", [2, 3, 5])]
-        if f_dims:
-            dimensions = [d for d in dimensions if d in f_dims]
-
-        noise_stds = [float(s) for s in matrix_cfg.get("noise_stds", [0.0, 0.05])]
-        if f_modes:
-            allowed_modes = [m.lower() for m in f_modes]
-            noise_stds = [
-                s
-                for s in noise_stds
-                if ("clean" in allowed_modes and s == 0.0)
-                or ("noisy" in allowed_modes and s > 0.0)
-            ]
+        problems = [int(p) for p in cfg.get("problem_ids", [1, 8, 11, 15, 21])]
+        dimensions = [int(d) for d in cfg.get("dimensions", [2, 3, 5])]
+        noise_stds = [float(s) for s in cfg.get("noise_stds", [0.0, 0.05])]
 
         return problems, dimensions, noise_stds, prompt_strats
 
