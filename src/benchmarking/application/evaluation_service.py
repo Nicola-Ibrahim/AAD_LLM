@@ -57,9 +57,10 @@ class EvaluationService:
         self.project_root = Path(project_root)
 
         cfg = self.config_repo.load_config()
-        self.n_runs = int(cfg.get("target_eval_runs", 10))
+        self.n_runs = int(cfg.get("target_eval_runs", 20))
         self.budget_multiplier = int(cfg.get("budget_multiplier", 10000))
-        self.trial_timeout_seconds = float(cfg.get("eval_timeout_seconds", 300.0))
+        self.trial_timeout_seconds = float(cfg.get("eval_timeout_seconds", 30.0))
+        self.force_rerun = bool(cfg.get("force_rerun", False))
         self.classical_baselines = cfg.get("classical_baselines", ["cmaes", "de", "pso"])
         self.target_problems = cfg.get("target_problems", [1, 8, 11, 15, 21])
         self.target_dims = cfg.get("target_dims", [2, 3, 5])
@@ -254,7 +255,21 @@ class EvaluationService:
                 store_positions=False,
             )
 
+            consecutive_failures = 0
             for run_idx in range(start_run_idx, self.n_runs + 1):
+                if consecutive_failures >= 2:
+                    clean_errors.append(float("inf"))
+                    runtimes.append(0.0)
+                    evals_list.append(budget)
+                    self.logger.trial(
+                        trial_idx=run_idx,
+                        total_trials=self.n_runs,
+                        best_clean=float("inf"),
+                        runtime=0.0,
+                        evals_used=budget,
+                    )
+                    continue
+
                 prob = BBOBProblem(
                     problem_id=p_id,
                     dim=dim,
@@ -264,8 +279,13 @@ class EvaluationService:
                 prob.attach_logger(logger_ioh)
                 try:
                     best_clean, rt, evals_used = runner_fn(prob, budget)
+                    if np.isinf(best_clean):
+                        consecutive_failures += 1
+                    else:
+                        consecutive_failures = 0
                 except Exception:
                     best_clean, rt, evals_used = float("inf"), 0.0, budget
+                    consecutive_failures += 1
 
                 clean_errors.append(float(best_clean))
                 runtimes.append(float(rt))
@@ -311,11 +331,12 @@ class EvaluationService:
     def run_champion_trials(
         self,
         champion_info: dict[str, Any],
-        force_rerun: bool = False,
+        force_rerun: bool | None = None,
         verbose: bool = True,
     ) -> dict[str, Any]:
         """Execute empirical trials for a single LLM champion algorithm."""
         self.logger.verbose = verbose
+        rerun = self.force_rerun if force_rerun is None else force_rerun
         p_id = int(champion_info["problem_id"])
         dim = int(champion_info["dim"])
         noise_std = float(champion_info.get("noise_std", 0.0))
@@ -367,7 +388,7 @@ class EvaluationService:
             runner_fn=champion_runner,
             prov_metadata=prov_metadata,
             expected_code_hash=code_hash,
-            force_rerun=force_rerun,
+            force_rerun=rerun,
             verbose=verbose,
         )
 
@@ -377,11 +398,12 @@ class EvaluationService:
         dim: int,
         noise_std: float,
         p_id: int,
-        force_rerun: bool = False,
+        force_rerun: bool | None = None,
         verbose: bool = True,
     ) -> dict[str, Any]:
         """Execute empirical trials for a classical baseline algorithm."""
         self.logger.verbose = verbose
+        rerun = self.force_rerun if force_rerun is None else force_rerun
         if baseline_slug not in BASELINES:
             raise ValueError(f"Unknown baseline: {baseline_slug}. Available: {list(BASELINES.keys())}")
 
@@ -402,7 +424,7 @@ class EvaluationService:
             runner_fn=baseline_runner,
             prov_metadata=prov_metadata,
             expected_code_hash=None,
-            force_rerun=force_rerun,
+            force_rerun=rerun,
             verbose=verbose,
         )
 
@@ -411,11 +433,12 @@ class EvaluationService:
     def run_evaluations(
         self,
         solver_type: str = "all",
-        force_rerun: bool = False,
+        force_rerun: bool | None = None,
         verbose: bool = True,
     ) -> pd.DataFrame:
         """Run all pending/partial evaluations matching the configured workload."""
         self.logger.verbose = verbose
+        rerun = self.force_rerun if force_rerun is None else force_rerun
 
         df_audit = self.audit_workload(solver_type=solver_type)
         active = df_audit[~df_audit["is_filtered"] & (df_audit["status"] != "MISSING_CODE")]
@@ -454,14 +477,14 @@ class EvaluationService:
                 matching = [v for k, v in champions_flat.items() if k.endswith(clean_k) or k == clean_k]
                 if not matching:
                     continue
-                res = self.run_champion_trials(matching[0], force_rerun=force_rerun, verbose=verbose)
+                res = self.run_champion_trials(matching[0], force_rerun=rerun, verbose=verbose)
             else:
                 res = self.run_baseline_trials(
                     baseline_slug=row["solver"],
                     dim=dim,
                     noise_std=noise_std,
                     p_id=p_id,
-                    force_rerun=force_rerun,
+                    force_rerun=rerun,
                     verbose=verbose,
                 )
 
@@ -493,20 +516,22 @@ class EvaluationService:
 
     def run_champions(
         self,
-        force_rerun: bool = False,
+        force_rerun: bool | None = None,
         verbose: bool = True,
     ) -> pd.DataFrame:
         """Run all pending/partial champion evaluations matching the config matrix."""
+        rerun = self.force_rerun if force_rerun is None else force_rerun
         return self.run_evaluations(
-            solver_type="champions", force_rerun=force_rerun, verbose=verbose
+            solver_type="champions", force_rerun=rerun, verbose=verbose
         )
 
     def run_baselines(
         self,
-        force_rerun: bool = False,
+        force_rerun: bool | None = None,
         verbose: bool = True,
     ) -> pd.DataFrame:
         """Run all pending/partial baseline evaluations matching the config matrix."""
+        rerun = self.force_rerun if force_rerun is None else force_rerun
         return self.run_evaluations(
-            solver_type="baselines", force_rerun=force_rerun, verbose=verbose
+            solver_type="baselines", force_rerun=rerun, verbose=verbose
         )

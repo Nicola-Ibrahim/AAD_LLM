@@ -319,7 +319,7 @@ def test_evaluation_config_repository_edge_cases(tmp_path: Path):
         baselines_path=tmp_path / "nonexistent_base.toml",
     )
     cfg_missing = repo_missing.load_config()
-    assert cfg_missing["target_eval_runs"] == 10
+    assert cfg_missing["target_eval_runs"] == 20
     assert "cmaes" in cfg_missing["baseline_labels"]
 
     # 2. Empty TOML file
@@ -327,14 +327,14 @@ def test_evaluation_config_repository_edge_cases(tmp_path: Path):
     empty_cfg_file.write_text("", encoding="utf-8")
     repo_empty = EvaluationConfigRepository(config_path=empty_cfg_file)
     cfg_empty = repo_empty.load_config()
-    assert cfg_empty["target_eval_runs"] == 10
+    assert cfg_empty["target_eval_runs"] == 20
 
     # 3. File with empty [benchmarking] section
     bench_empty_file = tmp_path / "bench_empty.toml"
     bench_empty_file.write_text("[benchmarking]\n", encoding="utf-8")
     repo_bench_empty = EvaluationConfigRepository(config_path=bench_empty_file)
     cfg_bench_empty = repo_bench_empty.load_config()
-    assert cfg_bench_empty["target_eval_runs"] == 10
+    assert cfg_bench_empty["target_eval_runs"] == 20
     assert cfg_bench_empty["budget_multiplier"] == 10000
 
     # 4. File with [evaluation] section fallback

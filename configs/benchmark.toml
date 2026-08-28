@@ -5,13 +5,18 @@
 
 [benchmarking]
 # Target independent benchmark evaluation runs per condition (e.g., 10, 15, 20)
-target_eval_runs = 10
+target_eval_runs = 20
 
 # Budget multiplier per dimension (Budget = dim * budget_multiplier, e.g. 5D * 10,000 = 50,000 evaluations)
 budget_multiplier = 10000
 
 # Per-trial execution wall-clock timeout in seconds
-eval_timeout_seconds = 300.0
+eval_timeout_seconds = 30.0
+
+# Execution & Auto-Resume Control:
+#   • force_rerun = false: Automatically resumes from existing runs (e.g. runs 11..20) and skips completed
+#   • force_rerun = true:  Wipes existing traces and re-evaluates all 20 runs from scratch
+force_rerun = false
 
 # Classical Baselines evaluated on identical benchmark problems
 classical_baselines = ["cmaes", "de", "pso"]

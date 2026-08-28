@@ -112,12 +112,12 @@ The continuous black-box optimization benchmark suite comprises five canonical p
 ### 4.2 Benchmark Factorial Volume
 * **Search Space Dimensions**: $D \in \{2, 3, 5\}$.
 * **Noise Regimes**: Deterministic ($\sigma = 0.0$) and Heteroscedastic Optimality-Gap Noise ($\sigma = 0.05$).
-* **Replications**: $R = 10$ independent runs per condition with distinct PRNG seeds.
+* **Replications**: $R = 20$ independent runs per condition with distinct PRNG seeds.
 * **Evaluation Budget**: $B_{\text{eval}} = 50{,}000$ function evaluations ($10{,}000 \times D$ scaling).
 * **Comparison Solvers (11 Total)**:
   - **3 Classical Baselines**: Covariance Matrix Adaptation Evolution Strategy (CMA-ES), Differential Evolution (`best1bin`), Particle Swarm Optimization (PSO).
   - **8 LLM Champion Optimizers**: $2 \text{ Model Scales } (7\text{B}, 14\text{B}) \times 4 \text{ Prompt Strategies } (\text{Baseline}, \text{Guided}, \text{Thinking}, \text{Vectorization})$.
-* **Total Execution Volume**: $5 \text{ problems} \times 3 \text{ dimensions} \times 2 \text{ noise levels} \times 10 \text{ seeds} \times 11 \text{ solvers} = \mathbf{3{,}300 \text{ full benchmark runs}}$ ($1.65 \times 10^8$ total objective evaluations).
+* **Total Execution Volume**: $5 \text{ problems} \times 3 \text{ dimensions} \times 2 \text{ noise levels} \times 20 \text{ seeds} \times 11 \text{ solvers} = \mathbf{6{,}600 \text{ full benchmark runs}}$ ($3.30 \times 10^8$ total objective evaluations).
 
 ---
 
@@ -127,7 +127,7 @@ To prevent ambiguity, the fundamental benchmark operational units are strictly f
 * **Candidate Point $\mathbf{x} \in \mathbb{R}^D$**: A single spatial coordinate vector in $D$-dimensional continuous space.
 * **Function Evaluation $f(\mathbf{x})$**: A single query to the objective oracle, representing the **fundamental computational cost metric (X-axis)**.
 * **Algorithmic Iteration $t \in \mathbb{N}$**: An internal update step of the solver (variable across algorithms and population sizes; not used on axes to preserve fairness).
-* **Replication Run $r \in [1, 10]$**: An independent execution of the solver on condition $(f_p, D, \sigma)$ initialized with a unique random seed.
+* **Replication Run $r \in [1, 20]$**: An independent execution of the solver on condition $(f_p, D, \sigma)$ initialized with a unique random seed.
 
 ### 5.1 Runtime Empirical Cumulative Distribution Function (Runtime ECDF)
 Performance is aggregated across problem instances and runs using the Runtime ECDF over a discretized ladder of **51 logarithmic precision target values** spanning **10 orders of magnitude**:
@@ -140,7 +140,7 @@ $$T_r(f_p, \theta) = \min \left\{ t \in [1, B_{\text{eval}}] \;\middle|\; \vert 
 
 If the target precision $\theta$ is not reached within the budget $B_{\text{eval}} = 50{,}000$, $T_r(f_p, \theta) = \infty$.
 
-The empirical fraction of solved targets at evaluation count $t \in [1, 50000]$ across $N_{\text{runs}} = 10$ replications is:
+The empirical fraction of solved targets at evaluation count $t \in [1, 50000]$ across $N_{\text{runs}} = 20$ replications is:
 
 $$\operatorname{ECDF}(t) = \frac{1}{|\Theta| \cdot N_{\text{runs}}} \sum_{r=1}^{N_{\text{runs}}} \sum_{\theta \in \Theta} \mathbb{I}\left( T_r(f_p, \theta) \le t \right)$$
 
@@ -190,8 +190,8 @@ $$\text{SR}(\mathcal{C}) = \frac{1}{|\mathcal{C}|} \sum_{f_p \in \mathcal{C}} \t
 
 ### 5.5 Median Convergence Trajectories with Interquartile Ranges (IQR)
 To visualize convergence dynamics without imposing normality assumptions:
-* Objective values across all 10 runs are sampled on a uniform logarithmic evaluation grid $k \in [1, 50000]$ (200 log-spaced points).
-* The **median** trajectory $\tilde{y}(t) = \operatorname{median}(\Delta y_1(t), \dots, \Delta y_{10}(t))$ is plotted alongside the shaded **25th–75th percentile Interquartile Range**:
+* Objective values across all 20 runs are sampled on a uniform logarithmic evaluation grid $k \in [1, 50000]$ (200 log-spaced points).
+* The **median** trajectory $\tilde{y}(t) = \operatorname{median}(\Delta y_1(t), \dots, \Delta y_{20}(t))$ is plotted alongside the shaded **25th–75th percentile Interquartile Range**:
   $$\operatorname{IQR}(t) = \left[ Q_1(t), Q_3(t) \right]$$
 
 ### 5.6 Cross-Environment Noise Degradation Gap & Retention Ratio

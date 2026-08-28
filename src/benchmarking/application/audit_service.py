@@ -61,7 +61,7 @@ class EvaluationAuditService:
         self.config_repo = config_repo
 
         cfg = self.config_repo.load_config()
-        self.target_runs = int(cfg.get("target_eval_runs", 10))
+        self.target_runs = int(cfg.get("target_eval_runs", 20))
         self.classical_baselines = cfg.get("classical_baselines", ["cmaes", "de", "pso"])
         self.target_problems = cfg.get("target_problems", [1, 8, 11, 15, 21])
         self.target_dims = cfg.get("target_dims", [2, 3, 5])

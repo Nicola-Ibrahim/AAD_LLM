@@ -49,9 +49,10 @@ class EvaluationConfigRepository:
 
         return {
             "benchmarking": bench_cfg,
-            "target_eval_runs": int(bench_cfg.get("target_eval_runs", 10)),
+            "target_eval_runs": int(bench_cfg.get("target_eval_runs", 20)),
             "budget_multiplier": int(bench_cfg.get("budget_multiplier", 10000)),
-            "eval_timeout_seconds": float(bench_cfg.get("eval_timeout_seconds", 300.0)),
+            "eval_timeout_seconds": float(bench_cfg.get("eval_timeout_seconds", 30.0)),
+            "force_rerun": bool(bench_cfg.get("force_rerun", False)),
             "fill_missing_only": bool(bench_cfg.get("fill_missing_only", True)),
             "classical_baselines": bench_cfg.get(
                 "classical_baselines", ["cmaes", "de", "pso"]
