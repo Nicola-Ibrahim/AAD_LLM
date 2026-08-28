@@ -115,59 +115,94 @@ To prevent ambiguity in continuous optimization benchmarking, four distinct oper
 
 ---
 
-### 4.2 Empirical Cumulative Distribution Functions (ECDF)
+### 4.2 Empirical Cumulative Distribution Functions (ECDF) & Area Under Curve (AUC-ECDF)
 
 The performance aggregation across problem instances and runs is evaluated using the **Empirical Runtime Cumulative Distribution Function (ECDF)** as standardized by Nikolaus Hansen et al. (COCO/BBOB, 2016) and IOHprofiler (de Nobel et al., 2021).
 
 #### The 51 Logarithmic Target Checkpoints ($T$)
-Rather than measuring a binary all-or-nothing success threshold ($\Delta y \le 10^{-8}$), the benchmark establishes a discretized ladder of **51 precision target values** spanning **10 orders of magnitude** from coarse approximation ($10^2 = 100$) down to machine-precision optimum ($10^{-8}$):
+Rather than measuring a single binary threshold, the benchmark establishes a discretized ladder of **51 precision target values** spanning **10 orders of magnitude** from coarse approximation ($10^2 = 100$) down to machine-precision optimum ($10^{-8}$):
 
 $$T = \left\{ 10^{2.0 - 0.2 \cdot k} \;\middle|\; k \in \{0, 1, \dots, 50\} \right\} = \left\{ 10^{2.0}, 10^{1.8}, 10^{1.6}, \dots, 10^{0.0}, \dots, 10^{-7.8}, 10^{-8.0} \right\}$$
 
 $$\text{Total Targets } |T| = \frac{\log_{10}(10^2) - \log_{10}(10^{-8})}{\Delta \log_{10}} + 1 = \frac{2 - (-8)}{0.2} + 1 = \mathbf{51 \text{ targets}}$$
 
 #### Mathematical Formulation of Runtime ECDF
-Let $y_r(k) = \min_{j \le k} \left( f(\vec{x}_j) - f_{\text{opt}} \right)$ denote the best objective value found in run $r \in \{1, \dots, N_{\text{runs}}\}$ at or before function evaluation $k \in [1, 50000]$.
+Let $T_r(f_p, \tau_k) = \min \{ t \ge 1 \mid \Delta y_r(t) \le \tau_k \}$ denote the first-hitting evaluation count where run $r$ first reaches error $\le \tau_k$. If the target is never achieved within budget $B = 50{,}000$, $T_r(f_p, \tau_k) = \infty$.
 
-The empirical fraction of solved targets at evaluation budget $k$ is given by:
-$$\text{ECDF}(k) = \frac{1}{|T| \cdot N_{\text{runs}}} \sum_{r=1}^{N_{\text{runs}}} \sum_{t \in T} \mathbb{I}\left( y_r(k) \le t \right)$$
+The empirical fraction of solved targets at evaluation budget $t \in [1, 50000]$ is:
+$$\hat{F}(t) = \frac{1}{|T| \cdot N_{\text{runs}}} \sum_{r=1}^{N_{\text{runs}}} \sum_{\tau_k \in T} \mathbb{I}\left( T_r(f_p, \tau_k) \le t \right)$$
 
-where $\mathbb{I}(\cdot)$ is the indicator function returning $1$ if the condition is satisfied and $0$ otherwise.
+where $\mathbb{I}(\cdot)$ is the indicator function returning $1$ if true and $0$ otherwise.
 
-```
-Fraction of Targets Solved (Y-axis)
- 1.0 |                                    ┌────────── (All 51 targets solved across all 10 runs)
-     |                             ┌──────┘
- 0.5 |                      ┌──────┘
-     |               ┌──────┘
- 0.0 |───────────────┴───────────────────────────────
-     10⁰            10²            10⁴           10⁵  --> Function Evaluations (X-axis, Log-scale)
-```
+#### Area Under the Runtime ECDF Curve ($\text{AUC-ECDF}$)
+The overall anytime efficiency is quantified by integrating the ECDF curve across the logarithmic evaluation budget $u = \log_{10}(t) \in [0, \log_{10}(50000)]$:
 
-#### Properties and Interpretation:
-1. **Monotonically Non-Decreasing ($0.0 \to 1.0$)**: Because best-so-far error $y_r(k)$ is non-increasing as $k$ grows, $\text{ECDF}(k)$ is guaranteed to be monotonically non-decreasing over function evaluations.
-2. **Steepness and Height**: A steeper, left-shifted curve indicates faster convergence speed. A higher plateau indicates greater global exploration capability and fewer premature stagnations.
-3. **What "ECDF = 1.0 at 1,000 Evaluations" Signifies**: It proves that across **100% of the independent runs**, the optimizer successfully reached the global optimum ($\Delta y \le 10^{-8}$) within the first $1,000$ function calls.
-4. **Equivalence to Expected Running Time (ERT)**: The area above the ECDF curve up to budget $B$ is proportional to the Expected Running Time (ERT) across the 51 targets, providing a unified single-curve representation of both speed and robustness.
+$$\text{AUC-ECDF} = \frac{1}{\log_{10}(50000) - \log_{10}(1)} \int_{0}^{\log_{10}(50000)} \hat{F}(10^u) \, du \in [0, 1]$$
+
+$$\text{AUC-ECDF (\%)} = \text{AUC-ECDF} \times 100\%$$
 
 ---
 
-### 4.3 Empirical Target Success Rate
-The asymptotic success rate measures the fraction of runs that successfully hit the strictest precision target ($\Delta y \le 10^{-8}$) by the end of the full $50,000$ evaluation budget:
-$$\text{Success Rate} = \frac{1}{N_{\text{runs}}} \sum_{r=1}^{N_{\text{runs}}} \mathbb{I}\left( y_r(B) \le 10^{-8} \right)$$
+### 4.3 Terminal Target Success Rate by Landscape Hardness
+
+The asymptotic success rate evaluates whether a solver successfully locates the global optimum within machine precision ($\Delta y \le 10^{-8}$) by the end of the full $50,000$ evaluation budget, aggregated across BBOB landscape hardness classes:
+
+$$\text{SR}(f_p) = \frac{1}{N_{\text{runs}}} \sum_{r=1}^{N_{\text{runs}}} \mathbb{I}\left( \min_{1 \le t \le B} \Delta y_r(t) \le 10^{-8} \right)$$
+
+$$\text{SR}(\mathcal{C}) = \frac{1}{|\mathcal{C}|} \sum_{f_p \in \mathcal{C}} \text{SR}(f_p) \quad \text{for landscape class } \mathcal{C}$$
 
 ---
 
-### 4.4 Convergence Trajectories with Interquartile Ranges (IQR)
+### 4.4 Methodological Contrast: Success Rate by Hardness vs. AUC-ECDF
+
+To ensure scientific clarity, the thesis clearly distinguishes between the two complementary metrics:
+
+| Property | Success Rate by Hardness (`figure_success_rate_by_hardness.png`) | Area Under Runtime ECDF (`AUC-ECDF`) |
+| :--- | :--- | :--- |
+| **Question Answered** | *"Did the optimizer reach the global minimum by evaluation 50,000?"* | *"How fast and reliably did the optimizer progress across all precision levels throughout the entire search?"* |
+| **Target Precision** | **Single target:** Final error $\Delta y \le 10^{-8}$. | **51 logarithmic targets:** $\Delta y \in [10^{+2}, 10^{-8}]$. |
+| **Budget Awareness** | ❌ **Budget-blind:** Solving at evaluation 100 vs. 49,999 gets the identical score. | ✅ **Budget-sensitive:** Earlier convergence yields an exponentially larger area under curve. |
+| **Partial Progress** | ❌ **All-or-nothing:** Reaching $\Delta y = 10^{-7}$ is scored as $0.0$ (complete failure). | ✅ **Continuous credit:** Partial progress is credited across all intermediate targets ($10^{+2} \to 10^{-7}$). |
+| **Role in Thesis** | Topological failure diagnosis (e.g. ill-conditioning failure vs. multi-modal traps). | Primary benchmark ranking metric, statistical omnibus tests, and noise retention analysis. |
+
+#### Illustrative Scenario (Why Both Metrics Are Necessary):
+Consider three distinct algorithms on the Sphere problem ($f_1$) with a budget of 50,000 evaluations:
+1. **Algorithm A (Fast Solver, e.g., CMA-ES):** Reaches $\Delta y \le 10^{-8}$ in **250 evaluations**.
+2. **Algorithm B (Slow Solver):** Reaches $\Delta y \le 10^{-8}$ in **48,000 evaluations**.
+3. **Algorithm C (Stagnating Solver):** Reaches $\Delta y \le 10^{-6}$ in **1,000 evaluations**, but plateaus and never reaches $10^{-8}$.
+
+```
+Evaluation Outcome Comparison:
+• Success Rate (Δy ≤ 10⁻⁸):
+  - Algorithm A: 100%
+  - Algorithm B: 100%  (Indistinguishable from A despite 192x slower convergence)
+  - Algorithm C:   0%  (Scored as total failure despite reaching high accuracy 10⁻⁶)
+
+• AUC-ECDF (%):
+  - Algorithm A: ~91.4% (Heavily rewarded for early convergence)
+  - Algorithm B: ~34.2% (Penalized for slow convergence)
+  - Algorithm C: ~41.8% (Credited for solving 41 out of 51 targets)
+```
+
+#### Why Both Metrics Are Essential to the Thesis Narrative:
+1. **`figure_success_rate_by_hardness.png` (Topological Failure Analysis):**
+   * Identifies structural landscape barriers that defeat LLM-generated code (e.g., ill-conditioning in *Discus $f_{11}$* vs. local basins in *Rastrigin $f_{15}$*).
+2. **`AUC-ECDF` (Primary Comparative Benchmark):**
+   * Gold-standard IOHprofiler metric used for overall solver rankings, Friedman/Conover-Iman omnibus tests, model scale ablation, and noise robustness retention ratios:
+   $$\text{Noise Retention (\%)} = \left( \frac{\text{AUC}_{\text{noisy}}}{\text{AUC}_{\text{clean}}} \right) \times 100\%$$
+
+---
+
+### 4.5 Convergence Trajectories with Interquartile Ranges (IQR)
 * Irregular execution traces logged by IOHprofiler are interpolated onto a uniform logarithmic evaluation grid ($k \in [10^0, 10^5]$, 200 points).
 * The **median** convergence trajectory is plotted alongside the shaded **25th–75th percentile Interquartile Range (IQR)** to capture central tendency and stochastic variance without assuming normal distribution.
 
 ---
 
-### 4.5 Cross-Environment Noise Retention & Fragility Index
+### 4.6 Cross-Environment Noise Retention & Fragility Index
 Evaluates solver resilience when transitioning from deterministic ($\sigma = 0.0$) to heteroscedastic noisy landscapes ($\sigma = 0.05$):
 $$\Delta_{\text{noise}} = \text{Success Rate}_{\text{clean}} - \text{Success Rate}_{\text{noisy}}$$
-$$\text{Noise Retention Ratio} = \frac{\text{Success Rate}_{\text{noisy}}}{\text{Success Rate}_{\text{clean}} + \epsilon}$$
+$$\text{Noise Retention Ratio} = \frac{\text{AUC-ECDF}_{\text{noisy}}}{\text{AUC-ECDF}_{\text{clean}}}$$
 A smaller $\Delta_{\text{noise}}$ or higher retention ratio characterizes algorithms with inherent noise tolerance.
 
 ---

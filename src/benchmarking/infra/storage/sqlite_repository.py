@@ -1,5 +1,6 @@
 """SQLite read repository for benchmarking experiments, balance queries, and matrix data."""
 
+from typing import Any
 import pandas as pd
 from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker
@@ -7,8 +8,8 @@ from sqlalchemy.orm import sessionmaker
 from shared.tables import ExperimentORM, IterationORM
 
 
-class SQLiteBenchmarkReadRepository:
-    """Read-only infrastructure repository managing SQLite queries for benchmark experiments."""
+class SQLiteSynthesisReadRepository:
+    """Read-only infrastructure repository managing SQLite queries for synthesis experiments and champion discovery."""
 
     def __init__(self, session_factory: sessionmaker):
         self.SessionLocal = session_factory
@@ -24,32 +25,35 @@ class SQLiteBenchmarkReadRepository:
                 ExperimentORM.problem_id,
                 ExperimentORM.dim,
                 ExperimentORM.noise_std,
+                ExperimentORM.mode,
                 ExperimentORM.prompt_strategy,
-                func.count().label("count"),
+                ExperimentORM.llm_name,
+                func.count(ExperimentORM.id).label("completed_count"),
             )
             .where(ExperimentORM.status == "completed")
             .group_by(
                 ExperimentORM.problem_id,
                 ExperimentORM.dim,
                 ExperimentORM.noise_std,
+                ExperimentORM.mode,
                 ExperimentORM.prompt_strategy,
-            )
-            .order_by(
-                ExperimentORM.problem_id,
-                ExperimentORM.dim,
-                ExperimentORM.noise_std,
-                ExperimentORM.prompt_strategy,
+                ExperimentORM.llm_name,
             )
         )
 
         with self.SessionLocal() as session:
             conn = session.connection()
-            df_summary = pd.read_sql_query(stmt, conn)
-            total_completed = int(df_summary["count"].sum()) if not df_summary.empty else 0
-            return df_summary, total_completed
+            df = pd.read_sql_query(stmt, conn)
+
+        total_completed = int(df["completed_count"].sum()) if not df.empty else 0
+        return df, total_completed
 
     def get_target_conditions(self) -> list[tuple[int, float, int]]:
-        """Discover unique (dim, noise_std, problem_id) experimental conditions from DB."""
+        """Extract unique `(dim, noise_std, problem_id)` tuples present in DB.
+
+        Returns:
+            List of sorted condition tuples.
+        """
         stmt = (
             select(
                 ExperimentORM.dim,
@@ -66,26 +70,19 @@ class SQLiteBenchmarkReadRepository:
         )
 
         with self.SessionLocal() as session:
-            conn = session.connection()
-            df_db = pd.read_sql_query(stmt, conn)
-            return [
-                (int(r["dim"]), float(r["noise_std"]), int(r["problem_id"]))
-                for _, r in df_db.iterrows()
-            ]
+            rows = session.execute(stmt).all()
 
-    def get_synthesis_dataframes(self) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Load synthesis experiments and iterations tables into pandas DataFrames."""
-        stmt_exp = select(ExperimentORM).where(ExperimentORM.status == "completed")
-        stmt_iter = select(IterationORM)
-
-        with self.SessionLocal() as session:
-            conn = session.connection()
-            df_exp = pd.read_sql_query(stmt_exp, conn)
-            df_iter = pd.read_sql_query(stmt_iter, conn)
-            return df_exp, df_iter
+        return [
+            (
+                int(r.dim),
+                float(r.noise_std) if r.noise_std is not None else 0.0,
+                int(r.problem_id),
+            )
+            for r in rows
+        ]
 
     def get_completed_experiments_matrix(self) -> pd.DataFrame:
-        """Query distinct conditions and models for global coverage matrix construction."""
+        """Fetch distinct completed combinations for auditing coverage."""
         stmt = (
             select(
                 ExperimentORM.llm_name,
@@ -106,3 +103,12 @@ class SQLiteBenchmarkReadRepository:
         with self.SessionLocal() as session:
             conn = session.connection()
             return pd.read_sql_query(stmt, conn)
+
+    def get_synthesis_dataframes(self) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Load synthesis experiments and iterations tables into pandas DataFrames."""
+        with self.SessionLocal() as session:
+            conn = session.connection()
+            df_exp = pd.read_sql_table(ExperimentORM.__tablename__, conn)
+            df_iter = pd.read_sql_table(IterationORM.__tablename__, conn)
+        return df_exp, df_iter
+

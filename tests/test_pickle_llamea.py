@@ -11,7 +11,7 @@ from evolution.domain.vos import ProblemProfile
 from evolution.infra.llm.client import LLMClient, Provider
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.code.repository import CodeRepository
-from evolution.infra.storage.experiments.repository import SQLiteExperimentRepository
+from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from shared.database import build_engine
 from shared.tables import Base
 
@@ -35,7 +35,7 @@ def test_repos(tmp_path):
     engine = build_engine(db_path)
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine)
-    db_repo = SQLiteExperimentRepository(session_factory)
+    db_repo = SQLiteSynthesisRepository(session_factory)
     code_repo = CodeRepository(base_dir=tmp_path / "code")
     return db_repo, code_repo
 

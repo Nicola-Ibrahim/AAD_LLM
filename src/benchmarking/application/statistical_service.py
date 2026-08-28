@@ -13,9 +13,9 @@ import pandas as pd
 
 from benchmarking.domain.services.resolvers import resolve_folder_solver_name
 from benchmarking.domain.services.statistics import StatisticalEngine
-from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
+from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
 from benchmarking.infra.io.trace_repository import IOHTraceReader
-from benchmarking.infra.storage.sqlite_repository import SQLiteBenchmarkReadRepository
+from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
 
 
 def generate_markdown_report(
@@ -111,7 +111,7 @@ class StatisticalEvaluationService:
 
     def __init__(
         self,
-        sqlite_repo: SQLiteBenchmarkReadRepository,
+        sqlite_repo: SQLiteSynthesisReadRepository,
         trace_repo: IOHTraceReader,
         engine: StatisticalEngine | None = None,
     ):
@@ -123,7 +123,7 @@ class StatisticalEvaluationService:
         """Load synthesis experiments and iterations tables into pandas DataFrames."""
         return self.sqlite_repo.get_synthesis_dataframes()
 
-    def load_all_traces(self) -> BenchmarkDataset:
+    def load_all_traces(self) -> EvaluationDataset:
         """Load all available benchmark evaluation traces across all conditions."""
         return self.trace_repo.load_evaluation_traces(
             solver_resolver=resolve_folder_solver_name,
@@ -135,7 +135,7 @@ class StatisticalEvaluationService:
         problems: list[int],
         noise_stds: list[float],
         solvers: list[str] | None = None,
-    ) -> BenchmarkDataset:
+    ) -> EvaluationDataset:
         """Load benchmark evaluation traces for explicitly specified dimensions, problems, and noise levels."""
         return self.trace_repo.load_evaluation_traces(
             dims=dims,
@@ -152,7 +152,7 @@ class StatisticalEvaluationService:
         noise_stds: list[float] | None = None,
         solvers: list[str] | None = None,
         solver_resolver: Callable[[str], str] | None = None,
-    ) -> BenchmarkDataset:
+    ) -> EvaluationDataset:
         """Scans evaluations directory and loads all .dat runs organized by condition key."""
         if dims is None and problems is None and noise_stds is None and solvers is None and solver_resolver is None:
             return self.load_all_traces()
@@ -166,14 +166,14 @@ class StatisticalEvaluationService:
 
     def run_omnibus_kruskal(
         self,
-        benchmark_data: BenchmarkDataset,
+        benchmark_data: EvaluationDataset,
     ) -> pd.DataFrame:
         """Execute omnibus Kruskal-Wallis $H$-test across all conditions."""
         return self.engine.run_omnibus_kruskal(benchmark_data)
 
     def run_pairwise_fdr(
         self,
-        benchmark_data: BenchmarkDataset,
+        benchmark_data: EvaluationDataset,
         alpha: float = 0.05,
     ) -> pd.DataFrame:
         """Execute pairwise Mann-Whitney U tests with Benjamini-Hochberg FDR correction and A12."""
@@ -205,7 +205,7 @@ class StatisticalEvaluationService:
 
     def compute_fragility_matrix(
         self,
-        benchmark_data: BenchmarkDataset,
+        benchmark_data: EvaluationDataset,
         dim: int,
         solvers: list[str],
         problem_ids: list[int],
@@ -226,7 +226,7 @@ class StatisticalEvaluationService:
 
     def compute_hardness_success_rates(
         self,
-        benchmark_data: BenchmarkDataset,
+        benchmark_data: EvaluationDataset,
         dim: int,
         solvers_list: list[str],
         noise_level: float,
@@ -243,7 +243,7 @@ class StatisticalEvaluationService:
 
     def compute_validation_medians(
         self,
-        benchmark_data: BenchmarkDataset,
+        benchmark_data: EvaluationDataset,
         dim: int,
         problem_ids: list[int],
         clean_std: float = 0.0,
@@ -273,7 +273,7 @@ class StatisticalEvaluationService:
 
     def compute_robustness_profile(
         self,
-        benchmark_data: BenchmarkDataset,
+        benchmark_data: EvaluationDataset,
         dim: int,
         solvers_order: list[str],
         problem_ids: list[int],
@@ -294,7 +294,7 @@ class StatisticalEvaluationService:
 
     def compute_scaffolding_ablation(
         self,
-        benchmark_data: BenchmarkDataset,
+        benchmark_data: EvaluationDataset,
         dim: int,
         solvers_list: list[str],
         problem_ids: list[int],
@@ -315,7 +315,7 @@ class StatisticalEvaluationService:
 
     def compute_auc_ecdf_ranking(
         self,
-        benchmark_data: BenchmarkDataset,
+        benchmark_data: EvaluationDataset,
         solvers: list[str],
         eval_grid: np.ndarray,
         targets: np.ndarray,
@@ -330,7 +330,7 @@ class StatisticalEvaluationService:
 
     def compute_auc_ecdf_matrix(
         self,
-        benchmark_data: BenchmarkDataset,
+        benchmark_data: EvaluationDataset,
         solvers: list[str],
         eval_grid: np.ndarray,
         targets: np.ndarray,

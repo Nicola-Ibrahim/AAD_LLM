@@ -1,6 +1,6 @@
-"""Experiment Configuration Read Repository (Pure I/O & TOML Parsing).
+"""Synthesis Configuration Read Repository (Pure I/O & TOML Parsing).
 
-Encapsulates reading, parsing, and resolving experiments.toml
+Encapsulates reading, parsing, and resolving synthesis.toml / experiments.toml
 for evolutionary synthesis search spaces and execution parameters.
 """
 
@@ -12,17 +12,17 @@ import tomllib
 from shared.config import CONFIGS_DIR
 
 
-class ExperimentConfigRepository:
-    """Infrastructure repository for reading and parsing experiments.toml."""
+class SynthesisConfigRepository:
+    """Infrastructure repository for reading and parsing synthesis.toml."""
 
     def __init__(
         self,
-        config_path: Path = CONFIGS_DIR / "experiments.toml",
+        config_path: Path = CONFIGS_DIR / "synthesis.toml",
     ):
         self.config_path = config_path
 
     def load_config(self) -> dict[str, Any]:
-        """Loads and parses the experiments.toml configuration."""
+        """Loads and parses the synthesis configuration."""
         cfg: dict[str, Any] = {}
         if self.config_path.exists():
             with open(self.config_path, "rb") as f:
@@ -54,3 +54,4 @@ class ExperimentConfigRepository:
             "only_incomplete": bool(exec_meta.get("only_incomplete", False)),
             "target_exp_ids": exec_meta.get("target_experiment_ids") or None,
         }
+

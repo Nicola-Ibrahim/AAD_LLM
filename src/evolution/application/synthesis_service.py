@@ -1,7 +1,7 @@
-"""Evolutionary Synthesis Application Service (Campaign & Execution Facade).
+"""LLaMEA Algorithm Synthesis Application Service (Campaign & Execution Facade).
 
-Coordinates configuration reading, database status reconciliation,
-task construction, upfront experiment persistence, and parallel multi-process dispatching.
+Coordinates synthesis configuration reading, database status reconciliation,
+task construction, upfront synthesis session persistence, and parallel multi-process dispatching.
 """
 
 from typing import Any
@@ -14,19 +14,19 @@ from evolution.domain.services.noise_strategy import NoiseStrategyFactory
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.problems.bbob import BBOBProblem
-from evolution.infra.storage.campaigns.repository import ExperimentConfigRepository
-from evolution.infra.storage.experiments.repository import SQLiteExperimentRepository
+from evolution.infra.storage.synthesis_config import SynthesisConfigRepository
+from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
 from evolution.application.synthesis.session import SessionResult
 from evolution.application.tasks import EvolutionTask, TaskOrchestrator
 
 
-class EvolutionExperimentService:
-    """Application use case service managing evolutionary search campaigns."""
+class LLaMEASynthesisService:
+    """Application use case service managing algorithm synthesis campaigns."""
 
     def __init__(
         self,
-        sqlite_repo: SQLiteExperimentRepository,
-        config_repo: ExperimentConfigRepository,
+        sqlite_repo: SQLiteSynthesisRepository,
+        config_repo: SynthesisConfigRepository,
         llm_client: LLMClient,
     ):
         self.sqlite_repo = sqlite_repo
@@ -37,7 +37,7 @@ class EvolutionExperimentService:
     # Public Use Cases
     # -------------------------------------------------------------------------
 
-    def audit_campaign(self) -> tuple[pd.DataFrame, dict[str, Any]]:
+    def audit_matrix(self) -> tuple[pd.DataFrame, dict[str, Any]]:
         """Reconciles configured matrix against SQLite experiments for the configured LLM model."""
         cfg = self.config_repo.load_config()
         llm_name = self.llm_client.model.name
@@ -196,11 +196,11 @@ class EvolutionExperimentService:
                                 )
         return tasks
 
-    def run_campaign(
+    def run_synthesis(
         self,
         max_workers: int | None = None,
     ) -> dict[str, SessionResult]:
-        """Builds tasks and executes the evolutionary campaign in parallel using TaskOrchestrator."""
+        """Builds tasks and executes the evolutionary synthesis in parallel using TaskOrchestrator."""
         cfg = self.config_repo.load_config()
         workers = max_workers if max_workers is not None else int(cfg["num_processes"])
 

@@ -1,9 +1,9 @@
 from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
-from benchmarking.infra.storage.config_repository import BenchmarkConfigRepository
-from benchmarking.infra.storage.sqlite_repository import SQLiteBenchmarkReadRepository
+from benchmarking.infra.storage.config_repository import EvaluationConfigRepository
+from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
 
 __all__ = [
-    "BenchmarkConfigRepository",
-    "SQLiteBenchmarkReadRepository",
+    "EvaluationConfigRepository",
+    "SQLiteSynthesisReadRepository",
     "ChampionsReadRepository",
 ]

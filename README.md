@@ -45,15 +45,11 @@ Use this track if you are running on a remote Jupyter Server, custom Conda envir
 
 ## Running the Notebooks
 Open your Jupyter interface and navigate to the `notebooks/` directory to run code:
-* [notebooks/00_model_test.ipynb](notebooks/00_model_test.ipynb) — Verify connection to your LLM provider.
-* [notebooks/01_noise_analysis.ipynb](notebooks/01_noise_analysis.ipynb) — Validate BBOB benchmark landscapes with multiplicative noise.
-* [notebooks/02_llamea_evolution.ipynb](notebooks/02_llamea_evolution.ipynb) — Run single-problem or multi-problem batch LLaMEA evolution.
-* [notebooks/03_select_champions.ipynb](notebooks/03_select_champions.ipynb) — Query SQLite and extract clean & noisy champion algorithms.
-* [notebooks/04_evaluate_champions.ipynb](notebooks/04_evaluate_champions.ipynb) — Benchmarking champion algorithms (N=10 runs) with IOH Analyzer logging.
-* [notebooks/05_run_baselines.ipynb](notebooks/05_run_baselines.ipynb) — Execute classical baselines (CMA-ES, DE, PSO).
-* [notebooks/06_experimental_audit.ipynb](notebooks/06_experimental_audit.ipynb) — Audit experimental matrix coverage, detect sample imbalances, and export audit reports.
-* [notebooks/07_statistical_evaluation.ipynb](notebooks/07_statistical_evaluation.ipynb) — Statistical summaries and performance tables.
-* [notebooks/08_publication_figures.ipynb](notebooks/08_publication_figures.ipynb) — Generate thesis & publication figures (Clean/Noisy Trajectories, ECDFs, Robustness, Scaffolding).
+* [notebooks/01_noise.ipynb](notebooks/01_noise.ipynb) — BBOB problem noise landscape analysis and heteroscedastic noise modeling.
+* [notebooks/02_synthesis.ipynb](notebooks/02_synthesis.ipynb) — Parallel LLaMEA evolutionary synthesis pipeline across problem benchmark matrix.
+* [notebooks/03_evaluation.ipynb](notebooks/03_evaluation.ipynb) — Multi-trial benchmark evaluations for discovered champions and classical baselines.
+* [notebooks/04_audit.ipynb](notebooks/04_audit.ipynb) — Experimental matrix coverage, gap detection, and two-tier audit dashboard.
+* [notebooks/05_analysis.ipynb](notebooks/05_analysis.ipynb) — Non-parametric statistical hypothesis testing and thesis publication figures.
 
 
 ## Starting the Local Model Server
@@ -108,10 +104,11 @@ bash scripts/clean.sh
 - `docs/` — Documentation:
   - [MODEL_CONFIGURATION.md](docs/MODEL_CONFIGURATION.md) — Guide to configuring custom models and quantizations.
 - `notebooks/` — Jupyter notebooks:
-  - `00_model_test.ipynb` — Quick diagnostic test for local model server connection and response latency.
-  - `01_noise_analysis.ipynb` — Noise injection & interactive analysis notebook.
-  - `02_llamea_evolution.ipynb` — Single and batch multi-problem LLaMEA evolutionary search pipeline.
-  - `03_results_analysis.ipynb` — Comprehensive database analysis dashboard, stats builder, and interactive plots.
+  - `01_noise.ipynb` — BBOB problem noise landscape analysis and heteroscedastic noise modeling.
+  - `02_synthesis.ipynb` — Parallel LLaMEA evolutionary synthesis pipeline across problem benchmark matrix.
+  - `03_evaluation.ipynb` — Multi-trial benchmark evaluations for discovered champions and classical baselines.
+  - `04_audit.ipynb` — Experimental matrix coverage, gap detection, and two-tier audit dashboard.
+  - `05_analysis.ipynb` — Non-parametric statistical hypothesis testing and thesis publication figures.
 - `scripts/` — Execution and orchestration scripts:
   - `env.sh` — Initializes environment, checks env vars, and syncs dependencies via uv.
   - `llm.sh` — Interactive CLI for model serving, downloading, listing, and cache cleanup.

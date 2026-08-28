@@ -1,10 +1,25 @@
-"""Benchmarking domain computational and normalization services."""
+"""Benchmarking domain computational, normalization, and styling services."""
 
 from benchmarking.domain.services.baselines import (
     BASELINES,
     run_cmaes,
     run_de,
     run_pso,
+)
+from benchmarking.domain.services.palette import (
+    DIMENSION_PALETTE_CLEAN,
+    DIMENSION_PALETTE_NOISY,
+    FONT_FAMILY,
+    MODEL_SCALE_PALETTE,
+    REGIME_PALETTE,
+    SOLVER_LINE_STYLES,
+    SOLVER_PALETTE,
+    STRATEGY_PALETTE,
+    build_dynamic_solver_palette,
+    get_dimension_color,
+    get_rgba_fill,
+    get_solver_color,
+    get_solver_line_style,
 )
 from benchmarking.domain.services.resolvers import (
     CLASSICAL_SOLVERS_MAP,
@@ -44,4 +59,17 @@ __all__ = [
     "BBOB_NAMES",
     "get_bbob_class",
     "get_bbob_name",
+    "FONT_FAMILY",
+    "SOLVER_PALETTE",
+    "SOLVER_LINE_STYLES",
+    "STRATEGY_PALETTE",
+    "MODEL_SCALE_PALETTE",
+    "REGIME_PALETTE",
+    "DIMENSION_PALETTE_CLEAN",
+    "DIMENSION_PALETTE_NOISY",
+    "get_solver_color",
+    "get_solver_line_style",
+    "get_rgba_fill",
+    "get_dimension_color",
+    "build_dynamic_solver_palette",
 ]

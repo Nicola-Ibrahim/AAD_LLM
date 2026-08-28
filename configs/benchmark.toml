@@ -1,19 +1,26 @@
 # ==============================================================================
-# Benchmark & Evaluation Configuration (Notebooks 03-05)
+# Independent Empirical Benchmarking Configuration (Stage 2: Notebooks 03-05)
 # ==============================================================================
-# Settings for systematic multi-trial evaluations of LLaMEA Champions & Classical Baselines.
+# Settings for systematic multi-trial IOHprofiler evaluations of LLaMEA Champions & Classical Baselines.
 
-[evaluation]
-# Standard independent benchmark evaluation runs per condition for champions & baselines (N=10)
+[benchmarking]
+# Target independent benchmark evaluation runs per condition (e.g., 10, 15, 20)
 target_eval_runs = 10
 
-# Per-run execution wall-clock timeout in seconds
-eval_timeout_seconds = 30.0
+# Budget multiplier per dimension (Budget = dim * budget_multiplier, e.g. 5D * 10,000 = 50,000 evaluations)
+budget_multiplier = 10000
 
-# fill_missing_only:
-#   • true  = Scans data/ioh_logs and executes ONLY missing / partial runs (< 10)
-#   • false = Re-evaluates based on notebook filter settings
-fill_missing_only = true
+# Per-trial execution wall-clock timeout in seconds
+eval_timeout_seconds = 300.0
 
 # Classical Baselines evaluated on identical benchmark problems
-classical_baselines = ["CMA-ES", "DE", "PSO"]
+classical_baselines = ["cmaes", "de", "pso"]
+
+# Benchmark evaluation conditions
+target_problems = [1, 8, 11, 15, 21]
+target_dims = [2, 3, 5]
+target_noise_levels = [0.0, 0.05]
+
+# Optional filters (empty list [] evaluates all discovered models & strategies)
+target_models = []
+target_prompt_strategies = []

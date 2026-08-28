@@ -1,4 +1,4 @@
-"""BenchmarkDataset Value Object representing complete multi-condition benchmark traces."""
+"""EvaluationDataset Value Object representing complete multi-condition benchmark traces."""
 
 from collections.abc import Iterator, Mapping
 from typing import Any, Self
@@ -6,21 +6,21 @@ import numpy as np
 from pydantic import Field
 
 from benchmarking.domain.base import ValueObject
-from benchmarking.domain.vos.condition import BenchmarkCondition
+from benchmarking.domain.vos.condition import EvaluationCondition
 from benchmarking.domain.vos.run_trace import RunTrace, SolverRunCollection
 
 
-class BenchmarkDataset(ValueObject, Mapping[BenchmarkCondition, dict[str, list[RunTrace]]]):
-    """Analytical Value Object encapsulating multi-condition benchmark evaluation traces."""
+class EvaluationDataset(ValueObject, Mapping[EvaluationCondition, dict[str, list[RunTrace]]]):
+    """Analytical Value Object encapsulating multi-condition empirical evaluation traces."""
 
-    conditions_data: dict[BenchmarkCondition, dict[str, list[RunTrace]]] = Field(
+    conditions_data: dict[EvaluationCondition, dict[str, list[RunTrace]]] = Field(
         default_factory=dict,
-        description="Map from BenchmarkCondition to dictionary of solver names and their run traces.",
+        description="Map from EvaluationCondition to dictionary of solver names and their run traces.",
     )
 
     def add_run(
         self,
-        condition: BenchmarkCondition,
+        condition: EvaluationCondition,
         solver_name: str,
         run: RunTrace,
     ) -> None:
@@ -62,7 +62,7 @@ class BenchmarkDataset(ValueObject, Mapping[BenchmarkCondition, dict[str, list[R
         solver: str,
     ) -> list[RunTrace]:
         """Get the list of run traces for a specific condition and solver."""
-        cond = BenchmarkCondition(dim=dim, noise_std=noise_std, problem_id=problem_id)
+        cond = EvaluationCondition(dim=dim, noise_std=noise_std, problem_id=problem_id)
         return self.conditions_data.get(cond, {}).get(solver, [])
 
     def get_solver_collection(
@@ -84,7 +84,7 @@ class BenchmarkDataset(ValueObject, Mapping[BenchmarkCondition, dict[str, list[R
         solvers: list[str] | None = None,
     ) -> Self:
         """Return a filtered sub-dataset."""
-        filtered_data: dict[BenchmarkCondition, dict[str, list[RunTrace]]] = {}
+        filtered_data: dict[EvaluationCondition, dict[str, list[RunTrace]]] = {}
         for cond, s_dict in self.conditions_data.items():
             if dims and cond.dim not in dims:
                 continue
@@ -104,16 +104,16 @@ class BenchmarkDataset(ValueObject, Mapping[BenchmarkCondition, dict[str, list[R
 
         return self.__class__(conditions_data=filtered_data)
 
-    def __getitem__(self, key: BenchmarkCondition) -> dict[str, list[RunTrace]]:
+    def __getitem__(self, key: EvaluationCondition) -> dict[str, list[RunTrace]]:
         return self.conditions_data[key]
 
-    def __setitem__(self, key: BenchmarkCondition, val: dict[str, list[RunTrace]]) -> None:
+    def __setitem__(self, key: EvaluationCondition, val: dict[str, list[RunTrace]]) -> None:
         self.conditions_data[key] = val
 
     def __contains__(self, key: object) -> bool:
         return key in self.conditions_data
 
-    def __iter__(self) -> Iterator[BenchmarkCondition]:
+    def __iter__(self) -> Iterator[EvaluationCondition]:
         return iter(self.conditions_data)
 
     def __len__(self) -> int:
@@ -128,5 +128,5 @@ class BenchmarkDataset(ValueObject, Mapping[BenchmarkCondition, dict[str, list[R
     def values(self):
         return self.conditions_data.values()
 
-    def get(self, key: BenchmarkCondition, default: Any = None) -> Any:
+    def get(self, key: EvaluationCondition, default: Any = None) -> Any:
         return self.conditions_data.get(key, default)

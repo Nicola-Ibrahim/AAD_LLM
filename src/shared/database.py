@@ -102,8 +102,9 @@ def create_db_session_factory(
 def initialize_sqlite_storage(
     path: Path = DATA_DIR / "db.sqlite3",
 ):
-    """Creates engine and returns an initialized SQLite experiment repository."""
-    from evolution.infra.storage.experiments.repository import SQLiteExperimentRepository
+    """Creates engine and returns an initialized SQLite synthesis repository."""
+    from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
 
     session_factory = create_db_session_factory(path)
-    return SQLiteExperimentRepository(session_factory=session_factory)
+    return SQLiteSynthesisRepository(session_factory=session_factory)
+

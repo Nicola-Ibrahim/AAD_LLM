@@ -19,7 +19,7 @@ from evolution.domain.vos import (
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy, NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.code.repository import CodeRepository
-from evolution.infra.storage.experiments.repository import SQLiteExperimentRepository
+from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from shared.database import build_engine
 from shared.tables import Base, ExperimentORM
 from evolution.application.synthesis.evaluator import Evaluator
@@ -65,7 +65,7 @@ class FailingProblem(BBOBProblem):
 
 def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
     db_path = temp_dir / "test.db"
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     llm = DummyLLM()
 
     problem_clean = BBOBProblem(
@@ -130,7 +130,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
 
 def test_dispatch_partial_failure(temp_dir, db_session_factory):
     db_path = temp_dir / "test.db"
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     problem_fail = FailingProblem(
         problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1
     )
@@ -211,7 +211,7 @@ def db_session_factory(temp_dir):
 
 def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
 
     exp_id = repo.create_experiment(
@@ -253,7 +253,7 @@ def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
 
 def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory):
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
 
     exp_id = repo.create_experiment(
@@ -294,7 +294,7 @@ def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory
 
 
 def test_sqlite_create_and_append(db_session_factory):
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
 
     ctx1 = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0),
@@ -353,7 +353,7 @@ def test_sqlite_create_and_append(db_session_factory):
 
 
 def test_sqlite_append_with_error(db_session_factory):
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
 
     ctx = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0),
@@ -406,7 +406,7 @@ def test_sqlite_append_with_error(db_session_factory):
 
 
 def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
@@ -443,7 +443,7 @@ def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
 
 
 def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory):
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
@@ -497,7 +497,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
 
 
 def test_session_none_llm_guard(temp_dir, db_session_factory):
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
@@ -514,7 +514,7 @@ def test_session_none_llm_guard(temp_dir, db_session_factory):
 
 
 def test_session_mark_failed_on_error(temp_dir, db_session_factory):
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
@@ -555,7 +555,7 @@ def test_session_mark_failed_on_error(temp_dir, db_session_factory):
 
 
 def test_evolution_task_execution(temp_dir, db_session_factory):
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
@@ -588,7 +588,7 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
 
 
 def test_session_problem_validation(temp_dir, db_session_factory):
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
 
@@ -605,7 +605,7 @@ def test_session_problem_validation(temp_dir, db_session_factory):
 
 
 def test_evaluator_current_iteration_resumes_from_db(temp_dir, db_session_factory):
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
@@ -679,7 +679,7 @@ class FailingLLM:
 
 def test_all_executions_failed_session_handling(db_session_factory, tmp_path):
     """Verify LLaMEASession handles cases gracefully when all generated candidate algorithms fail."""
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(problem_id=24, dim=2, noise_strategy=NoNoiseStrategy())
     mock_llm = FailingLLM()
@@ -715,7 +715,7 @@ def test_all_executions_failed_session_handling(db_session_factory, tmp_path):
 
 def test_prompt_strategy_persisted(db_session_factory, tmp_path):
     """Verify create_experiment and load properly handle prompt_strategy."""
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     exp_id = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=3, noise_std=0.0, true_optimum=0.0),
         mode="clean",
@@ -755,7 +755,7 @@ class BannedOptimizer:
 
 def test_evaluator_clean_reevaluation_with_tuple_return(db_session_factory, tmp_path):
     """Verify that Evaluator clean re-evaluates best_x when algorithm returns a (best_x, best_y) tuple."""
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=HeteroscedasticNoiseStrategy(0.5))
     exp_id = repo.create_experiment(
@@ -796,7 +796,7 @@ class CustomOpt:
 
 def test_evaluator_out_of_bounds_best_x_rejected(db_session_factory, tmp_path):
     """Verify that Evaluator marks algorithm as failed if returned best_x is out of search space bounds."""
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
     exp_id = repo.create_experiment(
@@ -844,7 +844,7 @@ def test_convergence_evaluate():
 
 def test_evaluator_failure_fitness_and_categorized_feedback(db_session_factory, tmp_path):
     """Verify that failure returns Evaluator failure tiers and categorized feedback prefixes."""
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
     exp_id = repo.create_experiment(
@@ -891,7 +891,7 @@ class NanOpt:
 
 def test_evaluator_enriched_feedback_and_warnings(db_session_factory, tmp_path):
     """Verify code snippet extraction (Option A), problem context footer (Option B), and warning capture (Option D)."""
-    repo = SQLiteExperimentRepository(db_session_factory)
+    repo = SQLiteSynthesisRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(problem_id=8, dim=3, noise_strategy=NoNoiseStrategy())
     exp_id = repo.create_experiment(

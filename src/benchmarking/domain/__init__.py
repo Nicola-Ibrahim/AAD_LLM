@@ -2,8 +2,8 @@
 
 from benchmarking.domain.base import ValueObject
 from benchmarking.domain.enums import (
-    BenchmarkStrategy,
     ClassicalSolver,
+    EvaluationStrategy,
 )
 from benchmarking.domain.services import (
     BASELINES,
@@ -26,8 +26,8 @@ from benchmarking.domain.services import (
     run_pso,
 )
 from benchmarking.domain.vos import (
-    BenchmarkCondition,
-    BenchmarkDataset,
+    EvaluationCondition,
+    EvaluationDataset,
     RunTrace,
     SolverRunCollection,
 )
@@ -35,11 +35,11 @@ from benchmarking.domain.vos import (
 __all__ = [
     "ValueObject",
     "ClassicalSolver",
-    "BenchmarkStrategy",
-    "BenchmarkCondition",
+    "EvaluationStrategy",
+    "EvaluationCondition",
     "RunTrace",
     "SolverRunCollection",
-    "BenchmarkDataset",
+    "EvaluationDataset",
     "StatisticalEngine",
     "BASELINES",
     "run_cmaes",

@@ -5,8 +5,8 @@ from evolution.domain.enums import ProblemMode
 from evolution.domain.vos import IterationMetadata, ProblemProfile
 
 
-class ExperimentRepository(ABC):
-    """Abstract base class representing a repository interface for experiment results metadata and session state lifecycle."""
+class SynthesisRepository(ABC):
+    """Abstract base class representing a repository interface for synthesis results metadata and session state lifecycle."""
 
     @abstractmethod
     def load(

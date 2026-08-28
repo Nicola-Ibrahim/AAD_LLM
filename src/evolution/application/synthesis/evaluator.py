@@ -18,7 +18,7 @@ from evolution.domain.vos import (
     ProblemProfile,
 )
 from shared.execution import AlgorithmExecutor, AlgorithmTimeoutException
-from evolution.infra.storage.base import ExperimentRepository
+from evolution.infra.storage.base import SynthesisRepository
 from evolution.infra.storage.code.repository import CodeRepository
 
 
@@ -71,7 +71,7 @@ class Evaluator:
     def __init__(
         self,
         problem: BaseProblem,
-        db_repo: ExperimentRepository,
+        db_repo: SynthesisRepository,
         code_repo: CodeRepository,
         budget: int = 1000000,
         timeout_seconds: float = 10.0,

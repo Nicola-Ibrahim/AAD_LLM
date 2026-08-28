@@ -1,0 +1,27 @@
+# ==============================================================================
+# Classical Baseline Optimization Algorithms Configuration
+# ==============================================================================
+# Formal definitions, metadata, and display labels for standard comparative baselines.
+
+[baselines]
+
+[baselines.cmaes]
+slug = "cmaes"
+display_name = "CMA-ES"
+full_name = "Covariance Matrix Adaptation Evolution Strategy"
+category = "Evolutionary Strategy"
+description = "State-of-the-art derivative-free optimizer for continuous non-linear optimization."
+
+[baselines.de]
+slug = "de"
+display_name = "Differential Evolution"
+full_name = "Differential Evolution"
+category = "Evolutionary Algorithm"
+description = "Stochastic population-based method using vector differences for perturbation."
+
+[baselines.pso]
+slug = "pso"
+display_name = "Particle Swarm Optimization"
+full_name = "Particle Swarm Optimization"
+category = "Swarm Intelligence"
+description = "Swarm-based heuristic inspired by social behavior of bird flocking."

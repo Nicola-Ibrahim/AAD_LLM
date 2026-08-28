@@ -1,12 +1,19 @@
-"""Tests for BenchmarkEvaluationService (Application Layer: Empirical Execution Engine)."""
+"""Tests for EvaluationService (Application Layer: Empirical Execution Engine)."""
 
 import json
 from pathlib import Path
 
-from benchmarking.application.evaluation_service import BenchmarkEvaluationService
+from benchmarking.application.evaluation_service import EvaluationService
 from benchmarking.domain.services.baselines import run_cmaes, run_de, run_pso
+from benchmarking.infra.io.trace_repository import EvaluationStateRepository, IOHTraceReader
+from benchmarking.infra.storage import (
+    ChampionsReadRepository,
+    EvaluationConfigRepository,
+    SQLiteSynthesisReadRepository,
+)
 from evolution.domain.services.noise_strategy import NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
+from shared.database import create_db_session_factory
 
 
 def test_baselines_callables():
@@ -32,23 +39,36 @@ def test_baselines_callables():
 
 
 def test_service_baseline_execution(tmp_path: Path):
-    """Test BenchmarkEvaluationService executing classical baselines, caching, and dashboard."""
+    """Test EvaluationService executing classical baselines, caching, and dashboard."""
     eval_dir = tmp_path / "evaluations"
-    from benchmarking.infra.io.trace_repository import IOHTraceReader
-    from benchmarking.infra.storage import ChampionsReadRepository, SQLiteBenchmarkReadRepository
-    from shared.database import create_db_session_factory
+    cfg_file = tmp_path / "benchmark.toml"
+    cfg_file.write_text(
+        """
+[benchmarking]
+target_eval_runs = 2
+budget_multiplier = 50
+eval_timeout_seconds = 30.0
+classical_baselines = ["cmaes", "de", "pso"]
+target_problems = [1]
+target_dims = [2]
+target_noise_levels = [0.0]
+""",
+        encoding="utf-8",
+    )
 
     session_factory = create_db_session_factory()
-    sqlite_repo = SQLiteBenchmarkReadRepository(session_factory)
+    sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
     trace_repo = IOHTraceReader(eval_dir=eval_dir)
+    state_repo = EvaluationStateRepository(eval_dir=eval_dir)
+    config_repo = EvaluationConfigRepository(config_path=cfg_file)
 
-    service = BenchmarkEvaluationService(
+    service = EvaluationService(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         trace_repo=trace_repo,
-        n_runs=2,
-        budget_multiplier=50,
+        state_repo=state_repo,
+        config_repo=config_repo,
     )
 
     # 1. Run evaluation
@@ -69,19 +89,32 @@ def test_service_baseline_execution(tmp_path: Path):
 
 
 def test_service_champion_execution(tmp_path: Path):
-    """Test BenchmarkEvaluationService executing LLM champion code, compilation, caching, and dashboard."""
+    """Test EvaluationService executing LLM champion code, compilation, caching, and dashboard."""
     eval_dir = tmp_path / "evaluations"
     project_root = tmp_path / "project"
     project_root.mkdir()
 
-    from benchmarking.infra.io.trace_repository import IOHTraceReader
-    from benchmarking.infra.storage import ChampionsReadRepository, SQLiteBenchmarkReadRepository
-    from shared.database import create_db_session_factory
+    cfg_file = tmp_path / "benchmark.toml"
+    cfg_file.write_text(
+        """
+[benchmarking]
+target_eval_runs = 2
+budget_multiplier = 50
+eval_timeout_seconds = 5.0
+classical_baselines = ["cmaes", "de", "pso"]
+target_problems = [1]
+target_dims = [2]
+target_noise_levels = [0.0]
+""",
+        encoding="utf-8",
+    )
 
     session_factory = create_db_session_factory()
-    sqlite_repo = SQLiteBenchmarkReadRepository(session_factory)
+    sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
     trace_repo = IOHTraceReader(eval_dir=eval_dir)
+    state_repo = EvaluationStateRepository(eval_dir=eval_dir)
+    config_repo = EvaluationConfigRepository(config_path=cfg_file)
 
     # Create dummy champion algorithm script conforming to (problem, budget) contract
     dummy_code = """
@@ -108,14 +141,13 @@ class RandomOptimizer:
     code_path.parent.mkdir()
     code_path.write_text(dummy_code, encoding="utf-8")
 
-    service = BenchmarkEvaluationService(
+    service = EvaluationService(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         trace_repo=trace_repo,
+        state_repo=state_repo,
+        config_repo=config_repo,
         project_root=project_root,
-        n_runs=2,
-        trial_timeout_seconds=5,
-        budget_multiplier=50,
     )
 
     champ_info = {
@@ -150,3 +182,157 @@ class RandomOptimizer:
     missing_champ["code_path"] = "algorithms/nonexistent.py"
     missing_res = service.run_champion_trials(missing_champ)
     assert missing_res["status"] == "MISSING_CODE"
+
+
+def test_service_incremental_resumption(tmp_path: Path):
+    """Test incremental resumption: scaling from 2 runs to 4 runs without full re-execution."""
+    eval_dir = tmp_path / "evaluations"
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+
+    cfg_file_2runs = tmp_path / "benchmark_2runs.toml"
+    cfg_file_2runs.write_text(
+        """
+[benchmarking]
+target_eval_runs = 2
+budget_multiplier = 50
+eval_timeout_seconds = 5.0
+classical_baselines = ["cmaes", "de", "pso"]
+target_problems = [1]
+target_dims = [2]
+target_noise_levels = [0.0]
+""",
+        encoding="utf-8",
+    )
+
+    cfg_file_4runs = tmp_path / "benchmark_4runs.toml"
+    cfg_file_4runs.write_text(
+        """
+[benchmarking]
+target_eval_runs = 4
+budget_multiplier = 50
+eval_timeout_seconds = 5.0
+classical_baselines = ["cmaes", "de", "pso"]
+target_problems = [1]
+target_dims = [2]
+target_noise_levels = [0.0]
+""",
+        encoding="utf-8",
+    )
+
+    session_factory = create_db_session_factory()
+    sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
+    champions_repo = ChampionsReadRepository(session_factory)
+    trace_repo = IOHTraceReader(eval_dir=eval_dir)
+    state_repo = EvaluationStateRepository(eval_dir=eval_dir)
+    config_repo_2 = EvaluationConfigRepository(config_path=cfg_file_2runs)
+    config_repo_4 = EvaluationConfigRepository(config_path=cfg_file_4runs)
+
+    dummy_code = """
+import numpy as np
+
+class IncrementalOptimizer:
+    def __call__(self, problem, budget=100):
+        lb, ub = problem.lower_bound, problem.upper_bound
+        dim = len(lb)
+        best_x = np.zeros(dim)
+        best_y = problem(best_x)
+        return best_x, best_y
+"""
+    code_path = project_root / "algorithms" / "inc_champ.py"
+    code_path.parent.mkdir()
+    code_path.write_text(dummy_code, encoding="utf-8")
+
+    champ_info = {
+        "problem_id": 1,
+        "dim": 2,
+        "noise_std": 0.0,
+        "prompt_strategy": "baseline",
+        "llm_name": "qwen2.5-coder-14b",
+        "algorithm_name": "IncrementalOptimizer",
+        "experiment_id": 102,
+        "code_path": "algorithms/inc_champ.py",
+    }
+
+    # Step 1: Initial run with target_eval_runs=2
+    service_initial = EvaluationService(
+        sqlite_repo=sqlite_repo,
+        champions_repo=champions_repo,
+        trace_repo=trace_repo,
+        state_repo=state_repo,
+        config_repo=config_repo_2,
+        project_root=project_root,
+    )
+    res_1 = service_initial.run_champion_trials(champ_info)
+    assert res_1["status"] == "SUCCESS"
+    assert len(res_1["clean_errors"]) == 2
+
+    solver_dir = eval_dir / "2D" / "std_0.0" / "f1" / "qwen_14b_baseline"
+    assert trace_repo.get_run_count(solver_dir) == 2
+
+    # Step 2: Resume with target_eval_runs=4
+    service_resumed = EvaluationService(
+        sqlite_repo=sqlite_repo,
+        champions_repo=champions_repo,
+        trace_repo=trace_repo,
+        state_repo=state_repo,
+        config_repo=config_repo_4,
+        project_root=project_root,
+    )
+    res_2 = service_resumed.run_champion_trials(champ_info)
+    assert res_2["status"] == "SUCCESS"
+    assert len(res_2["clean_errors"]) == 4
+    assert trace_repo.get_run_count(solver_dir) == 4
+
+    prov_file = solver_dir / "provenance.json"
+    prov_data = json.loads(prov_file.read_text(encoding="utf-8"))
+    assert prov_data["n_runs"] == 4
+    assert len(prov_data["clean_errors"]) == 4
+
+    # Step 3: Baseline incremental resumption
+    base_res_1 = service_initial.run_baseline_trials(dim=2, noise_std=0.0, p_id=1, baseline_slug="pso")
+    assert base_res_1["status"] == "SUCCESS"
+    assert len(base_res_1["clean_errors"]) == 2
+
+    pso_dir = eval_dir / "2D" / "std_0.0" / "f1" / "pso"
+    assert trace_repo.get_run_count(pso_dir) == 2
+
+    base_res_2 = service_resumed.run_baseline_trials(dim=2, noise_std=0.0, p_id=1, baseline_slug="pso")
+    assert base_res_2["status"] == "SUCCESS"
+    assert len(base_res_2["clean_errors"]) == 4
+    assert trace_repo.get_run_count(pso_dir) == 4
+
+
+def test_evaluation_config_repository_edge_cases(tmp_path: Path):
+    """Test EvaluationConfigRepository handling missing, empty, or NoneType configuration sections."""
+    # 1. Non-existent files
+    repo_missing = EvaluationConfigRepository(
+        config_path=tmp_path / "nonexistent_bench.toml",
+        baselines_path=tmp_path / "nonexistent_base.toml",
+    )
+    cfg_missing = repo_missing.load_config()
+    assert cfg_missing["target_eval_runs"] == 10
+    assert "cmaes" in cfg_missing["baseline_labels"]
+
+    # 2. Empty TOML file
+    empty_cfg_file = tmp_path / "empty_bench.toml"
+    empty_cfg_file.write_text("", encoding="utf-8")
+    repo_empty = EvaluationConfigRepository(config_path=empty_cfg_file)
+    cfg_empty = repo_empty.load_config()
+    assert cfg_empty["target_eval_runs"] == 10
+
+    # 3. File with empty [benchmarking] section
+    bench_empty_file = tmp_path / "bench_empty.toml"
+    bench_empty_file.write_text("[benchmarking]\n", encoding="utf-8")
+    repo_bench_empty = EvaluationConfigRepository(config_path=bench_empty_file)
+    cfg_bench_empty = repo_bench_empty.load_config()
+    assert cfg_bench_empty["target_eval_runs"] == 10
+    assert cfg_bench_empty["budget_multiplier"] == 10000
+
+    # 4. File with [evaluation] section fallback
+    eval_file = tmp_path / "eval_fallback.toml"
+    eval_file.write_text("[evaluation]\ntarget_eval_runs = 5\n", encoding="utf-8")
+    repo_eval = EvaluationConfigRepository(config_path=eval_file)
+    cfg_eval = repo_eval.load_config()
+    assert cfg_eval["target_eval_runs"] == 5
+

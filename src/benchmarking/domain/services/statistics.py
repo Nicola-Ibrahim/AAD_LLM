@@ -9,7 +9,7 @@ from scipy.stats import kruskal, mannwhitneyu, pearsonr
 from statsmodels.stats.multitest import multipletests
 
 from benchmarking.domain.services.taxonomy import BBOB_CLASSES, BBOB_NAMES
-from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
+from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
 
 
 class StatisticalEngine:
@@ -41,7 +41,7 @@ class StatisticalEngine:
 
     def run_omnibus_kruskal(
         self,
-        benchmark_data: BenchmarkDataset | Mapping[BenchmarkCondition, dict[str, list[RunTrace]]],
+        benchmark_data: EvaluationDataset | Mapping[EvaluationCondition, dict[str, list[RunTrace]]],
     ) -> pd.DataFrame:
         """Execute omnibus Kruskal-Wallis H-tests across all solvers per problem condition."""
         master_omnibus: list[dict[str, Any]] = []
@@ -85,7 +85,7 @@ class StatisticalEngine:
 
     def run_pairwise_fdr(
         self,
-        benchmark_data: BenchmarkDataset | Mapping[BenchmarkCondition, dict[str, list[RunTrace]]],
+        benchmark_data: EvaluationDataset | Mapping[EvaluationCondition, dict[str, list[RunTrace]]],
         alpha: float = 0.05,
     ) -> pd.DataFrame:
         """Execute pairwise Mann-Whitney U tests with Benjamini-Hochberg FDR correction."""
@@ -250,7 +250,7 @@ class StatisticalEngine:
 
     def compute_fragility_matrix(
         self,
-        benchmark_data: BenchmarkDataset | Mapping[BenchmarkCondition, dict[str, list[RunTrace]]],
+        benchmark_data: EvaluationDataset | Mapping[EvaluationCondition, dict[str, list[RunTrace]]],
         dim: int,
         solvers: list[str],
         problem_ids: list[int],
@@ -267,8 +267,8 @@ class StatisticalEngine:
             p_class = BBOB_CLASSES.get(p_id, "")
             problem_labels.append(f"<b>{p_name}</b><br><sup>{p_class}</sup>")
 
-            c_key = BenchmarkCondition(dim=dim, noise_std=clean_std, problem_id=p_id)
-            n_key = BenchmarkCondition(dim=dim, noise_std=noisy_std, problem_id=p_id)
+            c_key = EvaluationCondition(dim=dim, noise_std=clean_std, problem_id=p_id)
+            n_key = EvaluationCondition(dim=dim, noise_std=noisy_std, problem_id=p_id)
 
             for c_idx, solver in enumerate(solvers):
                 c_runs = benchmark_data.get(c_key, {}).get(solver, [])
@@ -281,7 +281,7 @@ class StatisticalEngine:
 
     def compute_hardness_success_rates(
         self,
-        benchmark_data: BenchmarkDataset | Mapping[BenchmarkCondition, dict[str, list[RunTrace]]],
+        benchmark_data: EvaluationDataset | Mapping[EvaluationCondition, dict[str, list[RunTrace]]],
         dim: int,
         solvers_list: list[str],
         noise_level: float,
@@ -314,7 +314,7 @@ class StatisticalEngine:
 
     def compute_validation_medians(
         self,
-        benchmark_data: BenchmarkDataset | Mapping[BenchmarkCondition, dict[str, list[RunTrace]]],
+        benchmark_data: EvaluationDataset | Mapping[EvaluationCondition, dict[str, list[RunTrace]]],
         dim: int,
         problem_ids: list[int],
         clean_std: float = 0.0,
@@ -330,7 +330,7 @@ class StatisticalEngine:
             p_class = BBOB_CLASSES.get(p_id, "")
             problem_labels.append(f"<b>{p_name}</b><br><sup>{p_class}</sup>")
 
-            c_key = BenchmarkCondition(dim=dim, noise_std=clean_std, problem_id=p_id)
+            c_key = EvaluationCondition(dim=dim, noise_std=clean_std, problem_id=p_id)
             c_finals = []
             if c_key in benchmark_data:
                 for s, runs in benchmark_data[c_key].items():
@@ -339,7 +339,7 @@ class StatisticalEngine:
                             c_finals.append(run.final_value)
             clean_medians.append(float(np.median(c_finals)) if c_finals else 1e-16)
 
-            n_key = BenchmarkCondition(dim=dim, noise_std=noisy_std, problem_id=p_id)
+            n_key = EvaluationCondition(dim=dim, noise_std=noisy_std, problem_id=p_id)
             n_finals = []
             if n_key in benchmark_data:
                 for s, runs in benchmark_data[n_key].items():
@@ -391,7 +391,7 @@ class StatisticalEngine:
 
     def compute_robustness_profile(
         self,
-        benchmark_data: BenchmarkDataset | Mapping[BenchmarkCondition, dict[str, list[RunTrace]]],
+        benchmark_data: EvaluationDataset | Mapping[EvaluationCondition, dict[str, list[RunTrace]]],
         dim: int,
         solvers_order: list[str],
         problem_ids: list[int],
@@ -409,7 +409,7 @@ class StatisticalEngine:
             c_succ, c_tot = 0, 0
             n_succ, n_tot = 0, 0
             for p_id in problem_ids:
-                c_key = BenchmarkCondition(dim=dim, noise_std=clean_std, problem_id=p_id)
+                c_key = EvaluationCondition(dim=dim, noise_std=clean_std, problem_id=p_id)
                 if c_key in benchmark_data and s in benchmark_data[c_key]:
                     runs = benchmark_data[c_key][s]
                     for r in runs:
@@ -417,7 +417,7 @@ class StatisticalEngine:
                         if r.is_success(threshold):
                             c_succ += 1
 
-                n_key = BenchmarkCondition(dim=dim, noise_std=noisy_std, problem_id=p_id)
+                n_key = EvaluationCondition(dim=dim, noise_std=noisy_std, problem_id=p_id)
                 if n_key in benchmark_data and s in benchmark_data[n_key]:
                     runs = benchmark_data[n_key][s]
                     for r in runs:
@@ -437,7 +437,7 @@ class StatisticalEngine:
 
     def compute_scaffolding_ablation(
         self,
-        benchmark_data: BenchmarkDataset | Mapping[BenchmarkCondition, dict[str, list[RunTrace]]],
+        benchmark_data: EvaluationDataset | Mapping[EvaluationCondition, dict[str, list[RunTrace]]],
         dim: int,
         solvers_list: list[str],
         problem_ids: list[int],
@@ -455,14 +455,14 @@ class StatisticalEngine:
             c_succ, c_tot = 0, 0
             n_succ, n_tot = 0, 0
             for p_id in problem_ids:
-                c_key = BenchmarkCondition(dim=dim, noise_std=clean_std, problem_id=p_id)
+                c_key = EvaluationCondition(dim=dim, noise_std=clean_std, problem_id=p_id)
                 if c_key in benchmark_data and s_name in benchmark_data[c_key]:
                     for r in benchmark_data[c_key][s_name]:
                         c_tot += 1
                         if r.is_success(threshold):
                             c_succ += 1
 
-                n_key = BenchmarkCondition(dim=dim, noise_std=noisy_std, problem_id=p_id)
+                n_key = EvaluationCondition(dim=dim, noise_std=noisy_std, problem_id=p_id)
                 if n_key in benchmark_data and s_name in benchmark_data[n_key]:
                     for r in benchmark_data[n_key][s_name]:
                         n_tot += 1
@@ -476,7 +476,7 @@ class StatisticalEngine:
 
     def compute_auc_ecdf_ranking(
         self,
-        benchmark_data: BenchmarkDataset | Mapping[BenchmarkCondition, dict[str, list[RunTrace]]],
+        benchmark_data: EvaluationDataset | Mapping[EvaluationCondition, dict[str, list[RunTrace]]],
         solvers: list[str],
         eval_grid: np.ndarray,
         targets: np.ndarray,
@@ -512,7 +512,7 @@ class StatisticalEngine:
 
     def compute_auc_ecdf_matrix(
         self,
-        benchmark_data: BenchmarkDataset | Mapping[BenchmarkCondition, dict[str, list[RunTrace]]],
+        benchmark_data: EvaluationDataset | Mapping[EvaluationCondition, dict[str, list[RunTrace]]],
         solvers: list[str],
         eval_grid: np.ndarray,
         targets: np.ndarray,

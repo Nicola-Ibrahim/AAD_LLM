@@ -1,13 +1,12 @@
 # ==============================================================================
-# LLaMEA Unified Experiment & Runner Configuration
+# LLaMEA Evolutionary Synthesis Configuration (Stage 1: Notebooks 01-02)
 # ==============================================================================
-# Single source of truth for the experimental search space, evolution parameters,
-# execution concurrency, and benchmark evaluation settings.
+# Single source of truth for the experimental synthesis search space,
+# evolutionary hyperparameters, prompt engineering strategies, and worker execution.
 
 # ==============================================================================
-# 1. WHAT TO RUN (Search Space Matrix)
+# 1. WHAT TO SYNTHESIZE (Search Space Matrix)
 # ==============================================================================
-# Edit these lists to specify exactly which problems, dimensions, or modes to run.
 [matrix]
 # Target BBOB Problem Suite IDs:
 #   1  : Sphere (Separable, smooth, unimodal)
@@ -37,11 +36,11 @@ noise_model = "heteroscedastic"
 prompt_strategies = ["baseline", "thinking", "vectorization", "guided"]
 
 # ==============================================================================
-# 2. EVOLUTION SETTINGS
+# 2. EVOLUTIONARY SYNTHESIS SETTINGS
 # ==============================================================================
 [evolution]
-# Evolutionary Generations: Number of LLaMEA mutation/selection iterations per experiment run
-#   • 10  = Standard full search run
+# Evolutionary Generations: Number of LLaMEA mutation/selection iterations per session
+#   • 10  = Standard full synthesis run
 #   • 2-3 = Fast quick-test / dry-run
 iterations = 10
 
@@ -50,7 +49,6 @@ budget = 1000000
 
 # Statistical Replicates: Number of independent repeat runs per unique matrix configuration
 #   • 1   = Single execution per condition (extracting the best champion algorithm)
-#   • 3-5 = Statistical replicates across seeds
 runs_per_config = 1
 
 # ==============================================================================
@@ -58,29 +56,9 @@ runs_per_config = 1
 # ==============================================================================
 [execution]
 # Process Pool Concurrency: Number of parallel worker processes (0 = os.cpu_count())
-max_workers = 8
+max_workers = 0
 
-# auto_resume: Crash-recovery mechanism
-#   • true  = Queries DB for interrupted runs (status='running') and resumes from their last iteration
-#   • false = Ignores interrupted runs and schedules only fresh ones
+# Fault Tolerance & Auto-Resume:
 auto_resume = true
-
-# skip_completed: State deduplication
-#   • true  = Checks DB and skips configurations that already completed with a valid finite error
-#   • false = Forces re-running everything
 skip_completed = true
-
-# retry_failed_synthesis: Re-synthesize conditions where 0 working algorithms were found
-#   • true  = Automatically detects completed runs that failed all iterations (best_final_error is null/inf)
-#             and re-executes them to find a working champion algorithm
-#   • false = Treats any completed experiment in DB as finished regardless of candidate failure
 retry_failed_synthesis = true
-
-# only_incomplete: Recovery / triage mode
-#   • true  = ONLY finishes interrupted runs that crashed mid-way
-#   • false = Finishes interrupted runs AND executes all remaining pending matrix tasks
-only_incomplete = false
-
-# target_experiment_ids: Re-run specific DB experiment IDs (leave empty [] to run entire configured matrix)
-# e.g., [112, 64, 36] to re-run exact DB experiment rows
-target_experiment_ids = []

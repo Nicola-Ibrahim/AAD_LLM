@@ -1,3 +1,5 @@
+"""SQLite-based repository for LLaMEA algorithm synthesis sessions."""
+
 from datetime import datetime, timezone
 from typing import Any
 
@@ -15,12 +17,12 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
-from evolution.infra.storage.base import ExperimentRepository
+from evolution.infra.storage.base import SynthesisRepository
 from shared.tables import ErrorLogORM, ExperimentMode, ExperimentORM, IterationORM
 
 
-class SQLiteExperimentRepository(ExperimentRepository):
-    """SQLite-based repository for LLaMEA experiment summaries and session state management using SQLAlchemy ORM."""
+class SQLiteSynthesisRepository(SynthesisRepository):
+    """SQLite-based repository for LLaMEA synthesis sessions and iteration lifecycle using SQLAlchemy ORM."""
 
     def __init__(self, session_factory: sessionmaker):
         self.SessionLocal = session_factory
@@ -32,7 +34,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
-        """Restore state for process workers (SessionLocal will be None if unpickled directly)."""
+        """Restore state for process workers."""
         self.__dict__.update(state)
         self.SessionLocal = state.get("SessionLocal", None)
 
@@ -45,7 +47,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
         budget: int = 1000000,
         iterations: int = 10,
     ) -> int:
-        """Creates the experiment DB row and returns its id."""
+        """Creates the synthesis session DB row and returns its id."""
         mode_str = mode.value if hasattr(mode, "value") else str(mode)
         noise_model_str = (
             problem.noise_model.value
@@ -74,7 +76,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
             return experiment.id
 
     def get_experiment_status(self, experiment_id: int) -> tuple[str | None, int]:
-        """Returns tuple of (status_string, max_iteration_number) for an experiment, or (None, 0) if not found."""
+        """Returns tuple of (status_string, max_iteration_number) for a synthesis run, or (None, 0) if not found."""
         with self.SessionLocal() as session:
             exp = session.get(ExperimentORM, experiment_id)
             if not exp:
@@ -135,7 +137,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
             session.commit()
 
     def mark_completed(self, experiment_id: int) -> None:
-        """Marks experiment completed and computes best_* rollup fields from the iterations table."""
+        """Marks synthesis completed and computes best_* rollup fields from iterations table."""
         with self.SessionLocal() as session:
             exp = session.get(ExperimentORM, experiment_id)
             if not exp:
@@ -168,7 +170,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
         self.checkpoint_wal()
 
     def mark_failed(self, experiment_id: int, reason: str = "") -> None:
-        """Marks an experiment as failed so it is not left as 'running' forever."""
+        """Marks a synthesis session as failed so it is not left as 'running' forever."""
         with self.SessionLocal() as session:
             exp = session.get(ExperimentORM, experiment_id)
             if exp:
@@ -179,7 +181,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
         self.checkpoint_wal()
 
     def checkpoint_wal(self) -> None:
-        """Flushes WAL log frames to the main database file using PASSIVE mode without truncating or deleting the WAL file."""
+        """Flushes WAL log frames to main database file using PASSIVE mode."""
         if not self.SessionLocal:
             return
         from sqlalchemy import text
@@ -192,7 +194,7 @@ class SQLiteExperimentRepository(ExperimentRepository):
             print(f"[WARN] checkpoint_wal failed non-fatally: {e}")
 
     def get_best_raw_fitness(self, experiment_id: int) -> float | None:
-        """Returns the raw algorithm objective value from the best (lowest-error) iteration of an experiment."""
+        """Returns raw algorithm objective value from the best iteration of a synthesis run."""
         stmt = (
             select(IterationORM.raw_fitness)
             .where(

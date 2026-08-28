@@ -9,7 +9,7 @@ from typing import Any
 import pandas as pd
 
 from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
-from benchmarking.infra.storage.sqlite_repository import SQLiteBenchmarkReadRepository
+from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
 
 
 class ChampionSelectionService:
@@ -17,7 +17,7 @@ class ChampionSelectionService:
 
     def __init__(
         self,
-        sqlite_repo: SQLiteBenchmarkReadRepository,
+        sqlite_repo: SQLiteSynthesisReadRepository,
         champions_repo: ChampionsReadRepository,
     ):
         self.sqlite_repo = sqlite_repo

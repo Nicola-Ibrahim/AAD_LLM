@@ -3,6 +3,7 @@
 Coordinates multi-model, multi-strategy coverage matrix analysis across all 30 BBOB conditions.
 """
 
+from pathlib import Path
 import re
 from typing import Any
 import pandas as pd
@@ -11,7 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from benchmarking.domain.services.resolvers import get_clean_model_label, get_model_slug
 from benchmarking.domain.services.taxonomy import get_bbob_class, get_bbob_name
 from benchmarking.infra.io.trace_repository import IOHTraceReader
-from benchmarking.infra.storage.sqlite_repository import SQLiteBenchmarkReadRepository
+from benchmarking.infra.storage.config_repository import EvaluationConfigRepository
+from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
 
 
 class AuditCoverageSummary(BaseModel):
@@ -45,21 +47,27 @@ class AuditMatrixData(BaseModel):
     coverage_summary: AuditCoverageSummary | dict[str, Any] = Field(default_factory=dict)
 
 
-class BenchmarkAuditService:
-    """Application use case for auditing global benchmark experiment completion and coverage."""
+class EvaluationAuditService:
+    """Application use case for auditing global benchmark evaluation completion and coverage."""
 
     def __init__(
         self,
-        sqlite_repo: SQLiteBenchmarkReadRepository,
+        sqlite_repo: SQLiteSynthesisReadRepository,
         trace_repo: IOHTraceReader,
+        config_repo: EvaluationConfigRepository,
     ):
         self.sqlite_repo = sqlite_repo
         self.trace_repo = trace_repo
+        self.config_repo = config_repo
 
-    def get_audit_matrix(
-        self,
-        target_runs: int = 10,
-    ) -> tuple[pd.DataFrame, dict[str, Any]]:
+        cfg = self.config_repo.load_config()
+        self.target_runs = int(cfg.get("target_eval_runs", 10))
+        self.classical_baselines = cfg.get("classical_baselines", ["cmaes", "de", "pso"])
+        self.target_problems = cfg.get("target_problems", [1, 8, 11, 15, 21])
+        self.target_dims = cfg.get("target_dims", [2, 3, 5])
+        self.target_noise_levels = cfg.get("target_noise_levels", [0.0, 0.05])
+
+    def get_audit_matrix(self) -> tuple[pd.DataFrame, dict[str, Any]]:
         """Generate the complete 30-condition audit matrix across discovered models and baselines."""
         df_db = self.sqlite_repo.get_completed_experiments_matrix()
         if df_db.empty:
@@ -72,7 +80,7 @@ class BenchmarkAuditService:
         )
         unique_models = sorted(df_db["llm_name"].dropna().unique())
         strategies = ["baseline", "guided", "thinking", "vectorization"]
-        baselines = ["cmaes", "de", "pso"]
+        baselines = self.classical_baselines
 
         matrix_rows: list[dict[str, Any]] = []
         total_cells = 0
@@ -99,11 +107,11 @@ class BenchmarkAuditService:
                 runs = self.trace_repo.get_run_count(b_dir) if b_dir.exists() else 0
                 col_name = f"Baseline / {b.upper()}"
 
-                if runs >= target_runs:
-                    row[col_name] = f"✅ {runs}/{target_runs}"
+                if runs >= self.target_runs:
+                    row[col_name] = f"✅ {runs}/{self.target_runs}"
                     completed_cells += 1
                 elif runs > 0:
-                    row[col_name] = f"⚠️ {runs}/{target_runs}"
+                    row[col_name] = f"⚠️ {runs}/{self.target_runs}"
                     partial_cells += 1
                 else:
                     row[col_name] = "❌ 0"
@@ -121,11 +129,11 @@ class BenchmarkAuditService:
                     s_dir = self.trace_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder_name
                     runs = self.trace_repo.get_run_count(s_dir) if s_dir.exists() else 0
 
-                    if runs >= target_runs:
-                        row[col_name] = f"✅ {runs}/{target_runs}"
+                    if runs >= self.target_runs:
+                        row[col_name] = f"✅ {runs}/{self.target_runs}"
                         completed_cells += 1
                     elif runs > 0:
-                        row[col_name] = f"⚠️ {runs}/{target_runs}"
+                        row[col_name] = f"⚠️ {runs}/{self.target_runs}"
                         partial_cells += 1
                     else:
                         row[col_name] = "❌ 0"
@@ -148,12 +156,9 @@ class BenchmarkAuditService:
 
         return df_matrix, summary
 
-    def get_global_audit_matrix(
-        self,
-        target_runs: int = 10,
-    ) -> AuditMatrixData:
+    def get_global_audit_matrix(self) -> AuditMatrixData:
         """Generate the complete 30-condition audit matrix with Pydantic model access."""
-        df_matrix, summary = self.get_audit_matrix(target_runs=target_runs)
+        df_matrix, summary = self.get_audit_matrix()
         df_exp, df_iter = self.sqlite_repo.get_synthesis_dataframes()
 
         if df_matrix.empty:

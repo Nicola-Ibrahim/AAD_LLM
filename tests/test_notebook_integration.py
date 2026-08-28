@@ -2,35 +2,35 @@
 
 import json
 
-from benchmarking.application.audit_service import BenchmarkAuditService
-from benchmarking.application.evaluation_service import BenchmarkEvaluationService
+from benchmarking.application.audit_service import EvaluationAuditService
+from benchmarking.application.evaluation_service import EvaluationService
 from benchmarking.application.selection_service import ChampionSelectionService
 from benchmarking.application.statistical_service import StatisticalEvaluationService
 from shared.config import DATA_DIR, RESULTS_DIR
 
 
-def test_nb01_noise_landscapes():
-    """Verify Notebook 01 data pipeline."""
-    from evolution.infra.problems.bbob import BBOBProblem
+def test_nb01_noise_pipeline():
+    """Verify Notebook 01 (01_noise.ipynb: Noise Landscape & Problem Evaluation)."""
     from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy
+    from evolution.infra.problems.bbob import BBOBProblem
     p = BBOBProblem(problem_id=1, dim=2, noise_strategy=HeteroscedasticNoiseStrategy(0.05))
     val = p([0.0, 0.0])
     assert isinstance(val, float)
-    print("✅ NB01 noise landscape pipeline verified.")
+    print("✅ NB01 noise pipeline verified.")
 
 
-def test_nb02_evolutionary_synthesis_pipeline():
-    """Verify Notebook 02 (Evolutionary Synthesis Service & Task Construction with DI)."""
-    from evolution.application.experiment_service import EvolutionExperimentService
+def test_nb02_synthesis_pipeline():
+    """Verify Notebook 02 (02_synthesis.ipynb: Evolutionary Synthesis Service & Task Construction)."""
+    from evolution.application.synthesis_service import LLaMEASynthesisService
     from evolution.infra.llm.client import LLMClient
-    from evolution.infra.storage.campaigns.repository import ExperimentConfigRepository
+    from evolution.infra.storage.synthesis_config.repository import SynthesisConfigRepository
     from shared.database import initialize_sqlite_storage
 
     # Explicit repository dependency injection
     sqlite_repo = initialize_sqlite_storage()
-    config_repo = ExperimentConfigRepository()
+    config_repo = SynthesisConfigRepository()
     llm = LLMClient("local", skip_validation=True)
-    service = EvolutionExperimentService(
+    service = LLaMEASynthesisService(
         sqlite_repo=sqlite_repo,
         config_repo=config_repo,
         llm_client=llm,
@@ -42,9 +42,9 @@ def test_nb02_evolutionary_synthesis_pipeline():
 
     cfg = config_repo.load_config()
     assert "matrix" in cfg
-    assert "budget" in cfg
+    assert "evolution" in cfg
 
-    matrix_df, summary = service.audit_campaign()
+    matrix_df, summary = service.audit_matrix()
     assert not matrix_df.empty
     assert "total_conditions" in summary
 
@@ -54,18 +54,18 @@ def test_nb02_evolutionary_synthesis_pipeline():
     print(f"✅ NB02 evolutionary synthesis pipeline verified ({len(tasks)} tasks constructed).")
 
 
-def test_nb03_benchmark_evaluations_pipeline():
-    """Verify Notebook 03 (Champion Selection + Evaluations Audit & Dispatch)."""
-    print("Testing NB03 logic with ChampionSelectionService & BenchmarkEvaluationService...")
+def test_nb03_evaluation_pipeline():
+    """Verify Notebook 03 (03_evaluation.ipynb: Champion Selection + Evaluations Audit & Dispatch)."""
+    print("Testing NB03 logic with ChampionSelectionService & EvaluationService...")
     from benchmarking.infra.io.trace_repository import IOHTraceReader
     from benchmarking.infra.storage import (
         ChampionsReadRepository,
-        SQLiteBenchmarkReadRepository,
+        SQLiteSynthesisReadRepository,
     )
     from shared.database import create_db_session_factory
 
     session_factory = create_db_session_factory()
-    sqlite_repo = SQLiteBenchmarkReadRepository(session_factory)
+    sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
     trace_repo = IOHTraceReader()
 
@@ -79,10 +79,17 @@ def test_nb03_benchmark_evaluations_pipeline():
     total_champs = sum(len(v) for v in champions.values())
     print(f"  • Champions discovered: {total_champs} across {len(champions)} models")
 
-    eval_service = BenchmarkEvaluationService(
+    from benchmarking.infra.io.trace_repository import EvaluationStateRepository
+    from benchmarking.infra.storage import EvaluationConfigRepository
+    state_repo = EvaluationStateRepository()
+    config_repo = EvaluationConfigRepository()
+
+    eval_service = EvaluationService(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         trace_repo=trace_repo,
+        state_repo=state_repo,
+        config_repo=config_repo,
     )
     champions_path = DATA_DIR / "champions.json"
     assert champions_path.exists(), "champions.json does not exist!"
@@ -90,24 +97,29 @@ def test_nb03_benchmark_evaluations_pipeline():
         champions_raw = json.load(f)
     champions_flat = eval_service.champions_repo.get_champions_flat(champions_raw)
 
-    df_audit = eval_service.audit_champions_workload(champions_flat)
+    df_audit = eval_service.audit_champions_workload()
     assert not df_audit.empty
     print(f"  • Audited champions count: {len(df_audit)}")
     print("✅ NB03 benchmark evaluation pipeline verified.")
 
 
-def test_nb04_experimental_matrix_audit_pipeline():
-    """Verify Notebook 04 (Experimental Matrix Audit)."""
-    print("\nTesting NB04 logic with BenchmarkAuditService...")
+def test_nb04_audit_pipeline():
+    """Verify Notebook 04 (04_audit.ipynb: Experimental Matrix Audit)."""
+    print("\nTesting NB04 logic with EvaluationAuditService...")
     from benchmarking.infra.io.trace_repository import IOHTraceReader
-    from benchmarking.infra.storage import SQLiteBenchmarkReadRepository
+    from benchmarking.infra.storage import EvaluationConfigRepository, SQLiteSynthesisReadRepository
     from shared.database import create_db_session_factory
 
     session_factory = create_db_session_factory()
-    sqlite_repo = SQLiteBenchmarkReadRepository(session_factory)
+    sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     trace_repo = IOHTraceReader()
+    config_repo = EvaluationConfigRepository()
 
-    service = BenchmarkAuditService(sqlite_repo=sqlite_repo, trace_repo=trace_repo)
+    service = EvaluationAuditService(
+        sqlite_repo=sqlite_repo,
+        trace_repo=trace_repo,
+        config_repo=config_repo,
+    )
     audit_data = service.get_global_audit_matrix()
     assert len(audit_data.dims) > 0
     assert len(audit_data.all_solvers) > 0
@@ -118,20 +130,20 @@ def test_nb04_experimental_matrix_audit_pipeline():
     print("✅ NB04 experimental matrix audit pipeline verified.")
 
 
-def test_nb05_statistical_analysis_and_figures_pipeline():
-    """Verify Notebook 05 (Statistical Hypothesis Testing, Reports & Figure Data)."""
+def test_nb05_analysis_pipeline():
+    """Verify Notebook 05 (05_analysis.ipynb: Statistical Hypothesis Testing, Reports & Figures)."""
     print("\nTesting NB05 logic with StatisticalEvaluationService...")
     from benchmarking.infra.io.trace_repository import IOHTraceReader
-    from benchmarking.infra.storage import SQLiteBenchmarkReadRepository
+    from benchmarking.infra.storage import SQLiteSynthesisReadRepository
     from shared.database import create_db_session_factory
 
     session_factory = create_db_session_factory()
-    sqlite_repo = SQLiteBenchmarkReadRepository(session_factory)
+    sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     trace_repo = IOHTraceReader()
 
     service = StatisticalEvaluationService(sqlite_repo=sqlite_repo, trace_repo=trace_repo)
     df_exp, df_iter = service.get_synthesis_dataframes()
-    all_benchmark_data = service.load_evaluation_traces()
+    all_benchmark_data = service.load_all_traces()
     assert len(all_benchmark_data) > 0
     print(f"  • Problem conditions loaded: {len(all_benchmark_data)}")
 
@@ -165,7 +177,8 @@ def test_nb05_statistical_analysis_and_figures_pipeline():
 
 
 if __name__ == "__main__":
-    test_nb01_noise_landscapes()
-    test_nb03_benchmark_evaluations_pipeline()
-    test_nb04_experimental_matrix_audit_pipeline()
-    test_nb05_statistical_analysis_and_figures_pipeline()
+    test_nb01_noise_pipeline()
+    test_nb02_synthesis_pipeline()
+    test_nb03_evaluation_pipeline()
+    test_nb04_audit_pipeline()
+    test_nb05_analysis_pipeline()

@@ -16,7 +16,7 @@ from evolution.infra.prompts import (
     FORMAT_PROMPT,
     build_task_prompt,
 )
-from evolution.infra.storage.base import ExperimentRepository
+from evolution.infra.storage.base import SynthesisRepository
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.application.synthesis.evaluator import Evaluator
 
@@ -62,7 +62,7 @@ class LLaMEASession:
         initial_iteration: int,
         prompt_strategy: PromptStrategy | str,
         llm_client: LLMClient,
-        db_repo: ExperimentRepository,
+        db_repo: SynthesisRepository,
         code_repo: CodeRepository,
         budget: int = DEFAULT_BUDGET,
         iterations: int = DEFAULT_MAX_ITERATIONS,
