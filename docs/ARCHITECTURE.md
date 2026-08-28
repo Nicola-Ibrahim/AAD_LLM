@@ -12,6 +12,9 @@ The technical documentation for `AAD_LLM` is structured into focused directories
 3. [LLaMEA Decoupled Architecture](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/docs/architecture/llamea_architecture.md)
    - Class and component diagram of runtime dependencies (`LLaMEASession`, `Evaluator`, `Logger`, `Repositories`).
    - Deep dive into the fast JSONL decoupled persistence strategy.
+4. [Evolutionary Synthesis & Evaluator Methodology](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/docs/evaluator_methodology.md)
+   - Comprehensive breakdown of the evolutionary search loop, `Evaluator` architecture, and mathematical scoring formulations.
+   - Mathematical definitions of ground-truth optimality gaps, Euclidean decision space distances, and noise injection models.
 
 ## ⚙️ Configuration Documentation (`docs/configuration/`)
 1. [Model & LLM Configuration Guide](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/docs/configuration/model_configuration.md)

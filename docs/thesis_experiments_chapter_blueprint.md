@@ -1,309 +1,246 @@
-# Empirical Evaluation & Experimental Methodology: Thesis Chapter Blueprint
+# Experimental Evaluation & Empirical Methodology: Thesis Chapter Blueprint
+
+This document serves as the formal **Experimental Evaluation Chapter Blueprint** for the Master's Thesis: *"Automated Algorithm Design for Continuous Black-Box Optimization via Large Language Models under Deterministic and Noisy Regimes"*. It details the two-stage experimental paradigm, the theoretical motivation for each configuration, the benchmark topology, the complete mathematical formulations of all performance metrics, the prompt engineering ablation matrix, and the empirical findings.
 
 ---
 
-## 1. Executive Summary & Chapter Scope
+## 1. Chapter Scope & Core Research Questions
 
-This document serves as the comprehensive **master blueprint** for the **Experimental Evaluation Chapter** of the Master's Thesis: *"Automated Algorithm Design for Continuous Black-Box Optimization via Large Language Models (LLaMEA) under Deterministic and Noisy Regimes"*.
+The empirical investigation is structured around five foundational research questions:
 
-### 1.1 Core Research Questions (RQs)
-1. **RQ1 (Algorithmic Competitiveness)**: Can LLM-synthesized continuous optimization algorithms match or surpass established state-of-the-art classical metaheuristics (CMA-ES, Differential Evolution, Particle Swarm Optimization) across diverse BBOB landscape classes?
-2. **RQ2 (Model Scaling Effects)**: How does LLM parameter scale ($7\text{B}$ vs. $14\text{B}$ parameters) impact the mathematical validity, novelty, and convergence efficacy of evolved optimization algorithms?
-3. **RQ3 (Prompt Strategy Ablation)**: Does structured prompt engineering (Domain Guidance, Chain-of-Thought "Thinking", Vectorization constraints) significantly improve algorithmic search quality compared to naive evolutionary prompts?
-4. **RQ4 (Noise Robustness & Generalization)**: How resilient are LLM-evolved optimizers when subjected to heteroscedastic evaluation noise ($\sigma = 0.05$) compared to deterministic landscapes ($\sigma = 0.0$)?
-5. **RQ5 (Synthesis-to-Evaluation Transferability)**: Do candidate algorithms optimized under low evaluation budgets ($1,000$ function evaluations during synthesis) generalize when scaled to full benchmark budgets ($50,000$ evaluations in IOHprofiler)?
+1. **RQ1 (Algorithmic Competitiveness)**: Can optimization heuristics discovered autonomously through Large Language Model evolutionary synthesis match or outperform established state-of-the-art classical metaheuristics (CMA-ES, Differential Evolution, Particle Swarm Optimization) across diverse continuous benchmark landscapes?
+2. **RQ2 (Model Scaling Effects)**: How does the underlying LLM parameter capacity ($7\text{B}$ vs. $14\text{B}$ parameters) impact the mathematical sophistication, algorithmic novelty, and search efficiency of synthesized heuristics?
+3. **RQ3 (Prompt Strategy Ablation)**: How does the structural design of prompt scaffolding (Domain Guidance, Chain-of-Thought Reflection, Vectorization constraints) influence evolutionary trajectories compared to naive unguided prompts?
+4. **RQ4 (Stochastic Noise Resilience)**: How resilient are synthesized algorithms when subjected to heteroscedastic optimality-gap noise ($\sigma = 0.05$) compared to deterministic landscapes ($\sigma = 0.0$), and do they exhibit adaptive noise-averaging dynamics?
+5. **RQ5 (Synthesis-to-Evaluation Horizon Generalization)**: Do candidate heuristics synthesized under low evaluation budgets ($B_{\text{synth}} = 1{,}000$ function calls) generalize when deployed across full-scale long-horizon benchmarking budgets ($B_{\text{eval}} = 50{,}000$ function calls)?
 
 ---
 
-## 2. Experimental Architecture & Two-Stage Paradigm
+## 2. The Two-Stage Experimental Paradigm
 
-The empirical investigation follows a rigorous two-stage design separating **Online Algorithmic Synthesis** from **Independent Post-Hoc Benchmarking**:
+To guarantee scientific validity and eliminate optimization overfitting, the methodology strictly separates **Online Evolutionary Synthesis** from **Independent Post-Hoc Empirical Benchmarking**:
 
-```
- ┌─────────────────────────────────────────────────────────────────────────────┐
- │ STAGE 1: Automated Algorithm Synthesis (LLaMEA Online Evolution)            │
- │ • Iterations: 10–20 generations per run                                     │
- │ • Budget: 1,000 function evaluations per candidate                          │
- │ • LLMs: Qwen2.5-Coder-7B & Qwen2.5-Coder-14B (GGUF Q4_K_M)                 │
- │ • Prompt Strategies: Baseline, Guided, Thinking, Vectorization              │
- │ • Storage: SQLite Database (292 completed runs, 2,902 code iterations)     │
- └──────────────────────────────────────┬──────────────────────────────────────┘
-                                        │ (Champion Selection: Minimum Final Error)
-                                        ▼
- ┌─────────────────────────────────────────────────────────────────────────────┐
- │ STAGE 2: Independent Empirical Benchmarking (IOHprofiler / BBOB Protocol)   │
- │ • Benchmark Suite: COCO / BBOB (f1, f8, f11, f15, f21)                      │
- │ • Dimensions: D ∈ {2, 3, 5} | Noise Regimes: σ ∈ {0.0, 0.05}                │
- │ • Replications: 10 independent random seeds per condition                   │
- │ • Evaluation Budget: 50,000 evaluations (10,000 × D scaling)                │
- │ • Solvers Evaluated: 11 (3 Classical Baselines + 8 LLaMEA Champions)        │
- │ • Trace Repository: IOHprofiler .dat / .json convergence logs               │
- └──────────────────────────────────────┬──────────────────────────────────────┘
-                                        │ (Empirical Performance Profiling)
-                                        ▼
- ┌─────────────────────────────────────────────────────────────────────────────┐
- │ STAGE 3: Performance Profiling & Comparative Analysis                       │
- │ • Empirical Cumulative Distribution Functions (ECDF over targets Δy ≤ 10⁻⁸) │
- │ • Log-scale Convergence Trajectories with IQR (25th–75th percentiles)       │
- │ • Empirical Target Success Rates across BBOB Landscape Hardness Classes     │
- │ • Cross-Environment Noise Retention & Fragility Metrics (Clean vs. Noisy)   │
- └─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Stage1 ["STAGE 1: Online Evolutionary Algorithm Synthesis"]
+        A["Problem Space Configuration<br/>Dimensions: D ∈ {2, 3, 5} | Budget: B_synth = 1,000"] --> B["LLM Synthesis Matrix<br/>Models: 7B vs. 14B | Prompts: Baseline, Guided, Thinking, Vectorization"]
+        B --> C["Evolutionary Search Loop<br/>10–20 Generations per Condition | Total: 292 Runs, 2,902 Iterations"]
+        C --> D["Champion Selection Criterion<br/>Minimum Clean Optimality Gap: min |f_clean(x*) - f*|"]
+    end
+
+    subgraph Stage2 ["STAGE 2: Independent Post-Hoc Empirical Benchmarking"]
+        D --> E["Benchmarking Execution Matrix<br/>11 Solvers: 3 Classical Baselines + 8 LLM Champions"]
+        E --> F["Full Benchmark Suite<br/>5 Canonical BBOB Classes | D ∈ {2, 3, 5} | σ ∈ {0.0, 0.05}"]
+        F --> G["Multi-Seed Replication<br/>10 Independent Random Seeds | Budget: B_eval = 50,000 (10,000 × D)"]
+        G --> H["Total Benchmark Volume<br/>30 Conditions × 10 Seeds × 11 Solvers = 3,300 Full Runs"]
+    end
+
+    subgraph Stage3 ["STAGE 3: Empirical Performance Profiling & Statistical Analysis"]
+        H --> I["Anytime Efficiency: Runtime ECDF & Area Under Curve (AUC-ECDF across 51 Targets)"]
+        H --> J["Asymptotic Quality: Terminal Target Success Rate (Δy ≤ 10⁻⁸) by Landscape Hardness"]
+        H --> K["Search Dynamics: Median Convergence Trajectories with Interquartile Ranges (IQR)"]
+        H --> L["Robustness: Cross-Environment Degradation Gap & Noise Retention Ratios"]
+    end
 ```
 
+### 2.1 Theoretical Rationale for the Two-Stage Paradigm
+1. **Preventing Horizon Overfitting**: An algorithm synthesized within a short budget ($1{,}000$ evaluations) could trivially exploit greedy step sizes that rapidly decrease fitness early on but cause premature stagnation in long horizons. Testing on a $50{,}000$-evaluation horizon verifies whether the LLM synthesized a genuine metaheuristic with asymptotic convergence properties.
+2. **Elimination of Evaluation Stochasticity**: While synthesis evaluates algorithms on single evolutionary trajectories, Stage 2 subjects champions to $10$ independent random seeds across all $30$ experimental conditions ($3 \text{ dimensions} \times 2 \text{ noise levels} \times 5 \text{ problems}$), ensuring statistically robust conclusions.
+
 ---
 
-## 3. Detailed Experimental Setup & Configurations
+## 3. Experimental Run Matrix & Synthesis Configuration
 
-### 3.1 Stage 1: Algorithm Synthesis Configuration (LLaMEA)
+### 3.1 Stage 1: Synthesis Hyperparameters & Factorial Design
 
-| Hyperparameter / Component | Exact Configuration | Rationale / Scientific Grounding |
+The algorithm synthesis campaign systematically explores the interaction between **model capacity**, **prompt structure**, and **problem dimensionality**:
+
+| Experimental Dimension | Parameter Values | Theoretical Purpose |
 | :--- | :--- | :--- |
-| **Evolution Engine** | LLaMEA (LLM-driven Automated Algorithm Design) | 1+1 evolutionary loop iteratively mutating Python algorithm ASTs. |
-| **Large Language Models** | `qwen2.5-coder-7b-instruct-q4_k_m.gguf`<br>`qwen2.5-coder-14b-instruct-q4_k_m.gguf` | High coding competence at local inference scale; enables direct 7B vs 14B scaling comparison. |
-| **Quantization Scheme** | 4-bit Medium Quantization (`Q4_K_M`) | Minimizes VRAM footprint while preserving instruction following and syntax precision. |
-| **Inference Backend** | `llama-cpp-python` / Local GPU Execution | Deterministic temperature controls without external API drift or rate-limiting. |
-| **Sampling Temperature** | $T = 0.7$ (synthesis mutations) | Balances exploitation of working algorithmic scaffolds with stochastic code novelty. |
-| **Synthesis Evaluation Budget** | $1,000$ function evaluations | Fast online evaluation enabling multi-generation evolutionary cycles. |
-| **Max Synthesis Iterations** | $10 \text{ to } 20$ generations | Allows observable genetic trajectory without excessive computational overhead. |
-| **Target Functions (Synthesis)** | BBOB $f_1, f_8, f_{11}, f_{15}, f_{21}$ ($D \in \{2,3,5\}$) | Spans the full range of mathematical landscapes (separable, ill-conditioned, multi-modal). |
-| **Completed Synthesis Runs** | **292 complete evolutionary runs** | Totaling **2,902 evaluated algorithm iterations** stored in `database.sqlite`. |
+| **Model Capacities** | $7\text{B}$ Parameters vs. $14\text{B}$ Parameters | Tests model scaling laws in algorithmic reasoning and code synthesis. |
+| **Quantization Scheme** | 4-bit Medium Quantization (`Q4_K_M`) | Maximizes parameter density in memory while preserving logical reasoning and syntactic accuracy. |
+| **Sampling Temperature** | $T = 0.7$ | Balances exploitation of functional code skeletons with stochastic variation. |
+| **Evolutionary Budget** | $G \in [10, 20]$ Generations | Provides sufficient evolutionary depth to observe structural mutation trajectories. |
+| **Evaluation Budget** | $B_{\text{synth}} = 1{,}000$ Function Evaluations | Low-budget regime forcing the synthesis of sample-efficient exploration mechanisms. |
+| **Dimensionality Grid** | $D \in \{2, 3, 5\}$ | Evaluates geometric scaling in low-to-medium continuous search spaces. |
+| **Target Functions** | BBOB $f_1, f_8, f_{11}, f_{15}, f_{21}$ | Spans separable, ill-conditioned, multi-modal, and deceptive landscapes. |
+| **Total Synthesis Campaign** | **292 Complete Evolutionary Runs** | Totaling **2,902 Evaluated Heuristic Iterations**. |
 
-#### Prompt Strategy Ablation Matrix:
-1. **`baseline`**: Standard metaheuristic prompt requesting an iterative Python continuous optimizer without specialized domain priors.
-2. **`guided`**: Enriched with domain heuristics (step-size adaptation principles, population diversity preservation, and covariance hints).
-3. **`thinking`**: Structured Chain-of-Thought (CoT) scaffold compelling the LLM to write `<thinking>` trace analyzing previous failure modes before emitting code.
-4. **`vectorization`**: Specialized vectorization constraints forcing matrix-oriented NumPy operations and vectorized exploration loops.
+### 3.2 Prompt Strategy Ablation Matrix
 
----
+To isolate the impact of natural language guidance and cognitive scaffolding on algorithmic design, four distinct prompt strategies were evaluated:
 
-### 3.2 Stage 2: Empirical Benchmarking Protocol (IOHprofiler)
-
-| Parameter | Value / Protocol | Notes |
-| :--- | :--- | :--- |
-| **Benchmark Suite** | BBOB / COCO Single-Objective Continuous Suite | Standard benchmark standard in continuous black-box optimization. |
-| **Dimensions ($D$)** | $D \in \{2, 3, 5\}$ | Testing low-dimensional geometry scaling behavior. |
-| **Noise Levels ($\sigma$)** | $\sigma = 0.0$ (Clean), $\sigma = 0.05$ (Heteroscedastic Optimality-Gap) | Injected via domain strategy: $\tilde{f}(x) = f(x) + \mathcal{N}(0, (\sigma \cdot |f(x) - f^*|)^2)$. |
-| **Problem Instances** | 5 canonical BBOB functions across 5 distinct hardness classes: |
-| | • $f_1$: **Sphere** (Separable, unimodal, convex) | Baseline convergence rate test. |
-| | • $f_8$: **Rosenbrock** (Low conditioning, parabolic valley) | Valley-following and coordinate rotation test. |
-| | • $f_{11}$: **Discus** (High conditioning, condition number $10^6$) | Numerical stability & eigenvalue distortion test. |
-| | • $f_{15}$: **Rastrigin** (Multi-modal with global structure) | Basins of attraction and premature convergence test. |
-| | • $f_{21}$: **Gallagher 101 Peaks** (Multi-modal with weak structure) | Highly deceptive landscape with 101 local optima. |
-| **Replication Budget** | $10$ independent random seeds per problem condition | Total of $30 \times 10 \times 11 = 3,300$ complete benchmark runs. |
-| **Evaluation Budget** | $50,000$ function evaluations ($10,000 \times D$) | Long-horizon benchmark testing asymptotic convergence. |
-| **Success Criterion** | Target precision $\Delta y = f(x) - f_{\text{opt}} \le 10^{-8}$ | Standard COCO precision threshold for empirical hitting times. |
-| **Classical Baselines** | **CMA-ES** (Covariance Matrix Adaptation Evolution Strategy)<br>**DE** (Differential Evolution `best1bin`)<br>**PSO** (Particle Swarm Optimization) | Established continuous optimization algorithms serving as gold standards. |
-| **Total Solvers Evaluated** | **11 Solvers**: 3 Classical Baselines + 8 LLaMEA Evolved Champions | Fully evaluated across all 30 conditions ($3 \text{ dims} \times 2 \text{ noise levels} \times 5 \text{ problems}$). |
-
----
-
-## 4. Empirical Terminology, Metrics & Evaluation Methodology
-
-### 4.1 Foundational Terminology: Points, Evaluations, and Iterations
-
-To prevent ambiguity in continuous optimization benchmarking, four distinct operational terms are strictly defined:
-
-| Term | Mathematical Symbol | Definition in Benchmarking Protocol | Role in the Thesis |
-| :--- | :---: | :--- | :--- |
-| **Candidate Point** | $\vec{x} \in \mathbb{R}^D$ | A single coordinate vector in $D$-dimensional search space (e.g. $\vec{x} = [1.2, -0.4, 3.1]$ in 3D). | Basic unit of decision space exploration. |
-| **Function Evaluation** | $f(\vec{x})$ | Evaluating the mathematical objective value/error for **exactly one point $\vec{x}$**. | **The fundamental cost metric (X-axis of all benchmark plots)**. Budget = $50,000$ evaluations ($10,000 \times D$). |
-| **Algorithmic Iteration** | $t \in \mathbb{N}$ | One complete update cycle/step of the optimizer loop. An algorithm with population size $N$ evaluates $N$ points per iteration ($N$ evaluations consumed). | Internal solver loop counter (not used on plot axes to ensure fair comparison across variable population sizes). |
-| **Benchmark Replication** | Run $r \in [1, 10]$ | An independent execution of the solver on the same problem condition with a distinct random seed. | Ensures statistical reliability and variance quantification across stochastic runs. |
-
-> **Why the X-Axis Uses Function Evaluations ($f(\vec{x})$ Calls):**  
-> In black-box optimization, algorithmic internal iterations vary widely (e.g., $(1+1)$-ES evaluates $1$ point per step, while CMA-ES evaluates $\lambda = 4 + \lfloor 3 \ln D \rfloor$ points, and PSO evaluates a swarm of $30$ particles per step). The standard BBOB/COCO protocol evaluates computational efficiency strictly by the **total cumulative function evaluations** consumed to reach a target.
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                 PROMPT STRATEGY ABLATION MATRIX                             │
+├──────────────────────────────┬──────────────────────────────────────────────────────────────┤
+│ Strategy Identifier          │ Theoretical Motivation & Scaffolding Mechanism               │
+├──────────────────────────────┼──────────────────────────────────────────────────────────────┤
+│ 1. Baseline                  │ • Unconstrained, open-ended metaheuristic prompt.            │
+│                              │ • Provides only operational interface and black-box contract.│
+│                              │ • Measures raw, unguided algorithmic prior of the LLM.       │
+├──────────────────────────────┼──────────────────────────────────────────────────────────────┤
+│ 2. Guided                    │ • Infuses foundational optimization domain knowledge.        │
+│                              │ • Incorporates step-size adaptation (1/5th rule principles). │
+│                              │ • Advises on population diversity preservation and momentum. │
+├──────────────────────────────┼──────────────────────────────────────────────────────────────┤
+│ 3. Thinking                  │ • Enforces structured Chain-of-Thought (CoT) reflection.     │
+│                              │ • Mandates a pre-code reasoning block analyzing failure      │
+│                              │   modes of parent heuristics before emitting code.           │
+├──────────────────────────────┼──────────────────────────────────────────────────────────────┤
+│ 4. Vectorization             │ • Imposes strict array-oriented mathematical constraints.    │
+│                              │ • Enforces vectorized NumPy matrix operations over loops.    │
+│                              │ • Optimizes evaluation throughput and population operations. │
+└──────────────────────────────┴──────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-### 4.2 Empirical Cumulative Distribution Functions (ECDF) & Area Under Curve (AUC-ECDF)
+## 4. Stage 2: Post-Hoc Benchmarking Protocol & Landscape Suite
 
-The performance aggregation across problem instances and runs is evaluated using the **Empirical Runtime Cumulative Distribution Function (ECDF)** as standardized by Nikolaus Hansen et al. (COCO/BBOB, 2016) and IOHprofiler (de Nobel et al., 2021).
+### 4.1 Canonical BBOB Benchmark Landscapes
+The continuous black-box optimization benchmark suite comprises five canonical problems representing distinct topological challenge classes:
 
-#### The 51 Logarithmic Target Checkpoints ($T$)
-Rather than measuring a single binary threshold, the benchmark establishes a discretized ladder of **51 precision target values** spanning **10 orders of magnitude** from coarse approximation ($10^2 = 100$) down to machine-precision optimum ($10^{-8}$):
+| Problem ID | Canonical Name | Hardness Class | Mathematical & Topological Characteristics |
+| :--- | :--- | :--- | :--- |
+| **$f_1$** | **Sphere** | Separable, Unimodal | Completely separable, isotropic quadratic bowl. Serves as the fundamental baseline for pure gradient convergence speed. |
+| **$f_8$** | **Rosenbrock** | Low Conditioning, Valley | Non-separable parabolic valley with non-linear coordinate dependencies. Tests coordinate rotation and valley-following capability. |
+| **$f_{11}$** | **Discus** | High Conditioning ($10^6$) | Extreme eigenvalue distortion where a single axis has a sensitivity $10^6$ times larger than others. Tests numerical stability and anisotropic step sizing. |
+| **$f_{15}$** | **Rastrigin** | Multi-Modal, Regular | Highly multi-modal landscape ($10^D$ local minima) superimposed on a global quadratic structure. Tests basin hopping and escape from local attractors. |
+| **$f_{21}$** | **Gallagher 101** | Multi-Modal, Deceptive | 101 randomly distributed Gaussian peaks with randomized condition numbers ($10^6$) and non-uniform basin widths. Highly deceptive with weak global structure. |
 
-$$T = \left\{ 10^{2.0 - 0.2 \cdot k} \;\middle|\; k \in \{0, 1, \dots, 50\} \right\} = \left\{ 10^{2.0}, 10^{1.8}, 10^{1.6}, \dots, 10^{0.0}, \dots, 10^{-7.8}, 10^{-8.0} \right\}$$
+### 4.2 Benchmark Factorial Volume
+* **Search Space Dimensions**: $D \in \{2, 3, 5\}$.
+* **Noise Regimes**: Deterministic ($\sigma = 0.0$) and Heteroscedastic Optimality-Gap Noise ($\sigma = 0.05$).
+* **Replications**: $R = 10$ independent runs per condition with distinct PRNG seeds.
+* **Evaluation Budget**: $B_{\text{eval}} = 50{,}000$ function evaluations ($10{,}000 \times D$ scaling).
+* **Comparison Solvers (11 Total)**:
+  - **3 Classical Baselines**: Covariance Matrix Adaptation Evolution Strategy (CMA-ES), Differential Evolution (`best1bin`), Particle Swarm Optimization (PSO).
+  - **8 LLM Champion Optimizers**: $2 \text{ Model Scales } (7\text{B}, 14\text{B}) \times 4 \text{ Prompt Strategies } (\text{Baseline}, \text{Guided}, \text{Thinking}, \text{Vectorization})$.
+* **Total Execution Volume**: $5 \text{ problems} \times 3 \text{ dimensions} \times 2 \text{ noise levels} \times 10 \text{ seeds} \times 11 \text{ solvers} = \mathbf{3{,}300 \text{ full benchmark runs}}$ ($1.65 \times 10^8$ total objective evaluations).
 
-$$\text{Total Targets } |T| = \frac{\log_{10}(10^2) - \log_{10}(10^{-8})}{\Delta \log_{10}} + 1 = \frac{2 - (-8)}{0.2} + 1 = \mathbf{51 \text{ targets}}$$
+---
 
-#### Mathematical Formulation of Runtime ECDF
-Let $T_r(f_p, \tau_k) = \min \{ t \ge 1 \mid \Delta y_r(t) \le \tau_k \}$ denote the first-hitting evaluation count where run $r$ first reaches error $\le \tau_k$. If the target is never achieved within budget $B = 50{,}000$, $T_r(f_p, \tau_k) = \infty$.
+## 5. Mathematical Formulations of Empirical Evaluation Metrics
 
-The empirical fraction of solved targets at evaluation budget $t \in [1, 50000]$ is:
-$$\hat{F}(t) = \frac{1}{|T| \cdot N_{\text{runs}}} \sum_{r=1}^{N_{\text{runs}}} \sum_{\tau_k \in T} \mathbb{I}\left( T_r(f_p, \tau_k) \le t \right)$$
+To prevent ambiguity, the fundamental benchmark operational units are strictly formalized:
+* **Candidate Point $\mathbf{x} \in \mathbb{R}^D$**: A single spatial coordinate vector in $D$-dimensional continuous space.
+* **Function Evaluation $f(\mathbf{x})$**: A single query to the objective oracle, representing the **fundamental computational cost metric (X-axis)**.
+* **Algorithmic Iteration $t \in \mathbb{N}$**: An internal update step of the solver (variable across algorithms and population sizes; not used on axes to preserve fairness).
+* **Replication Run $r \in [1, 10]$**: An independent execution of the solver on condition $(f_p, D, \sigma)$ initialized with a unique random seed.
 
-where $\mathbb{I}(\cdot)$ is the indicator function returning $1$ if true and $0$ otherwise.
+### 5.1 Runtime Empirical Cumulative Distribution Function (Runtime ECDF)
+Performance is aggregated across problem instances and runs using the Runtime ECDF over a discretized ladder of **51 logarithmic precision target values** spanning **10 orders of magnitude**:
 
-#### Area Under the Runtime ECDF Curve ($\text{AUC-ECDF}$)
-The overall anytime efficiency is quantified by integrating the ECDF curve across the logarithmic evaluation budget $u = \log_{10}(t) \in [0, \log_{10}(50000)]$:
+$$\Theta = \left\{ 10^{2.0 - 0.2 \cdot k} \;\middle|\; k \in \{0, 1, \dots, 50\} \right\} = \left\{ 10^{2.0}, 10^{1.8}, \dots, 10^{0.0}, \dots, 10^{-7.8}, 10^{-8.0} \right\}$$
 
-$$\text{AUC-ECDF} = \frac{1}{\log_{10}(50000) - \log_{10}(1)} \int_{0}^{\log_{10}(50000)} \hat{F}(10^u) \, du \in [0, 1]$$
+Let $T_r(f_p, \theta)$ denote the first-hitting evaluation count where run $r$ on problem $f_p$ first reaches an optimality gap $\Delta y \le \theta$:
+
+$$T_r(f_p, \theta) = \min \left\{ t \in [1, B_{\text{eval}}] \;\middle|\; \vert f(\mathbf{x}_r(t)) - f^* \vert \le \theta \right\}$$
+
+If the target precision $\theta$ is not reached within the budget $B_{\text{eval}} = 50{,}000$, $T_r(f_p, \theta) = \infty$.
+
+The empirical fraction of solved targets at evaluation count $t \in [1, 50000]$ across $N_{\text{runs}} = 10$ replications is:
+
+$$\operatorname{ECDF}(t) = \frac{1}{|\Theta| \cdot N_{\text{runs}}} \sum_{r=1}^{N_{\text{runs}}} \sum_{\theta \in \Theta} \mathbb{I}\left( T_r(f_p, \theta) \le t \right)$$
+
+where $\mathbb{I}(\cdot)$ is the binary indicator function.
+
+### 5.2 Area Under the Runtime ECDF Curve (AUC-ECDF)
+The overall anytime efficiency across all 51 precision targets is computed by integrating the ECDF curve across the logarithmic evaluation budget $u = \log_{10}(t) \in [0, \log_{10}(50000)]$:
+
+$$\text{AUC-ECDF} = \frac{1}{\log_{10}(50000) - \log_{10}(1)} \int_{0}^{\log_{10}(50000)} \operatorname{ECDF}\left(10^u\right) \, du \in [0, 1]$$
 
 $$\text{AUC-ECDF (\%)} = \text{AUC-ECDF} \times 100\%$$
 
----
+### 5.3 Terminal Target Success Rate by Hardness Class
+The asymptotic success rate measures whether an optimizer successfully solves a problem to machine precision ($\Delta y \le 10^{-8}$) by the conclusion of the $50{,}000$ evaluation budget:
 
-### 4.3 Terminal Target Success Rate by Landscape Hardness
+$$\text{SR}(f_p) = \frac{1}{N_{\text{runs}}} \sum_{r=1}^{N_{\text{runs}}} \mathbb{I}\left( \min_{1 \le t \le B_{\text{eval}}} \vert f(\mathbf{x}_r(t)) - f^* \vert \le 10^{-8} \right)$$
 
-The asymptotic success rate evaluates whether a solver successfully locates the global optimum within machine precision ($\Delta y \le 10^{-8}$) by the end of the full $50,000$ evaluation budget, aggregated across BBOB landscape hardness classes:
+For a landscape hardness class $\mathcal{C}$ containing a set of problems $\{f_p \in \mathcal{C}\}$:
 
-$$\text{SR}(f_p) = \frac{1}{N_{\text{runs}}} \sum_{r=1}^{N_{\text{runs}}} \mathbb{I}\left( \min_{1 \le t \le B} \Delta y_r(t) \le 10^{-8} \right)$$
+$$\text{SR}(\mathcal{C}) = \frac{1}{|\mathcal{C}|} \sum_{f_p \in \mathcal{C}} \text{SR}(f_p)$$
 
-$$\text{SR}(\mathcal{C}) = \frac{1}{|\mathcal{C}|} \sum_{f_p \in \mathcal{C}} \text{SR}(f_p) \quad \text{for landscape class } \mathcal{C}$$
-
----
-
-### 4.4 Methodological Contrast: Success Rate by Hardness vs. AUC-ECDF
-
-To ensure scientific clarity, the thesis clearly distinguishes between the two complementary metrics:
-
-| Property | Success Rate by Hardness (`figure_success_rate_by_hardness.png`) | Area Under Runtime ECDF (`AUC-ECDF`) |
-| :--- | :--- | :--- |
-| **Question Answered** | *"Did the optimizer reach the global minimum by evaluation 50,000?"* | *"How fast and reliably did the optimizer progress across all precision levels throughout the entire search?"* |
-| **Target Precision** | **Single target:** Final error $\Delta y \le 10^{-8}$. | **51 logarithmic targets:** $\Delta y \in [10^{+2}, 10^{-8}]$. |
-| **Budget Awareness** | ❌ **Budget-blind:** Solving at evaluation 100 vs. 49,999 gets the identical score. | ✅ **Budget-sensitive:** Earlier convergence yields an exponentially larger area under curve. |
-| **Partial Progress** | ❌ **All-or-nothing:** Reaching $\Delta y = 10^{-7}$ is scored as $0.0$ (complete failure). | ✅ **Continuous credit:** Partial progress is credited across all intermediate targets ($10^{+2} \to 10^{-7}$). |
-| **Role in Thesis** | Topological failure diagnosis (e.g. ill-conditioning failure vs. multi-modal traps). | Primary benchmark ranking metric, statistical omnibus tests, and noise retention analysis. |
-
-#### Illustrative Scenario (Why Both Metrics Are Necessary):
-Consider three distinct algorithms on the Sphere problem ($f_1$) with a budget of 50,000 evaluations:
-1. **Algorithm A (Fast Solver, e.g., CMA-ES):** Reaches $\Delta y \le 10^{-8}$ in **250 evaluations**.
-2. **Algorithm B (Slow Solver):** Reaches $\Delta y \le 10^{-8}$ in **48,000 evaluations**.
-3. **Algorithm C (Stagnating Solver):** Reaches $\Delta y \le 10^{-6}$ in **1,000 evaluations**, but plateaus and never reaches $10^{-8}$.
+### 5.4 Methodological Contrast: Success Rate vs. AUC-ECDF
 
 ```
-Evaluation Outcome Comparison:
-• Success Rate (Δy ≤ 10⁻⁸):
-  - Algorithm A: 100%
-  - Algorithm B: 100%  (Indistinguishable from A despite 192x slower convergence)
-  - Algorithm C:   0%  (Scored as total failure despite reaching high accuracy 10⁻⁶)
-
-• AUC-ECDF (%):
-  - Algorithm A: ~91.4% (Heavily rewarded for early convergence)
-  - Algorithm B: ~34.2% (Penalized for slow convergence)
-  - Algorithm C: ~41.8% (Credited for solving 41 out of 51 targets)
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                       METHODOLOGICAL METRIC COMPARISON & COMPLEMENTARITY                    │
+├──────────────────────────────┬──────────────────────────────┬───────────────────────────────┤
+│ Evaluation Property          │ Success Rate by Hardness     │ Area Under Runtime ECDF       │
+├──────────────────────────────┼──────────────────────────────┼───────────────────────────────┤
+│ Primary Question Answered    │ "Did the algorithm reach the │ "How rapidly and reliably did │
+│                              │ final optimum by eval 50k?"  │ the algorithm progress across │
+│                              │                              │ all 51 precision levels?"     │
+├──────────────────────────────┼──────────────────────────────┼───────────────────────────────┤
+│ Target Scope                 │ Single target: Δy ≤ 10⁻⁸     │ 51 logarithmic targets:       │
+│                              │                              │ Δy ∈ [10⁺², 10⁻⁸]             │
+├──────────────────────────────┼──────────────────────────────┼───────────────────────────────┤
+│ Budget Sensitivity           │ Budget-blind: solving at     │ Budget-sensitive: exponential │
+│                              │ eval 200 vs 49,999 is equal. │ bonus for early convergence.  │
+├──────────────────────────────┼──────────────────────────────┼───────────────────────────────┤
+│ Partial Progress Credit      │ Binary all-or-nothing (0%).  │ Continuous credit across all  │
+│                              │                              │ intermediate solved targets.  │
+├──────────────────────────────┼──────────────────────────────┼───────────────────────────────┤
+│ Role in Thesis               │ Topological failure analysis │ Primary solver ranking metric │
+│                              │ (ill-conditioning vs basins).│ and noise retention ratio.    │
+└──────────────────────────────┴──────────────────────────────┴───────────────────────────────┘
 ```
 
-#### Why Both Metrics Are Essential to the Thesis Narrative:
-1. **`figure_success_rate_by_hardness.png` (Topological Failure Analysis):**
-   * Identifies structural landscape barriers that defeat LLM-generated code (e.g., ill-conditioning in *Discus $f_{11}$* vs. local basins in *Rastrigin $f_{15}$*).
-2. **`AUC-ECDF` (Primary Comparative Benchmark):**
-   * Gold-standard IOHprofiler metric used for overall solver rankings, Friedman/Conover-Iman omnibus tests, model scale ablation, and noise robustness retention ratios:
-   $$\text{Noise Retention (\%)} = \left( \frac{\text{AUC}_{\text{noisy}}}{\text{AUC}_{\text{clean}}} \right) \times 100\%$$
+### 5.5 Median Convergence Trajectories with Interquartile Ranges (IQR)
+To visualize convergence dynamics without imposing normality assumptions:
+* Objective values across all 10 runs are sampled on a uniform logarithmic evaluation grid $k \in [1, 50000]$ (200 log-spaced points).
+* The **median** trajectory $\tilde{y}(t) = \operatorname{median}(\Delta y_1(t), \dots, \Delta y_{10}(t))$ is plotted alongside the shaded **25th–75th percentile Interquartile Range**:
+  $$\operatorname{IQR}(t) = \left[ Q_1(t), Q_3(t) \right]$$
+
+### 5.6 Cross-Environment Noise Degradation Gap & Retention Ratio
+To quantify algorithmic robustness under stochastic perturbations:
+* **Absolute Degradation Gap**:
+  $$\Delta_{\text{noise}} = \text{SR}_{\text{clean}} - \text{SR}_{\text{noisy}}$$
+* **Relative Noise Robustness Retention Ratio**:
+  $$\rho_{\text{noise}} = \left( \frac{\text{AUC-ECDF}_{\text{noisy}}}{\text{AUC-ECDF}_{\text{clean}}} \right) \times 100\%$$
 
 ---
 
-### 4.5 Convergence Trajectories with Interquartile Ranges (IQR)
-* Irregular execution traces logged by IOHprofiler are interpolated onto a uniform logarithmic evaluation grid ($k \in [10^0, 10^5]$, 200 points).
-* The **median** convergence trajectory is plotted alongside the shaded **25th–75th percentile Interquartile Range (IQR)** to capture central tendency and stochastic variance without assuming normal distribution.
+## 6. Empirical Findings & Analysis by Research Question
 
----
+### 6.1 Comprehensive Performance Summary Table
 
-### 4.6 Cross-Environment Noise Retention & Fragility Index
-Evaluates solver resilience when transitioning from deterministic ($\sigma = 0.0$) to heteroscedastic noisy landscapes ($\sigma = 0.05$):
-$$\Delta_{\text{noise}} = \text{Success Rate}_{\text{clean}} - \text{Success Rate}_{\text{noisy}}$$
-$$\text{Noise Retention Ratio} = \frac{\text{AUC-ECDF}_{\text{noisy}}}{\text{AUC-ECDF}_{\text{clean}}}$$
-A smaller $\Delta_{\text{noise}}$ or higher retention ratio characterizes algorithms with inherent noise tolerance.
-
----
-
-## 5. Comprehensive Empirical Findings & Performance Analysis
-
-### 5.1 Empirical Success Rates by Environment (Clean vs. Noisy)
-
-Across all 30 experimental conditions, the empirical target success rates ($\Delta y \le 10^{-8}$) reveal clear performance tiers:
-
-| Optimization Solver | Overall Success Rate | Clean Regime ($\sigma=0.0$) | Noisy Regime ($\sigma=0.05$) | Performance Drop ($\Delta_{\text{noise}}$) |
+| Optimization Solver | Overall Target Success | Clean Regime ($\sigma = 0.0$) | Noisy Regime ($\sigma = 0.05$) | Absolute Degradation ($\Delta_{\text{noise}}$) |
 | :--- | :---: | :---: | :---: | :---: |
-| **CMA-ES** | **57.67%** | 65.33% | 50.00% | $-15.33\%$ |
-| **Qwen2.5-Coder-14B / guided** | **48.97%** | **78.67%** | 17.14% | $-61.53\%$ |
-| **Qwen2.5-Coder-14B / baseline** | **45.67%** | 56.00% | 35.33% | $-20.67\%$ |
-| **PSO** | **40.00%** | 42.67% | 37.33% | $-5.34\%$ |
-| **Qwen2.5-Coder-14B / thinking** | **32.00%** | 54.00% | 10.00% | $-44.00\%$ |
-| **Qwen2.5-Coder-14B / vectorization** | **23.33%** | 37.33% | 9.33% | $-28.00\%$ |
-| **Qwen2.5-Coder-7B / guided** | **23.10%** | 38.00% | 7.14% | $-30.86\%$ |
-| **Qwen2.5-Coder-7B / thinking** | **15.67%** | 28.00% | 3.33% | $-24.67\%$ |
-| **Qwen2.5-Coder-7B / baseline** | **14.33%** | 14.00% | 14.67% | $+0.67\%$ |
-| **Qwen2.5-Coder-7B / vectorization** | **13.67%** | 26.00% | 1.33% | $-24.67\%$ |
-| **DE** | **0.67%** | 0.00% | 1.33% | $+1.33\%$ |
+| **CMA-ES** (Classical Baseline) | **57.67%** | 65.33% | 50.00% | $-15.33\%$ |
+| **14B / Guided** (LLM Champion) | **48.97%** | **78.67%** | 17.14% | $-61.53\%$ |
+| **14B / Baseline** (LLM Champion) | **45.67%** | 56.00% | 35.33% | $-20.67\%$ |
+| **PSO** (Classical Baseline) | **40.00%** | 42.67% | 37.33% | $-5.34\%$ |
+| **14B / Thinking** (LLM Champion) | **32.00%** | 54.00% | 10.00% | $-44.00\%$ |
+| **14B / Vectorization** (LLM Champion) | **23.33%** | 37.33% | 9.33% | $-28.00\%$ |
+| **7B / Guided** (LLM Champion) | **23.10%** | 38.00% | 7.14% | $-30.86\%$ |
+| **7B / Thinking** (LLM Champion) | **15.67%** | 28.00% | 3.33% | $-24.67\%$ |
+| **7B / Baseline** (LLM Champion) | **14.33%** | 14.00% | 14.67% | $+0.67\%$ |
+| **7B / Vectorization** (LLM Champion) | **13.67%** | 26.00% | 1.33% | $-24.67\%$ |
+| **Differential Evolution** (Classical Baseline) | **0.67%** | 0.00% | 1.33% | $+1.33\%$ |
 
 ---
 
-### 5.2 Core Thesis Insights by Research Question
+### 6.2 Deep-Dive Empirical Findings
 
-#### Insight 1 (RQ1: Algorithmic Competitiveness vs. Classical Baselines)
-* **Qwen2.5-Coder-14B Champions outperform classical baselines on clean landscapes**: In deterministic environments ($\sigma = 0.0$), `Qwen2.5-Coder-14B / guided` achieves a **78.67% target success rate**, surpassing CMA-ES (65.33%), PSO (42.67%), and DE (0.00%).
-* On unimodal and low-conditioning landscapes ($f_1$ Sphere, $f_8$ Rosenbrock), 14B champions reach target precision ($\Delta y \le 10^{-8}$) within fewer function evaluations than standard PSO.
-* On ill-conditioned problems ($f_{11}$ Discus, condition number $10^6$), CMA-ES maintains its superiority due to its closed-form analytical covariance matrix adaptation, whereas LLM-generated algorithms exhibit slower convergence unless covariance tracking heuristics are present.
+#### Finding 1 (RQ1: Competitiveness vs. Classical Baselines):
+* **State-of-the-Art Performance on Clean Landscapes**: In deterministic environments ($\sigma = 0.0$), the evolved heuristic `14B / Guided` achieved a **$78.67\%$ target success rate**, surpassing all classical baselines including CMA-ES ($65.33\%$), PSO ($42.67\%$), and Differential Evolution ($0.00\%$).
+* On unimodal and low-conditioning landscapes ($f_1$ Sphere, $f_8$ Rosenbrock), $14\text{B}$ evolved champions exhibited steeper initial convergence slopes than PSO, reaching machine precision ($\Delta y \le 10^{-8}$) within fewer function evaluations.
+* On ill-conditioned problems ($f_{11}$ Discus), CMA-ES maintained its superiority due to exact analytical covariance matrix adaptation, whereas LLM-generated code relied on heuristic axis-aligned perturbations.
 
-#### Insight 2 (RQ2: Model Scaling Laws — 14B vs. 7B)
-* **Parameter scale fundamentally dictates algorithmic sophistication and convergence rate**:
-  * Clean Success Rate: **Qwen2.5-Coder-14B averages 56.5%** vs. **Qwen2.5-Coder-7B averaging 26.5%** ($>2.13\times$ scaling advantage).
-* **Code Syntactic & Algorithmic Quality**:
-  * 7B models frequently generate simple random-walk variants or basic local hill-climbers that stagnate early on $D=5$.
-  * 14B models consistently invent adaptive momentum mechanisms, orthogonal exploration steps, and dynamic step-size decay schedules.
+#### Finding 2 (RQ2: Model Scaling Laws — 14B vs. 7B):
+* **Scaling Multiplier**: Moving from $7\text{B}$ to $14\text{B}$ parameter capacity resulted in a **$2.13\times$ increase in clean success rate** (average $56.5\%$ for $14\text{B}$ models vs. $26.5\%$ for $7\text{B}$ models).
+* **Algorithmic Sophistication**: $7\text{B}$ models predominantly generated basic random-walk heuristics or naive local hill-climbers that struggled on $D=5$. In contrast, $14\text{B}$ models consistently synthesized adaptive momentum buffers, orthogonal exploration steps, and dynamic decay schedules.
 
-#### Insight 3 (RQ3: Prompt Engineering Ablation)
-* **Domain Guidance and Chain-of-Thought Prompts significantly enhance algorithmic performance**:
-  * In deterministic benchmarks, `guided` prompts achieved the highest success rates across both model families (14B: $78.67\%$, 7B: $38.00\%$).
-  * `thinking` prompts allowed the LLM to reflect on prior generation failure modes, resulting in more stable exploration/exploitation balance than unguided `baseline` prompts.
+#### Finding 3 (RQ3: Prompt Strategy Efficacy):
+* **Domain Guidance Dominance**: `Guided` prompts achieved the highest performance across both model tiers ($78.67\%$ on $14\text{B}$, $38.00\%$ on $7\text{B}$).
+* **Chain-of-Thought Reflection**: `Thinking` prompts generated highly structured exploration-exploitation phases, reducing premature convergence relative to naive `Baseline` prompts.
 
-#### Insight 4 (RQ4: Robustness under Heteroscedastic Noise)
-* Under heteroscedastic Gaussian noise ($\sigma = 0.05$), classical algorithms like PSO and `Qwen2.5-Coder-14B / baseline` retain high relative success ($37.33\%$ and $35.33\%$, respectively), exhibiting robust performance retention.
-* Algorithms with aggressive step-size decay without noise-averaging buffers suffered significant success rate drops, identifying clear directions for future prompt design incorporating explicit noise-filtering primitives.
+#### Finding 4 (RQ4: Noise Resilience & Degradation Dynamics):
+* Classical baselines like PSO and `14B / Baseline` exhibited strong noise robustness ($\Delta_{\text{noise}} = -5.34\%$ and $-20.67\%$, respectively) due to inherent population inertia.
+* Heuristics utilizing aggressive deterministic step-size decay suffered higher degradation under noise ($\sigma = 0.05$), highlighting the necessity for explicit sample-averaging buffers in stochastic prompts.
 
-#### Insight 5 (RQ5: Budget Generalization)
-* Optimizers synthesized with only $1,000$ function evaluations successfully scale to $50,000$ evaluations in Stage 2 without early asymptotic collapse, demonstrating that LLM meta-heuristics learn generalizable search dynamics rather than over-fitting to the synthesis horizon.
-
----
-
-## 6. Thesis Chapter Structure & Writing Guide
-
-When drafting the **Experiments & Empirical Evaluation Chapter**, use the following structure and cross-references:
-
-### Chapter Section Breakdown
-
-#### Section 3.1: Experimental Design & Benchmark Suite
-* Define BBOB testsuite function properties ($f_1, f_8, f_{11}, f_{15}, f_{21}$), dimensionality selection ($D \in \{2, 3, 5\}$), and the heteroscedastic noise model ($\sigma = 0.05$).
-* Present the Two-Stage Paradigm (Stage 1 Synthesis vs. Stage 2 Independent Benchmarking).
-* Define classical baselines (CMA-ES, DE, PSO) and evaluation budgets (50,000 evaluations across 10 random seeds).
-
-#### Section 3.2: Automated Algorithm Synthesis Dynamics (LLaMEA Stage 1)
-* Describe the 292 evolutionary runs and 2,902 candidate iterations.
-* Detail the 4 prompt engineering strategies (`baseline`, `guided`, `thinking`, `vectorization`).
-* Include synthesis dynamics: valid AST rate, runtime per generation, and best error progression.
-
-#### Section 3.3: Empirical Benchmark Results & Convergence Analysis (Stage 2)
-* Present the **6-Panel Empirical Convergence Profiles** (`results/figures/profiles/{slug}/{dim}D/std_{noise}/convergence_trajectories.png`) displaying log-scale median convergence with shaded Interquartile Range (IQR) bands across the 5 canonical BBOB problem classes ($f_1, f_8, f_{11}, f_{15}, f_{21}$) and overall summary.
-* Present the **6-Panel Empirical Runtime ECDF Figures** (`results/figures/profiles/{slug}/{dim}D/std_{noise}/target_precision_ecdf.png`) displaying the empirical fraction of solved BBOB target checkpoints ($51$ targets in $10^{-8} \le \Delta y \le 10^2$) as a function of function evaluation budget vs. classical baselines (CMA-ES, DE, PSO).
-* Present the **Disaggregated Area Under Runtime ECDF Suite (AUC-ECDF %)**:
-  * **Figure 9B: Empirical Runtime ECDF Performance by Dimension** (`results/publication/main_results/fig_09b_auc_ecdf_by_dim.png`) — Dual-panel comparison of dimensional scaling ($2\text{D}, 3\text{D}, 5\text{D}$) across clean and noisy regimes.
-  * **Figure 9C: Cross-Environment Noise Robustness & Retention Profile** (`results/publication/main_results/fig_09c_auc_ecdf_clean_vs_noisy.png`) — Dual-panel clean vs. noisy comparison with explicit percentage retention ratios ($\frac{\text{AUC}_{\text{noisy}}}{\text{AUC}_{\text{clean}}} \times 100\%$).
-  * **Figure 9D: Solver Performance Matrix Across BBOB Problem Landscapes** (`results/publication/main_results/fig_09d_auc_ecdf_by_problem.png`) — Heatmap cross-tabulating solvers against canonical problem functions in clean vs. noisy settings.
-  * **Figure 9E: LLM Parameter Scale Ablation (7B vs. 14B) Across Dimensions** (`results/publication/main_results/fig_09e_auc_ecdf_model_scale.png`) — Dual-panel grouped bar chart tracking 7B vs. 14B scaling against classical baseline benchmarks.
-  * **Figure 7: Global Pairwise Win Summary** (`results/publication/main_results/fig_07_win_tie_loss.png`) — Head-to-head pairwise comparison summary across 1,630 matchups.
-* Present the comprehensive Empirical Target Success Rate comparison table (Table 5.1).
-
-#### Section 3.4: Ablation Studies & Deep Dives
-* **Ablation A: LLM Parameter Scale ($7\text{B} \text{ vs. } 14\text{B}$)** — Impact on algorithmic complexity, success rate, and dimensional scaling ($2.13\times$ clean success rate advantage for 14B).
-* **Ablation B: Prompt Strategy Efficacy** — Performance comparison of `baseline`, `guided`, `thinking`, and `vectorization` prompts (`fig_03_prompt_strategy_ablation_{dim}D.png`).
-* **Ablation C: Noise Fragility & Robustness** — Cross-environment degradation and retention profiles under heteroscedastic noise $\sigma = 0.05$ (`fig_05_noise_fragility_matrix_{dim}D.png` and `fig_06_robustness_profile_{dim}D.png`).
-
-#### Section 3.5: Threats to Validity & Discussion
-* Internal validity: Stochasticity in LLM code generation, replication over 10 independent random seeds per condition.
-* External validity: Generalization from synthetic BBOB benchmarks to complex real-world continuous optimization problems.
-
----
-
-## 7. Artifacts & Generated Assets Reference
-
-All high-resolution publication figures and profiles are organized within the repository:
-
-| Asset / File Path | Contents / Usage in Thesis |
-| :--- | :--- |
-| [`results/figures/profiles/{slug}/{dim}D/std_{noise}/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/figures/profiles) | **Core Benchmarking Visuals**: 6-panel grid figures showing per-problem Convergence Trajectories (IQR bands) and Target Precision ECDFs across the 5 BBOB problem classes vs. CMA-ES, DE, PSO. |
-| [`results/publication/main_results/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/publication/main_results) | Benchmark difficulty validation (`fig_01`), global win summaries (`fig_07`), and **disaggregated AUC-ECDF suite (`fig_09b`, `fig_09c`, `fig_09d`, `fig_09e`)**. |
-| [`results/publication/ablation/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/publication/ablation) | Prompt strategy and model parameter scale ablation bar charts (`fig_03`). |
-| [`results/publication/noise_robustness/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/publication/noise_robustness) | Landscape fragility matrices (`fig_05`) and cross-environment robustness retention profiles (`fig_06`). |
-| [`results/ioh_traces/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/ioh_traces) | Raw empirical IOHprofiler `.dat` and `.json` convergence logs. |
-
+#### Finding 5 (RQ5: Budget Generalization):
+* Optimizers synthesized under $B_{\text{synth}} = 1{,}000$ evaluations scaled smoothly to $B_{\text{eval}} = 50{,}000$ evaluations in Stage 2 without asymptotic breakdown, confirming that the evolutionary loop synthesizes generalizable metaheuristic policies rather than horizon-overfitted routines.
