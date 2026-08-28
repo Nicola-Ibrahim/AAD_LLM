@@ -1,7 +1,7 @@
 """Pure computational mathematics engine for statistical testing, effect sizes, and convergence analysis."""
 
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -509,3 +509,64 @@ class StatisticalEngine:
 
         df_auc = pd.DataFrame(records).sort_values(by="AUC-ECDF", ascending=True)
         return df_auc
+
+    def compute_auc_ecdf_matrix(
+        self,
+        benchmark_data: BenchmarkDataset | Mapping[BenchmarkCondition, dict[str, list[RunTrace]]],
+        solvers: list[str],
+        eval_grid: np.ndarray,
+        targets: np.ndarray,
+        group_by: Literal["dim", "problem_id", "noise_std", "dim_noise", "problem_noise", "condition"] = "dim",
+    ) -> pd.DataFrame:
+        """Compute Area Under the Runtime ECDF (AUC-ECDF) matrix disaggregated by grouping axis.
+
+        Returns a long-format DataFrame with percentage AUC values scaled to [0, 100].
+        """
+        log_x = np.log10(eval_grid)
+        x_range = float(log_x[-1] - log_x[0])
+
+        rows = []
+        for cond, s_dict in benchmark_data.items():
+            for s in solvers:
+                runs = s_dict.get(s, [])
+                if runs:
+                    _, _, _, ecdf = self.compute_trajectory_and_ecdf(runs, eval_grid, targets)
+                    auc_raw = float(np.trapezoid(ecdf, log_x) / x_range)
+                    auc_pct = auc_raw * 100.0
+                    rows.append({
+                        "Solver": s,
+                        "Dim": cond.dim,
+                        "Noise Std": cond.noise_std,
+                        "Problem ID": cond.problem_id,
+                        "AUC-ECDF (%)": auc_pct,
+                        "AUC-ECDF": auc_raw,
+                        "Type": "Classical Baseline" if " / " not in s else "LLaMEA Evolved",
+                    })
+
+        df_raw = pd.DataFrame(rows)
+        if df_raw.empty:
+            return pd.DataFrame(columns=["Solver", "GroupKey", "AUC-ECDF (%)", "Type"])
+
+        if group_by == "dim":
+            df_grp = df_raw.groupby(["Solver", "Dim", "Type"], as_index=False)["AUC-ECDF (%)"].mean()
+            df_grp["GroupKey"] = df_grp["Dim"].astype(str) + "D"
+            return df_grp
+        elif group_by == "noise_std":
+            df_grp = df_raw.groupby(["Solver", "Noise Std", "Type"], as_index=False)["AUC-ECDF (%)"].mean()
+            df_grp["GroupKey"] = df_grp["Noise Std"].apply(lambda n: "Clean (σ=0.0)" if n == 0.0 else f"Noisy (σ={n})")
+            return df_grp
+        elif group_by == "problem_id":
+            df_grp = df_raw.groupby(["Solver", "Problem ID", "Type"], as_index=False)["AUC-ECDF (%)"].mean()
+            df_grp["GroupKey"] = df_grp["Problem ID"].apply(lambda p: BBOB_NAMES.get(p, f"f{p}"))
+            return df_grp
+        elif group_by == "dim_noise":
+            df_grp = df_raw.groupby(["Solver", "Dim", "Noise Std", "Type"], as_index=False)["AUC-ECDF (%)"].mean()
+            return df_grp
+        elif group_by == "problem_noise":
+            df_grp = df_raw.groupby(["Solver", "Problem ID", "Noise Std", "Type"], as_index=False)["AUC-ECDF (%)"].mean()
+            return df_grp
+        elif group_by == "condition":
+            return df_raw
+        else:
+            raise ValueError(f"Unknown group_by: {group_by}")
+

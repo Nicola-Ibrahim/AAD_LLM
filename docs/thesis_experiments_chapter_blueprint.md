@@ -180,30 +180,30 @@ Across all 30 experimental conditions, the empirical target success rates ($\Del
 
 | Optimization Solver | Overall Success Rate | Clean Regime ($\sigma=0.0$) | Noisy Regime ($\sigma=0.05$) | Performance Drop ($\Delta_{\text{noise}}$) |
 | :--- | :---: | :---: | :---: | :---: |
-| **CMA-ES** (Classical Baseline) | **57.67%** | 65.33% | 50.00% | $-15.33\%$ |
-| **LLaMEA-14B / guided** | **48.97%** | **78.67%** | 17.14% | $-61.53\%$ |
-| **LLaMEA-14B / baseline** | **45.67%** | 56.00% | 35.33% | $-20.67\%$ |
-| **PSO** (Classical Baseline) | **40.00%** | 42.67% | 37.33% | $-5.34\%$ |
-| **LLaMEA-14B / thinking** | **32.00%** | 54.00% | 10.00% | $-44.00\%$ |
-| **LLaMEA-14B / vectorization** | **23.33%** | 37.33% | 9.33% | $-28.00\%$ |
-| **LLaMEA-7B / guided** | **23.10%** | 38.00% | 7.14% | $-30.86\%$ |
-| **LLaMEA-7B / thinking** | **15.67%** | 28.00% | 3.33% | $-24.67\%$ |
-| **LLaMEA-7B / baseline** | **14.33%** | 14.00% | 14.67% | $+0.67\%$ |
-| **LLaMEA-7B / vectorization** | **13.67%** | 26.00% | 1.33% | $-24.67\%$ |
-| **DE** (Classical Baseline) | **0.67%** | 0.00% | 1.33% | $+1.33\%$ |
+| **CMA-ES** | **57.67%** | 65.33% | 50.00% | $-15.33\%$ |
+| **Qwen2.5-Coder-14B / guided** | **48.97%** | **78.67%** | 17.14% | $-61.53\%$ |
+| **Qwen2.5-Coder-14B / baseline** | **45.67%** | 56.00% | 35.33% | $-20.67\%$ |
+| **PSO** | **40.00%** | 42.67% | 37.33% | $-5.34\%$ |
+| **Qwen2.5-Coder-14B / thinking** | **32.00%** | 54.00% | 10.00% | $-44.00\%$ |
+| **Qwen2.5-Coder-14B / vectorization** | **23.33%** | 37.33% | 9.33% | $-28.00\%$ |
+| **Qwen2.5-Coder-7B / guided** | **23.10%** | 38.00% | 7.14% | $-30.86\%$ |
+| **Qwen2.5-Coder-7B / thinking** | **15.67%** | 28.00% | 3.33% | $-24.67\%$ |
+| **Qwen2.5-Coder-7B / baseline** | **14.33%** | 14.00% | 14.67% | $+0.67\%$ |
+| **Qwen2.5-Coder-7B / vectorization** | **13.67%** | 26.00% | 1.33% | $-24.67\%$ |
+| **DE** | **0.67%** | 0.00% | 1.33% | $+1.33\%$ |
 
 ---
 
 ### 5.2 Core Thesis Insights by Research Question
 
 #### Insight 1 (RQ1: Algorithmic Competitiveness vs. Classical Baselines)
-* **LLaMEA-14B Champions outperform classical baselines on clean landscapes**: In deterministic environments ($\sigma = 0.0$), `LLaMEA-14B / guided` achieves a **78.67% target success rate**, surpassing CMA-ES (65.33%), PSO (42.67%), and DE (0.00%).
+* **Qwen2.5-Coder-14B Champions outperform classical baselines on clean landscapes**: In deterministic environments ($\sigma = 0.0$), `Qwen2.5-Coder-14B / guided` achieves a **78.67% target success rate**, surpassing CMA-ES (65.33%), PSO (42.67%), and DE (0.00%).
 * On unimodal and low-conditioning landscapes ($f_1$ Sphere, $f_8$ Rosenbrock), 14B champions reach target precision ($\Delta y \le 10^{-8}$) within fewer function evaluations than standard PSO.
 * On ill-conditioned problems ($f_{11}$ Discus, condition number $10^6$), CMA-ES maintains its superiority due to its closed-form analytical covariance matrix adaptation, whereas LLM-generated algorithms exhibit slower convergence unless covariance tracking heuristics are present.
 
 #### Insight 2 (RQ2: Model Scaling Laws — 14B vs. 7B)
 * **Parameter scale fundamentally dictates algorithmic sophistication and convergence rate**:
-  * Clean Success Rate: **LLaMEA-14B averages 56.5%** vs. **LLaMEA-7B averaging 26.5%** ($>2.13\times$ scaling advantage).
+  * Clean Success Rate: **Qwen2.5-Coder-14B averages 56.5%** vs. **Qwen2.5-Coder-7B averaging 26.5%** ($>2.13\times$ scaling advantage).
 * **Code Syntactic & Algorithmic Quality**:
   * 7B models frequently generate simple random-walk variants or basic local hill-climbers that stagnate early on $D=5$.
   * 14B models consistently invent adaptive momentum mechanisms, orthogonal exploration steps, and dynamic step-size decay schedules.
@@ -214,7 +214,7 @@ Across all 30 experimental conditions, the empirical target success rates ($\Del
   * `thinking` prompts allowed the LLM to reflect on prior generation failure modes, resulting in more stable exploration/exploitation balance than unguided `baseline` prompts.
 
 #### Insight 4 (RQ4: Robustness under Heteroscedastic Noise)
-* Under heteroscedastic Gaussian noise ($\sigma = 0.05$), classical algorithms like PSO and `LLaMEA-14B / baseline` retain high relative success ($37.33\%$ and $35.33\%$, respectively), exhibiting robust performance retention.
+* Under heteroscedastic Gaussian noise ($\sigma = 0.05$), classical algorithms like PSO and `Qwen2.5-Coder-14B / baseline` retain high relative success ($37.33\%$ and $35.33\%$, respectively), exhibiting robust performance retention.
 * Algorithms with aggressive step-size decay without noise-averaging buffers suffered significant success rate drops, identifying clear directions for future prompt design incorporating explicit noise-filtering primitives.
 
 #### Insight 5 (RQ5: Budget Generalization)
@@ -241,8 +241,11 @@ When drafting the **Experiments & Empirical Evaluation Chapter**, use the follow
 #### Section 3.3: Empirical Benchmark Results & Convergence Analysis (Stage 2)
 * Present the **6-Panel Empirical Convergence Profiles** (`results/figures/profiles/{slug}/{dim}D/std_{noise}/convergence_trajectories.png`) displaying log-scale median convergence with shaded Interquartile Range (IQR) bands across the 5 canonical BBOB problem classes ($f_1, f_8, f_{11}, f_{15}, f_{21}$) and overall summary.
 * Present the **6-Panel Empirical Runtime ECDF Figures** (`results/figures/profiles/{slug}/{dim}D/std_{noise}/target_precision_ecdf.png`) displaying the empirical fraction of solved BBOB target checkpoints ($51$ targets in $10^{-8} \le \Delta y \le 10^2$) as a function of function evaluation budget vs. classical baselines (CMA-ES, DE, PSO).
-* Present the **Global Performance Ranking Figures**:
-  * **Figure 9: Global Area Under Runtime ECDF Ranking (AUC-ECDF)** (`results/publication/main_results/fig_09_auc_ecdf_ranking.png`) — Non-parametric, p-value-free integration of speed and target coverage across all 30 BBOB conditions.
+* Present the **Disaggregated Area Under Runtime ECDF Suite (AUC-ECDF %)**:
+  * **Figure 9B: Empirical Runtime ECDF Performance by Dimension** (`results/publication/main_results/fig_09b_auc_ecdf_by_dim.png`) — Dual-panel comparison of dimensional scaling ($2\text{D}, 3\text{D}, 5\text{D}$) across clean and noisy regimes.
+  * **Figure 9C: Cross-Environment Noise Robustness & Retention Profile** (`results/publication/main_results/fig_09c_auc_ecdf_clean_vs_noisy.png`) — Dual-panel clean vs. noisy comparison with explicit percentage retention ratios ($\frac{\text{AUC}_{\text{noisy}}}{\text{AUC}_{\text{clean}}} \times 100\%$).
+  * **Figure 9D: Solver Performance Matrix Across BBOB Problem Landscapes** (`results/publication/main_results/fig_09d_auc_ecdf_by_problem.png`) — Heatmap cross-tabulating solvers against canonical problem functions in clean vs. noisy settings.
+  * **Figure 9E: LLM Parameter Scale Ablation (7B vs. 14B) Across Dimensions** (`results/publication/main_results/fig_09e_auc_ecdf_model_scale.png`) — Dual-panel grouped bar chart tracking 7B vs. 14B scaling against classical baseline benchmarks.
   * **Figure 7: Global Pairwise Win Summary** (`results/publication/main_results/fig_07_win_tie_loss.png`) — Head-to-head pairwise comparison summary across 1,630 matchups.
 * Present the comprehensive Empirical Target Success Rate comparison table (Table 5.1).
 
@@ -250,10 +253,9 @@ When drafting the **Experiments & Empirical Evaluation Chapter**, use the follow
 * **Ablation A: LLM Parameter Scale ($7\text{B} \text{ vs. } 14\text{B}$)** — Impact on algorithmic complexity, success rate, and dimensional scaling ($2.13\times$ clean success rate advantage for 14B).
 * **Ablation B: Prompt Strategy Efficacy** — Performance comparison of `baseline`, `guided`, `thinking`, and `vectorization` prompts (`fig_03_prompt_strategy_ablation_{dim}D.png`).
 * **Ablation C: Noise Fragility & Robustness** — Cross-environment degradation and retention profiles under heteroscedastic noise $\sigma = 0.05$ (`fig_05_noise_fragility_matrix_{dim}D.png` and `fig_06_robustness_profile_{dim}D.png`).
-* **Ablation D: Synthesis vs. Evaluation Transferability** — Correlation between low-budget synthesis error ($1,000$ evals) and full benchmark error ($50,000$ evals) (`fig_08_synthesis_transfer.png`).
 
 #### Section 3.5: Threats to Validity & Discussion
-* Internal validity: Stochasticity in LLM code generation and random seed replication.
+* Internal validity: Stochasticity in LLM code generation, replication over 10 independent random seeds per condition.
 * External validity: Generalization from synthetic BBOB benchmarks to complex real-world continuous optimization problems.
 
 ---
@@ -265,7 +267,7 @@ All high-resolution publication figures and profiles are organized within the re
 | Asset / File Path | Contents / Usage in Thesis |
 | :--- | :--- |
 | [`results/figures/profiles/{slug}/{dim}D/std_{noise}/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/figures/profiles) | **Core Benchmarking Visuals**: 6-panel grid figures showing per-problem Convergence Trajectories (IQR bands) and Target Precision ECDFs across the 5 BBOB problem classes vs. CMA-ES, DE, PSO. |
-| [`results/publication/main_results/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/publication/main_results) | Benchmark difficulty validation (`fig_01`), global win summaries (`fig_07`), synthesis transferability plots (`fig_08`), and **global AUC-ECDF ranking (`fig_09`)**. |
+| [`results/publication/main_results/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/publication/main_results) | Benchmark difficulty validation (`fig_01`), global win summaries (`fig_07`), and **disaggregated AUC-ECDF suite (`fig_09b`, `fig_09c`, `fig_09d`, `fig_09e`)**. |
 | [`results/publication/ablation/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/publication/ablation) | Prompt strategy and model parameter scale ablation bar charts (`fig_03`). |
 | [`results/publication/noise_robustness/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/publication/noise_robustness) | Landscape fragility matrices (`fig_05`) and cross-environment robustness retention profiles (`fig_06`). |
 | [`results/ioh_traces/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/ioh_traces) | Raw empirical IOHprofiler `.dat` and `.json` convergence logs. |

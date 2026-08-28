@@ -58,19 +58,23 @@ class TestDomainTaxonomy:
 
 class TestDomainResolvers:
     def test_clean_model_labels_dynamic(self):
-        assert get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m.gguf") == "LLaMEA-14B"
-        assert get_clean_model_label("qwen2.5-coder-7b-instruct-q4_k_m.gguf") == "LLaMEA-7B"
-        assert get_clean_model_label("deepseek-r1-distill-qwen-70b.gguf") == "LLaMEA-70B"
-        assert get_clean_model_label("meta-llama-3-8b-instruct") == "LLaMEA-8B"
+        assert get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m.gguf") == "Qwen2.5-Coder-14B"
+        assert get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m") == "Qwen2.5-Coder-14B"
+        assert get_clean_model_label("qwen2.5-coder-7b-instruct-q4_k_m.gguf") == "Qwen2.5-Coder-7B"
+        assert get_clean_model_label("deepseek-r1-distill-qwen-70b.gguf") == "DeepSeek-70B"
+        assert get_clean_model_label("meta-llama-3-8b-instruct") == "Llama-8B"
+        assert get_clean_model_label("Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf") == "Llama-8B"
+        # Dynamic fallback for unregistered models without hardcoding
+        assert get_clean_model_label("mistral-7b-instruct") == "Mistral-7B"
 
     def test_format_db_solver_name(self):
         assert (
             format_db_solver_name("qwen2.5-coder-14b-instruct-q4_k_m.gguf", "baseline")
-            == "LLaMEA-14B / baseline"
+            == "Qwen2.5-Coder-14B / baseline"
         )
         assert (
             format_db_solver_name("qwen2.5-coder-70b-instruct.gguf", "thinking")
-            == "LLaMEA-70B / thinking"
+            == "Qwen2.5-Coder-70B / thinking"
         )
 
     def test_get_model_slug(self):
@@ -88,9 +92,9 @@ class TestDomainResolvers:
         assert resolve_folder_solver_name("pso") == "PSO"
 
         # LLM structured folders
-        assert resolve_folder_solver_name("qwen_14b_baseline") == "LLaMEA-14B / baseline"
-        assert resolve_folder_solver_name("qwen_7b_guided") == "LLaMEA-7B / guided"
-        assert resolve_folder_solver_name("qwen_70b_thinking") == "LLaMEA-70B / thinking"
+        assert resolve_folder_solver_name("qwen_14b_baseline") == "Qwen2.5-Coder-14B / baseline"
+        assert resolve_folder_solver_name("qwen_7b_guided") == "Qwen2.5-Coder-7B / guided"
+        assert resolve_folder_solver_name("qwen_70b_thinking") == "Qwen2.5-Coder-70B / thinking"
 
 
 class TestStatisticalEngine:
@@ -142,6 +146,46 @@ class TestStatisticalEngine:
         assert len(med) == 10
         assert np.all(med >= q25)
         assert np.all(q75 >= med)
+
+    def test_compute_auc_ecdf_matrix(self, engine):
+        bench_data = BenchmarkDataset()
+        cond1 = BenchmarkCondition(dim=2, noise_std=0.0, problem_id=1)
+        cond2 = BenchmarkCondition(dim=3, noise_std=0.05, problem_id=8)
+        eval_grid = np.logspace(0, 3, 20)
+        targets = np.logspace(-8, 2, 10)
+
+        for _ in range(3):
+            bench_data.add_run(cond1, "CMA-ES", RunTrace(evaluations=np.array([1, 10, 100]), raw_objectives=np.array([10.0, 1.0, 1e-9])))
+            bench_data.add_run(cond1, "LLaMEA-14B / baseline", RunTrace(evaluations=np.array([1, 10, 100]), raw_objectives=np.array([10.0, 2.0, 1e-4])))
+            bench_data.add_run(cond2, "CMA-ES", RunTrace(evaluations=np.array([1, 10, 100]), raw_objectives=np.array([10.0, 5.0, 1.0])))
+            bench_data.add_run(cond2, "LLaMEA-14B / baseline", RunTrace(evaluations=np.array([1, 10, 100]), raw_objectives=np.array([10.0, 8.0, 5.0])))
+
+        solvers = ["CMA-ES", "LLaMEA-14B / baseline"]
+
+        # 1. Group by dim
+        df_dim = engine.compute_auc_ecdf_matrix(bench_data, solvers, eval_grid, targets, group_by="dim")
+        assert not df_dim.empty
+        assert "AUC-ECDF (%)" in df_dim.columns
+        assert "GroupKey" in df_dim.columns
+        assert set(df_dim["GroupKey"].unique()) == {"2D", "3D"}
+        assert np.all((df_dim["AUC-ECDF (%)"] >= 0.0) & (df_dim["AUC-ECDF (%)"] <= 100.0))
+
+        # 2. Group by noise_std
+        df_noise = engine.compute_auc_ecdf_matrix(bench_data, solvers, eval_grid, targets, group_by="noise_std")
+        assert not df_noise.empty
+        assert "Clean (σ=0.0)" in df_noise["GroupKey"].values
+        assert "Noisy (σ=0.05)" in df_noise["GroupKey"].values
+
+        # 3. Group by problem_id
+        df_prob = engine.compute_auc_ecdf_matrix(bench_data, solvers, eval_grid, targets, group_by="problem_id")
+        assert not df_prob.empty
+        assert "Sphere (f1)" in df_prob["GroupKey"].values
+        assert "Rosenbrock (f8)" in df_prob["GroupKey"].values
+
+        # 4. Group by condition (raw)
+        df_cond = engine.compute_auc_ecdf_matrix(bench_data, solvers, eval_grid, targets, group_by="condition")
+        assert len(df_cond) == 4  # 2 conditions x 2 solvers
+
 
 
 class TestApplicationServicesIntegration:

@@ -328,6 +328,23 @@ class StatisticalEvaluationService:
             targets=targets,
         )
 
+    def compute_auc_ecdf_matrix(
+        self,
+        benchmark_data: BenchmarkDataset,
+        solvers: list[str],
+        eval_grid: np.ndarray,
+        targets: np.ndarray,
+        group_by: str = "dim",
+    ) -> pd.DataFrame:
+        """Compute Area Under the Runtime ECDF Curve (AUC-ECDF) disaggregated by grouping axis."""
+        return self.engine.compute_auc_ecdf_matrix(
+            benchmark_data=benchmark_data,
+            solvers=solvers,
+            eval_grid=eval_grid,
+            targets=targets,
+            group_by=group_by,  # type: ignore[arg-type]
+        )
+
     def generate_markdown_report(
         self,
         df_omnibus: pd.DataFrame | None = None,

@@ -82,7 +82,7 @@ The empirical investigation follows a rigorous two-stage design separating **Onl
 | :--- | :--- | :--- |
 | **Benchmark Suite** | BBOB / COCO Single-Objective Continuous Suite | Standard benchmark standard in continuous black-box optimization. |
 | **Dimensions ($D$)** | $D \in \{2, 3, 5\}$ | Testing low-dimensional geometry scaling behavior. |
-| **Noise Levels ($\sigma$)** | $\sigma = 0.0$ (Clean), $\sigma = 0.05$ (Heteroscedastic Gaussian) | Noise added as $f_{\text{noisy}}(x) = f(x) + \mathcal{N}(0, \sigma^2 \cdot (1 + \|x\|^2))$. |
+| **Noise Levels ($\sigma$)** | $\sigma = 0.0$ (Clean), $\sigma = 0.05$ (Heteroscedastic Optimality-Gap) | Injected via domain strategy: $\tilde{f}(x) = f(x) + \mathcal{N}(0, (\sigma \cdot |f(x) - f^*|)^2)$. |
 | **Problem Instances** | 5 canonical BBOB functions across 5 distinct hardness classes: |
 | | • $f_1$: **Sphere** (Separable, unimodal, convex) | Baseline convergence rate test. |
 | | • $f_8$: **Rosenbrock** (Low conditioning, parabolic valley) | Valley-following and coordinate rotation test. |
@@ -97,27 +97,78 @@ The empirical investigation follows a rigorous two-stage design separating **Onl
 
 ---
 
-## 4. Empirical Evaluation Metrics & Methodology
+## 4. Empirical Terminology, Metrics & Evaluation Methodology
 
-All performance evaluations follow established empirical conventions in continuous optimization benchmarking:
+### 4.1 Foundational Terminology: Points, Evaluations, and Iterations
 
-### 4.1 Empirical Cumulative Distribution Functions (ECDF)
-* Aggregates hitting performance across a log-uniform target precision grid:
-  $$\Delta y \in [10^{-8}, 10^2] \quad \text{across } 100 \text{ target levels}$$
-* Measures the fraction of (problem instance $\times$ target value $\times$ run) triplets solved as a function of function evaluations.
+To prevent ambiguity in continuous optimization benchmarking, four distinct operational terms are strictly defined:
 
-### 4.2 Empirical Target Success Rate
-* Fraction of runs that successfully reach precision target $\Delta y \le 10^{-8}$ within the 50,000 function evaluation budget:
-  $$\text{Success Rate} = \frac{1}{N_{\text{runs}}} \sum_{i=1}^{N_{\text{runs}}} \mathbb{I}(\Delta y_i \le 10^{-8})$$
+| Term | Mathematical Symbol | Definition in Benchmarking Protocol | Role in the Thesis |
+| :--- | :---: | :--- | :--- |
+| **Candidate Point** | $\vec{x} \in \mathbb{R}^D$ | A single coordinate vector in $D$-dimensional search space (e.g. $\vec{x} = [1.2, -0.4, 3.1]$ in 3D). | Basic unit of decision space exploration. |
+| **Function Evaluation** | $f(\vec{x})$ | Evaluating the mathematical objective value/error for **exactly one point $\vec{x}$**. | **The fundamental cost metric (X-axis of all benchmark plots)**. Budget = $50,000$ evaluations ($10,000 \times D$). |
+| **Algorithmic Iteration** | $t \in \mathbb{N}$ | One complete update cycle/step of the optimizer loop. An algorithm with population size $N$ evaluates $N$ points per iteration ($N$ evaluations consumed). | Internal solver loop counter (not used on plot axes to ensure fair comparison across variable population sizes). |
+| **Benchmark Replication** | Run $r \in [1, 10]$ | An independent execution of the solver on the same problem condition with a distinct random seed. | Ensures statistical reliability and variance quantification across stochastic runs. |
 
-### 4.3 Convergence Trajectories with Interquartile Ranges (IQR)
-* Irregular execution traces from IOHprofiler are interpolated onto a uniform logarithmic evaluation grid ($t \in [1, 50000]$).
-* The **median** convergence trajectory is visualized alongside the shaded **25th–75th percentile Interquartile Range (IQR)** to demonstrate solver consistency and variance across random seeds.
+> **Why the X-Axis Uses Function Evaluations ($f(\vec{x})$ Calls):**  
+> In black-box optimization, algorithmic internal iterations vary widely (e.g., $(1+1)$-ES evaluates $1$ point per step, while CMA-ES evaluates $\lambda = 4 + \lfloor 3 \ln D \rfloor$ points, and PSO evaluates a swarm of $30$ particles per step). The standard BBOB/COCO protocol evaluates computational efficiency strictly by the **total cumulative function evaluations** consumed to reach a target.
 
-### 4.4 Cross-Environment Noise Retention & Fragility Index
-* Evaluates degradation when moving from deterministic ($\sigma = 0.0$) to noisy ($\sigma = 0.05$) evaluations:
-  $$\Delta_{\text{noise}} = \text{Success Rate}_{\text{clean}} - \text{Success Rate}_{\text{noisy}}$$
-* Quantifies the proportion of algorithmic performance retained in stochastic environments.
+---
+
+### 4.2 Empirical Cumulative Distribution Functions (ECDF)
+
+The performance aggregation across problem instances and runs is evaluated using the **Empirical Runtime Cumulative Distribution Function (ECDF)** as standardized by Nikolaus Hansen et al. (COCO/BBOB, 2016) and IOHprofiler (de Nobel et al., 2021).
+
+#### The 51 Logarithmic Target Checkpoints ($T$)
+Rather than measuring a binary all-or-nothing success threshold ($\Delta y \le 10^{-8}$), the benchmark establishes a discretized ladder of **51 precision target values** spanning **10 orders of magnitude** from coarse approximation ($10^2 = 100$) down to machine-precision optimum ($10^{-8}$):
+
+$$T = \left\{ 10^{2.0 - 0.2 \cdot k} \;\middle|\; k \in \{0, 1, \dots, 50\} \right\} = \left\{ 10^{2.0}, 10^{1.8}, 10^{1.6}, \dots, 10^{0.0}, \dots, 10^{-7.8}, 10^{-8.0} \right\}$$
+
+$$\text{Total Targets } |T| = \frac{\log_{10}(10^2) - \log_{10}(10^{-8})}{\Delta \log_{10}} + 1 = \frac{2 - (-8)}{0.2} + 1 = \mathbf{51 \text{ targets}}$$
+
+#### Mathematical Formulation of Runtime ECDF
+Let $y_r(k) = \min_{j \le k} \left( f(\vec{x}_j) - f_{\text{opt}} \right)$ denote the best objective value found in run $r \in \{1, \dots, N_{\text{runs}}\}$ at or before function evaluation $k \in [1, 50000]$.
+
+The empirical fraction of solved targets at evaluation budget $k$ is given by:
+$$\text{ECDF}(k) = \frac{1}{|T| \cdot N_{\text{runs}}} \sum_{r=1}^{N_{\text{runs}}} \sum_{t \in T} \mathbb{I}\left( y_r(k) \le t \right)$$
+
+where $\mathbb{I}(\cdot)$ is the indicator function returning $1$ if the condition is satisfied and $0$ otherwise.
+
+```
+Fraction of Targets Solved (Y-axis)
+ 1.0 |                                    ┌────────── (All 51 targets solved across all 10 runs)
+     |                             ┌──────┘
+ 0.5 |                      ┌──────┘
+     |               ┌──────┘
+ 0.0 |───────────────┴───────────────────────────────
+     10⁰            10²            10⁴           10⁵  --> Function Evaluations (X-axis, Log-scale)
+```
+
+#### Properties and Interpretation:
+1. **Monotonically Non-Decreasing ($0.0 \to 1.0$)**: Because best-so-far error $y_r(k)$ is non-increasing as $k$ grows, $\text{ECDF}(k)$ is guaranteed to be monotonically non-decreasing over function evaluations.
+2. **Steepness and Height**: A steeper, left-shifted curve indicates faster convergence speed. A higher plateau indicates greater global exploration capability and fewer premature stagnations.
+3. **What "ECDF = 1.0 at 1,000 Evaluations" Signifies**: It proves that across **100% of the independent runs**, the optimizer successfully reached the global optimum ($\Delta y \le 10^{-8}$) within the first $1,000$ function calls.
+4. **Equivalence to Expected Running Time (ERT)**: The area above the ECDF curve up to budget $B$ is proportional to the Expected Running Time (ERT) across the 51 targets, providing a unified single-curve representation of both speed and robustness.
+
+---
+
+### 4.3 Empirical Target Success Rate
+The asymptotic success rate measures the fraction of runs that successfully hit the strictest precision target ($\Delta y \le 10^{-8}$) by the end of the full $50,000$ evaluation budget:
+$$\text{Success Rate} = \frac{1}{N_{\text{runs}}} \sum_{r=1}^{N_{\text{runs}}} \mathbb{I}\left( y_r(B) \le 10^{-8} \right)$$
+
+---
+
+### 4.4 Convergence Trajectories with Interquartile Ranges (IQR)
+* Irregular execution traces logged by IOHprofiler are interpolated onto a uniform logarithmic evaluation grid ($k \in [10^0, 10^5]$, 200 points).
+* The **median** convergence trajectory is plotted alongside the shaded **25th–75th percentile Interquartile Range (IQR)** to capture central tendency and stochastic variance without assuming normal distribution.
+
+---
+
+### 4.5 Cross-Environment Noise Retention & Fragility Index
+Evaluates solver resilience when transitioning from deterministic ($\sigma = 0.0$) to heteroscedastic noisy landscapes ($\sigma = 0.05$):
+$$\Delta_{\text{noise}} = \text{Success Rate}_{\text{clean}} - \text{Success Rate}_{\text{noisy}}$$
+$$\text{Noise Retention Ratio} = \frac{\text{Success Rate}_{\text{noisy}}}{\text{Success Rate}_{\text{clean}} + \epsilon}$$
+A smaller $\Delta_{\text{noise}}$ or higher retention ratio characterizes algorithms with inherent noise tolerance.
 
 ---
 
@@ -129,30 +180,30 @@ Across all 30 experimental conditions, the empirical target success rates ($\Del
 
 | Optimization Solver | Overall Success Rate | Clean Regime ($\sigma=0.0$) | Noisy Regime ($\sigma=0.05$) | Performance Drop ($\Delta_{\text{noise}}$) |
 | :--- | :---: | :---: | :---: | :---: |
-| **CMA-ES** (Classical Baseline) | **57.67%** | 65.33% | 50.00% | $-15.33\%$ |
-| **LLaMEA-14B / guided** | **48.97%** | **78.67%** | 17.14% | $-61.53\%$ |
-| **LLaMEA-14B / baseline** | **45.67%** | 56.00% | 35.33% | $-20.67\%$ |
-| **PSO** (Classical Baseline) | **40.00%** | 42.67% | 37.33% | $-5.34\%$ |
-| **LLaMEA-14B / thinking** | **32.00%** | 54.00% | 10.00% | $-44.00\%$ |
-| **LLaMEA-14B / vectorization** | **23.33%** | 37.33% | 9.33% | $-28.00\%$ |
-| **LLaMEA-7B / guided** | **23.10%** | 38.00% | 7.14% | $-30.86\%$ |
-| **LLaMEA-7B / thinking** | **15.67%** | 28.00% | 3.33% | $-24.67\%$ |
-| **LLaMEA-7B / baseline** | **14.33%** | 14.00% | 14.67% | $+0.67\%$ |
-| **LLaMEA-7B / vectorization** | **13.67%** | 26.00% | 1.33% | $-24.67\%$ |
-| **DE** (Classical Baseline) | **0.67%** | 0.00% | 1.33% | $+1.33\%$ |
+| **CMA-ES** | **57.67%** | 65.33% | 50.00% | $-15.33\%$ |
+| **Qwen2.5-Coder-14B / guided** | **48.97%** | **78.67%** | 17.14% | $-61.53\%$ |
+| **Qwen2.5-Coder-14B / baseline** | **45.67%** | 56.00% | 35.33% | $-20.67\%$ |
+| **PSO** | **40.00%** | 42.67% | 37.33% | $-5.34\%$ |
+| **Qwen2.5-Coder-14B / thinking** | **32.00%** | 54.00% | 10.00% | $-44.00\%$ |
+| **Qwen2.5-Coder-14B / vectorization** | **23.33%** | 37.33% | 9.33% | $-28.00\%$ |
+| **Qwen2.5-Coder-7B / guided** | **23.10%** | 38.00% | 7.14% | $-30.86\%$ |
+| **Qwen2.5-Coder-7B / thinking** | **15.67%** | 28.00% | 3.33% | $-24.67\%$ |
+| **Qwen2.5-Coder-7B / baseline** | **14.33%** | 14.00% | 14.67% | $+0.67\%$ |
+| **Qwen2.5-Coder-7B / vectorization** | **13.67%** | 26.00% | 1.33% | $-24.67\%$ |
+| **DE** | **0.67%** | 0.00% | 1.33% | $+1.33\%$ |
 
 ---
 
 ### 5.2 Core Thesis Insights by Research Question
 
 #### Insight 1 (RQ1: Algorithmic Competitiveness vs. Classical Baselines)
-* **LLaMEA-14B Champions outperform classical baselines on clean landscapes**: In deterministic environments ($\sigma = 0.0$), `LLaMEA-14B / guided` achieves a **78.67% target success rate**, surpassing CMA-ES (65.33%), PSO (42.67%), and DE (0.00%).
+* **Qwen2.5-Coder-14B Champions outperform classical baselines on clean landscapes**: In deterministic environments ($\sigma = 0.0$), `Qwen2.5-Coder-14B / guided` achieves a **78.67% target success rate**, surpassing CMA-ES (65.33%), PSO (42.67%), and DE (0.00%).
 * On unimodal and low-conditioning landscapes ($f_1$ Sphere, $f_8$ Rosenbrock), 14B champions reach target precision ($\Delta y \le 10^{-8}$) within fewer function evaluations than standard PSO.
 * On ill-conditioned problems ($f_{11}$ Discus, condition number $10^6$), CMA-ES maintains its superiority due to its closed-form analytical covariance matrix adaptation, whereas LLM-generated algorithms exhibit slower convergence unless covariance tracking heuristics are present.
 
 #### Insight 2 (RQ2: Model Scaling Laws — 14B vs. 7B)
 * **Parameter scale fundamentally dictates algorithmic sophistication and convergence rate**:
-  * Clean Success Rate: **LLaMEA-14B averages 56.5%** vs. **LLaMEA-7B averaging 26.5%** ($>2.13\times$ scaling advantage).
+  * Clean Success Rate: **Qwen2.5-Coder-14B averages 56.5%** vs. **Qwen2.5-Coder-7B averaging 26.5%** ($>2.13\times$ scaling advantage).
 * **Code Syntactic & Algorithmic Quality**:
   * 7B models frequently generate simple random-walk variants or basic local hill-climbers that stagnate early on $D=5$.
   * 14B models consistently invent adaptive momentum mechanisms, orthogonal exploration steps, and dynamic step-size decay schedules.
@@ -163,7 +214,7 @@ Across all 30 experimental conditions, the empirical target success rates ($\Del
   * `thinking` prompts allowed the LLM to reflect on prior generation failure modes, resulting in more stable exploration/exploitation balance than unguided `baseline` prompts.
 
 #### Insight 4 (RQ4: Robustness under Heteroscedastic Noise)
-* Under heteroscedastic Gaussian noise ($\sigma = 0.05$), classical algorithms like PSO and `LLaMEA-14B / baseline` retain high relative success ($37.33\%$ and $35.33\%$, respectively), exhibiting robust performance retention.
+* Under heteroscedastic Gaussian noise ($\sigma = 0.05$), classical algorithms like PSO and `Qwen2.5-Coder-14B / baseline` retain high relative success ($37.33\%$ and $35.33\%$, respectively), exhibiting robust performance retention.
 * Algorithms with aggressive step-size decay without noise-averaging buffers suffered significant success rate drops, identifying clear directions for future prompt design incorporating explicit noise-filtering primitives.
 
 #### Insight 5 (RQ5: Budget Generalization)
@@ -189,17 +240,22 @@ When drafting the **Experiments & Empirical Evaluation Chapter**, use the follow
 
 #### Section 3.3: Empirical Benchmark Results & Convergence Analysis (Stage 2)
 * Present the **6-Panel Empirical Convergence Profiles** (`results/figures/profiles/{slug}/{dim}D/std_{noise}/convergence_trajectories.png`) displaying log-scale median convergence with shaded Interquartile Range (IQR) bands across the 5 canonical BBOB problem classes ($f_1, f_8, f_{11}, f_{15}, f_{21}$) and overall summary.
-* Present the **6-Panel Target Precision ECDF Figures** (`results/figures/profiles/{slug}/{dim}D/std_{noise}/target_precision_ecdf.png`) comparing the fraction of solved target precision thresholds ($\Delta y \in [10^{-8}, 10^2]$) against classical baselines (CMA-ES, DE, PSO).
+* Present the **6-Panel Empirical Runtime ECDF Figures** (`results/figures/profiles/{slug}/{dim}D/std_{noise}/target_precision_ecdf.png`) displaying the empirical fraction of solved BBOB target checkpoints ($51$ targets in $10^{-8} \le \Delta y \le 10^2$) as a function of function evaluation budget vs. classical baselines (CMA-ES, DE, PSO).
+* Present the **Disaggregated Area Under Runtime ECDF Suite (AUC-ECDF %)**:
+  * **Figure 9B: Empirical Runtime ECDF Performance by Dimension** (`results/publication/main_results/fig_09b_auc_ecdf_by_dim.png`) — Dual-panel comparison of dimensional scaling ($2\text{D}, 3\text{D}, 5\text{D}$) across clean and noisy regimes.
+  * **Figure 9C: Cross-Environment Noise Robustness & Retention Profile** (`results/publication/main_results/fig_09c_auc_ecdf_clean_vs_noisy.png`) — Dual-panel clean vs. noisy comparison with explicit percentage retention ratios ($\frac{\text{AUC}_{\text{noisy}}}{\text{AUC}_{\text{clean}}} \times 100\%$).
+  * **Figure 9D: Solver Performance Matrix Across BBOB Problem Landscapes** (`results/publication/main_results/fig_09d_auc_ecdf_by_problem.png`) — Heatmap cross-tabulating solvers against canonical problem functions in clean vs. noisy settings.
+  * **Figure 9E: LLM Parameter Scale Ablation (7B vs. 14B) Across Dimensions** (`results/publication/main_results/fig_09e_auc_ecdf_model_scale.png`) — Dual-panel grouped bar chart tracking 7B vs. 14B scaling against classical baseline benchmarks.
+  * **Figure 7: Global Pairwise Win Summary** (`results/publication/main_results/fig_07_win_tie_loss.png`) — Head-to-head pairwise comparison summary across 1,630 matchups.
 * Present the comprehensive Empirical Target Success Rate comparison table (Table 5.1).
 
 #### Section 3.4: Ablation Studies & Deep Dives
 * **Ablation A: LLM Parameter Scale ($7\text{B} \text{ vs. } 14\text{B}$)** — Impact on algorithmic complexity, success rate, and dimensional scaling ($2.13\times$ clean success rate advantage for 14B).
 * **Ablation B: Prompt Strategy Efficacy** — Performance comparison of `baseline`, `guided`, `thinking`, and `vectorization` prompts (`fig_03_prompt_strategy_ablation_{dim}D.png`).
 * **Ablation C: Noise Fragility & Robustness** — Cross-environment degradation and retention profiles under heteroscedastic noise $\sigma = 0.05$ (`fig_05_noise_fragility_matrix_{dim}D.png` and `fig_06_robustness_profile_{dim}D.png`).
-* **Ablation D: Synthesis vs. Evaluation Transferability** — Correlation between low-budget synthesis error ($1,000$ evals) and full benchmark error ($50,000$ evals) (`fig_08_synthesis_transfer.png`).
 
 #### Section 3.5: Threats to Validity & Discussion
-* Internal validity: Stochasticity in LLM code generation and random seed replication.
+* Internal validity: Stochasticity in LLM code generation, replication over 10 independent random seeds per condition.
 * External validity: Generalization from synthetic BBOB benchmarks to complex real-world continuous optimization problems.
 
 ---
@@ -211,7 +267,8 @@ All high-resolution publication figures and profiles are organized within the re
 | Asset / File Path | Contents / Usage in Thesis |
 | :--- | :--- |
 | [`results/figures/profiles/{slug}/{dim}D/std_{noise}/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/figures/profiles) | **Core Benchmarking Visuals**: 6-panel grid figures showing per-problem Convergence Trajectories (IQR bands) and Target Precision ECDFs across the 5 BBOB problem classes vs. CMA-ES, DE, PSO. |
-| [`results/publication/main_results/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/publication/main_results) | Benchmark difficulty validation (`fig_01`) and synthesis horizon transferability plots (`fig_08`). |
+| [`results/publication/main_results/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/publication/main_results) | Benchmark difficulty validation (`fig_01`), global win summaries (`fig_07`), and **disaggregated AUC-ECDF suite (`fig_09b`, `fig_09c`, `fig_09d`, `fig_09e`)**. |
 | [`results/publication/ablation/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/publication/ablation) | Prompt strategy and model parameter scale ablation bar charts (`fig_03`). |
 | [`results/publication/noise_robustness/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/publication/noise_robustness) | Landscape fragility matrices (`fig_05`) and cross-environment robustness retention profiles (`fig_06`). |
 | [`results/ioh_traces/`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/results/ioh_traces) | Raw empirical IOHprofiler `.dat` and `.json` convergence logs. |
+
