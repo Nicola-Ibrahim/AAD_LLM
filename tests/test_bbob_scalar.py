@@ -177,3 +177,38 @@ def test_ioh_logger_noisy_problem_does_not_corrupt_trajectory(tmp_path):
 
     # Noisy problem evaluation must produce identical IOH raw_y trajectory data as clean problem
     assert np.isclose(clean_raw_y, noisy_raw_y, atol=1e-6)
+
+
+def test_bbob_function_enum():
+    """Verify BBOBFunction Enum properties, values, and lookup methods."""
+    from benchmarking.domain.enums import (
+        BBOB_CLASSES_ORDER,
+        BBOBFunction,
+    )
+
+    # 1. Total Enum members
+    assert len(BBOBFunction) == 24
+
+    # 2. Member properties
+    f1 = BBOBFunction.F1
+    assert f1.problem_id == 1
+    assert f1.function_name == "Sphere"
+    assert f1.hardness_group == "Separable"
+    assert f1.display_name == "Sphere (f1)"
+    assert f1.value == (1, "Sphere", "Separable")
+
+    # 3. Lookups
+    assert BBOBFunction.from_id(1) is BBOBFunction.F1
+    assert BBOBFunction.from_id(24) is BBOBFunction.F24
+    assert BBOBFunction.from_id(99) is None
+
+    # 4. Helper classmethods
+    assert BBOBFunction.get_name(1) == "Sphere (f1)"
+    assert BBOBFunction.get_class(1) == "Separable"
+    assert BBOBFunction.get_name(99) == "f99"
+    assert BBOBFunction.get_class(99) == "Unknown"
+
+    # 5. Order
+    assert len(BBOB_CLASSES_ORDER) == 5
+
+

@@ -6,6 +6,7 @@ from pathlib import Path
 from benchmarking.application.evaluation_service import EvaluationService
 from benchmarking.domain.services.baselines import run_cmaes, run_de, run_pso
 from benchmarking.infra.io.trace_repository import EvaluationStateRepository, IOHTraceReader
+from benchmarking.infra.logging import EvaluationLogger
 from benchmarking.infra.storage import (
     ChampionsReadRepository,
     EvaluationConfigRepository,
@@ -62,6 +63,7 @@ target_noise_levels = [0.0]
     trace_repo = IOHTraceReader(eval_dir=eval_dir)
     state_repo = EvaluationStateRepository(eval_dir=eval_dir)
     config_repo = EvaluationConfigRepository(config_path=cfg_file)
+    logger = EvaluationLogger()
 
     service = EvaluationService(
         sqlite_repo=sqlite_repo,
@@ -69,6 +71,7 @@ target_noise_levels = [0.0]
         trace_repo=trace_repo,
         state_repo=state_repo,
         config_repo=config_repo,
+        logger=logger,
     )
 
     # 1. Run evaluation
@@ -141,12 +144,14 @@ class RandomOptimizer:
     code_path.parent.mkdir()
     code_path.write_text(dummy_code, encoding="utf-8")
 
+    logger = EvaluationLogger()
     service = EvaluationService(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         trace_repo=trace_repo,
         state_repo=state_repo,
         config_repo=config_repo,
+        logger=logger,
         project_root=project_root,
     )
 
@@ -227,6 +232,7 @@ target_noise_levels = [0.0]
     state_repo = EvaluationStateRepository(eval_dir=eval_dir)
     config_repo_2 = EvaluationConfigRepository(config_path=cfg_file_2runs)
     config_repo_4 = EvaluationConfigRepository(config_path=cfg_file_4runs)
+    logger = EvaluationLogger()
 
     dummy_code = """
 import numpy as np
@@ -261,6 +267,7 @@ class IncrementalOptimizer:
         trace_repo=trace_repo,
         state_repo=state_repo,
         config_repo=config_repo_2,
+        logger=logger,
         project_root=project_root,
     )
     res_1 = service_initial.run_champion_trials(champ_info)
@@ -277,6 +284,7 @@ class IncrementalOptimizer:
         trace_repo=trace_repo,
         state_repo=state_repo,
         config_repo=config_repo_4,
+        logger=logger,
         project_root=project_root,
     )
     res_2 = service_resumed.run_champion_trials(champ_info)
@@ -335,4 +343,106 @@ def test_evaluation_config_repository_edge_cases(tmp_path: Path):
     repo_eval = EvaluationConfigRepository(config_path=eval_file)
     cfg_eval = repo_eval.load_config()
     assert cfg_eval["target_eval_runs"] == 5
+
+
+def test_evaluation_logger(tmp_path: Path):
+    """Verify EvaluationLogger formatting and verbosity controls."""
+    import io
+    from benchmarking.infra.logging import EvaluationLogger
+
+    # 1. EvaluationLogger capturing output
+    buf = io.StringIO()
+    logger = EvaluationLogger(verbose=True, stream=buf)
+    logger.header("Test Header", subtitle="Testing logger")
+    logger.info("Informational message")
+    logger.success("Success message")
+    logger.warning("Warning message")
+    logger.error("Error message")
+    logger.condition_start(
+        index=1,
+        total=5,
+        solver_type="champion",
+        solver_name="TestSolver",
+        dim=2,
+        noise_std=0.0,
+        problem_id=1,
+        problem_name="Sphere",
+    )
+    logger.trial(trial_idx=1, total_trials=10, best_clean=1e-5, runtime=0.2, evals_used=500)
+    logger.cached(runs_count=10, median_error=1e-5)
+    logger.resuming(existing_runs=3, target_runs=10)
+    logger.condition_complete(n_runs=10, median_error=1e-5)
+    logger.missing_code("/path/to/missing.py")
+    logger.summary("Batch Complete", stats={"Total": 10, "Cached": 5})
+
+    output = buf.getvalue()
+    assert "TEST HEADER" in output
+    assert "Informational message" in output
+    assert "Success message" in output
+    assert "TestSolver" in output
+    assert "Sphere" in output
+    assert "Trial  1/10" in output
+    assert "CACHED" in output
+
+    # 2. Quiet mode (verbose=False)
+    buf_quiet = io.StringIO()
+    quiet_logger = EvaluationLogger(verbose=False, stream=buf_quiet)
+    quiet_logger.header("Quiet Header")
+    quiet_logger.info("Quiet info")
+    assert buf_quiet.getvalue() == ""
+
+
+def test_evaluation_service_run_verbose_control(tmp_path: Path):
+    """Verify that verbose flag on EvaluationService.run_* methods controls output dynamically."""
+    import io
+    from benchmarking.infra.logging import EvaluationLogger
+
+    buf = io.StringIO()
+    custom_logger = EvaluationLogger(verbose=True, stream=buf)
+
+    eval_dir = tmp_path / "evaluations"
+    cfg_file = tmp_path / "benchmark.toml"
+    cfg_file.write_text(
+        """
+[benchmarking]
+target_eval_runs = 2
+budget_multiplier = 50
+eval_timeout_seconds = 30.0
+classical_baselines = ["cmaes"]
+target_problems = [1]
+target_dims = [2]
+target_noise_levels = [0.0]
+""",
+        encoding="utf-8",
+    )
+
+    session_factory = create_db_session_factory()
+    sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
+    champions_repo = ChampionsReadRepository(session_factory)
+    trace_repo = IOHTraceReader()
+    state_repo = EvaluationStateRepository(eval_dir=eval_dir)
+    config_repo = EvaluationConfigRepository(config_path=cfg_file)
+
+    service = EvaluationService(
+        sqlite_repo=sqlite_repo,
+        champions_repo=champions_repo,
+        trace_repo=trace_repo,
+        state_repo=state_repo,
+        config_repo=config_repo,
+        logger=custom_logger,
+    )
+
+    # 1. Run with verbose=False -> No output captured in buffer
+    service.run_baselines(verbose=False)
+    assert buf.getvalue() == ""
+
+    # 2. Run with verbose=True -> Output is captured
+    service.run_baselines(verbose=True)
+    assert len(buf.getvalue()) > 0
+    assert "CMA-ES" in buf.getvalue()
+
+
+
+
+
 

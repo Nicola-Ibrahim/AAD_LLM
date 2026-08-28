@@ -80,9 +80,11 @@ def test_nb03_evaluation_pipeline():
     print(f"  • Champions discovered: {total_champs} across {len(champions)} models")
 
     from benchmarking.infra.io.trace_repository import EvaluationStateRepository
+    from benchmarking.infra.logging import EvaluationLogger
     from benchmarking.infra.storage import EvaluationConfigRepository
     state_repo = EvaluationStateRepository()
     config_repo = EvaluationConfigRepository()
+    logger = EvaluationLogger()
 
     eval_service = EvaluationService(
         sqlite_repo=sqlite_repo,
@@ -90,6 +92,7 @@ def test_nb03_evaluation_pipeline():
         trace_repo=trace_repo,
         state_repo=state_repo,
         config_repo=config_repo,
+        logger=logger,
     )
     champions_path = DATA_DIR / "champions.json"
     assert champions_path.exists(), "champions.json does not exist!"

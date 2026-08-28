@@ -8,7 +8,7 @@ import pandas as pd
 from scipy.stats import kruskal, mannwhitneyu, pearsonr
 from statsmodels.stats.multitest import multipletests
 
-from benchmarking.domain.services.taxonomy import BBOB_CLASSES, BBOB_NAMES
+from benchmarking.domain.enums import BBOBFunction
 from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
 
 
@@ -47,8 +47,8 @@ class StatisticalEngine:
         master_omnibus: list[dict[str, Any]] = []
 
         for cond, s_dict in benchmark_data.items():
-            p_name = BBOB_NAMES.get(cond.problem_id, f"f{cond.problem_id}")
-            p_class = BBOB_CLASSES.get(cond.problem_id, "Unknown")
+            p_name = BBOBFunction.get_name(cond.problem_id)
+            p_class = BBOBFunction.get_class(cond.problem_id)
             residuals = {
                 s: [r.final_value for r in runs if not np.isnan(r.final_value)]
                 for s, runs in s_dict.items()
@@ -98,8 +98,8 @@ class StatisticalEngine:
                 for s, runs in s_dict.items()
             }
 
-            p_name = BBOB_NAMES.get(cond.problem_id, f"f{cond.problem_id}")
-            p_class = BBOB_CLASSES.get(cond.problem_id, "Unknown")
+            p_name = BBOBFunction.get_name(cond.problem_id)
+            p_class = BBOBFunction.get_class(cond.problem_id)
 
             for i in range(len(solvers)):
                 for j in range(i + 1, len(solvers)):
@@ -263,8 +263,8 @@ class StatisticalEngine:
         problem_labels: list[str] = []
 
         for r_idx, p_id in enumerate(problem_ids):
-            p_name = BBOB_NAMES.get(p_id, f"f{p_id}")
-            p_class = BBOB_CLASSES.get(p_id, "")
+            p_name = BBOBFunction.get_name(p_id)
+            p_class = BBOBFunction.get_class(p_id)
             problem_labels.append(f"<b>{p_name}</b><br><sup>{p_class}</sup>")
 
             c_key = EvaluationCondition(dim=dim, noise_std=clean_std, problem_id=p_id)
@@ -292,8 +292,8 @@ class StatisticalEngine:
         for cond, solvers in benchmark_data.items():
             if cond.dim != dim or not np.isclose(cond.noise_std, noise_level):
                 continue
-            p_name = BBOB_NAMES.get(cond.problem_id, f"f{cond.problem_id}")
-            p_class = BBOB_CLASSES.get(cond.problem_id, "Unknown")
+            p_name = BBOBFunction.get_name(cond.problem_id)
+            p_class = BBOBFunction.get_class(cond.problem_id)
             for s in solvers_list:
                 if s not in solvers:
                     continue
@@ -326,8 +326,8 @@ class StatisticalEngine:
         problem_labels: list[str] = []
 
         for p_id in problem_ids:
-            p_name = BBOB_NAMES.get(p_id, f"f{p_id}")
-            p_class = BBOB_CLASSES.get(p_id, "")
+            p_name = BBOBFunction.get_name(p_id)
+            p_class = BBOBFunction.get_class(p_id)
             problem_labels.append(f"<b>{p_name}</b><br><sup>{p_class}</sup>")
 
             c_key = EvaluationCondition(dim=dim, noise_std=clean_std, problem_id=p_id)
@@ -557,7 +557,7 @@ class StatisticalEngine:
             return df_grp
         elif group_by == "problem_id":
             df_grp = df_raw.groupby(["Solver", "Problem ID", "Type"], as_index=False)["AUC-ECDF (%)"].mean()
-            df_grp["GroupKey"] = df_grp["Problem ID"].apply(lambda p: BBOB_NAMES.get(p, f"f{p}"))
+            df_grp["GroupKey"] = df_grp["Problem ID"].apply(BBOBFunction.get_name)
             return df_grp
         elif group_by == "dim_noise":
             df_grp = df_raw.groupby(["Solver", "Dim", "Noise Std", "Type"], as_index=False)["AUC-ECDF (%)"].mean()

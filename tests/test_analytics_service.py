@@ -30,13 +30,9 @@ from benchmarking.domain.services.resolvers import (
     resolve_folder_solver_name,
 )
 from benchmarking.domain.services.statistics import StatisticalEngine
-from benchmarking.domain.services.taxonomy import (
-    BBOB_CLASSES,
+from benchmarking.domain.enums import (
     BBOB_CLASSES_ORDER,
-    BBOB_METADATA,
-    BBOB_NAMES,
-    get_bbob_class,
-    get_bbob_name,
+    BBOBFunction,
 )
 from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
 from benchmarking.infra.io.trace_repository import IOHTraceReader
@@ -49,20 +45,18 @@ from shared.database import create_db_session_factory
 
 class TestDomainTaxonomy:
     def test_all_24_bbob_functions_present(self):
-        assert len(BBOB_METADATA) == 24
-        assert len(BBOB_NAMES) == 24
-        assert len(BBOB_CLASSES) == 24
+        assert len(BBOBFunction) == 24
 
-        assert get_bbob_name(1) == "Sphere (f1)"
-        assert get_bbob_class(1) == "Separable"
-        assert get_bbob_name(8) == "Rosenbrock (f8)"
-        assert get_bbob_class(8) == "Low Conditioning"
-        assert get_bbob_name(11) == "Discus (f11)"
-        assert get_bbob_class(11) == "High Conditioning"
-        assert get_bbob_name(15) == "Rastrigin Multi-Modal (f15)"
-        assert get_bbob_class(15) == "Multi-Modal (Global)"
-        assert get_bbob_name(21) == "Gallagher 101 Peaks (f21)"
-        assert get_bbob_class(21) == "Multi-Modal (Weak)"
+        assert BBOBFunction.get_name(1) == "Sphere (f1)"
+        assert BBOBFunction.get_class(1) == "Separable"
+        assert BBOBFunction.get_name(8) == "Rosenbrock (f8)"
+        assert BBOBFunction.get_class(8) == "Low Conditioning"
+        assert BBOBFunction.get_name(11) == "Discus (f11)"
+        assert BBOBFunction.get_class(11) == "High Conditioning"
+        assert BBOBFunction.get_name(15) == "Rastrigin Multi-Modal (f15)"
+        assert BBOBFunction.get_class(15) == "Multi-Modal (Global)"
+        assert BBOBFunction.get_name(21) == "Gallagher 101 Peaks (f21)"
+        assert BBOBFunction.get_class(21) == "Multi-Modal (Weak)"
 
     def test_landscape_classes_order(self):
         assert len(BBOB_CLASSES_ORDER) == 5

@@ -17,10 +17,12 @@ import ioh
 import numpy as np
 import pandas as pd
 
+from benchmarking.domain.enums import BBOBFunction
 from benchmarking.domain.services.baselines import BASELINES
 from benchmarking.domain.services.resolvers import get_model_slug
 from benchmarking.infra.io.hashing import compute_code_hash
 from benchmarking.infra.io.trace_repository import EvaluationStateRepository, IOHTraceReader
+from benchmarking.infra.logging import EvaluationLogger
 from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
 from benchmarking.infra.storage.config_repository import EvaluationConfigRepository
 from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
@@ -32,6 +34,7 @@ from evolution.infra.problems.bbob import BBOBProblem
 from shared.config import PROJECT_ROOT
 from shared.execution import AlgorithmExecutor
 
+
 class EvaluationService:
     """Unified application service for workload auditing and empirical benchmark execution."""
 
@@ -42,6 +45,7 @@ class EvaluationService:
         trace_repo: IOHTraceReader,
         state_repo: EvaluationStateRepository,
         config_repo: EvaluationConfigRepository,
+        logger: EvaluationLogger,
         project_root: Path = PROJECT_ROOT,
     ):
         self.sqlite_repo = sqlite_repo
@@ -49,6 +53,7 @@ class EvaluationService:
         self.trace_repo = trace_repo
         self.state_repo = state_repo
         self.config_repo = config_repo
+        self.logger = logger
         self.project_root = Path(project_root)
 
         cfg = self.config_repo.load_config()
@@ -74,141 +79,113 @@ class EvaluationService:
         """Inspects target directory traces returning (status, runs_found, median_error)."""
         if not code_valid:
             return "MISSING_CODE", 0, None
+
         if not target_dir.exists():
             return "PENDING", 0, None
 
-        runs_found = self.state_repo.get_run_count(target_dir)
         prov = self.state_repo.read_provenance(target_dir)
-        med_err = prov.get("median_clean_error") if prov else None
+        if prov is None:
+            return "PENDING", 0, None
 
-        if expected_code_hash and prov and prov.get("code_hash") != expected_code_hash:
-            return "HASH_MISMATCH", runs_found, med_err
+        if expected_code_hash and prov.get("code_hash") != expected_code_hash:
+            return "NEEDS_RERUN", len(prov.get("clean_errors", [])), prov.get("median_clean_error")
+
+        clean_errs = prov.get("clean_errors", [])
+        runs_found = len(clean_errs)
+        med_err = prov.get("median_clean_error")
 
         if runs_found >= self.n_runs:
             return "COMPLETED", runs_found, med_err
-        if runs_found > 0:
-            return "PARTIAL", runs_found, med_err
+        elif runs_found > 0:
+            return "PENDING", runs_found, med_err
         return "PENDING", 0, None
 
-    # ── Unified Workload Auditing ────────────────────────────────────────────────
-
-    def audit_workload(self, solver_type: str = "all") -> pd.DataFrame:
-        """Audit complete benchmark workload across champions and classical baselines."""
-        records: list[dict[str, Any]] = []
-
-        # 1. Audit LLM Champions
-        if solver_type.lower() in ("all", "champions", "champion", "llm"):
-            champions_flat = self.champions_repo.get_champions_flat()
-            for key, info in champions_flat.items():
-                p_id = int(info["problem_id"])
-                dim = int(info["dim"])
-                mode = info.get("mode", "all").lower()
-                strat = info.get("prompt_strategy", "baseline").lower()
-                llm_name = info.get("llm_name", key.split("/")[0])
-                noise_std = float(info.get("noise_std", 0.0))
-                algo_name = info.get("algorithm_name", "")
-                clean_key = key.split("/")[-1]
-
-                # Match against TOML matrix config
-                is_filtered = (
-                    (bool(self.target_models) and not any(m.lower() in llm_name.lower() for m in self.target_models))
-                    or (bool(self.target_problems) and p_id not in self.target_problems)
-                    or (bool(self.target_prompt_strategies) and strat not in [s.lower() for s in self.target_prompt_strategies])
-                    or (bool(self.target_dims) and dim not in self.target_dims)
-                    or (bool(self.target_noise_levels) and noise_std not in self.target_noise_levels)
-                )
-
-                raw_code_path = Path(info["code_path"])
-                code_file = self.project_root / raw_code_path if not raw_code_path.is_absolute() else raw_code_path
-                code_valid = code_file.exists() and code_file.stat().st_size > 0
-                code_hash = compute_code_hash(code_file.read_text(encoding="utf-8")) if code_valid else ""
-
-                model_slug = get_model_slug(llm_name)
-                folder_name = f"{model_slug}_{strat}"
-                target_folder = self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder_name
-
-                status, runs_found, med_err = self._inspect_solver_status(
-                    target_dir=target_folder,
-                    expected_code_hash=code_hash,
-                    code_valid=code_valid,
-                )
-
-                records.append({
-                    "solver_type": "champion",
-                    "condition_key": clean_key,
-                    "key": clean_key,
-                    "model": model_slug,
-                    "solver": model_slug,
-                    "display_name": f"{model_slug} ({strat})",
-                    "llm_name": llm_name,
-                    "strategy": strat,
-                    "mode": mode,
-                    "dim": dim,
-                    "noise_std": noise_std,
-                    "problem_id": p_id,
-                    "algorithm_name": algo_name,
-                    "status": status,
-                    "runs_found": runs_found,
-                    "target_runs": self.n_runs,
-                    "median_error": med_err,
-                    "code_valid": code_valid,
-                    "code_hash": code_hash,
-                    "is_filtered": is_filtered,
-                    "target_folder": target_folder,
-                })
-
-        # 2. Audit Classical Baselines
-        if solver_type.lower() in ("all", "baselines", "baseline", "classical"):
-            conditions = [
-                (d, n, p)
-                for d in self.target_dims
-                for n in self.target_noise_levels
-                for p in self.target_problems
-            ]
-            for dim, noise_std, p_id in conditions:
-                for b_slug in self.classical_baselines:
-                    b_name = self.baseline_labels.get(b_slug, b_slug.upper())
-                    target_folder = self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / b_slug
-
-                    status, runs_found, med_err = self._inspect_solver_status(
-                        target_dir=target_folder,
-                        code_valid=True,
-                    )
-
-                    records.append({
-                        "solver_type": "baseline",
-                        "condition_key": f"{b_slug}_f{p_id}_{dim}D_std{noise_std}",
-                        "key": f"{b_slug}_f{p_id}",
-                        "model": b_slug,
-                        "solver": b_slug,
-                        "display_name": b_name,
-                        "llm_name": b_name,
-                        "baseline": b_slug,
-                        "strategy": "classical",
-                        "mode": "all",
-                        "dim": dim,
-                        "noise_std": noise_std,
-                        "problem_id": p_id,
-                        "algorithm_name": b_name,
-                        "status": status,
-                        "runs_found": runs_found,
-                        "target_runs": self.n_runs,
-                        "median_error": med_err,
-                        "code_valid": True,
-                        "code_hash": "builtin",
-                        "is_filtered": False,
-                        "target_folder": target_folder,
-                    })
-
-        return pd.DataFrame(records)
+    # ── Workload Auditing Facades ────────────────────────────────────────────────
 
     def audit_champions_workload(self) -> pd.DataFrame:
-        """Audit LLM champions workload against config matrix."""
+        """Audit LLM-evolved champion algorithms workload against config matrix."""
         return self.audit_workload(solver_type="champions")
 
     def audit_baselines_workload(self) -> pd.DataFrame:
         """Audit classical baselines workload against config matrix."""
         return self.audit_workload(solver_type="baselines")
+
+    def audit_workload(self, solver_type: str = "all") -> pd.DataFrame:
+        """Comprehensive workload audit across configured solver types."""
+        rows: list[dict[str, Any]] = []
+
+        if solver_type in ("all", "champions"):
+            champions_flat = self.champions_repo.get_champions_flat()
+            for key, champ in champions_flat.items():
+                p_id = int(champ["problem_id"])
+                dim = int(champ["dim"])
+                noise_std = float(champ.get("noise_std", 0.0))
+                strat = str(champ.get("prompt_strategy", "baseline"))
+                llm_name = str(champ.get("llm_name", "llamea"))
+                model_slug = get_model_slug(llm_name)
+
+                code_path_raw = Path(champ["code_path"])
+                code_file = self.project_root / code_path_raw if not code_path_raw.is_absolute() else code_path_raw
+                code_valid = code_file.exists()
+                code_hash = compute_code_hash(code_file.read_text(encoding="utf-8")) if code_valid else None
+
+                target_dir = self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / f"{model_slug}_{strat}"
+                status, runs_found, med_err = self._inspect_solver_status(target_dir, expected_code_hash=code_hash, code_valid=code_valid)
+
+                is_filtered = (
+                    (self.target_models and llm_name not in self.target_models)
+                    or (self.target_prompt_strategies and strat not in self.target_prompt_strategies)
+                    or (self.target_problems and p_id not in self.target_problems)
+                    or (self.target_dims and dim not in self.target_dims)
+                    or (self.target_noise_levels and noise_std not in self.target_noise_levels)
+                )
+
+                rows.append({
+                    "key": key,
+                    "solver_type": "champion",
+                    "solver": f"{model_slug}_{strat}",
+                    "display_name": f"{llm_name} ({strat})",
+                    "model": llm_name,
+                    "strategy": strat,
+                    "problem_id": p_id,
+                    "dim": dim,
+                    "noise_std": noise_std,
+                    "mode": "clean" if noise_std == 0.0 else "noisy",
+                    "target_runs": self.n_runs,
+                    "runs_found": runs_found,
+                    "status": status,
+                    "median_error": med_err,
+                    "is_filtered": is_filtered,
+                })
+
+        if solver_type in ("all", "baselines"):
+            for baseline_slug in self.classical_baselines:
+                b_name = self.baseline_labels.get(baseline_slug, baseline_slug.upper())
+                for dim in self.target_dims:
+                    for noise_std in self.target_noise_levels:
+                        for p_id in self.target_problems:
+                            target_dir = self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / baseline_slug
+                            status, runs_found, med_err = self._inspect_solver_status(target_dir, expected_code_hash=None, code_valid=True)
+
+                            rows.append({
+                                "key": f"f{p_id}_{dim}D_std{noise_std}_{baseline_slug}",
+                                "solver_type": "baseline",
+                                "solver": baseline_slug,
+                                "display_name": b_name,
+                                "model": baseline_slug,
+                                "strategy": "classical",
+                                "problem_id": p_id,
+                                "dim": dim,
+                                "noise_std": noise_std,
+                                "mode": "clean" if noise_std == 0.0 else "noisy",
+                                "target_runs": self.n_runs,
+                                "runs_found": runs_found,
+                                "status": status,
+                                "median_error": med_err,
+                                "is_filtered": False,
+                            })
+
+        return pd.DataFrame(rows)
 
     # ── Core Trial Execution Engine ──────────────────────────────────────────────
 
@@ -223,8 +200,10 @@ class EvaluationService:
         prov_metadata: dict[str, Any],
         expected_code_hash: str | None = None,
         force_rerun: bool = False,
+        verbose: bool = True,
     ) -> dict[str, Any]:
         """Generic empirical trial executor handling incremental resumption, IOH logging, and provenance."""
+        self.logger.verbose = verbose
         existing_runs = 0
         clean_errors: list[float] = []
         runtimes: list[float] = []
@@ -239,6 +218,7 @@ class EvaluationService:
                 evals_list = [int(v) for v in prov.get("evaluations_used", [])]
                 existing_runs = len(clean_errors)
                 if existing_runs >= self.n_runs:
+                    self.logger.cached(existing_runs, prov.get("median_clean_error"))
                     return {
                         "status": "CACHED",
                         "median_clean_error": prov.get("median_clean_error"),
@@ -247,6 +227,7 @@ class EvaluationService:
                     }
                 elif existing_runs > 0:
                     can_resume = True
+                    self.logger.resuming(existing_runs, self.n_runs)
 
         if not can_resume:
             if target_dir.exists():
@@ -289,6 +270,13 @@ class EvaluationService:
                 clean_errors.append(float(best_clean))
                 runtimes.append(float(rt))
                 evals_list.append(int(evals_used))
+                self.logger.trial(
+                    trial_idx=run_idx,
+                    total_trials=self.n_runs,
+                    best_clean=best_clean,
+                    runtime=rt,
+                    evals_used=evals_used,
+                )
                 prob.reset()
 
             logger_ioh.close()
@@ -296,6 +284,7 @@ class EvaluationService:
                 self.state_repo.merge_run_logs(run_dir, target_dir)
 
         median_err = float(np.median(clean_errors)) if clean_errors else float("inf")
+        self.logger.condition_complete(len(clean_errors), median_err)
         prov_data = {
             **prov_metadata,
             "problem_id": p_id,
@@ -323,8 +312,10 @@ class EvaluationService:
         self,
         champion_info: dict[str, Any],
         force_rerun: bool = False,
+        verbose: bool = True,
     ) -> dict[str, Any]:
         """Execute empirical trials for a single LLM champion algorithm."""
+        self.logger.verbose = verbose
         p_id = int(champion_info["problem_id"])
         dim = int(champion_info["dim"])
         noise_std = float(champion_info.get("noise_std", 0.0))
@@ -335,6 +326,7 @@ class EvaluationService:
         raw_code_path = Path(champion_info["code_path"])
         code_file = self.project_root / raw_code_path if not raw_code_path.is_absolute() else raw_code_path
         if not code_file.exists():
+            self.logger.missing_code(str(raw_code_path))
             return {"status": "MISSING_CODE", "errors": []}
 
         code_str = code_file.read_text(encoding="utf-8")
@@ -376,6 +368,7 @@ class EvaluationService:
             prov_metadata=prov_metadata,
             expected_code_hash=code_hash,
             force_rerun=force_rerun,
+            verbose=verbose,
         )
 
     def run_baseline_trials(
@@ -385,8 +378,10 @@ class EvaluationService:
         noise_std: float,
         p_id: int,
         force_rerun: bool = False,
+        verbose: bool = True,
     ) -> dict[str, Any]:
         """Execute empirical trials for a classical baseline algorithm."""
+        self.logger.verbose = verbose
         if baseline_slug not in BASELINES:
             raise ValueError(f"Unknown baseline: {baseline_slug}. Available: {list(BASELINES.keys())}")
 
@@ -408,6 +403,7 @@ class EvaluationService:
             prov_metadata=prov_metadata,
             expected_code_hash=None,
             force_rerun=force_rerun,
+            verbose=verbose,
         )
 
     # ── Unified Batch Runner ─────────────────────────────────────────────────────
@@ -416,26 +412,49 @@ class EvaluationService:
         self,
         solver_type: str = "all",
         force_rerun: bool = False,
+        verbose: bool = True,
     ) -> pd.DataFrame:
         """Run all pending/partial evaluations matching the configured workload."""
+        self.logger.verbose = verbose
+
         df_audit = self.audit_workload(solver_type=solver_type)
         active = df_audit[~df_audit["is_filtered"] & (df_audit["status"] != "MISSING_CODE")]
 
         champions_flat = self.champions_repo.get_champions_flat() if solver_type in ("all", "champions") else {}
         results: list[dict[str, Any]] = []
 
-        for _, row in active.iterrows():
+        total_active = len(active)
+        self.logger.header(
+            title=f"Starting Benchmark Evaluations for {solver_type.upper()}",
+            subtitle=f"{total_active} target conditions to evaluate",
+        )
+        cached_count = 0
+        executed_count = 0
+
+        for idx, (_, row) in enumerate(active.iterrows(), start=1):
             stype = row["solver_type"]
             dim = int(row["dim"])
             noise_std = float(row["noise_std"])
             p_id = int(row["problem_id"])
+            s_name = row["display_name"]
+
+            self.logger.condition_start(
+                index=idx,
+                total=total_active,
+                solver_type=stype,
+                solver_name=s_name,
+                dim=dim,
+                noise_std=noise_std,
+                problem_id=p_id,
+                problem_name=BBOBFunction.get_name(p_id),
+            )
 
             if stype == "champion":
                 clean_k = row["key"]
                 matching = [v for k, v in champions_flat.items() if k.endswith(clean_k) or k == clean_k]
                 if not matching:
                     continue
-                res = self.run_champion_trials(matching[0], force_rerun=force_rerun)
+                res = self.run_champion_trials(matching[0], force_rerun=force_rerun, verbose=verbose)
             else:
                 res = self.run_baseline_trials(
                     baseline_slug=row["solver"],
@@ -443,7 +462,13 @@ class EvaluationService:
                     noise_std=noise_std,
                     p_id=p_id,
                     force_rerun=force_rerun,
+                    verbose=verbose,
                 )
+
+            if res.get("status") == "CACHED":
+                cached_count += 1
+            else:
+                executed_count += 1
 
             results.append({
                 "solver_type": stype,
@@ -456,12 +481,32 @@ class EvaluationService:
                 "median_error": res.get("median_clean_error"),
             })
 
+        self.logger.summary(
+            title=f"Completed {solver_type.title()} Evaluations",
+            stats={
+                "Total": total_active,
+                "Cached": cached_count,
+                "Executed/Resumed": executed_count,
+            },
+        )
         return pd.DataFrame(results)
 
-    def run_champions(self, force_rerun: bool = False) -> pd.DataFrame:
+    def run_champions(
+        self,
+        force_rerun: bool = False,
+        verbose: bool = True,
+    ) -> pd.DataFrame:
         """Run all pending/partial champion evaluations matching the config matrix."""
-        return self.run_evaluations(solver_type="champions", force_rerun=force_rerun)
+        return self.run_evaluations(
+            solver_type="champions", force_rerun=force_rerun, verbose=verbose
+        )
 
-    def run_baselines(self, force_rerun: bool = False) -> pd.DataFrame:
+    def run_baselines(
+        self,
+        force_rerun: bool = False,
+        verbose: bool = True,
+    ) -> pd.DataFrame:
         """Run all pending/partial baseline evaluations matching the config matrix."""
-        return self.run_evaluations(solver_type="baselines", force_rerun=force_rerun)
+        return self.run_evaluations(
+            solver_type="baselines", force_rerun=force_rerun, verbose=verbose
+        )

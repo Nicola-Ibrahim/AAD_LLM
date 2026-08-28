@@ -9,8 +9,8 @@ from typing import Any
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
+from benchmarking.domain.enums import BBOBFunction
 from benchmarking.domain.services.resolvers import get_clean_model_label, get_model_slug
-from benchmarking.domain.services.taxonomy import get_bbob_class, get_bbob_name
 from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage.config_repository import EvaluationConfigRepository
 from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
@@ -96,8 +96,8 @@ class EvaluationAuditService:
             row: dict[str, Any] = {
                 "Dim": f"{dim}D",
                 "Noise": f"std_{noise_std}",
-                "Problem": get_bbob_name(p_id),
-                "Class": get_bbob_class(p_id),
+                "Problem": BBOBFunction.get_name(p_id),
+                "Class": BBOBFunction.get_class(p_id),
             }
 
             # 1. Classical Baselines

@@ -31,14 +31,6 @@ from benchmarking.domain.services.resolvers import (
     resolve_folder_solver_name,
 )
 from benchmarking.domain.services.statistics import StatisticalEngine
-from benchmarking.domain.services.taxonomy import (
-    BBOB_CLASSES,
-    BBOB_CLASSES_ORDER,
-    BBOB_METADATA,
-    BBOB_NAMES,
-    get_bbob_class,
-    get_bbob_name,
-)
 
 __all__ = [
     "BASELINES",
@@ -53,12 +45,6 @@ __all__ = [
     "resolve_canonical_model_slug",
     "resolve_folder_solver_name",
     "StatisticalEngine",
-    "BBOB_CLASSES",
-    "BBOB_CLASSES_ORDER",
-    "BBOB_METADATA",
-    "BBOB_NAMES",
-    "get_bbob_class",
-    "get_bbob_name",
     "FONT_FAMILY",
     "SOLVER_PALETTE",
     "SOLVER_LINE_STYLES",

@@ -5,6 +5,7 @@ from benchmarking.infra.io import (
     IOHTraceReader,
     compute_code_hash,
 )
+from benchmarking.infra.logging import EvaluationLogger
 from benchmarking.infra.storage import (
     ChampionsReadRepository,
     EvaluationConfigRepository,
@@ -17,5 +18,6 @@ __all__ = [
     "ChampionsReadRepository",
     "EvaluationStateRepository",
     "IOHTraceReader",
+    "EvaluationLogger",
     "compute_code_hash",
 ]
