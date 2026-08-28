@@ -13,6 +13,7 @@ from evolution.domain.enums import BBOBFunction, PromptStrategy
 from evolution.domain.services.noise_strategy import NoiseStrategyFactory
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.llm.client import LLMClient
+from evolution.infra.logging import SynthesisLogger
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.synthesis_config import SynthesisConfigRepository
 from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
@@ -28,10 +29,12 @@ class LLaMEASynthesisService:
         sqlite_repo: SQLiteSynthesisRepository,
         config_repo: SynthesisConfigRepository,
         llm_client: LLMClient,
+        logger: SynthesisLogger,
     ):
         self.sqlite_repo = sqlite_repo
         self.config_repo = config_repo
         self.llm_client = llm_client
+        self.logger = logger
 
     # -------------------------------------------------------------------------
     # Public Use Cases
@@ -106,6 +109,14 @@ class LLaMEASynthesisService:
             "prompt_strategies": [s.value for s in prompt_strats],
             "target_exp_ids": cfg["target_exp_ids"],
         }
+        self.logger.audit_summary(
+            model_name=llm_name,
+            total_conditions=total_cfg,
+            completed=total_done,
+            pending=total_cfg - total_done,
+            retry=total_retry,
+            progress_pct=summary["progress_pct"],
+        )
         return df_matrix, summary
 
     def build_tasks(self) -> list[EvolutionTask]:
@@ -199,17 +210,47 @@ class LLaMEASynthesisService:
     def run_synthesis(
         self,
         max_workers: int | None = None,
+        verbose: bool = True,
     ) -> dict[str, SessionResult]:
         """Builds tasks and executes the evolutionary synthesis in parallel using TaskOrchestrator."""
+        self.logger.verbose = verbose
         cfg = self.config_repo.load_config()
-        workers = max_workers if max_workers is not None else int(cfg["num_processes"])
+        workers = max_workers if max_workers is not None else int(cfg.get("num_processes", 1))
 
         tasks = self.build_tasks()
+        model_name = self.llm_client.model.name
+
         if not tasks:
+            self.logger.success(
+                f"All requested experiments are already completed with valid champions for '{model_name}'! Nothing to run."
+            )
             return {}
 
+        self.logger.header(
+            title="LLaMEA Evolutionary Algorithm Synthesis",
+            subtitle=f"Model: {model_name} | Pending Tasks: {len(tasks)} | Concurrency: {workers} workers",
+        )
+
         orchestrator = TaskOrchestrator(max_workers=workers)
-        return orchestrator.run(tasks)
+        results = orchestrator.run(tasks)
+
+        successful_count = sum(
+            1
+            for r in results.values()
+            if r.best_error is not None and np.isfinite(r.best_error)
+        )
+        failed_count = len(results) - successful_count
+
+        self.logger.summary(
+            title="Synthesis Campaign Complete",
+            stats={
+                "Model Target": model_name,
+                "Total Tasks Executed": len(results),
+                "Valid Champions Found": successful_count,
+                "Failed / Incomplete": failed_count,
+            },
+        )
+        return results
 
     # -------------------------------------------------------------------------
     # Private Helpers (Single Responsibility)

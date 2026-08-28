@@ -18,6 +18,7 @@ from evolution.domain.vos import (
     ProblemProfile,
 )
 from shared.execution import AlgorithmExecutor, AlgorithmTimeoutException
+from evolution.infra.logging import SynthesisLogger
 from evolution.infra.storage.base import SynthesisRepository
 from evolution.infra.storage.code.repository import CodeRepository
 
@@ -79,6 +80,7 @@ class Evaluator:
         initial_iteration: int = 0,
         convergence_threshold: float = 1e-6,
         stagnation_threshold: int = 3,
+        logger: SynthesisLogger | None = None,
     ) -> None:
         """Initialize the evaluator.
 
@@ -95,6 +97,7 @@ class Evaluator:
             initial_iteration: Starting iteration counter (e.g. from warm start), by default 0.
             convergence_threshold: Target error threshold required to consider a run converged, by default 1e-6.
             stagnation_threshold: Number of consecutive failure iterations before triggering diversity injection, by default 3.
+            logger: SynthesisLogger instance for console output.
         """
         self._problem = problem
         self._db_repo = db_repo
@@ -107,6 +110,7 @@ class Evaluator:
         self._convergence_threshold = convergence_threshold
         self._stagnation_threshold = stagnation_threshold
         self._consecutive_failures = 0
+        self._logger = logger or SynthesisLogger()
 
     @property
     def problem_profile(self) -> ProblemProfile:
@@ -300,6 +304,17 @@ class Evaluator:
         # We negate the final_error so that an error of 0 is the max (0.0), and larger errors are more negative.
         fitness_score = -final_error
 
+        self._logger.generation(
+            gen_idx=self._current_iteration + 1,
+            total_gens=10,
+            algo_name=algorithm_name or "Candidate",
+            error=final_error,
+            fitness=fitness_score,
+            evals_used=evaluations_used,
+            runtime=runtime_seconds,
+            is_failure=False,
+        )
+
         return fitness_score, feedback, metadata
 
     def _run_and_score_algorithm(
@@ -450,42 +465,55 @@ class Evaluator:
             internal_score = self.FAILURE_FITNESS
 
         feedback = self._generate_error_feedback(
-            error,
-            is_timeout,
+            error=error,
+            is_timeout=is_timeout,
             candidate_code=candidate_code,
             captured_warnings=captured_warnings,
         )
-        metadata = self._build_error_metadata(
-            algorithm_name=solution_name,
+
+        metadata = self._build_failure_metadata(
+            error=error,
+            solution_name=solution_name,
             elapsed_time=elapsed_time,
             evals_used=evals_used,
             code_lines=code_lines,
             code_length=code_length,
             llm_gen_time=llm_gen_time,
             is_timeout=is_timeout,
-            error=error,
+        )
+
+        self._logger.generation(
+            gen_idx=self._current_iteration + 1,
+            total_gens=10,
+            algo_name=solution_name or "Candidate",
+            error=None,
+            fitness=None,
+            evals_used=evals_used,
+            runtime=elapsed_time,
+            is_failure=True,
+            failure_reason=type(error).__name__,
         )
 
         return internal_score, feedback, metadata
 
-    def _build_error_metadata(
+    def _build_failure_metadata(
         self,
-        algorithm_name: str,
+        error: Exception,
+        solution_name: str,
         elapsed_time: float,
         evals_used: int,
         code_lines: int,
         code_length: int,
         llm_gen_time: float | None,
         is_timeout: bool,
-        error: Exception,
     ) -> IterationMetadata:
-        """Construct an IterationMetadata object for failed algorithm executions."""
+        """Construct IterationMetadata for a failed run."""
+        error_traceback = None if is_timeout else traceback.format_exc()
         budget_consumed_pct = (evals_used / self._budget * 100) if self._budget > 0 else 0.0
         evals_per_second = (evals_used / elapsed_time) if elapsed_time > 0.0 else 0.0
-        error_traceback = None if is_timeout else traceback.format_exc()
 
         return IterationMetadata(
-            algorithm_name=algorithm_name,
+            algorithm_name=solution_name,
             execution=Execution(
                 timed_out=is_timeout,
                 runtime_seconds=elapsed_time,
@@ -573,6 +601,7 @@ class Evaluator:
 
         diversity_text = ""
         if self._consecutive_failures >= self._stagnation_threshold:
+            self._logger.stagnation_warning(self._consecutive_failures, self._stagnation_threshold)
             diversity_text = _DIVERSITY_INJECTION_MSG.format(n=self._stagnation_threshold)
             self._consecutive_failures = 0
 
@@ -583,21 +612,17 @@ class Evaluator:
         return solution
 
     def __getstate__(self) -> dict[str, Any]:
-        # Exclude unpicklable C++ executor wrapper only.
-        # _db_repo and _code_repo are preserved: SQLiteExperimentRepository has its own
-        # __getstate__/__setstate__ that safely strips the non-picklable session_factory.
-        # Without them, warm-start resumes would have no db_repo and all iteration
-        # persistence would silently stop.
+        # Exclude unpicklable C++ executor wrapper and logger stream handlers.
         state = self.__dict__.copy()
         state["_executor"] = None
+        state["_logger"] = None
         return state
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.__dict__.update(state)
-        # Re-initialize the executor on resume.
+        # Re-initialize the executor and logger on resume.
         self._executor = AlgorithmExecutor(timeout_seconds=self._timeout_seconds)
-        # If _db_repo or _code_repo are None after resume (e.g. from an old pickle),
-        # we cannot recover them here — the session must re-attach them after warm_start.
+        self._logger = getattr(self, "_logger", None) or SynthesisLogger()
         if self._db_repo is None:
             print(
                 "[WARN] Evaluator resumed from pickle with _db_repo=None. "

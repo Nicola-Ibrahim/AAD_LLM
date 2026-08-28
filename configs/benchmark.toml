@@ -16,7 +16,7 @@ eval_timeout_seconds = 30.0
 # Execution & Auto-Resume Control:
 #   • force_rerun = false: Automatically resumes from existing runs (e.g. runs 11..20) and skips completed
 #   • force_rerun = true:  Wipes existing traces and re-evaluates all 20 runs from scratch
-force_rerun = false
+force_rerun = true
 
 # Classical Baselines evaluated on identical benchmark problems
 classical_baselines = ["cmaes", "de", "pso"]

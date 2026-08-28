@@ -11,6 +11,7 @@ from shared.config import DATA_DIR
 from evolution.domain.enums import PromptStrategy
 from evolution.domain.interfaces import BaseProblem
 from evolution.infra.llm.client import LLMClient
+from evolution.infra.logging import SynthesisLogger
 from evolution.infra.prompts import (
     EXAMPLE_PROMPT,
     FORMAT_PROMPT,
@@ -67,6 +68,7 @@ class LLaMEASession:
         budget: int = DEFAULT_BUDGET,
         iterations: int = DEFAULT_MAX_ITERATIONS,
         stagnation_threshold: int = 3,
+        logger: SynthesisLogger | None = None,
     ):
         """Initializes the synthesis session with pre-resolved domain objects and database experiment ID."""
         if llm_client is None:
@@ -88,6 +90,7 @@ class LLaMEASession:
         self._budget = budget
         self._iterations = iterations
         self._stagnation_threshold = stagnation_threshold
+        self._logger = logger or SynthesisLogger()
 
         self._archive_dir = (
             DATA_DIR
@@ -106,12 +109,21 @@ class LLaMEASession:
 
     def _print_start_banner(self) -> None:
         """Prints the initialization banner for the evolution run."""
-        print(
-            f"\n=== Starting LLaMEA Evolution: BBOB-{self._problem.problem_id} "
-            f"(Dim {self._problem.dim}, Mode {self._problem.mode}, Exp {self._experiment_id}, "
-            f"Strategy {self._prompt_strategy}) [Budget: {self._budget} evals | "
-            f"Max Iterations: {self._iterations}] ===",
-            flush=True,
+        strat_str = (
+            self._prompt_strategy.value
+            if hasattr(self._prompt_strategy, "value")
+            else str(self._prompt_strategy)
+        )
+        self._logger.task_start(
+            index=1,
+            total=1,
+            model_name=self._llm_client.model.name,
+            dim=self._problem.dim,
+            noise_std=self._problem.noise_std,
+            problem_id=self._problem.problem_id,
+            strategy=strat_str,
+            experiment_id=self._experiment_id,
+            problem_name=getattr(self._problem, "name", ""),
         )
 
     def _process_session_result(
@@ -186,18 +198,18 @@ class LLaMEASession:
         state_file = self._archive_dir / "llamea_config.pkl"
 
         if state_file.exists():
-            print(f"[i] Existing session state found — resuming from {self._archive_dir}")
             try:
                 synthesis_engine = LLaMEA.warm_start(str(self._archive_dir))
                 if synthesis_engine is not None:
                     synthesis_engine.f = evaluator
                     synthesis_engine.llm = self._llm_client
-                    print(
-                        f"[i] Resumed at generation {synthesis_engine.generation}, "
-                        f"history size {len(synthesis_engine.run_history)}"
+                    self._logger.resuming(
+                        self._experiment_id,
+                        synthesis_engine.generation,
+                        self._iterations,
                     )
             except Exception as e:
-                print(f"[!] Warm start failed, starting fresh: {e}")
+                self._logger.warning(f"Warm start failed, starting fresh: {e}")
                 synthesis_engine = None
 
         if synthesis_engine is None:
@@ -231,6 +243,7 @@ class LLaMEASession:
             experiment_id=self._experiment_id,
             initial_iteration=self._initial_iteration,
             stagnation_threshold=self._stagnation_threshold,
+            logger=self._logger,
         )
 
     def _print_report(
@@ -239,24 +252,14 @@ class LLaMEASession:
         raw_fitness: float | None,
         final_error: float | None,
     ) -> None:
-        """Prints a human-readable console report highlighting objective value and error metrics of the best candidate."""
-        true_opt = self._problem.true_optimum
-        raw_str = f"{raw_fitness:.6f}" if raw_fitness is not None else "N/A (All Executions Failed)"
-        err_str = f"{final_error:.6e}" if final_error is not None else "N/A"
-        fit_str = (
-            f"{-final_error:.6e}" if final_error is not None else "N/A (All Executions Failed)"
+        """Prints a structured console report highlighting objective value and error metrics of the best candidate."""
+        self._logger.task_complete(
+            exp_id=self._experiment_id,
+            best_algo_name=algorithm_name,
+            best_error=final_error,
+            raw_obj=raw_fitness,
+            true_opt=self._problem.true_optimum,
         )
-
-        print("\n" + "=" * 70)
-        print(
-            f"=== BBOB-{self._problem.problem_id} Evolution Best Solution Summary ({self._problem.mode.upper()}) ==="
-        )
-        print(f"  Best Algorithm Name:            {algorithm_name}")
-        print(f"  Returned Objective Value (Obj): {raw_str}")
-        print(f"  True Global Optimum (Opt):      {true_opt:.6f}")
-        print(f"  Final Absolute Error (|Obj-Opt|): {err_str} (Target = 0.0)")
-        print(f"  LLaMEA Fitness Score (-Error):  {fit_str} (Higher is better, Max = 0.0)")
-        print("=" * 70 + "\n")
 
     def _cleanup_archive_dir(self) -> None:
         """Silently removes the temporary evolution_state checkpoint directory upon successful experiment completion."""

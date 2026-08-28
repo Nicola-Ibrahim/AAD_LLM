@@ -23,22 +23,26 @@ def test_nb02_synthesis_pipeline():
     """Verify Notebook 02 (02_synthesis.ipynb: Evolutionary Synthesis Service & Task Construction)."""
     from evolution.application.synthesis_service import LLaMEASynthesisService
     from evolution.infra.llm.client import LLMClient
+    from evolution.infra.logging import SynthesisLogger
     from evolution.infra.storage.synthesis_config.repository import SynthesisConfigRepository
     from shared.database import initialize_sqlite_storage
 
-    # Explicit repository dependency injection
+    # Explicit repository and logger dependency injection
     sqlite_repo = initialize_sqlite_storage()
     config_repo = SynthesisConfigRepository()
     llm = LLMClient("local", skip_validation=True)
+    logger = SynthesisLogger(verbose=False)
     service = LLaMEASynthesisService(
         sqlite_repo=sqlite_repo,
         config_repo=config_repo,
         llm_client=llm,
+        logger=logger,
     )
 
     assert service.sqlite_repo is sqlite_repo
     assert service.config_repo is config_repo
     assert service.llm_client is llm
+    assert service.logger is logger
 
     cfg = config_repo.load_config()
     assert "matrix" in cfg
