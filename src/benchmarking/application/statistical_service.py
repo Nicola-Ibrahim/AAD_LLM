@@ -171,6 +171,26 @@ class StatisticalEvaluationService:
         """Compute Pearson correlation between synthesis error and empirical evaluation error."""
         return self.hypothesis_engine.compute_synthesis_transfer_correlation(df_exp)
 
+    def compute_pairwise_a12_matrix(
+        self,
+        df_pairwise: pd.DataFrame,
+        solvers_order: list[str] | None = None,
+    ) -> tuple[list[str], np.ndarray]:
+        """Compute pairwise Vargha-Delaney A12 effect size matrix across all solvers."""
+        return self.hypothesis_engine.compute_pairwise_a12_matrix(
+            df_pairwise=df_pairwise, solvers_order=solvers_order
+        )
+
+    def compute_pairwise_win_counts(
+        self,
+        df_pairwise: pd.DataFrame,
+        solvers_order: list[str] | None = None,
+    ) -> pd.DataFrame:
+        """Compute total head-to-head FDR-adjusted wins, losses, and ties per solver."""
+        return self.hypothesis_engine.compute_pairwise_win_counts(
+            df_pairwise=df_pairwise, solvers_order=solvers_order
+        )
+
     def compute_success_rate(
         self,
         runs: list[RunTrace],

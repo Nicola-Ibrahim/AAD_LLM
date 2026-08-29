@@ -57,10 +57,5 @@ class EvaluationConfigRepository:
             "classical_baselines": bench_cfg.get(
                 "classical_baselines", ["cmaes", "de", "pso"]
             ),
-            "target_problems": bench_cfg.get("target_problems", [1, 8, 11, 15, 21]),
-            "target_dims": bench_cfg.get("target_dims", [2, 3, 5]),
-            "target_noise_levels": bench_cfg.get("target_noise_levels", [0.0, 0.05]),
-            "target_models": bench_cfg.get("target_models", []),
-            "target_prompt_strategies": bench_cfg.get("target_prompt_strategies", []),
             "baseline_labels": baseline_labels,
         }

@@ -61,12 +61,30 @@ class EvaluationService:
         self.trial_timeout_seconds = cfg.get("eval_timeout_seconds", 30.0)
         self.force_rerun = cfg.get("force_rerun", False)
         self.classical_baselines = cfg.get("classical_baselines", ["cmaes", "de", "pso"])
-        self.target_problems = cfg.get("target_problems", [1, 8, 11, 15, 21])
-        self.target_dims = cfg.get("target_dims", [2, 3, 5])
-        self.target_noise_levels = cfg.get("target_noise_levels", [0.0, 0.05])
-        self.target_models = cfg.get("target_models", [])
-        self.target_prompt_strategies = cfg.get("target_prompt_strategies", [])
         self.baseline_labels = cfg.get("baseline_labels", {})
+
+    # ── Condition Discovery Helper ───────────────────────────────────────────────
+
+    def _discover_target_conditions(self) -> list[tuple[int, float, int]]:
+        """Discover unique (dim, noise_std, problem_id) conditions directly from SQLite or champions."""
+        if self.sqlite_repo:
+            try:
+                conditions = self.sqlite_repo.get_target_conditions()
+                if conditions:
+                    return conditions
+            except Exception:
+                pass
+
+        champions_flat = self.champions_repo.get_champions_flat()
+        return sorted(
+            list(
+                {
+                    (c["dim"], c.get("noise_std", 0.0), c["problem_id"])
+                    for c in champions_flat.values()
+                    if "dim" in c and "problem_id" in c
+                }
+            )
+        )
 
     # ── Status Inspection Helper ─────────────────────────────────────────────────
 
@@ -132,14 +150,6 @@ class EvaluationService:
                 target_dir = self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / f"{model_slug}_{strat}"
                 status, runs_found, med_err = self._inspect_solver_status(target_dir, expected_code_hash=code_hash, code_valid=code_valid)
 
-                is_filtered = (
-                    (self.target_models and llm_name not in self.target_models)
-                    or (self.target_prompt_strategies and strat not in self.target_prompt_strategies)
-                    or (self.target_problems and p_id not in self.target_problems)
-                    or (self.target_dims and dim not in self.target_dims)
-                    or (self.target_noise_levels and noise_std not in self.target_noise_levels)
-                )
-
                 rows.append({
                     "key": key,
                     "solver_type": "champion",
@@ -155,35 +165,42 @@ class EvaluationService:
                     "runs_found": runs_found,
                     "status": status,
                     "median_error": med_err,
-                    "is_filtered": is_filtered,
+                    "is_filtered": False,
                 })
 
         if solver_type in ("all", "baselines"):
+            target_conditions = self._discover_target_conditions()
             for baseline_slug in self.classical_baselines:
                 b_name = self.baseline_labels.get(baseline_slug, baseline_slug.upper())
-                for dim in self.target_dims:
-                    for noise_std in self.target_noise_levels:
-                        for p_id in self.target_problems:
-                            target_dir = self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / baseline_slug
-                            status, runs_found, med_err = self._inspect_solver_status(target_dir, expected_code_hash=None, code_valid=True)
+                for dim, noise_std, p_id in target_conditions:
+                    target_dir = (
+                        self.state_repo.eval_dir
+                        / f"{dim}D"
+                        / f"std_{noise_std}"
+                        / f"f{p_id}"
+                        / baseline_slug
+                    )
+                    status, runs_found, med_err = self._inspect_solver_status(
+                        target_dir, expected_code_hash=None, code_valid=True
+                    )
 
-                            rows.append({
-                                "key": f"f{p_id}_{dim}D_std{noise_std}_{baseline_slug}",
-                                "solver_type": "baseline",
-                                "solver": baseline_slug,
-                                "display_name": b_name,
-                                "model": baseline_slug,
-                                "strategy": "classical",
-                                "problem_id": p_id,
-                                "dim": dim,
-                                "noise_std": noise_std,
-                                "mode": "clean" if noise_std == 0.0 else "noisy",
-                                "target_runs": self.n_runs,
-                                "runs_found": runs_found,
-                                "status": status,
-                                "median_error": med_err,
-                                "is_filtered": False,
-                            })
+                    rows.append({
+                        "key": f"f{p_id}_{dim}D_std{noise_std}_{baseline_slug}",
+                        "solver_type": "baseline",
+                        "solver": baseline_slug,
+                        "display_name": b_name,
+                        "model": baseline_slug,
+                        "strategy": "classical",
+                        "problem_id": p_id,
+                        "dim": dim,
+                        "noise_std": noise_std,
+                        "mode": "clean" if noise_std == 0.0 else "noisy",
+                        "target_runs": self.n_runs,
+                        "runs_found": runs_found,
+                        "status": status,
+                        "median_error": med_err,
+                        "is_filtered": False,
+                    })
 
         return pd.DataFrame(rows)
 

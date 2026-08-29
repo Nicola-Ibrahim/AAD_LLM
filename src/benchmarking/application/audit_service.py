@@ -62,9 +62,6 @@ class EvaluationAuditService:
         cfg = self.config_repo.load_config()
         self.target_runs = int(cfg.get("target_eval_runs", 20))
         self.classical_baselines = cfg.get("classical_baselines", ["cmaes", "de", "pso"])
-        self.target_problems = cfg.get("target_problems", [1, 8, 11, 15, 21])
-        self.target_dims = cfg.get("target_dims", [2, 3, 5])
-        self.target_noise_levels = cfg.get("target_noise_levels", [0.0, 0.05])
 
     def get_audit_matrix(self) -> tuple[pd.DataFrame, dict[str, Any]]:
         """Generate the complete 30-condition audit matrix across discovered models and baselines."""
