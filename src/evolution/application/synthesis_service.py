@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from evolution.domain.entities import ExperimentSummary
-from evolution.domain.enums import BBOBFunction, PromptStrategy
+from evolution.domain.enums import BBOBFunction, NoiseModelEnum, PromptStrategy
 from evolution.domain.services.noise_strategy import NoiseStrategyFactory
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.llm.client import LLMClient
@@ -131,7 +131,7 @@ class LLaMEASynthesisService:
         task_budget = int(cfg["budget"])
         task_iterations = int(cfg["iterations"])
         runs_per_config = int(cfg["runs_per_config"])
-        noise_model = str(cfg.get("noise_model", "heteroscedastic"))
+        noise_model = NoiseModelEnum(cfg.get("noise_model", "heteroscedastic"))
         f_target_ids = cfg["target_exp_ids"]
 
         # Fast path: targeted experiment IDs
@@ -140,7 +140,6 @@ class LLaMEASynthesisService:
                 target_ids=f_target_ids,
                 task_budget=task_budget,
                 fallback_iterations=task_iterations,
-                default_noise_model=noise_model,
             )
 
         problems, dimensions, noise_stds, prompt_strats = self._resolve_search_space(cfg)
@@ -177,7 +176,6 @@ class LLaMEASynthesisService:
                                         strat=strat,
                                         task_budget=task_budget,
                                         task_iterations=task_iterations,
-                                        default_noise_model=noise_model,
                                     )
                                 )
 
@@ -306,7 +304,6 @@ class LLaMEASynthesisService:
         target_ids: list[int],
         task_budget: int,
         fallback_iterations: int,
-        default_noise_model: str = "heteroscedastic",
     ) -> list[EvolutionTask]:
         targeted_experiments = self.sqlite_repo.load_by_ids(target_ids)
         tasks: list[EvolutionTask] = []
@@ -316,9 +313,8 @@ class LLaMEASynthesisService:
             noise_std = exp.problem.noise_std or 0.0
             strat_str = str(exp.prompt_strategy).lower()
             strat_enum = getattr(PromptStrategy, strat_str.upper())
-            model_str = exp.problem.noise_model or default_noise_model
             noise_strat = NoiseStrategyFactory.create(
-                noise_model=model_str,
+                noise_model=exp.problem.noise_model,
                 noise_std=noise_std,
             )
 
@@ -353,12 +349,10 @@ class LLaMEASynthesisService:
         strat: PromptStrategy,
         task_budget: int,
         task_iterations: int,
-        default_noise_model: str = "heteroscedastic",
     ) -> EvolutionTask:
         """Constructs a resume EvolutionTask from an active running experiment in the database."""
-        model_str = exp.problem.noise_model or default_noise_model
         noise_strat = NoiseStrategyFactory.create(
-            noise_model=model_str,
+            noise_model=exp.problem.noise_model,
             noise_std=noise_std,
         )
         resume_problem = BBOBProblem(
@@ -389,7 +383,7 @@ class LLaMEASynthesisService:
         run_idx: int,
         task_budget: int,
         task_iterations: int,
-        noise_model: str = "heteroscedastic",
+        noise_model: NoiseModelEnum,
         key_prefix: str = "",
     ) -> EvolutionTask:
         """Registers a new experiment record in the database and returns a fresh EvolutionTask."""

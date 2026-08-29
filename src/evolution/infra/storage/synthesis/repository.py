@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload, sessionmaker
 
 from evolution.domain.entities import ExperimentSummary
-from evolution.domain.enums import NoiseModelEnum, ProblemMode
+from evolution.domain.enums import ProblemMode
 from evolution.domain.vos import (
     Code,
     Convergence,
@@ -266,9 +266,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
             problem_id=exp.problem_id,
             dim=exp.dim,
             noise_std=exp.noise_std or 0.0,
-            noise_model=NoiseModelEnum(exp.noise_model)
-            if exp.noise_model
-            else NoiseModelEnum.HETEROSCEDASTIC,
+            noise_model=exp.noise_model or "heteroscedastic",
             instance_id=exp.instance_id,
             true_optimum=exp.true_optimum,
         )

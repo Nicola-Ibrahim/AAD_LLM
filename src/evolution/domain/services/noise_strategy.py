@@ -121,34 +121,25 @@ class AWGNStrategy(BaseNoiseStrategy):
 class NoiseStrategyFactory:
     """Factory for instantiating noise strategy objects."""
 
-    _STRATEGIES: dict[str, type[BaseNoiseStrategy]] = {
-        NoiseModelEnum.HETEROSCEDASTIC.value: HeteroscedasticNoiseStrategy,
-        NoiseModelEnum.HOMOSCEDASTIC_ADDITIVE.value: HomoscedasticAdditiveNoiseStrategy,
-        NoiseModelEnum.AWGN.value: AWGNStrategy,
-        NoiseModelEnum.NONE.value: NoNoiseStrategy,
+    _STRATEGIES: dict[NoiseModelEnum, type[BaseNoiseStrategy]] = {
+        NoiseModelEnum.HETEROSCEDASTIC: HeteroscedasticNoiseStrategy,
+        NoiseModelEnum.HOMOSCEDASTIC_ADDITIVE: HomoscedasticAdditiveNoiseStrategy,
+        NoiseModelEnum.AWGN: AWGNStrategy,
+        NoiseModelEnum.NONE: NoNoiseStrategy,
     }
 
     @classmethod
     def create(
         cls,
-        noise_model: str | NoiseModelEnum,
+        noise_model: NoiseModelEnum,
         noise_std: float = 0.0,
         **kwargs,
     ) -> BaseNoiseStrategy:
-        """Create a BaseNoiseStrategy instance based on noise_model string/enum and noise_std value."""
-        model_str = (
-            noise_model.value
-            if isinstance(noise_model, NoiseModelEnum)
-            else str(noise_model).lower()
-        )
-
-        if noise_std <= 0.0 or model_str == NoiseModelEnum.NONE.value:
+        """Create a BaseNoiseStrategy instance based on noise_model and noise_std value."""
+        if noise_std <= 0.0 or noise_model == NoiseModelEnum.NONE:
             return NoNoiseStrategy()
 
-        if model_str not in cls._STRATEGIES:
-            raise ValueError(
-                f"Unknown noise model '{model_str}'. Available models: {list(cls._STRATEGIES.keys())}"
-            )
-
-        strategy_cls = cls._STRATEGIES[model_str]
+        strategy_cls = cls._STRATEGIES[noise_model]
         return strategy_cls(noise_std=noise_std, **kwargs)
+
+
