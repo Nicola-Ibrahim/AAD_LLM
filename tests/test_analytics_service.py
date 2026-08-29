@@ -287,4 +287,50 @@ class TestMarkdownReporting:
         assert "Comprehensive Empirical Evaluation" in report
 
 
+class TestConvergenceTiers:
+    def test_compute_convergence_tiers(self):
+        engine = PerformanceMetricsEngine()
+        dataset = EvaluationDataset()
+        cond = EvaluationCondition(dim=2, noise_std=0.0, problem_id=1)
 
+        # 4 runs with different error levels
+        r_solved = RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([100.0, 1e-9]))
+        r_moderate = RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([100.0, 1e-4]))
+        r_minor = RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([100.0, 0.5]))
+        r_stagnated = RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([100.0, 50.0]))
+
+        dataset.add_run(cond, "TestSolver", r_solved)
+        dataset.add_run(cond, "TestSolver", r_moderate)
+        dataset.add_run(cond, "TestSolver", r_minor)
+        dataset.add_run(cond, "TestSolver", r_stagnated)
+
+        df_tiers = engine.compute_convergence_tiers(dataset)
+        assert len(df_tiers) == 4
+        assert "High Precision (Δy ≤ 10⁻⁸)" in df_tiers["Tier"].values
+        assert "Moderate Convergence (10⁻⁸ < Δy ≤ 10⁻²)" in df_tiers["Tier"].values
+        assert "Minor Progress (10⁻² < Δy ≤ 1.0)" in df_tiers["Tier"].values
+        assert "Severe Stagnation / Failure (Δy > 1.0)" in df_tiers["Tier"].values
+
+    def test_ecdf_matrix_with_dict_targets(self):
+        ecdf_engine = EcdfConvergenceEngine()
+        dataset = EvaluationDataset()
+        cond_clean = EvaluationCondition(dim=2, noise_std=0.0, problem_id=1)
+        cond_noisy = EvaluationCondition(dim=2, noise_std=0.05, problem_id=1)
+
+        r1 = RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 1e-8]))
+        r2 = RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 1e-2]))
+
+        dataset.add_run(cond_clean, "TestSolver", r1)
+        dataset.add_run(cond_noisy, "TestSolver", r2)
+
+        targets_dict = {
+            0.0: np.logspace(-8, 2, 20),
+            0.05: np.logspace(-3, 2, 20),
+        }
+
+        df_res = ecdf_engine.compute_auc_ecdf_matrix(
+            dataset, solvers=["TestSolver"], targets=targets_dict, group_by="condition"
+        )
+        assert len(df_res) == 2
+        assert "AUC-ECDF (%)" in df_res.columns
+        assert (df_res["AUC-ECDF (%)"] >= 0.0).all()

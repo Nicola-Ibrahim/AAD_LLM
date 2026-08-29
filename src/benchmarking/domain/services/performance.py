@@ -1,6 +1,6 @@
 """Performance metrics, robustness profiles, and BBOB hardness evaluations."""
 
-from typing import cast
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -212,3 +212,72 @@ class PerformanceMetricsEngine:
             noisy_succ_rates.append(n_succ / max(1, n_tot))
 
         return strat_labels, clean_succ_rates, noisy_succ_rates
+
+    def compute_convergence_tiers(
+        self,
+        benchmark_data: EvaluationDataset,
+        dims: list[int] | None = None,
+        solvers: list[str] | None = None,
+        noise_stds: list[float] | None = None,
+        problem_ids: list[int] | None = None,
+    ) -> pd.DataFrame:
+        """Classify each execution run into 4 rigorous convergence tiers based on terminal error.
+
+        Tiers:
+        - High Precision (Solved): best_value <= 1e-8 (global optimum basin reached)
+        - Moderate Convergence: 1e-8 < best_value <= 1e-2 (strong local convergence)
+        - Minor Progress: 1e-2 < best_value <= 1.0 (partial descent)
+        - Severe Stagnation / Failure: best_value > 1.0 (premature stagnation or divergence)
+
+        Returns:
+            DataFrame containing individual run records with classified convergence tiers.
+        """
+        records: list[dict[str, Any]] = []
+
+        for cond, s_dict in benchmark_data.items():
+            if dims is not None and cond.dim not in dims:
+                continue
+            if noise_stds is not None and not any(np.isclose(cond.noise_std, n) for n in noise_stds):
+                continue
+            if problem_ids is not None and cond.problem_id not in problem_ids:
+                continue
+
+            for s_name, runs in s_dict.items():
+                if solvers is not None and s_name not in solvers:
+                    continue
+
+                for r in runs:
+                    if len(r.raw_objectives) == 0:
+                        continue
+                    err = r.best_value
+                    if np.isnan(err):
+                        tier = "Severe Stagnation / Failure (Δy > 1.0)"
+                        tier_code = "severe_stagnation"
+                    elif err <= 1e-8:
+                        tier = "High Precision (Δy ≤ 10⁻⁸)"
+                        tier_code = "high_precision"
+                    elif err <= 1e-2:
+                        tier = "Moderate Convergence (10⁻⁸ < Δy ≤ 10⁻²)"
+                        tier_code = "moderate_convergence"
+                    elif err <= 1.0:
+                        tier = "Minor Progress (10⁻² < Δy ≤ 1.0)"
+                        tier_code = "minor_progress"
+                    else:
+                        tier = "Severe Stagnation / Failure (Δy > 1.0)"
+                        tier_code = "severe_stagnation"
+
+                    records.append({
+                        "Solver": s_name,
+                        "Dim": cond.dim,
+                        "Noise Std": cond.noise_std,
+                        "Problem ID": cond.problem_id,
+                        "Best Error": err,
+                        "Tier": tier,
+                        "Tier Code": tier_code,
+                    })
+
+        if not records:
+            return pd.DataFrame(columns=["Solver", "Dim", "Noise Std", "Problem ID", "Best Error", "Tier", "Tier Code"])
+
+        return pd.DataFrame(records)
+

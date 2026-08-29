@@ -326,7 +326,7 @@ class StatisticalEvaluationService:
         self,
         benchmark_data: EvaluationDataset,
         solvers: list[str],
-        targets: np.ndarray,
+        targets: np.ndarray | dict[float, np.ndarray],
         n_grid_points: int = 200,
     ) -> pd.DataFrame:
         """Compute Area Under the Runtime ECDF Curve (AUC-ECDF) for each solver across all conditions."""
@@ -341,7 +341,7 @@ class StatisticalEvaluationService:
         self,
         benchmark_data: EvaluationDataset,
         solvers: list[str],
-        targets: np.ndarray,
+        targets: np.ndarray | dict[float, np.ndarray],
         group_by: str = "dim",
         n_grid_points: int = 200,
     ) -> pd.DataFrame:
@@ -352,6 +352,23 @@ class StatisticalEvaluationService:
             targets=targets,
             group_by=group_by,  # type: ignore[arg-type]
             n_grid_points=n_grid_points,
+        )
+
+    def compute_convergence_tiers(
+        self,
+        benchmark_data: EvaluationDataset,
+        dims: list[int] | None = None,
+        solvers: list[str] | None = None,
+        noise_stds: list[float] | None = None,
+        problem_ids: list[int] | None = None,
+    ) -> pd.DataFrame:
+        """Classify execution runs into 4 convergence tiers based on best terminal error."""
+        return self.performance_engine.compute_convergence_tiers(
+            benchmark_data=benchmark_data,
+            dims=dims,
+            solvers=solvers,
+            noise_stds=noise_stds,
+            problem_ids=problem_ids,
         )
 
     def generate_markdown_report(
@@ -368,3 +385,4 @@ class StatisticalEvaluationService:
             output_path=output_path,
             **kwargs,
         )
+

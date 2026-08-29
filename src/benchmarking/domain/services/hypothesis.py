@@ -16,9 +16,10 @@ class HypothesisTestingEngine:
 
     @staticmethod
     def vargha_delaney_a12(sample1: np.ndarray, sample2: np.ndarray) -> tuple[float, str]:
-        """Compute the Vargha-Delaney A12 non-parametric effect size.
+        """Compute the Vargha-Delaney A12 non-parametric effect size for minimization.
 
-        A12 > 0.5 indicates sample1 stochastic dominance (or higher values).
+        A12 = P(sample1 < sample2) + 0.5 * P(sample1 == sample2).
+        A12 > 0.5 indicates sample1 stochastic superiority / dominance (achieves lower error values).
         Magnitude is categorized as 'negligible', 'small', 'medium', or 'large'.
         """
         s1 = np.asarray(sample1, dtype=float)

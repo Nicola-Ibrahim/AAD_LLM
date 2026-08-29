@@ -133,13 +133,14 @@ class EcdfConvergenceEngine:
         self,
         benchmark_data: EvaluationDataset,
         solvers: list[str],
-        targets: np.ndarray,
+        targets: np.ndarray | dict[float, np.ndarray],
         n_grid_points: int = 200,
     ) -> pd.DataFrame:
         """Compute Area Under the Runtime ECDF Curve (AUC-ECDF) for each solver across all conditions.
 
         AUC is integrated over log10(evaluations) using trapezoidal integration and normalized to [0, 1].
         Dynamic evaluation grids (dim * 10,000) are computed per condition.
+        Targets can be a single np.ndarray or a dictionary mapping noise_std to target arrays.
         """
         solver_aucs = {s: [] for s in solvers}
 
@@ -149,10 +150,20 @@ class EcdfConvergenceEngine:
             log_x = np.log10(c_grid)
             x_range = float(log_x[-1] - log_x[0])
 
+            if isinstance(targets, dict):
+                c_targets = targets.get(cond.noise_std)
+                if c_targets is None:
+                    c_targets = next(
+                        (t for k, t in targets.items() if np.isclose(k, cond.noise_std)),
+                        next(iter(targets.values())),
+                    )
+            else:
+                c_targets = targets
+
             for s in solvers:
                 runs = s_dict.get(s, [])
                 if runs:
-                    _, _, _, ecdf = self.compute_trajectory_and_ecdf(runs, c_grid, targets)
+                    _, _, _, ecdf = self.compute_trajectory_and_ecdf(runs, c_grid, c_targets)
                     auc = float(np.trapezoid(ecdf, log_x) / x_range)
                     solver_aucs[s].append(auc)
 
@@ -173,7 +184,7 @@ class EcdfConvergenceEngine:
         self,
         benchmark_data: EvaluationDataset,
         solvers: list[str],
-        targets: np.ndarray,
+        targets: np.ndarray | dict[float, np.ndarray],
         group_by: Literal["dim", "problem_id", "noise_std", "dim_noise", "problem_noise", "condition"] = "dim",
         n_grid_points: int = 200,
     ) -> pd.DataFrame:
@@ -181,6 +192,7 @@ class EcdfConvergenceEngine:
 
         Returns a long-format DataFrame with percentage AUC values scaled to [0, 100].
         Dynamic evaluation grids (dim * 10,000) are computed per condition.
+        Targets can be a single np.ndarray or a dictionary mapping noise_std to target arrays.
         """
         rows = []
 
@@ -190,10 +202,20 @@ class EcdfConvergenceEngine:
             log_x = np.log10(c_grid)
             x_range = float(log_x[-1] - log_x[0])
 
+            if isinstance(targets, dict):
+                c_targets = targets.get(cond.noise_std)
+                if c_targets is None:
+                    c_targets = next(
+                        (t for k, t in targets.items() if np.isclose(k, cond.noise_std)),
+                        next(iter(targets.values())),
+                    )
+            else:
+                c_targets = targets
+
             for s in solvers:
                 runs = s_dict.get(s, [])
                 if runs:
-                    _, _, _, ecdf = self.compute_trajectory_and_ecdf(runs, c_grid, targets)
+                    _, _, _, ecdf = self.compute_trajectory_and_ecdf(runs, c_grid, c_targets)
                     auc_raw = float(np.trapezoid(ecdf, log_x) / x_range)
                     auc_pct = auc_raw * 100.0
                     rows.append({
