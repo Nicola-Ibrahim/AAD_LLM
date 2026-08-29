@@ -217,3 +217,48 @@ class EcdfConvergenceEngine:
             )
 
         return handler(df_raw)
+
+    def compute_adaptive_targets(
+        self,
+        benchmark_data: EvaluationDataset,
+        noise_std: float,
+        n_targets: int = 51,
+    ) -> np.ndarray:
+        """Compute noise-aware adaptive logarithmic target thresholds spanning empirical error range."""
+        if not benchmark_data:
+            if noise_std <= 0.0:
+                return np.logspace(-8, 2, n_targets)
+            return np.logspace(-2, 3, n_targets)
+
+        mins: list[float] = []
+        maxs: list[float] = []
+        for cond, s_dict in benchmark_data.items():
+            if np.isclose(cond.noise_std, noise_std):
+                for runs in s_dict.values():
+                    for r in runs:
+                        if len(r.raw_objectives) > 0:
+                            fin = r.raw_objectives[np.isfinite(r.raw_objectives)]
+                            pos = fin[fin > 0]
+                            if len(pos) > 0:
+                                mins.append(float(np.min(pos)))
+                                maxs.append(float(pos[0]))
+
+        if not mins or not maxs:
+            if noise_std <= 0.0:
+                return np.logspace(-8, 2, n_targets)
+            return np.logspace(-2, 3, n_targets)
+
+        if noise_std <= 0.0:
+            t_min = max(float(np.min(mins)), 1e-8)
+            t_max = min(max(float(np.median(maxs)), 1e2), 1e4)
+        else:
+            # In noisy regimes, precision floor reflects realistic solver resolution
+            # Floor at 1e-3 / 1e-2 to ensure dense target coverage across active solver trajectories
+            p5 = float(np.percentile(mins, 5))
+            t_min = max(p5, 1e-3)
+            t_max = min(max(float(np.median(maxs)), 1e2), 1e4)
+
+        if t_min >= t_max:
+            t_min, t_max = (1e-8, 1e2) if noise_std <= 0.0 else (1e-2, 1e3)
+
+        return np.logspace(np.log10(t_min), np.log10(t_max), n_targets)

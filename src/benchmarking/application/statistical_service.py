@@ -267,6 +267,19 @@ class StatisticalEvaluationService:
             targets=targets,
         )
 
+    def compute_adaptive_targets(
+        self,
+        benchmark_data: EvaluationDataset,
+        noise_std: float,
+        n_targets: int = 51,
+    ) -> np.ndarray:
+        """Compute noise-aware adaptive logarithmic target thresholds spanning empirical error range."""
+        return self.ecdf_engine.compute_adaptive_targets(
+            benchmark_data=benchmark_data,
+            noise_std=noise_std,
+            n_targets=n_targets,
+        )
+
     def compute_robustness_profile(
         self,
         benchmark_data: EvaluationDataset,

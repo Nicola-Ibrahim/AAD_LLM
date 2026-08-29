@@ -292,6 +292,7 @@ class EvaluationService:
                     instance_id=run_idx,
                 )
                 prob.attach_logger(logger_ioh)
+                prob.set_budget(budget)
                 try:
                     best_clean, rt, evals_used = runner_fn(prob, budget)
                     if np.isinf(best_clean):

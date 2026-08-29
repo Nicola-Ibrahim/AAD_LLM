@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 from ioh import ProblemClass, get_problem
 
@@ -46,6 +48,12 @@ class BBOBProblem(BaseProblem):
         )
         self.noise_std: float = self.noise_strategy.noise_std
         self.noise_model: str = self.noise_strategy.name
+        self._budget: int | None = None
+        self._last_f: float = float("inf")
+
+    def set_budget(self, budget: int) -> None:
+        """Set maximum evaluation budget for the problem instance."""
+        self._budget = budget
 
     def __call__(self, x: np.ndarray) -> float:
         """Evaluate the objective function at point `x`.
@@ -56,12 +64,23 @@ class BBOBProblem(BaseProblem):
         Returns:
             float: Evaluated objective value (noisy if self.noise_std > 0 else clean).
         """
+        if self._budget is not None and self.evaluations >= self._budget:
+            warnings.warn(
+                f"[BUDGET OVERRUN] Problem evaluation called after budget exhausted "
+                f"({self.evaluations} >= {self._budget}). Returning last observed fitness.",
+                stacklevel=2,
+            )
+            return self._last_f
+
         arr = np.asarray(x, dtype=float)
         f_clean = self._clean_problem(arr.tolist())
         if self.noise_std <= 0.0:
-            return f_clean
+            val = f_clean
+        else:
+            val = self.noise_strategy.add_noise(f_clean)
 
-        return self.noise_strategy.add_noise(f_clean)
+        self._last_f = val
+        return val
 
     @property
     def mode(self) -> ProblemMode:
@@ -80,6 +99,7 @@ class BBOBProblem(BaseProblem):
 
     def reset(self):
         """Reset the IOH problem state (call counter) for reuse across runs."""
+        self._last_f = float("inf")
         self._clean_problem.reset()
 
     @property
