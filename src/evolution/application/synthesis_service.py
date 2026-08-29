@@ -36,43 +36,68 @@ class LLaMEASynthesisService:
         self.llm_client = llm_client
         self.logger = logger
 
+        # 1. Load and extract synthesis configuration upfront
+        self.cfg: dict[str, Any] = self.config_repo.load_config()
+
+        # 2. Execution knobs & parameters
+        self.budget: int = int(self.cfg["budget"])
+        self.iterations: int = int(self.cfg["iterations"])
+        self.runs_per_config: int = int(self.cfg["runs_per_config"])
+        self.num_processes: int = int(self.cfg["num_processes"])
+        self.auto_resume: bool = bool(self.cfg["auto_resume"])
+        self.skip_completed: bool = bool(self.cfg["skip_completed"])
+        self.retry_failed_synthesis: bool = bool(self.cfg["retry_failed_synthesis"])
+        self.only_incomplete: bool = bool(self.cfg["only_incomplete"])
+        self.target_exp_ids: list[int] | None = self.cfg["target_exp_ids"]
+        self.noise_model: NoiseModelEnum = NoiseModelEnum(
+            self.cfg.get("noise_model", "heteroscedastic")
+        )
+
+        # 3. Search space dimensions and prompt strategies
+        self.problems: list[int] = [
+            int(p) for p in self.cfg.get("problem_ids", [1, 8, 11, 15, 21])
+        ]
+        self.dimensions: list[int] = [int(d) for d in self.cfg.get("dimensions", [2, 3, 5])]
+        self.noise_stds: list[float] = [float(s) for s in self.cfg.get("noise_stds", [0.0, 0.05])]
+
+        raw_strats = self.cfg.get("prompt_strategies", ["baseline"])
+        if isinstance(raw_strats, str):
+            raw_strats = [raw_strats]
+        self.prompt_strategies: list[PromptStrategy] = [
+            getattr(PromptStrategy, s.upper()) if isinstance(s, str) else s for s in raw_strats
+        ]
+
     # -------------------------------------------------------------------------
     # Public Use Cases
     # -------------------------------------------------------------------------
 
     def audit_matrix(self) -> tuple[pd.DataFrame, dict[str, Any]]:
         """Reconciles configured matrix against SQLite experiments for the configured LLM model."""
-        cfg = self.config_repo.load_config()
         llm_name = self.llm_client.model.name
-
-        do_retry_failed = bool(cfg["retry_failed_synthesis"])
-        runs_per_config = int(cfg["runs_per_config"])
-
-        problems, dimensions, noise_stds, prompt_strats = self._resolve_search_space(cfg)
 
         all_db_exps = self.sqlite_repo.load(llm_name=llm_name)
         db_comp, db_run, db_fail = self._group_experiments_by_condition(
             experiments=all_db_exps,
-            retry_failed_synthesis=do_retry_failed,
+            retry_failed_synthesis=self.retry_failed_synthesis,
         )
 
         matrix_rows = []
-        for dim in dimensions:
-            for noise_std in noise_stds:
+        for dim in self.dimensions:
+            for noise_std in self.noise_stds:
                 mode_label = "Clean (0.0)" if noise_std == 0.0 else f"Noisy ({noise_std})"
                 mode_str = "clean" if noise_std == 0.0 else "noisy"
                 noise_val = round(noise_std, 4)
 
-                for strat in prompt_strats:
-                    for p_id in problems:
+                for strat in self.prompt_strategies:
+                    for p_id in self.problems:
                         cfg_key = (p_id, dim, mode_str, noise_val, strat.value.lower())
                         n_comp = len(db_comp.get(cfg_key, []))
                         n_fail = len(db_fail.get(cfg_key, []))
                         n_run = len(db_run.get(cfg_key, []))
 
-                        if n_comp >= runs_per_config:
+                        if n_comp >= self.runs_per_config:
                             status_label = "✅ Completed (Valid Champion)"
-                        elif n_fail > 0 and do_retry_failed:
+                        elif n_fail > 0 and self.retry_failed_synthesis:
                             status_label = f"⚠️ Failed Synthesis (To Retry, {n_fail} run)"
                         elif n_run > 0:
                             status_label = f"🔄 Incomplete/Running ({n_run})"
@@ -84,7 +109,7 @@ class LLaMEASynthesisService:
                             "Dimension": f"{dim}D",
                             "Environment": mode_label,
                             "Strategy": strat.value.capitalize(),
-                            "Target Runs": runs_per_config,
+                            "Target Runs": self.runs_per_config,
                             "Completed": n_comp,
                             "Status": status_label,
                         })
@@ -100,14 +125,14 @@ class LLaMEASynthesisService:
             "completed_conditions": total_done,
             "retry_conditions": total_retry,
             "progress_pct": (total_done / max(1, total_cfg)) * 100,
-            "retry_failed_synthesis": do_retry_failed,
-            "auto_resume": cfg["auto_resume"],
-            "skip_completed": cfg["skip_completed"],
-            "problem_ids": cfg["problem_ids"],
-            "dimensions": cfg["dimensions"],
-            "noise_stds": cfg["noise_stds"],
-            "prompt_strategies": [s.value for s in prompt_strats],
-            "target_exp_ids": cfg["target_exp_ids"],
+            "retry_failed_synthesis": self.retry_failed_synthesis,
+            "auto_resume": self.auto_resume,
+            "skip_completed": self.skip_completed,
+            "problem_ids": self.problems,
+            "dimensions": self.dimensions,
+            "noise_stds": self.noise_stds,
+            "prompt_strategies": [s.value for s in self.prompt_strategies],
+            "target_exp_ids": self.target_exp_ids,
         }
         self.logger.audit_summary(
             model_name=llm_name,
@@ -121,50 +146,31 @@ class LLaMEASynthesisService:
 
     def build_tasks(self) -> list[EvolutionTask]:
         """Constructs the list of EvolutionTask units to execute based on configuration."""
-        cfg = self.config_repo.load_config()
-
-        do_auto_resume = bool(cfg["auto_resume"])
-        do_skip_comp = bool(cfg["skip_completed"])
-        do_only_incomp = bool(cfg["only_incomplete"])
-        do_retry_failed = bool(cfg["retry_failed_synthesis"])
-
-        task_budget = int(cfg["budget"])
-        task_iterations = int(cfg["iterations"])
-        runs_per_config = int(cfg["runs_per_config"])
-        noise_model = NoiseModelEnum(cfg.get("noise_model", "heteroscedastic"))
-        f_target_ids = cfg["target_exp_ids"]
-
         # Fast path: targeted experiment IDs
-        if f_target_ids:
-            return self._build_targeted_tasks(
-                target_ids=f_target_ids,
-                task_budget=task_budget,
-                fallback_iterations=task_iterations,
-            )
-
-        problems, dimensions, noise_stds, prompt_strats = self._resolve_search_space(cfg)
+        if self.target_exp_ids:
+            return self._build_targeted_tasks(target_ids=self.target_exp_ids)
 
         all_db_exps = self.sqlite_repo.load(llm_name=self.llm_client.model.name)
         db_comp, db_run, _ = self._group_experiments_by_condition(
             experiments=all_db_exps,
-            retry_failed_synthesis=do_retry_failed,
+            retry_failed_synthesis=self.retry_failed_synthesis,
         )
 
         tasks: list[EvolutionTask] = []
-        for dim in dimensions:
-            for noise_std in noise_stds:
+        for dim in self.dimensions:
+            for noise_std in self.noise_stds:
                 mode_str = "clean" if noise_std == 0.0 else "noisy"
                 mode_label = "clean" if noise_std == 0.0 else f"noisy_std_{noise_std}"
                 noise_val = round(noise_std, 4)
 
-                for strat in prompt_strats:
-                    for p_id in problems:
+                for strat in self.prompt_strategies:
+                    for p_id in self.problems:
                         cfg_key = (p_id, dim, mode_str, noise_val, strat.value.lower())
                         completed_list = db_comp.get(cfg_key, [])
                         running_list = db_run.get(cfg_key, [])
 
                         # Step A: Resume interrupted/running runs from DB if AUTO_RESUME enabled
-                        if do_auto_resume:
+                        if self.auto_resume:
                             for exp in running_list:
                                 tasks.append(
                                     self._build_resume_task(
@@ -174,19 +180,17 @@ class LLaMEASynthesisService:
                                         noise_std=noise_std,
                                         mode_label=mode_label,
                                         strat=strat,
-                                        task_budget=task_budget,
-                                        task_iterations=task_iterations,
                                     )
                                 )
 
                         # Step B: Calculate accounted count
-                        accounted_runs = (len(completed_list) if do_skip_comp else 0) + (
-                            len(running_list) if do_auto_resume else 0
+                        accounted_runs = (len(completed_list) if self.skip_completed else 0) + (
+                            len(running_list) if self.auto_resume else 0
                         )
 
                         # Step C: Schedule remaining fresh / retry runs
-                        if not do_only_incomp:
-                            remaining_needed = max(0, runs_per_config - accounted_runs)
+                        if not self.only_incomplete:
+                            remaining_needed = max(0, self.runs_per_config - accounted_runs)
                             for run_idx in range(
                                 accounted_runs + 1, accounted_runs + remaining_needed + 1
                             ):
@@ -198,22 +202,17 @@ class LLaMEASynthesisService:
                                         mode_label=mode_label,
                                         strat=strat,
                                         run_idx=run_idx,
-                                        task_budget=task_budget,
-                                        task_iterations=task_iterations,
-                                        noise_model=noise_model,
                                     )
                                 )
         return tasks
 
     def run_synthesis(
         self,
-        max_workers: int | None = None,
         verbose: bool = True,
     ) -> dict[str, SessionResult]:
         """Builds tasks and executes the evolutionary synthesis in parallel using TaskOrchestrator."""
         self.logger.verbose = verbose
-        cfg = self.config_repo.load_config()
-        workers = max_workers if max_workers is not None else int(cfg.get("num_processes", 1))
+        workers = self.num_processes
 
         tasks = self.build_tasks()
         model_name = self.llm_client.model.name
@@ -254,22 +253,6 @@ class LLaMEASynthesisService:
     # Private Helpers (Single Responsibility)
     # -------------------------------------------------------------------------
 
-    def _resolve_search_space(
-        self,
-        cfg: dict[str, Any],
-    ) -> tuple[list[int], list[int], list[float], list[PromptStrategy]]:
-        """Resolves active problems, dimensions, noise standard deviations, and strategies from config."""
-        raw_strats = cfg.get("prompt_strategies", ["baseline"])
-        if isinstance(raw_strats, str):
-            raw_strats = [raw_strats]
-        prompt_strats = [getattr(PromptStrategy, s.upper()) for s in raw_strats]
-
-        problems = [int(p) for p in cfg.get("problem_ids", [1, 8, 11, 15, 21])]
-        dimensions = [int(d) for d in cfg.get("dimensions", [2, 3, 5])]
-        noise_stds = [float(s) for s in cfg.get("noise_stds", [0.0, 0.05])]
-
-        return problems, dimensions, noise_stds, prompt_strats
-
     def _group_experiments_by_condition(
         self,
         experiments: list[ExperimentSummary],
@@ -302,8 +285,6 @@ class LLaMEASynthesisService:
     def _build_targeted_tasks(
         self,
         target_ids: list[int],
-        task_budget: int,
-        fallback_iterations: int,
     ) -> list[EvolutionTask]:
         targeted_experiments = self.sqlite_repo.load_by_ids(target_ids)
         tasks: list[EvolutionTask] = []
@@ -311,7 +292,7 @@ class LLaMEASynthesisService:
             p_id = exp.problem.problem_id
             dim = exp.problem.dim
             noise_std = exp.problem.noise_std or 0.0
-            strat_str = str(exp.prompt_strategy).lower()
+            strat_str = exp.prompt_strategy.lower()
             strat_enum = getattr(PromptStrategy, strat_str.upper())
             noise_strat = NoiseStrategyFactory.create(
                 noise_model=exp.problem.noise_model,
@@ -332,8 +313,8 @@ class LLaMEASynthesisService:
                     llm_client=self.llm_client,
                     experiment_id=exp.id,
                     initial_iteration=initial_iter,
-                    budget=task_budget,
-                    iterations=exp.max_iterations or fallback_iterations,
+                    budget=self.budget,
+                    iterations=exp.max_iterations or self.iterations,
                     prompt_strategy=strat_enum,
                 )
             )
@@ -347,8 +328,6 @@ class LLaMEASynthesisService:
         noise_std: float,
         mode_label: str,
         strat: PromptStrategy,
-        task_budget: int,
-        task_iterations: int,
     ) -> EvolutionTask:
         """Constructs a resume EvolutionTask from an active running experiment in the database."""
         noise_strat = NoiseStrategyFactory.create(
@@ -368,8 +347,8 @@ class LLaMEASynthesisService:
             llm_client=self.llm_client,
             experiment_id=exp.id,
             initial_iteration=initial_iter,
-            budget=task_budget,
-            iterations=exp.max_iterations or task_iterations,
+            budget=self.budget,
+            iterations=exp.max_iterations or self.iterations,
             prompt_strategy=strat,
         )
 
@@ -381,14 +360,11 @@ class LLaMEASynthesisService:
         mode_label: str,
         strat: PromptStrategy,
         run_idx: int,
-        task_budget: int,
-        task_iterations: int,
-        noise_model: NoiseModelEnum,
         key_prefix: str = "",
     ) -> EvolutionTask:
         """Registers a new experiment record in the database and returns a fresh EvolutionTask."""
         noise_strat = NoiseStrategyFactory.create(
-            noise_model=noise_model,
+            noise_model=self.noise_model,
             noise_std=noise_std,
         )
         problem = BBOBProblem(
@@ -411,8 +387,8 @@ class LLaMEASynthesisService:
             mode=problem.mode,
             llm_name=self.llm_client.model.name,
             prompt_strategy=strat.value,
-            budget=task_budget,
-            iterations=task_iterations,
+            budget=self.budget,
+            iterations=self.iterations,
         )
 
         key = (
@@ -426,7 +402,7 @@ class LLaMEASynthesisService:
             llm_client=self.llm_client,
             experiment_id=exp_id,
             initial_iteration=0,
-            budget=task_budget,
-            iterations=task_iterations,
+            budget=self.budget,
+            iterations=self.iterations,
             prompt_strategy=strat,
         )

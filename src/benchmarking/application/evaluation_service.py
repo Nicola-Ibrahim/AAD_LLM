@@ -56,10 +56,10 @@ class EvaluationService:
         self.project_root = Path(project_root)
 
         cfg = self.config_repo.load_config()
-        self.n_runs = int(cfg.get("target_eval_runs", 20))
-        self.budget_multiplier = int(cfg.get("budget_multiplier", 10000))
-        self.trial_timeout_seconds = float(cfg.get("eval_timeout_seconds", 30.0))
-        self.force_rerun = bool(cfg.get("force_rerun", False))
+        self.n_runs = cfg.get("target_eval_runs", 20)
+        self.budget_multiplier = cfg.get("budget_multiplier", 10000)
+        self.trial_timeout_seconds = cfg.get("eval_timeout_seconds", 30.0)
+        self.force_rerun = cfg.get("force_rerun", False)
         self.classical_baselines = cfg.get("classical_baselines", ["cmaes", "de", "pso"])
         self.target_problems = cfg.get("target_problems", [1, 8, 11, 15, 21])
         self.target_dims = cfg.get("target_dims", [2, 3, 5])
@@ -117,11 +117,11 @@ class EvaluationService:
         if solver_type in ("all", "champions"):
             champions_flat = self.champions_repo.get_champions_flat()
             for key, champ in champions_flat.items():
-                p_id = int(champ["problem_id"])
-                dim = int(champ["dim"])
-                noise_std = float(champ.get("noise_std", 0.0))
-                strat = str(champ.get("prompt_strategy", "baseline"))
-                llm_name = str(champ.get("llm_name", "llamea"))
+                p_id = champ["problem_id"]
+                dim = champ["dim"]
+                noise_std = champ.get("noise_std", 0.0)
+                strat = champ.get("prompt_strategy", "baseline")
+                llm_name = champ.get("llm_name", "llamea")
                 model_slug = get_model_slug(llm_name)
 
                 code_path_raw = Path(champ["code_path"])
@@ -212,9 +212,9 @@ class EvaluationService:
         if not self.force_rerun and target_dir.exists():
             prov = self.state_repo.read_provenance(target_dir)
             if prov is not None and (not expected_code_hash or prov.get("code_hash") == expected_code_hash):
-                clean_errors = [float(e) for e in prov.get("clean_errors", [])]
-                runtimes = [float(r) for r in prov.get("runtimes", [])]
-                evals_list = [int(v) for v in prov.get("evaluations_used", [])]
+                clean_errors = prov.get("clean_errors", [])
+                runtimes = prov.get("runtimes", [])
+                evals_list = prov.get("evaluations_used", [])
                 existing_runs = len(clean_errors)
                 if existing_runs >= self.n_runs:
                     self.logger.cached(existing_runs, prov.get("median_clean_error"))
@@ -239,7 +239,7 @@ class EvaluationService:
             start_run_idx = existing_runs + 1
             is_incremental = True
 
-        budget = int(dim * self.budget_multiplier)
+        budget = dim * self.budget_multiplier
         noise_strat = NoNoiseStrategy() if noise_std == 0.0 else HeteroscedasticNoiseStrategy(noise_std=noise_std)
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -285,9 +285,9 @@ class EvaluationService:
                     best_clean, rt, evals_used = float("inf"), 0.0, budget
                     consecutive_failures += 1
 
-                clean_errors.append(float(best_clean))
-                runtimes.append(float(rt))
-                evals_list.append(int(evals_used))
+                clean_errors.append(best_clean)
+                runtimes.append(rt)
+                evals_list.append(evals_used)
                 self.logger.trial(
                     trial_idx=run_idx,
                     total_trials=self.n_runs,
@@ -333,12 +333,12 @@ class EvaluationService:
     ) -> dict[str, Any]:
         """Execute empirical trials for a single LLM champion algorithm."""
         self.logger.verbose = verbose
-        p_id = int(champion_info["problem_id"])
-        dim = int(champion_info["dim"])
-        noise_std = float(champion_info.get("noise_std", 0.0))
-        strat = str(champion_info.get("prompt_strategy", "baseline"))
-        llm_name = str(champion_info.get("llm_name", "llamea"))
-        algo_name = str(champion_info.get("algorithm_name", "ChampionAlgorithm"))
+        p_id = champion_info["problem_id"]
+        dim = champion_info["dim"]
+        noise_std = champion_info.get("noise_std", 0.0)
+        strat = champion_info.get("prompt_strategy", "baseline")
+        llm_name = champion_info.get("llm_name", "llamea")
+        algo_name = champion_info.get("algorithm_name", "ChampionAlgorithm")
 
         raw_code_path = Path(champion_info["code_path"])
         code_file = self.project_root / raw_code_path if not raw_code_path.is_absolute() else raw_code_path
@@ -371,7 +371,7 @@ class EvaluationService:
             "model_slug": model_slug,
             "strategy": strat,
             "algorithm_name": algo_name,
-            "code_path": str(champion_info.get("code_path", "")),
+            "code_path": champion_info.get("code_path", ""),
             "code_hash": code_hash,
         }
 
@@ -443,9 +443,9 @@ class EvaluationService:
 
         for idx, (_, row) in enumerate(active.iterrows(), start=1):
             stype = row["solver_type"]
-            dim = int(row["dim"])
-            noise_std = float(row["noise_std"])
-            p_id = int(row["problem_id"])
+            dim = row["dim"]
+            noise_std = row["noise_std"]
+            p_id = row["problem_id"]
             s_name = row["display_name"]
 
             self.logger.condition_start(
