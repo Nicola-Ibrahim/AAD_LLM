@@ -101,8 +101,14 @@ def run_pso(problem: Any, budget: int) -> tuple[float, float, int]:
     return best_clean, t1 - t0, evals
 
 
-BASELINES: dict[str, Callable[[Any, int], tuple[float, float, int]]] = {
-    "cmaes": run_cmaes,
-    "de": run_de,
-    "pso": run_pso,
-}
+def get_baseline_runner(baseline_slug: str) -> Callable[[Any, int], tuple[float, float, int]]:
+    """Resolve and return the execution function for a baseline solver name."""
+    match baseline_slug.lower():
+        case "cmaes" | "cma-es":
+            return run_cmaes
+        case "de":
+            return run_de
+        case "pso":
+            return run_pso
+        case _:
+            raise ValueError(f"Unknown baseline: '{baseline_slug}'. Supported: 'cmaes', 'de', 'pso'.")

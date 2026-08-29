@@ -1,6 +1,5 @@
 """SQLite read repository for benchmarking experiments, balance queries, and matrix data."""
 
-from typing import Any
 import pandas as pd
 from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker

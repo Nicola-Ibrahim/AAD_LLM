@@ -1,25 +1,19 @@
-"""Benchmarking domain computational, normalization, and styling services."""
+"""Benchmarking domain computational, normalization, and baseline services."""
 
 from benchmarking.domain.services.baselines import (
-    BASELINES,
+    get_baseline_runner,
     run_cmaes,
     run_de,
     run_pso,
 )
-from benchmarking.domain.services.palette import (
-    DIMENSION_PALETTE_CLEAN,
-    DIMENSION_PALETTE_NOISY,
-    FONT_FAMILY,
-    MODEL_SCALE_PALETTE,
-    REGIME_PALETTE,
-    SOLVER_LINE_STYLES,
-    SOLVER_PALETTE,
-    STRATEGY_PALETTE,
-    build_dynamic_solver_palette,
-    get_dimension_color,
-    get_rgba_fill,
-    get_solver_color,
-    get_solver_line_style,
+from benchmarking.domain.services.ecdf import (
+    EcdfConvergenceEngine,
+)
+from benchmarking.domain.services.hypothesis import (
+    HypothesisTestingEngine,
+)
+from benchmarking.domain.services.performance import (
+    PerformanceMetricsEngine,
 )
 from benchmarking.domain.services.resolvers import (
     CLASSICAL_SOLVERS_MAP,
@@ -30,10 +24,9 @@ from benchmarking.domain.services.resolvers import (
     resolve_canonical_model_slug,
     resolve_folder_solver_name,
 )
-from benchmarking.domain.services.statistics import StatisticalEngine
 
 __all__ = [
-    "BASELINES",
+    "get_baseline_runner",
     "run_cmaes",
     "run_de",
     "run_pso",
@@ -44,18 +37,7 @@ __all__ = [
     "get_model_slug",
     "resolve_canonical_model_slug",
     "resolve_folder_solver_name",
-    "StatisticalEngine",
-    "FONT_FAMILY",
-    "SOLVER_PALETTE",
-    "SOLVER_LINE_STYLES",
-    "STRATEGY_PALETTE",
-    "MODEL_SCALE_PALETTE",
-    "REGIME_PALETTE",
-    "DIMENSION_PALETTE_CLEAN",
-    "DIMENSION_PALETTE_NOISY",
-    "get_solver_color",
-    "get_solver_line_style",
-    "get_rgba_fill",
-    "get_dimension_color",
-    "build_dynamic_solver_palette",
+    "HypothesisTestingEngine",
+    "EcdfConvergenceEngine",
+    "PerformanceMetricsEngine",
 ]

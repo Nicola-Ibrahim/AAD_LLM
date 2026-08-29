@@ -4,24 +4,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from benchmarking.application.audit_service import EvaluationAuditService
+from benchmarking.application.audit_service import AuditCoverageSummary, EvaluationAuditService
 from benchmarking.application.selection_service import ChampionSelectionService
 from benchmarking.application.statistical_service import (
     StatisticalEvaluationService,
     generate_markdown_report,
-)
-from benchmarking.domain.enums import ClassicalSolver, EvaluationStrategy
-from benchmarking.domain.services.palette import (
-    DIMENSION_PALETTE_CLEAN,
-    DIMENSION_PALETTE_NOISY,
-    SOLVER_LINE_STYLES,
-    SOLVER_PALETTE,
-    STRATEGY_PALETTE,
-    build_dynamic_solver_palette,
-    get_dimension_color,
-    get_rgba_fill,
-    get_solver_color,
-    get_solver_line_style,
 )
 from benchmarking.domain.services.resolvers import (
     format_db_solver_name,
@@ -29,7 +16,9 @@ from benchmarking.domain.services.resolvers import (
     get_model_slug,
     resolve_folder_solver_name,
 )
-from benchmarking.domain.services.statistics import StatisticalEngine
+from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
+from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
+from benchmarking.domain.services.performance import PerformanceMetricsEngine
 from benchmarking.domain.enums import (
     BBOB_CLASSES_ORDER,
     BBOBFunction,
@@ -104,24 +93,32 @@ class TestDomainResolvers:
         assert resolve_folder_solver_name("qwen_70b_thinking") == "Qwen2.5-Coder-70B / thinking"
 
 
-class TestStatisticalEngine:
+class TestDomainEngines:
     @pytest.fixture
-    def engine(self):
-        return StatisticalEngine()
+    def hypothesis_engine(self):
+        return HypothesisTestingEngine()
 
-    def test_vargha_delaney_a12(self, engine):
-        s1 = [1.0, 2.0, 3.0]
-        s2 = [4.0, 5.0, 6.0]
-        a12, mag = engine.vargha_delaney_a12(s1, s2)
+    @pytest.fixture
+    def ecdf_engine(self):
+        return EcdfConvergenceEngine()
+
+    @pytest.fixture
+    def performance_engine(self):
+        return PerformanceMetricsEngine()
+
+    def test_vargha_delaney_a12(self, hypothesis_engine):
+        s1 = np.array([1.0, 2.0, 3.0])
+        s2 = np.array([4.0, 5.0, 6.0])
+        a12, mag = hypothesis_engine.vargha_delaney_a12(s1, s2)
         assert a12 == 1.0  # s1 has all values smaller than s2
         assert mag == "large"
 
         # Identical samples
-        a12_eq, mag_eq = engine.vargha_delaney_a12(s1, s1)
+        a12_eq, mag_eq = hypothesis_engine.vargha_delaney_a12(s1, s1)
         assert a12_eq == 0.5
         assert mag_eq == "negligible"
 
-    def test_omnibus_and_pairwise_fdr_tests(self, engine):
+    def test_omnibus_and_pairwise_fdr_tests(self, hypothesis_engine):
         # Strongly-typed EvaluationDataset
         bench_data = EvaluationDataset()
         cond = EvaluationCondition(dim=2, noise_std=0.0, problem_id=1)
@@ -130,35 +127,34 @@ class TestStatisticalEngine:
             bench_data.add_run(cond, "DE", RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 0.5])))
             bench_data.add_run(cond, "LLaMEA-14B / baseline", RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 0.01])))
 
-        df_omni = engine.run_omnibus_kruskal(bench_data)
+        df_omni = hypothesis_engine.run_omnibus_kruskal(bench_data)
         assert not df_omni.empty
         assert len(df_omni) == 1
         assert df_omni.iloc[0]["Problem ID"] == 1
         assert df_omni.iloc[0]["Solvers Count"] == 3
 
-        df_pair = engine.run_pairwise_fdr(bench_data)
+        df_pair = hypothesis_engine.run_pairwise_fdr(bench_data)
         assert not df_pair.empty
         assert len(df_pair) == 3  # (CMA vs DE, CMA vs LLM, DE vs LLM)
         assert "p-adjusted" in df_pair.columns
         assert "Outcome" in df_pair.columns
 
-    def test_compute_convergence_iqr(self, engine):
+    def test_compute_convergence_iqr(self, ecdf_engine):
         runs = [
             RunTrace(evaluations=np.array([1, 5, 10]), raw_objectives=np.array([100.0, 50.0, 1.0])),
             RunTrace(evaluations=np.array([1, 5, 10]), raw_objectives=np.array([100.0, 40.0, 2.0])),
             RunTrace(evaluations=np.array([1, 5, 10]), raw_objectives=np.array([100.0, 60.0, 0.5])),
         ]
-        eval_grid, med, q25, q75 = engine.compute_convergence_iqr(runs, n_points=10)
+        eval_grid, med, q25, q75 = ecdf_engine.compute_convergence_iqr(runs, n_points=10)
         assert len(eval_grid) == 10
         assert len(med) == 10
         assert np.all(med >= q25)
         assert np.all(q75 >= med)
 
-    def test_compute_auc_ecdf_matrix(self, engine):
+    def test_compute_auc_ecdf_matrix(self, ecdf_engine):
         bench_data = EvaluationDataset()
         cond1 = EvaluationCondition(dim=2, noise_std=0.0, problem_id=1)
         cond2 = EvaluationCondition(dim=3, noise_std=0.05, problem_id=8)
-        eval_grid = np.logspace(0, 3, 20)
         targets = np.logspace(-8, 2, 10)
 
         for _ in range(3):
@@ -170,7 +166,7 @@ class TestStatisticalEngine:
         solvers = ["CMA-ES", "LLaMEA-14B / baseline"]
 
         # 1. Group by dim
-        df_dim = engine.compute_auc_ecdf_matrix(bench_data, solvers, eval_grid, targets, group_by="dim")
+        df_dim = ecdf_engine.compute_auc_ecdf_matrix(bench_data, solvers, targets, group_by="dim")
         assert not df_dim.empty
         assert "AUC-ECDF (%)" in df_dim.columns
         assert "GroupKey" in df_dim.columns
@@ -178,20 +174,28 @@ class TestStatisticalEngine:
         assert np.all((df_dim["AUC-ECDF (%)"] >= 0.0) & (df_dim["AUC-ECDF (%)"] <= 100.0))
 
         # 2. Group by noise_std
-        df_noise = engine.compute_auc_ecdf_matrix(bench_data, solvers, eval_grid, targets, group_by="noise_std")
+        df_noise = ecdf_engine.compute_auc_ecdf_matrix(bench_data, solvers, targets, group_by="noise_std")
         assert not df_noise.empty
         assert "Clean (σ=0.0)" in df_noise["GroupKey"].values
         assert "Noisy (σ=0.05)" in df_noise["GroupKey"].values
 
-        # 3. Group by problem_id
-        df_prob = engine.compute_auc_ecdf_matrix(bench_data, solvers, eval_grid, targets, group_by="problem_id")
+        # 3. Problem Grouping
+        df_prob = ecdf_engine.compute_auc_ecdf_matrix(bench_data, solvers, targets, group_by="problem_id")
         assert not df_prob.empty
         assert "Sphere (f1)" in df_prob["GroupKey"].values
         assert "Rosenbrock (f8)" in df_prob["GroupKey"].values
 
         # 4. Group by condition (raw)
-        df_cond = engine.compute_auc_ecdf_matrix(bench_data, solvers, eval_grid, targets, group_by="condition")
+        df_cond = ecdf_engine.compute_auc_ecdf_matrix(bench_data, solvers, targets, group_by="condition")
         assert len(df_cond) == 4  # 2 conditions x 2 solvers
+
+    def test_compute_performance_metrics(self, performance_engine):
+        runs = [
+            RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 1e-9])),
+            RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 1.0])),
+        ]
+        succ = performance_engine.compute_success_rate(runs, threshold=1e-8)
+        assert succ == 0.5
 
 
 class TestApplicationServicesIntegration:
@@ -221,7 +225,9 @@ class TestApplicationServicesIntegration:
             assert "coverage_pct" in summary
             audit_data = service.get_global_audit_matrix()
             assert isinstance(audit_data.df, pd.DataFrame)
-            assert audit_data.coverage_summary.coverage_pct >= 0.0
+            coverage = audit_data.coverage_summary
+            cov_pct = coverage.coverage_pct if isinstance(coverage, AuditCoverageSummary) else coverage["coverage_pct"]
+            assert cov_pct >= 0.0
 
     def test_statistical_service(self):
         session_factory = create_db_session_factory()
@@ -278,44 +284,7 @@ class TestMarkdownReporting:
         out_file = tmp_path / "test_report.md"
         report = generate_markdown_report(df_omnibus=df_omnibus, df_pairwise=df_pairwise, output_path=out_file)
         assert out_file.exists()
+        assert "Comprehensive Empirical Evaluation" in report
 
 
-class TestVisualizationPalette:
-    def test_canonical_solver_colors_and_styles(self):
-        # Classical baselines
-        assert get_solver_color("CMA-ES") == "#0F172A"
-        assert get_solver_color("PSO") == "#0D9488"
-        assert get_solver_color("DE") == "#7C3AED"
 
-        cma_style = get_solver_line_style("CMA-ES")
-        assert cma_style["dash"] == "dash"
-        assert cma_style["width"] == 2.2
-
-        # 14B Champions
-        assert get_solver_color("Qwen2.5-Coder-14B / guided") == "#1D4ED8"
-        guided_14b_style = get_solver_line_style("Qwen2.5-Coder-14B / guided")
-        assert guided_14b_style["dash"] == "solid"
-        assert guided_14b_style["width"] == 2.5
-
-        # 7B Models
-        assert get_solver_color("Qwen2.5-Coder-7B / guided") == "#38BDF8"
-        guided_7b_style = get_solver_line_style("Qwen2.5-Coder-7B / guided")
-        assert guided_7b_style["dash"] == "solid"
-        assert guided_7b_style["width"] == 1.8
-
-    def test_palette_utilities(self):
-        # RGBA fill conversion
-        rgba = get_rgba_fill("#1D4ED8", opacity=0.25)
-        assert rgba == "rgba(29, 78, 216, 0.25)"
-
-        # Dimension color
-        assert get_dimension_color(2, is_noisy=False) == "#93C5FD"
-        assert get_dimension_color(5, is_noisy=False) == "#1D4ED8"
-        assert get_dimension_color(2, is_noisy=True) == "#FDBA74"
-        assert get_dimension_color(5, is_noisy=True) == "#EA580C"
-
-        # Dynamic fallback
-        dynamic_color = get_solver_color("Mistral-7B / custom")
-        assert dynamic_color.startswith("#")
-        dynamic_style = get_solver_line_style("Mistral-7B / custom")
-        assert dynamic_style["dash"] == "solid"

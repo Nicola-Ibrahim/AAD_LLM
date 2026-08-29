@@ -3,7 +3,6 @@
 Coordinates multi-model, multi-strategy coverage matrix analysis across all 30 BBOB conditions.
 """
 
-from pathlib import Path
 import re
 from typing import Any
 import pandas as pd

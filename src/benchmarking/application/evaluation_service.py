@@ -6,7 +6,6 @@ and classical baselines driven purely by configs/benchmark.toml.
 """
 
 from datetime import datetime, timezone
-import json
 from pathlib import Path
 import shutil
 import tempfile
@@ -18,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 from benchmarking.domain.enums import BBOBFunction
-from benchmarking.domain.services.baselines import BASELINES
+from benchmarking.domain.services.baselines import get_baseline_runner
 from benchmarking.domain.services.resolvers import get_model_slug
 from benchmarking.infra.io.hashing import compute_code_hash
 from benchmarking.infra.io.trace_repository import EvaluationStateRepository, IOHTraceReader
@@ -398,10 +397,7 @@ class EvaluationService:
     ) -> dict[str, Any]:
         """Execute empirical trials for a classical baseline algorithm."""
         self.logger.verbose = verbose
-        if baseline_slug not in BASELINES:
-            raise ValueError(f"Unknown baseline: {baseline_slug}. Available: {list(BASELINES.keys())}")
-
-        baseline_fn = BASELINES[baseline_slug]
+        baseline_fn = get_baseline_runner(baseline_slug)
         target_dir = self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / baseline_slug
 
         def baseline_runner(prob: BBOBProblem, budget: int) -> tuple[float, float, int]:

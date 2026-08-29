@@ -10,13 +10,13 @@ from functools import lru_cache
 from pathlib import Path
 import re
 import tomllib
-from typing import Final, Optional
+from typing import Optional
 
 from benchmarking.domain.enums.benchmark_strategy import EvaluationStrategy
 from benchmarking.domain.enums.classical_solver import ClassicalSolver
 
 # Recognized classical optimization baselines
-CLASSICAL_SOLVERS_MAP: Final[dict[str, ClassicalSolver]] = {
+CLASSICAL_SOLVERS_MAP: dict[str, ClassicalSolver] = {
     "cmaes": ClassicalSolver.CMA_ES,
     "cma_es": ClassicalSolver.CMA_ES,
     "cma-es": ClassicalSolver.CMA_ES,
@@ -24,7 +24,7 @@ CLASSICAL_SOLVERS_MAP: Final[dict[str, ClassicalSolver]] = {
     "pso": ClassicalSolver.PSO,
 }
 
-KNOWN_STRATEGIES: Final[list[EvaluationStrategy]] = list(EvaluationStrategy)
+KNOWN_STRATEGIES: list[EvaluationStrategy] = list(EvaluationStrategy)
 
 
 @dataclass(frozen=True)
@@ -127,7 +127,7 @@ def get_clean_model_label(llm_name: str) -> str:
     if not llm_name:
         return "LLM"
 
-    s = str(llm_name).strip()
+    s = llm_name.strip()
     s_lower = s.lower().removesuffix(".gguf")
     specs = load_llm_registry()
 
@@ -185,7 +185,7 @@ def get_clean_model_label(llm_name: str) -> str:
 def format_db_solver_name(llm_name: str, prompt_strategy: str) -> str:
     """Format combined solver name from DB record e.g., 'Qwen2.5-Coder-14B / baseline'."""
     model_lbl = get_clean_model_label(llm_name)
-    strat = str(prompt_strategy).lower() if prompt_strategy else "baseline"
+    strat = prompt_strategy.lower() if prompt_strategy else "baseline"
     return f"{model_lbl} / {strat}"
 
 
@@ -194,7 +194,7 @@ def get_model_slug(llm_name: str) -> str:
     if not llm_name:
         return "llamea"
 
-    name_lower = str(llm_name).lower()
+    name_lower = llm_name.lower()
     specs = load_llm_registry()
 
     # Check registry match first
@@ -228,7 +228,7 @@ def resolve_folder_solver_name(folder_name: str) -> str:
 
     # 1. Classical Baselines
     if p in CLASSICAL_SOLVERS_MAP:
-        return str(CLASSICAL_SOLVERS_MAP[p].value)
+        return CLASSICAL_SOLVERS_MAP[p].value
     if p == "de" or p.startswith(("de_", "de-")) or "_de_" in p:
         return ClassicalSolver.DE.value
     if "cma" in p:
@@ -256,7 +256,7 @@ def resolve_folder_solver_name(folder_name: str) -> str:
 
 def resolve_canonical_model_slug(model_slug: str, known_models: list[str] | None = None) -> str:
     """Normalize model slug for figure output directories using registered model IDs."""
-    slug_str = str(model_slug).lower()
+    slug_str = model_slug.lower()
     models_to_check = known_models or get_registered_model_ids()
     for db_m in models_to_check:
         clean_db = db_m.removesuffix(".gguf")
@@ -266,4 +266,4 @@ def resolve_canonical_model_slug(model_slug: str, known_models: list[str] | None
         if m and m.group(1) in clean_db.lower():
             return clean_db
 
-    return str(model_slug).replace("LLaMEA-", "").replace(" ", "_").removesuffix(".gguf")
+    return model_slug.replace("LLaMEA-", "").replace(" ", "_").removesuffix(".gguf")

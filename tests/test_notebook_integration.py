@@ -103,6 +103,7 @@ def test_nb03_evaluation_pipeline():
     with open(champions_path, "r", encoding="utf-8") as f:
         champions_raw = json.load(f)
     champions_flat = eval_service.champions_repo.get_champions_flat(champions_raw)
+    assert len(champions_flat) > 0
 
     df_audit = eval_service.audit_champions_workload()
     assert not df_audit.empty
