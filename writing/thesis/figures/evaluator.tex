@@ -1,0 +1,93 @@
+\begin{tikzpicture}[
+    font=\footnotesize,
+    base/.style={rectangle, draw=black!80, thick, rounded corners=3pt, align=center, inner sep=5pt},
+    headerbox/.style={base, fill=orange!10, text width=0.74\textwidth},
+    process/.style={base, fill=gray!10, text width=0.74\textwidth},
+    decision/.style={diamond, draw=black!80, fill=blue!8, thick, aspect=2.1, inner sep=2pt, align=center, font=\scriptsize},
+    branchbox/.style={base, text width=0.38\textwidth, align=left, font=\scriptsize},
+    metaaction/.style={base, fill=orange!12, text width=0.38\textwidth, align=center, font=\scriptsize},
+    terminal/.style={base, fill=blue!15, text width=0.74\textwidth, align=center, font=\footnotesize\bfseries},
+    arrow/.style={->, >=stealth, thick, draw=black!75}
+]
+    % Level 1: Input
+    \node[headerbox] (input) {
+        \textbf{Evaluator Input} \\
+        \scriptsize Candidate Optimization Heuristic ($\mathcal{A}_{\text{child}}$) from LLaMEA Loop
+    };
+
+    % Level 2: Sandboxed Objective Evaluation
+    \node[process, below=0.45cm of input] (exec) {
+        \textbf{Sandboxed Objective Evaluation} \\
+        \scriptsize Execute search routine on noisy surface $f_{\text{noisy}}$ over budget $B_{\text{synth}}$
+    };
+
+    % Level 3: First Decision (Execution Validity)
+    \node[decision, below=0.5cm of exec] (dec_valid) {
+        \textbf{Execution Valid?}
+    };
+
+    % Level 4: Left Branch (Success) & Right Branch (Failure)
+    \node[branchbox, fill=green!8, below left=0.65cm and 0.1cm of dec_valid] (succ) {
+        \textbf{Ground-Truth Oracle Scoring} \\[2pt]
+        $\bullet$ Validate bounds: $\mathbf{x}^* \in [\mathbf{lb}, \mathbf{ub}]^D$ \\
+        $\bullet$ Evaluate clean target: $y_{\text{clean}} = f_{\text{clean}}(\mathbf{x}^*)$ \\
+        $\bullet$ Assign fitness: $\mathcal{F} = -|y_{\text{clean}} - f^*|$ \\
+        $\bullet$ Reset stagnation tracker: $C_{\text{failures}} \gets 0$ \\
+        $\bullet$ Format standard progress telemetry
+    };
+
+    \node[branchbox, fill=red!8, below right=0.65cm and 0.1cm of dec_valid] (fail) {
+        \textbf{Tiered Penalty \& Diagnostics} \\[2pt]
+        $\bullet$ Assign failure penalty $\mathcal{F}_{\text{failure}}$ \\
+        $\bullet$ Intercept line pointer and traceback \\
+        $\bullet$ Increment tracker: $C_{\text{failures}} \gets C_{\text{failures}} + 1$
+    };
+
+    % Level 5: Stagnation Decision (Strictly under Failure box)
+    \node[decision, below=0.55cm of fail] (dec_stag) {
+        \textbf{Stagnation Check} \\
+        \scriptsize ($C_{\text{failures}} \ge 3$)
+    };
+
+    % Level 6: Meta-Feedback Action (Strictly under Stagnation Decision)
+    \node[metaaction, below=0.55cm of dec_stag] (meta) {
+        \textbf{Inject Paradigm-Shift Meta-Feedback} \\[2pt]
+        \scriptsize Append directive instructing model to pivot toward robust population metaheuristics
+    };
+
+    % Level 7: Feedback Assembly (Anchored cleanly below the lowest branch node)
+    \node[process, below=0.75cm of meta] (assemble) {
+        \textbf{Feedback Assembly \& Repository Persistence} \\
+        \scriptsize Attach computed fitness score $\mathcal{F}$ and context buffer $\mathcal{T}_{\text{feedback}}$; persist run telemetry
+    };
+
+    % Level 8: Terminal Return
+    \node[terminal, below=0.45cm of assemble] (output) {
+        \textbf{Evaluator Return to LLaMEA Engine} \\
+        \scriptsize Transmit scored candidate payload $(\mathcal{F}, \mathcal{T}_{\text{feedback}})$ to selection operator
+    };
+
+    % --- Routing Connectors ---
+    \draw[arrow] (input) -- (exec);
+    \draw[arrow] (exec) -- (dec_valid);
+
+    % Decision 1 Routing
+    \draw[arrow] (dec_valid) -| node[pos=0.3, above, font=\scriptsize\bfseries] {Yes} (succ);
+    \draw[arrow] (dec_valid) -| node[pos=0.3, above, font=\scriptsize\bfseries] {No} (fail);
+
+    % Success Path straight into Assembly Layer (Left Channel)
+    \draw[arrow] (succ.south) -- ++(0,-1.75) |- (assemble.west);
+
+    % Failure Path into Stagnation Check
+    \draw[arrow] (fail) -- (dec_stag);
+
+    % Stagnation Decision Routing
+    \draw[arrow] (dec_stag) -- node[right, font=\scriptsize\bfseries] {Yes} (meta);
+    \draw[arrow] (meta.south) -- (meta.south |- assemble.north);
+
+    % Stagnation "No" Bypass Route (Outer Right Channel)
+    \draw[arrow] (dec_stag.east) -- ++(0.5,0) node[pos=0.3, above, font=\scriptsize\bfseries] {No} |- (assemble.east);
+
+    % Terminal Connection
+    \draw[arrow] (assemble) -- (output);
+\end{tikzpicture}
