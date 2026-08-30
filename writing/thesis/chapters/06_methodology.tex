@@ -4,33 +4,38 @@
 
 \chapter{Methodology}\label{chap:methodology}
 
-Evolutionary loops operating over stochastic fitness evaluations suffer from deceptive selection signals. When objective returns carry variance, candidate algorithms easily exploit lucky evaluation samples, which stalls code generation routines that rely on reliable directional feedback. Resolving this failure mode requires an execution environment that isolates stochastic noise during candidate evaluation while maintaining clean progress metrics for outer-loop selection.
+Stochastic fitness evaluations distort evolutionary selection. When objective returns carry variance, candidate optimizers exploit lucky sample evaluations, stalling outer-loop code generation. Resolving this pathology requires an architecture that isolates stochastic noise during candidate search while preserving clean metrics for meta-selection.
 
-This chapter establishes the mathematical specifications, execution sandboxing, and statistical protocols of the automated algorithm design system. First, we formalize the optimality-gap heteroscedastic noise model and trace its behavior across representative continuous topologies. We then define the dual-evaluation decoupling layer that isolates candidate search logic from diagnostic telemetry, followed by the Abstract Syntax Tree (AST) validation rules, execution timeouts, and traceback recovery pipelines. Subsequent sections detail the evolutionary selection operators, the stochastic parent resampling policy ($K=3$), and the prompt scaffolding configurations evaluated in our experiments. We conclude by specifying the orchestration lifecycle and the non-parametric statistical hypothesis testing protocol used for empirical verification.
+This chapter details the mathematical specifications, execution sandboxing, and statistical benchmarking protocols of the automated synthesis pipeline. We define the optimality-gap heteroscedastic noise model and trace its interaction with continuous benchmark topographies. Next, we specify the evaluation decoupling layer that isolates candidate search logic from diagnostic telemetry, alongside Abstract Syntax Tree (AST) validation rules, execution timeouts, and traceback recovery pipelines. Subsequent sections detail the $(1+1)$ evolutionary selection operators, the stochastic parent resampling policy ($K=3$), and the prompt scaffolding configurations. We conclude by outlining the pipeline execution lifecycle and the non-parametric statistical hypothesis testing protocol used for empirical verification.
 
 
 %-------------------------------------------------------------------------------
-\section{System Orchestration}\label{sec:method_orchestration}
+\section{Pipeline Orchestration}\label{sec:method_orchestration}
 
-The interaction between the heteroscedastic noise model, sandboxed execution, prompt scaffolding, and parent resampling forms a closed-loop search system.
+The Automated Algorithm Design (AAD) pipeline couples a generative foundation model with an isolated execution sandbox inside a closed-loop evolutionary system \cite{LLaMEA2024}. The interactions among prompt contexts, AST compilation defenses, the stochastic evaluation wrapper, and the parent resampling policy form the discovery engine shown in Figure~\ref{fig:evolutionary_aad_loop}.
 
 \begin{figure}[htbp]
-\centering
-\input{figures/evolutionary_aad_loop}
-\caption{System orchestration of the stochastic Automated Algorithm Design loop. Source code flows from the model through AST validation to the execution sandbox. Search decisions consume noisy evaluations $f_{\text{noisy}}(x_k)$, while the background logger records true precision $\Delta f(x_k)$ and applies parent resampling ($K=3$, $\bar{f}_{\text{parent}}$) to update prompt context $\mathcal{C}_g$.}
-\label{fig:evolutionary_aad_loop}
+    \centering
+    \resizebox{\linewidth}{!}{%
+        \input{figures/evolutionary_aad_loop}%
+    }
+    \caption{System orchestration of the stochastic Automated Algorithm Discovery framework. Synthesized Python programs are validated via AST security checks and executed within the isolated sandbox. Search heuristics process corrupted evaluations, while the background evaluation harness records clean ground-truth error and coordinates stochastic parent resampling to drive evolutionary selection \cite{LLaMEA2024}.}
+    \label{fig:evolutionary_aad_loop}
 \end{figure}
 
-Each generation $g \in \{1 \dots G\}$ proceeds through five phases:
+The system executes across three operational phases:
 \begin{enumerate}
-\item \textbf{Context Assembly and Generation:} The driver builds prompt packet $\mathcal{C}_g$ (Equation~\ref{eq:context_assembly}) containing the chosen prompt archetype, parent code $\mathcal{A}_{\text{parent}}$, and prior error traces. The model mutates the parent to produce $\mathcal{A}_{\text{child}}$.
-\item \textbf{Sanitization and Validation:} The harness extracts the code block using regular expressions and parses the AST. Scripts with unauthorized imports or blacklisted built-ins receive $\mathcal{F} = -10^9$ and terminate immediately.
-\item \textbf{Decoupled Execution:} The validated candidate executes inside an isolated worker under budget $B = 100\,000$ and timeout $T_{\text{max}} = 10.0\,\text{s}$. The candidate receives noisy values $f_{\text{noisy}}(x_k)$ (Equation~\ref{eq:wrapper_noise_return}), while the background harness logs uncorrupted spatial error $\Delta f(x_k)$ (Equation~\ref{eq:clean_distance_metric}).
-\item \textbf{Error Handling and Oracle Scoring:} If execution fails or times out, the run receives tiered penalty $\mathcal{F}_{\text{failure}}$ (Equation~\ref{eq:failure_penalties}), and the formatted traceback appends to $\mathcal{T}_{\text{feedback}}$. If execution completes, final coordinate $\mathbf{x}^*$ is evaluated on clean oracle $f_{\text{clean}}(\mathbf{x}^*)$ to assign scalar fitness $\mathcal{F}(\mathcal{A}_{\text{child}})$ via Equation~\ref{eq:meta_fitness_score}.
-\item \textbf{Selection and Parent Resampling:} Child fitness $\mathcal{F}(\mathcal{A}_{\text{child}})$ is compared against incumbent score $\bar{\mathcal{F}}_{\text{parent}}$. If $\mathcal{F}(\mathcal{A}_{\text{child}}) > \bar{\mathcal{F}}_{\text{parent}}$, the child becomes the candidate parent. The incumbent is re-evaluated across $K = 3$ stochastic runs to update baseline $\bar{\mathcal{F}}_{\text{parent}}$ (Equation~\ref{eq:parent_resampling}), and the history archive $\mathcal{H}_{1 \dots g}$ logs the step.
+    \item \textbf{Initialization:} The pipeline ingests problem parameters, search dimensionality $D$, and prompt scaffolding configurations to construct the initial system specification.
+    \item \textbf{Evolutionary Discovery Loop:} Across the generational horizon $G$, the engine runs four linked stages:
+    \begin{itemize}
+        \item \textit{Code Mutation:} The language model acts as a semantic variation operator, mutating incumbent source code $\mathcal{A}_{\text{parent}}$ to generate offspring algorithm $\mathcal{A}_{\text{child}}$.
+    \item \textit{Sandboxed Execution:} The candidate executes in a detached worker process under memory bounds, a synthesis evaluation budget of $B_{\text{synth}} = 1{,}000{,}000$, and a 30.0-second wall-clock limit, receiving noisy evaluations $f_{\text{noisy}}(x_k)$ while the harness tracks clean spatial gap $\Delta y = |f_{\text{clean}}(\mathbf{x}^*) - f^*|$.
+    
+    \item \textit{Diagnostic Recovery:} Syntax violations, process timeouts, or runtime numerical crashes trigger tiered fitness penalties and feed formatted Python tracebacks into context buffer $\mathcal{T}_{\text{feedback}}$.
+        \item \textit{Resampling and Selection:} The incumbent parent undergoes $K=3$ stochastic re-evaluations to update baseline $\bar{\mathcal{F}}_{\text{parent}}$, after which candidate fitness determines replacement and history archive $\mathcal{H}_{1 \dots g}$ updates.
+    \end{itemize}
+    \item \textbf{Artifact Delivery:} Upon budget exhaustion, the framework exports the champion noise-resilient heuristic alongside relational database records and AST logs for downstream benchmarking.
 \end{enumerate}
-
-
 
 %-------------------------------------------------------------------------------
 \section{Noise Modeling}\label{sec:noise_modeling}
@@ -63,9 +68,10 @@ This deviation spans $4\%$ of the total function range. Because peak elevation g
 
 We resolve these discrepancies using a Heteroscedastic Optimality-Gap Noise Model. Rather than scaling variance against arbitrary raw function values, variance is tied directly to the distance from the global minimum. For any coordinate $x_k \in \mathbb{R}^D$ queried at step $k$, the local standard deviation $\sigma_{\text{dynamic}}(x_k)$ scales strictly with the absolute optimality gap:
 \begin{equation}\label{eq:proportional_dynamic_std}
-    \sigma_{\text{dynamic}}(x_k) = \text{CV} \cdot \left| f_{\text{clean}}(x_k) - f(x^*) \right|
+    \sigma_{\text{dynamic}}(x_k) = \text{CV} \cdot \left| f_{\text{clean}}(x_k) - f^* \right|
 \end{equation}
-where $\text{CV} \ge 0$ parameterizes the noise severity (corresponding to the standard deviation scale in the execution wrapper), and $\left| f_{\text{clean}}(x_k) - f(x^*) \right|$ is the true spatial error.
+where $\text{CV} \ge 0$ parameterizes the noise severity (corresponding to the standard deviation scale in the execution wrapper), and $\left| f_{\text{clean}}(x_k) - f^* \right|$ is the true spatial error.
+
 
 The benchmark harness preserves the true minimum $f(x^*)$ internally while hiding it from the generated Python script. At evaluation step $k$, the candidate receives a corrupted scalar observation:
 \begin{equation}\label{eq:proportional_gaussian_noise}
@@ -110,9 +116,9 @@ As illustrated in Figure~\ref{fig:f21_noise_distortion}, homoscedastic additive 
 
 To evaluate behavior on large-scale, ill-conditioned geometries, consider BBOB function $f_8$ (Rosenbrock). Benchmark instances apply spatial translations $x^* \in \mathbb{R}^D$ and orthogonal rotation matrices $R \in \mathbb{R}^{D \times D}$ to eliminate coordinate alignment \cite{Hansen2010}:
 \begin{equation}\label{eq:bbob_f8_formula}
-    f_8(x) = \sum_{i=1}^{D-1} \left[ 100 \cdot \left( y_{i+1} - y_i^2 \right)^2 + (1 - y_i)^2 \right] + f_{\text{opt}}
+    f_8(x) = \sum_{i=1}^{D-1} \left[ 100 \cdot \left( y_{i+1} - y_i^2 \right)^2 + (1 - y_i)^2 \right] + f^*
 \end{equation}
-where $y = \max\left(1, \frac{\sqrt{D}}{8}\right) R (x - x^*) + \mathbf{1}$, $\mathbf{1} \in \mathbb{R}^D$ is a vector of ones, and $f_{\text{opt}} \in \mathbb{R}$ is the target minimum.
+where $y = \max\left(1, \frac{\sqrt{D}}{8}\right) R (x - x^*) + \mathbf{1}$, $\mathbf{1} \in \mathbb{R}^D$ is a vector of ones, and $f^* \in \mathbb{R}$ is the target minimum value.
 
 The term $100 \cdot (y_{i+1} - y_i^2)^2$ forms a steep parabolic valley, pushing boundary deviations $f_{\text{clean}}(x_k) - f_{\text{opt}}$ up to $10^3$. Setting $\text{CV} = 0.1$, exploration along domain boundaries where $f_{\text{clean}}(x_k) - f_{\text{opt}} \approx 10^3$ sets the standard deviation to:
 \begin{equation}\label{eq:f8_dynamic_std_boundary}
@@ -136,24 +142,28 @@ Figure~\ref{fig:f8_noise_distortion} confirms this scaling behavior. On steep ou
 \end{figure}
 
 %===============================================================================
-% Section 4.2: Evaluator Architecture and Execution Lifecycle
+% Section 4.2: Evaluator Architecture
 %===============================================================================
 
-\section{Evaluator Architecture and Execution Lifecycle}\label{sec:evaluator_architecture}
+\section{Evaluator Architecture}\label{sec:evaluator_architecture}
 
-The evaluation harness governs execution containment, runtime exception handling, and ground-truth fitness assignment for candidate optimization routines \cite{LLaMEA2024}. Operating as an isolated wrapper around the benchmark objective, it intercepts execution faults and calculates true spatial convergence to guide the $(1+1)$ evolutionary search \cite{Arnold2003, Jin2005}.
+The evaluation harness manages execution containment, runtime exception logging, and ground-truth fitness assignment for candidate optimization routines \cite{LLaMEA2024}. Operating as an isolated wrapper around the objective problem, it executes synthesized heuristics, catches fatal runtime faults, and computes clean spatial convergence to steer the $(1+1)$ evolutionary search \cite{Arnold2003, Jin2005}.
 
-Every heuristic synthesized by the language model must adhere to a standardized functional interface:
+Every heuristic emitted by the language model must implement a standard functional entry point:
 \begin{equation}\label{eq:candidate_interface_call}
     \mathbf{x}^*, y_{\text{raw}} = \operatorname{solve}(f, D, B_{\text{synth}}, \mathbf{lb}, \mathbf{ub})
 \end{equation}
-where $f$ denotes the callable objective wrapper, $D \in \{2, 3, 5\}$ specifies the continuous dimension, $B_{\text{synth}} = 1{,}000$ defines the function call budget during evolutionary synthesis, and $\mathbf{lb}, \mathbf{ub} \in \mathbb{R}^D$ define hypercube domain boundaries ($[-5.0, 5.0]^D$) \cite{Hansen2010, LLaMEA2024}.
+where $f$ denotes the continuous objective wrapper, $D \in \{2, 3, 5\}$ specifies coordinate dimensionality, $B_{\text{synth}} = 1{,}000{,}000$ sets the function evaluation budget for synthesis, and $\mathbf{lb}, \mathbf{ub} \in \mathbb{R}^D$ set the hypercube domain bounds ($[-5.0, 5.0]^D$) \cite{Hansen2010, LLaMEA2024}.
 
-During synthesis, candidate algorithms execute against the target optimization instance using exclusively the allocated budget of $B_{\text{synth}} = 1{,}000{,}000$ function evaluations \cite{LLaMEA2024}. Throughout the run, the heuristic interacts strictly with corrupted observations $f_{\text{noisy}}(x_k)$ generated via the optimality-gap heteroscedastic noise model (Equation~\ref{eq:proportional_gaussian_noise}), operating without analytical gradients, clean objective feedback, or prior knowledge of the global minimum $f^*$ \cite{Hansen2010, Jin2005}.
+During synthesis, the candidate executes strictly against corrupted evaluations $f_{\text{noisy}}(x_k)$ generated through the scale-invariant optimality-gap noise model (Equation~\ref{eq:proportional_gaussian_noise}):
+\begin{equation}\label{eq:noisy_evaluation_call}
+    f_{\text{noisy}}(x_k) = f_{\text{clean}}(x_k) + \mathcal{N}\left(0, \left(\text{CV} \cdot |f_{\text{clean}}(x_k) - f^*|\right)^2\right)
+\end{equation}
+The parameter $\text{CV} \in \{0.0, 0.05\}$ scales the perturbation variance relative to the distance from the global minimizer $f^*$ \cite{Jin2005}. Candidate routines receive no analytical gradients, uncorrupted objective values $f_{\text{clean}}(x_k)$, or prior knowledge of $f^*$ \cite{Hansen2010}.
 
-Upon exhausting its allocation of $B_{\text{synth}}$ evaluations, the candidate returns its best-identified spatial coordinate $\mathbf{x}^* \in \mathbb{R}^D$ alongside its self-reported objective scalar $y_{\text{raw}} \in \mathbb{R}$ \cite{LLaMEA2024}. The evaluation harness discards $y_{\text{raw}}$ unconditionally \cite{LLaMEA2024}. In stochastic search environments, extreme negative noise perturbations ($z_k \ll 0$) can generate deceptive objective drops; accepting self-reported values would allow unconverged points that benefited from fortunate stochastic draws to establish artificial parent baselines, inducing false elitism and permanently stalling evolutionary progress \cite{Jin2005, Qian2020}.
+Upon exhausting budget $B_{\text{synth}} = 1{,}000{,}000$, the algorithm returns its spatial coordinate estimate $\mathbf{x}^* \in \mathbb{R}^D$ and self-reported objective scalar $y_{\text{raw}} \in \mathbb{R}$ \cite{LLaMEA2024}. The harness discards $y_{\text{raw}}$ unconditionally \cite{LLaMEA2024}. Extreme negative stochastic perturbations ($z_k \ll 0$) produce spurious objective drops. Accepting self-reported values allows unconverged candidate solutions with fortunate noise draws to anchor the parent baseline, inducing false elitism that stalls search progress across subsequent generations \cite{Jin2005, Qian2020}.
 
-To compute an uncorrupted selection signal and enforce strict anti-hallucination guarantees within the LLaMEA $(1+1)$ evolutionary loop \cite{LLaMEA2024}, the evaluator overrides self-reported outputs by intercepting the candidate coordinate $\mathbf{x}^*$. The harness verifies boundary compliance ($\mathbf{x}^* \in [\mathbf{lb}, \mathbf{ub}]^D$) and numerical finiteness ($\texttt{NaN}$, $\texttt{Inf}$ checks) before evaluating $\mathbf{x}^*$ directly on the clean objective oracle \cite{LLaMEA2024}:
+To calculate an uncorrupted selection signal, the harness captures candidate coordinate $\mathbf{x}^*$, verifies domain feasibility ($\mathbf{x}^* \in [\mathbf{lb}, \mathbf{ub}]^D$), and screens for non-finite entries ($\texttt{NaN}$, $\texttt{Inf}$). It queries the uncorrupted analytical oracle directly at coordinate $\mathbf{x}^*$ \cite{LLaMEA2024}:
 \begin{equation}\label{eq:clean_oracle_query}
     y_{\text{clean}} = f_{\text{clean}}(\mathbf{x}^*)
 \end{equation}
@@ -161,11 +171,11 @@ The underlying distance to the known analytical minimum is quantified via the ab
 \begin{equation}\label{eq:clean_spatial_gap}
     \Delta y = |y_{\text{clean}} - f^*|
 \end{equation}
-While standard foundational LLaMEA aggregates the Area Over the Convergence Curve (AOCC) across deterministic multi-function suites \cite{LLaMEA2024}, our single-problem stochastic discovery engine scores individual candidate algorithms via the negated optimality gap:
+The single-problem stochastic discovery engine scores individual candidates via the negated gap:
 \begin{equation}\label{eq:fitness_assignment}
     \mathcal{F} = -\Delta y = -|y_{\text{clean}} - f^*|
 \end{equation}
-Because the $(1+1)$ selection rule in LLaMEA maximizes fitness ($\mathcal{A}_{\text{parent}}^{(g+1)} \gets \mathcal{A}_{\text{child}}^{(g)} \iff \mathcal{F}(\mathcal{A}_{\text{child}}) \ge \mathcal{F}(\mathcal{A}_{\text{parent}})$), driving $\mathcal{F} \to 0$ directly minimizes the true distance to the global minimizer. Evaluating candidate solutions through the clean oracle while restricting internal search logic strictly to corrupted feedback $f_{\text{noisy}}(x_k)$ decouples genuine spatial optimization from transient noise spikes, eliminating false elitism at the meta-selection level \cite{Jin2005, Qian2020, LLaMEA2024}.
+The $(1+1)$ selection rule updates the incumbent according to $\mathcal{A}_{\text{parent}}^{(g+1)} \gets \mathcal{A}_{\text{child}}^{(g)}$ if and only if $\mathcal{F}(\mathcal{A}_{\text{child}}) \ge \mathcal{F}(\mathcal{A}_{\text{parent}})$. Restricting search routines to corrupted inputs while computing meta-selection over uncorrupted outputs separates spatial descent from stochastic noise fluctuations, removing false elitism at the selection boundary \cite{Jin2005, Qian2020, LLaMEA2024}. Successful executions reset the consecutive failure tracker ($C_{\text{failures}} \gets 0$) \cite{LLaMEA2024}.
 
 \begin{figure}[htbp]
     \centering
@@ -176,22 +186,22 @@ Because the $(1+1)$ selection rule in LLaMEA maximizes fitness ($\mathcal{A}_{\t
     \label{fig:evaluator_lifecycle_flow}
 \end{figure}
 
-Beyond passive exception handling, the evaluation harness incorporates an active evolutionary stagnation monitor to prevent the $(1+1)$ meta-search from stalling on unviable algorithmic trajectories \cite{LLaMEA2024}. Because single-parent evolution strategies lack demographic population diversity, the generative model can occasionally become trapped in repetitive, localized failure loops—iteratively generating minor syntactical mutations of an incumbent architecture that repeatedly crash or fail to achieve measurable performance gains.
+The evaluation harness integrates an evolutionary stagnation monitor to prevent the single-parent search from stalling on unviable algorithmic branches \cite{LLaMEA2024}. Because $(1+1)$ evolution strategies lack population diversity, the generative model occasionally loops over minor syntactic variations of an incumbent architecture that repeatedly crash or fail to advance.
 
-To supervise and steer the evolutionary trajectory, the evaluator maintains an internal consecutive failure counter, denoted as $C_{\text{failures}}$. The state of $C_{\text{failures}}$ updates dynamically across generational transitions:
+The evaluator tracks this behavior via consecutive failure counter $C_{\text{failures}}$:
 \begin{itemize}
-    \item \textbf{Valid Execution and Counter Reset:} When an offspring executes successfully within domain and budget constraints, the evaluator computes its clean oracle fitness and resets the tracker ($C_{\text{failures}} \gets 0$).
-    \item \textbf{Failure Interception and Counter Increment:} When a candidate script fails static AST compilation, triggers an unhandled runtime exception, or exceeds execution deadlines, the sandbox assigns a tiered failure penalty (as detailed in Section~\ref{sec:method_sandbox_defenses}) and increments the tracker ($C_{\text{failures}} \gets C_{\text{failures}} + 1$).
+    \item \textbf{Valid Execution and Counter Reset:} When an offspring executes within domain and budget limits, the evaluator assigns clean oracle fitness and resets the tracker ($C_{\text{failures}} \gets 0$).
+    \item \textbf{Failure Interception and Counter Increment:} If a candidate fails AST parsing, triggers an unhandled runtime error, or exceeds execution deadlines, the sandbox assigns a tiered failure penalty and increments the counter ($C_{\text{failures}} \gets C_{\text{failures}} + 1$).
 \end{itemize}
 
-When the monitor detects three consecutive non-improving or crashing generations ($C_{\text{failures}} \ge 3$), it classifies the evolutionary search as stagnated and dynamically injects a structural $[\textsc{Meta-Feedback}]$ directive into the feedback buffer $\mathcal{T}_{\text{feedback}}$ \cite{LLaMEA2024}:
+When the counter reaches $C_{\text{failures}} \ge 3$, the system identifies a search stall and injects an explicit $[\textsc{Meta-Feedback}]$ directive into context buffer $\mathcal{T}_{\text{feedback}}$ \cite{LLaMEA2024}:
 \begin{quote}
     \footnotesize\ttfamily
     $[\textsc{Meta-Feedback}]$: The last 3 generations failed due to repeated execution errors or lack of progress. Abandon the current step-adaptation logic. Pivot immediately to a robust population-based heuristic: implement a vectorized Particle Swarm Optimization (PSO) or a covariance-matrix inspired Gaussian mutation strategy with explicit boundary clamping and numerical stability guards ($\epsilon = 10^{-8}$) \cite{Kennedy1995, Hansen2001}.
 \end{quote}
-This intervention forces an exploratory paradigm shift within the prompt context, instructing the foundation model to abandon failing algorithmic primitives and pivot toward established continuous metaheuristic archetypes \cite{Kennedy1995, Hansen2001, LLaMEA2024}.
+This intervention redirects the prompt context, prompting the foundation model to discard failing mutation logic and adopt alternative continuous metaheuristic structures \cite{Kennedy1995, Hansen2001, LLaMEA2024}.
 
-Finally, all evaluated candidate routines are committed to persistent dual-layer storage alongside complete operational telemetry \cite{LLaMEA2024}. Executable Python source code is preserved within the content-addressed source registry, while uncorrupted error gaps, wall-clock execution durations, exception tracebacks, and stagnation intervention flags are appended to the relational database \cite{LLaMEA2024}. Preserving these complete generational artifacts enables downstream AST morphological audits, post-hoc benchmarking gauntlets, and non-parametric statistical hypothesis testing without requiring repeated execution of the generative synthesis loop \cite{LLaMEA2024, deNobel2024}.
+Evaluated routines are committed to dual-layer storage with complete execution telemetry \cite{LLaMEA2024}. Python source code is stored in the content-addressed source registry, while uncorrupted error gaps, wall-clock runtimes, exception logs, and stagnation flags populate the relational database \cite{LLaMEA2024}. Storing these records allows post-hoc benchmarking, AST complexity analysis, and statistical hypothesis testing without re-executing the generative synthesis loop \cite{LLaMEA2024, deNobel2024}.
 
 %===============================================================================
 % Section 4.3: Execution Sandbox and Code Compilation Engine
@@ -199,34 +209,19 @@ Finally, all evaluated candidate routines are committed to persistent dual-layer
 
 \section{Execution Engine}\label{sec:execution_engine}
 
-Autonomous algorithm generation runs unverified Python code dynamically at each generation, risking CPU deadlocks, memory leaks, and unintended host operating system calls \cite{LLaMEA2024}. The compilation engine mitigates these failure modes through Abstract Syntax Tree (AST) validation, detached namespace isolation, and strict wall-clock time bounding \cite{LLaMEA2024}.
+Dynamic synthesis of unverified Python code introduces practical risks of process hangs, worker memory exhaustion, and unauthorized operating system calls \cite{LLaMEA2024}. The compilation engine handles these conditions through static AST filtering, isolated namespace execution, and hard wall-clock timeouts \cite{LLaMEA2024}.
 
-\textbf{Structural Compilation and AST Security Sanitization.}
-The compiler takes the candidate code string, target dimension $D$, and execution settings \cite{LLaMEA2024}. Before compilation, the raw string passes through an AST node visitor \cite{LLaMEA2024}:
-\begin{itemize}
-    \item \textbf{AST Parsing and Block Verification:} The parser walks the AST hierarchy, rejecting empty method bodies, malformed indentation blocks, or missing \texttt{pass} statements prior to byte compilation \cite{LLaMEA2024}.
-    \item \textbf{Scientific Library Whitelisting and Solver Restrictions:} Standard numerical modules (\texttt{numpy}, \texttt{math}, \texttt{random}) are permitted \cite{LLaMEA2024}. Black-box optimization solvers---specifically subpackages within \texttt{scipy.optimize}---are explicitly blocked to force the model to synthesize custom search logic.
-    \item \textbf{System Calls and Dynamic Primitives:} Operating system modules (\texttt{os}, \texttt{sys}, \texttt{subprocess}, \texttt{shutil}, \texttt{socket}, \texttt{importlib}) and dynamic evaluation primitives (\texttt{eval}, \texttt{exec}, \texttt{open}, \texttt{compile}, \texttt{\_\_import\_\_}) cause immediate AST rejection \cite{LLaMEA2024}.
-    \item \textbf{Isolated Namespace Execution:} Code passing security validation compiles into an isolated dictionary namespace, preventing variables from leaking into the host runtime environment \cite{LLaMEA2024}.
-\end{itemize}
+Prior to byte compilation, raw candidate source strings pass through an Abstract Syntax Tree (AST) visitor alongside problem dimension $D$ and execution settings \cite{LLaMEA2024}. The visitor screens code structure, rejecting empty method definitions, malformed blocks, or missing \texttt{pass} statements. Standard numerical dependencies (\texttt{numpy}, \texttt{math}, \texttt{random}) are whitelisted, whereas black-box solvers---specifically subpackages within \texttt{scipy.optimize}---are explicitly blocked to prevent candidate routines from delegating search logic to pre-existing numerical libraries. Operating system modules (\texttt{os}, \texttt{sys}, \texttt{subprocess}, \texttt{shutil}, \texttt{socket}, \texttt{importlib}) and dynamic execution primitives (\texttt{eval}, \texttt{exec}, \texttt{open}, \texttt{compile}, \texttt{\_\_import\_\_}) trigger immediate AST rejection. Validated code compiles into an isolated dictionary namespace, preventing variable leakage into the host environment.
 
-\textbf{Protected Sandboxed Execution and Timeout Interception.}
-Generated heuristics occasionally enter infinite loops, encounter singular covariance updates, or trigger recursive step expansions \cite{LLaMEA2024}. Each candidate runs in a detached worker process governed by an enforced 30.0-second limit ($T_{\text{max}} = 30.0\,\text{s}$) \cite{LLaMEA2024}. When runtime exceeds $T_{\text{max}}$, the harness intercepts the stall, terminates the worker via process signals, and logs an \texttt{AlgorithmTimeoutException} \cite{LLaMEA2024}. Floating-point warnings (underflows, invalid square roots, zero divisions) are caught via runtime hooks, logging numerical anomalies while preventing console pollution \cite{LLaMEA2024}.
+Candidate routines execute inside a detached worker process bound by a 30.0-second limit ($T_{\text{max}} = 30.0\,\text{s}$) to intercept non-terminating loops and divergent matrix factorizations \cite{LLaMEA2024}. Exceeding this window triggers a process termination signal and logs an \texttt{AlgorithmTimeoutException} \cite{LLaMEA2024}. Runtime error hooks capture floating-point warnings (underflows, invalid square roots, zero divisions), preserving diagnostic logs while avoiding terminal pollution \cite{LLaMEA2024}.
 
-\textbf{Output Unpacking, Boundary Normalization, and Budget Overrun Verification.}
-When execution finishes within the wall-clock threshold, the harness verifies the returned data structure:
-\begin{enumerate}
-    \item \textbf{Result Unpacking and Array Casting:} The runner extracts spatial vector $\mathbf{x}^*$ and scalar $y_{\text{raw}}$ \cite{LLaMEA2024}. If the script returns scalar values or irregular nested structures, $\mathbf{x}^*$ is cast to a continuous 1D NumPy array ($\mathbf{x}^* \in \mathbb{R}^D$) \cite{LLaMEA2024}.
-    \item \textbf{Domain Bounds and Numerical Finiteness:} The coordinate vector is checked for spatial validity \cite{LLaMEA2024}. The return is marked invalid if $\mathbf{x}^* \notin [\mathbf{lb}, \mathbf{ub}]^D$ or if numerical overflow produces non-finite values ($\texttt{NaN}$, $\texttt{Inf}$) \cite{LLaMEA2024}.
-    \item \textbf{Budget Overrun Bounds:} An internal counter tracks function calls $k$. To prevent heuristics from exceeding their allocated budget, the engine asserts:
-    \begin{equation}\label{eq:budget_overrun_check}
-        k \le \lambda_{\text{tol}} \cdot B_{\text{synth}}
-    \end{equation}
-    where $\lambda_{\text{tol}} = 1.10$ defines a 10\% tolerance margin over budget $B_{\text{synth}} = 1{,}000$. Candidates exceeding this bound are disqualified to maintain parity across evaluations \cite{LLaMEA2024}.
-\end{enumerate}
+After execution, the harness unpacks coordinate $\mathbf{x}^*$ and scalar $y_{\text{raw}}$, casting $\mathbf{x}^*$ into a 1D NumPy array ($\mathbf{x}^* \in \mathbb{R}^D$) \cite{LLaMEA2024}. The coordinate vector is screened for domain compliance $[\mathbf{lb}, \mathbf{ub}]^D$ and checked for non-finite values ($\texttt{NaN}$, $\texttt{Inf}$) \cite{LLaMEA2024}. Cumulative function evaluations $k$ are checked against an overrun threshold:
+\begin{equation}\label{eq:budget_overrun_check}
+    k \le \lambda_{\text{tol}} \cdot B_{\text{synth}}
+\end{equation}
+where $\lambda_{\text{tol}} = 1.10$ permits a 10\% margin over synthesis budget $B_{\text{synth}} = 1{,}000{,}000$. Candidates exceeding this bound are disqualified to maintain consistent sample budgets across runs.
 
-\textbf{Tiered Diagnostic Scoring and Traceback Propagation.}
-Candidates failing AST checks, exceeding execution deadlines, or raising unhandled runtime errors receive tiered penalty scores \cite{LLaMEA2024}:
+Candidates failing AST parsing, exceeding execution deadlines, or raising runtime exceptions receive tiered penalty scores \cite{LLaMEA2024}:
 \begin{equation}\label{eq:failure_penalties}
 \mathcal{F}_{\text{failure}} =
 \begin{cases}
@@ -235,10 +230,9 @@ Candidates failing AST checks, exceeding execution deadlines, or raising unhandl
 -1.0 \times 10^9, & \text{if AST Validation, Prohibited Library Import, or Syntax Failure}
 \end{cases}
 \end{equation}
-This tiered assignment maintains clear selection pressure across generations \cite{LLaMEA2024}. Valid but slow routines outrank crashing code, which in turn outranks unparseable syntax \cite{LLaMEA2024}.
+This tiered assignment maintains selection pressure across generations \cite{LLaMEA2024}. Valid but slow routines outrank crashing code, which in turn outranks unparseable syntax \cite{LLaMEA2024}.
 
-For runtime exceptions, the parser extracts the failure line and exception message (e.g., \texttt{LinAlgError: Matrix is singular at line 48}) \cite{LLaMEA2024}. This diagnostic trace is appended to buffer $\mathcal{T}_{\text{feedback}}$, enabling closed-loop semantic self-debugging in subsequent generations \cite{Chen2023, LLaMEA2024}.
-
+When runtime errors occur, the parser extracts the failure line and exception message (e.g., \texttt{LinAlgError: Matrix is singular at line 48}) \cite{LLaMEA2024}. This diagnostic trace is appended to context buffer $\mathcal{T}_{\text{feedback}}$, enabling closed-loop semantic self-repair in subsequent evolutionary generations \cite{Chen2023, LLaMEA2024}.
 
 %===============================================================================
 % Section 4.4: Evolutionary Code Discovery and Parent Resampling
@@ -257,7 +251,7 @@ In each generation $g \in \{1 \dots G\}$, the generative model synthesizes a sin
 \end{equation}
 The prompt context integrates four informational streams:
 \begin{enumerate}
-    \item \textbf{System Specification ($\mathcal{P}_{\text{system}}$):} Enforces the black-box interface contract (Equation~\ref{eq:candidate_interface_call}), setting dimensional boundaries ($[-5.0, 5.0]^D$) and the synthesis evaluation ceiling ($B_{\text{synth}} = 1{,}000$) \cite{Hansen2010, LLaMEA2024}.
+    \item \textbf{System Specification ($\mathcal{P}_{\text{system}}$):} Enforces the black-box interface contract (Equation~\ref{eq:candidate_interface_call}), setting dimensional boundaries ($[-5.0, 5.0]^D$) and the synthesis evaluation ceiling ($B_{\text{synth}} = 1{,}000{,}000$) \cite{Hansen2010, LLaMEA2024}.
     \item \textbf{Historical Archive ($\mathcal{H}_{1 \dots g-1}$):} An indexed registry recording previously generated algorithm identifiers and their uncorrupted error scores, acting as short-term tabu memory to prevent redundant code synthesis \cite{LLaMEA2024}.
     \item \textbf{Incumbent State ($\mathcal{T}_{\text{feedback}}$):} Contains the complete Python source code of active parent $\mathcal{A}_{\text{parent}}$, its uncorrupted oracle error $\Delta y_{\text{clean}}$, and diagnostic traceback frames from prior runtime faults \cite{Chen2023, LLaMEA2024}.
     \item \textbf{Evolutionary Directive ($\mathcal{I}_{\text{directive}}$):} Scaffolding instructions (ablated according to the \textsc{Baseline}, \textsc{Guided}, \textsc{Thinking}, or \textsc{Vectorization} strategy) prompting the model to diagnose failure modes and synthesize algorithmic revisions \cite{LLaMEA2024}.

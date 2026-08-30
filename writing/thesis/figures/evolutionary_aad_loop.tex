@@ -1,93 +1,119 @@
 \begin{tikzpicture}[
-    auto, 
-    >=Stealth, 
-    scale=0.88, 
-    every node/.style={transform shape},
-    % Custom Style Definitions
-    llmbox/.style={rectangle, draw=purple!80!black, fill=purple!8, text width=3.4cm, align=center, rounded corners=5pt, minimum height=1.3cm, font=\small},
-    sandbox/.style={rectangle, draw=blue!80!black, fill=blue!6, text width=3.4cm, align=center, rounded corners=5pt, minimum height=1.3cm, font=\small},
-    noisebox/.style={rectangle, draw=teal!80!black, fill=teal!8, text width=3.2cm, align=center, rounded corners=5pt, minimum height=1.3cm, font=\small},
-    evalbox/.style={rectangle, draw=orange!80!black, fill=orange!8, text width=3.4cm, align=center, rounded corners=5pt, minimum height=1.3cm, font=\small},
-    safetybox/.style={rectangle, draw=red!70!black, fill=red!6, text width=3.2cm, align=center, rounded corners=5pt, minimum height=1.3cm, font=\small},
-    groupcontainer/.style={draw=gray!50, dashed, fill=gray!4, rounded corners=8pt, inner sep=10pt}
+    font=\footnotesize,
+    >=Stealth,
+    % --- Core Node Styles ---
+    ioNode/.style={
+        rectangle, draw=black!80, fill=yellow!15,
+        text width=13cm, align=center, rounded corners=4pt,
+        inner sep=8pt, thick
+    },
+    loopNode/.style={
+        rectangle, draw=black!80, thick, rounded corners=4pt,
+        align=center, inner sep=8pt
+    },
+    genNode/.style={loopNode, fill=red!10, text width=5.9cm, minimum height=2.3cm},
+    evalNode/.style={loopNode, fill=blue!10, text width=5.9cm, minimum height=2.3cm},
+    contextNode/.style={loopNode, fill=purple!10, text width=13cm, minimum height=1.9cm},
+    decision/.style={
+        diamond, draw=black!80, fill=gray!15, thick,
+        aspect=3.2, inner sep=4pt, align=center, font=\scriptsize,
+        minimum width=6.2cm
+    },
+    outNode/.style={
+        rectangle, draw=black!80, fill=green!15,
+        text width=13cm, align=center, rounded corners=4pt,
+        inner sep=8pt, thick, font=\footnotesize\bfseries
+    },
+    arrow/.style={->, >=stealth, thick, draw=black!75},
+    fbArrow/.style={->, >=stealth, thick, draw=purple!80!black},
+    % edge labels sit on a white "patch" so crossing lines never look
+    % like they strike through the text
+    elbl/.style={font=\scriptsize, fill=white, inner sep=2pt, rounded corners=1pt},
+    elblB/.style={elbl, font=\scriptsize\bfseries}
 ]
 
-    % =========================================================================
-    % NODES PLACEMENT
-    % =========================================================================
-
-    % 1. Generative LLM Node (Top Left)
-    \node [llmbox] (llm) {
-        \textbf{Generative Foundation Model}\\ 
-        \scriptsize Context Window $\mathcal{C}_g$\\
-        \tiny Refactors algorithm code $\mathcal{A}_{\text{child}}$
+    % 1. System Inputs (Top Banner)
+    \node [ioNode] (inputs) {
+        \textbf{System Inputs \& Experimental Configuration} \\[3pt]
+        \scriptsize Target Continuous Problem $(f_p, D, \sigma)$ \quad $\bullet$ \quad
+        Prompt Scaffolding Archetype ($\mathcal{P}$) \quad $\bullet$ \quad
+        Evaluation Budget ($B_{\text{synth}}$)
     };
 
-    % 2. AST Validation & Security Gate
-    \node [safetybox, right=1.2cm of llm] (ast) {
-        \textbf{AST Validation \& Safety}\\ 
-        \scriptsize Whitelist imports / Timeout\\
-        \tiny Catch Syntax/Tracebacks
+    % 2. Generative Foundation Model (Left Inner Box)
+    \node [genNode, below left=1.8cm and 0cm of inputs.south, anchor=north west,
+           xshift=0cm] (llm) {
+        \textbf{Generative Foundation Model} \\[4pt]
+        \scriptsize Semantic Mutation Operator \\[2pt]
+        \scriptsize Synthesizes Candidate Heuristic $\mathcal{A}_{\text{child}}$
     };
 
-    % 3. Sandbox Calibration & Interceptor
-    \node [sandbox, right=1.2cm of ast] (sandbox_node) {
-        \textbf{Stochastic Execution Sandbox}\\ 
-        \scriptsize BBOB Wrapper Problem $f$\\
-        \tiny Intercepts calls at $x_k \in \mathbb{R}^D$
+    % 3. Evaluator Component Harness (Right Inner Box)
+    \node [evalNode, right=1.4cm of llm, anchor=north west] (evaluator) {
+        \textbf{Evaluator Component Harness} \\[4pt]
+        \scriptsize Sandboxed Execution \& Defensive Interception \\[2pt]
+        \scriptsize Ground-Truth Oracle Scoring \& Telemetry
     };
 
-    % 4. Landscape-Scaled Noise Engine (Lower Right)
-    \node [noisebox, below=1.8cm of sandbox_node] (noise) {
-        \textbf{Landscape Noise Layer}\\ 
-        \scriptsize $\sigma_{\text{scaled}} = \gamma \cdot S$\\
-        \tiny Adds $z \sim \mathcal{N}(0, \sigma_{\text{scaled}}^2)$
+    % 4. Context Builder & Selection (Bottom Wide Box)
+    \node [contextNode, below=1.7cm of $(llm.south)!0.5!(evaluator.south)$] (context) {
+        \textbf{Reflective Context Builder \& Selection Operator} \\[3pt]
+        \scriptsize $\bullet$ Updates Incumbent Parent Baseline ($\bar{\mathcal{F}}_{\text{parent}}$) via Stochastic Resampling ($K=3$) \\[1pt]
+        \scriptsize $\bullet$ Assembles Generation Context $\mathcal{C}_g$ (Performance History, Telemetry, Feedback Directives)
     };
 
-    % 5. Dual Evaluation & Resampling Engine
-    \node [evalbox, left=1.2cm of noise] (resampling) {
-        \textbf{Evaluation \& Resampling}\\ 
-        \scriptsize $K$-Pass Parent Mean $\bar{F}_{\text{parent}}$\\
-        \tiny Tracks uncorrupted $\Delta f(x_k)$
+    % 5. Termination Decision (Rhombus)
+    \node [decision, below=1.1cm of context] (termination) {
+        \textbf{Generational Horizon Exhausted?} ($g = G$)
     };
 
-    % 6. Prompt Assembly & Reflective Context
-    \node [llmbox, fill=purple!5, draw=purple!60, left=1.2cm of resampling] (context) {
-        \textbf{Context Builder}\\ 
-        \scriptsize $\mathcal{C}_g = \{\mathcal{P}_{\text{system}}, \mathcal{H}_{g-1}, \mathcal{T}_{\text{feedback}}\}$\\
-        \tiny Formulates mutation feedback
+    % 6. System Output (Bottom Banner)
+    \node [outNode, below=1.1cm of termination] (output) {
+        \textbf{Final System Output: Discovered Champion Algorithm ($\mathcal{A}^*$)} \\[3pt]
+        \scriptsize Validated Noise-Resilient Heuristic Source Script \& Generational Telemetry Records
     };
 
-    % =========================================================================
-    % CONTAINERS / STAGING BOUNDARIES
-    % =========================================================================
+    % Outer Group Container for the LLaMEA Loop
     \begin{scope}[on background layer]
-        \node [groupcontainer, fit=(sandbox_node) (noise) (resampling), label={[font=\bfseries\scriptsize, gray!80!black]below:Scaled Stochastic Execution Environment}] (env_group) {};
+        \node [draw=gray!50, dashed, fill=gray!3, rounded corners=8pt, inner sep=14pt,
+               fit=(llm) (evaluator) (context),
+               label={[font=\bfseries\scriptsize, gray!70!black]above:Iterative Evolutionary Discovery Loop (LLaMEA)}] (loopGroup) {};
     \end{scope}
 
-    % =========================================================================
-    % ARROWS AND FLOW CONNECTIONS
-    % =========================================================================
+    % --- Forward Pipeline Arrows ---
 
-    % LLM -> AST Safety
-    \draw [->, thick] (llm) -- node[above, font=\tiny, fill=white, inner sep=1pt] {Source Code $\mathcal{A}_{\text{child}}$} (ast);
+    % 1. Inputs into LLM entry — enters top edge, right of center so it
+    %    doesn't collide with the "No" loop that also lands on the top edge
+    \draw [arrow] (inputs.south) -- ++(0,-0.35)
+          -| ($(llm.north)+(1.3,0)$);
 
-    % AST -> Execution Sandbox
-    \draw [->, thick] (ast) -- node[above, font=\tiny, fill=white, inner sep=1pt] {Validated Code} (sandbox_node);
+    % 2. LLM -> Evaluator (clear horizontal channel, label sits above it)
+    \draw [arrow] (llm.east) -- node[elblB, above] {Offspring Code $\mathcal{A}_{\text{child}}$} (evaluator.west);
 
-    % AST Exception Feedback Loop
-    \draw [->, thick, red!70!black, dashed] (ast.south) -- ++(0,-0.3) -| node[below, pos=0.25, font=\tiny, fill=white, inner sep=1pt] {Runtime Traceback / Syntax Error} (context.north);
+    % 3. Evaluator -> Context Builder — drops from a point right-of-centre
+    %    on the evaluator's south edge into the context box's top-right
+    \draw [arrow] ($(evaluator.south)+(-0.6,0)$) -- ++(0,-0.45)
+          -| node[elbl, pos=0.75, above] {Scored Payload $(\mathcal{F}, \mathcal{T}_{\text{feedback}})$}
+          ($(context.north)+(2.6,0)$);
 
-    % Sandbox -> Noise Engine
-    \draw [->, thick] (sandbox_node) -- node[right, font=\tiny, fill=white, inner sep=1pt] {Query $x_k \to f_{\text{clean}}(x_k)$} (noise);
+    % 4. Context Builder -> LLM (Reflective Feedback Channel)
+    %    stays INSIDE the dashed loop box, entering the LLM's south edge
+    \draw [fbArrow] ($(context.north)+(-2.6,0)$) -- ++(0,0.5)
+          -| node[elblB, pos=0.35, above, text=purple!80!black] {Reflective Context $\mathcal{C}_g$}
+          (llm.south);
 
-    % Noise Engine -> Candidate Search Logic (Feedback Signal)
-    \draw [->, thick, teal!80!black] (noise) -- node[above, font=\tiny, fill=white, inner sep=1pt] {Noisy $f_{\text{noisy}}(x_k)$} (resampling);
+    % 5. Context Builder -> Termination Check
+    \draw [arrow] (context.south) -- (termination.north);
 
-    % Resampling / Fitness -> Context Builder
-    \draw [->, thick] (resampling) -- node[above, font=\tiny, fill=white, inner sep=1pt] {Scalar Score / Mean $\bar{F}$} (context);
+    % 6. Termination: Yes -> Output
+    \draw [arrow] (termination.south) -- node[elblB, right=2pt] {Yes} (output.north);
 
-    % Context Builder -> LLM
-    \draw [->, thick, purple!80!black] (context) -- node[left, font=\tiny, fill=white, inner sep=1pt] {Injected Prompt $\mathcal{C}_g$} (llm);
+    % 7. Termination: No -> outer cycle back to LLM.
+    %    Routed FAR left, outside the dashed box, and lands on the LLM's
+    %    top edge (left of center) so it never crosses the reflective
+    %    feedback arrow (#4) or the input arrow (#1).
+    \draw [arrow] (termination.west) -- ++(-2.6,0)
+          node[elblB, pos=0.5, above] {No ($g \gets g+1$)}
+          |- ($(llm.north)+(-1.3,0)$);
 
 \end{tikzpicture}
