@@ -12,6 +12,34 @@ class AlgorithmExecutor:
     """
     Responsible for executing candidate algorithms under strict timeout constraints.
     Delegates compilation and validation to CodeCompiler.
+
+    Workflow:
+                 code, name, dim, problem, budget
+                                │
+                                ▼
+              CodeCompiler.compile(code, name, dim)
+              • AST Parse & Sanitize (empty def bodies)
+              • Ban Check: scipy.optimize strictly blocked
+              • Isolated Namespace Execution & Class Instantiation
+                                │
+                                ▼
+              Sandboxed Execution with Timeout Protection
+              • func_timeout(timeout_seconds, runner)
+              • Warning Interception (np.seterr, catch_warnings)
+                                │
+           ┌────────────────────┴────────────────────┐
+        Success                                   Timeout
+    (returns result)                    (exceeds timeout_seconds)
+           │                                         │
+           ▼                                         ▼
+    1. Unpack & Normalize:                Raise AlgorithmTimeoutException
+       • (best_x, best_y) or float(best_y)
+       • Convert best_x to np.ndarray
+    2. Validate Finiteness (no NaN/inf)
+    3. Budget Overrun Check (> 1.10x)
+           │
+           ▼
+    Return (best_x, fitness)
     """
 
     def __init__(
