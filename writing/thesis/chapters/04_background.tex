@@ -1,8 +1,8 @@
 %-------------------------------------------------------------------------------
-% Chapter 2: Background and Related Work
+% Chapter 2: Background
 %-------------------------------------------------------------------------------
 
-\chapter{Background and Related Work}\label{chap:background}
+\chapter{Background}\label{chap:background}
 
 Continuous black-box optimization presents distinct failure modes when objective feedback is corrupted by stochastic noise. While Large Language Models (LLMs) can synthesize complete, executable search routines within Automated Algorithm Design (AAD) loops, these frameworks are typically evaluated under deterministic conditions. This chapter defines the mathematical formulation of continuous optimization under uncertainty, details how noise degrades classical heuristics, surveys literature on LLM-driven program evolution and prompt scaffolding, and isolates the research gap addressed in this work.
 
@@ -96,24 +96,62 @@ Direct numerical search frameworks such as EvoLLM \cite{Lange2024} query languag
 
 In continuous black-box domains, recent frameworks such as AutoEP \cite{AutoEP2026} extract Exploratory Landscape Analysis (ELA) features as prompt priors to direct LLM generation. While ELA features accelerate search discovery, the feedback loop depends on static pre-processing across noiseless surfaces. Concurrently, multi-agent pipelines such as Reflexion \cite{Shinn2023} demonstrate that feeding runtime stdout and compiler tracebacks back to the generator aids structural code synthesis. Chen et al.~\cite{Chen2023} showed that execution feedback improves Python function generation accuracy by up to 12\% while matching baselines that use ten times more generation samples.
 
-Structured prompt scaffolding provides an additional control layer for automated code synthesis. EvoPrompt \cite{Guo2023} treats natural language instructions as discrete optimization variables, applying evolutionary operators directly to prompt text. Promptomatix \cite{Murthy2025} wraps generation requests in guarded schemas to prevent syntactic drift. While these approaches enforce strict formatting in natural language tasks, their capacity to bias code mutation operators inside stochastic continuous domains remains unmeasured.
+Structured prompt scaffolding introduces deterministic constraints to natural language code synthesis. EvoPrompt \cite{Guo2023} optimizes prompt strings as discrete categorical variables, applying evolutionary operators directly to natural language instructions. Promptomatix \cite{Murthy2025} bounds generation steps within strict schema specifications to limit syntactic variation. While effective for standardized reasoning benchmarks, these scaffolding methods have not been evaluated as mutation operators within stochastic continuous domains.
 
-For source code synthesis, Abstract Syntax Tree (AST) metrics and Explainable AI (XAI) feature extraction provide structural feedback to guide LLM search \cite{LLaMEASAGE2026}. Augmenting system prompts with syntax metrics rather than scalar scores accelerates the discovery of continuous optimization heuristics in LLaMEA-SAGE \cite{LLaMEASAGE2026}. Van Stein \cite{vanStein2025} outlines a broader framework for explainable AAD, linking LLM code mutation with problem-class indicators to isolate the architectural features that produce performance gains. Literature surveys confirm that using language models as mutation operators forms the dominant approach for automated heuristic design \cite{ZhangSurvey2025}. However, current implementations of EvoPrompt, LLaMEA-SAGE, and related frameworks evaluate candidate algorithms exclusively on clean, deterministic objective functions.
+Source code synthesis benefits from structural feedback derived from Abstract Syntax Tree (AST) metrics and Explainable AI (XAI) feature extraction \cite{LLaMEASAGE2026}. Augmenting prompt contexts with concrete syntactic profiles accelerates heuristic discovery in LLaMEA-SAGE \cite{LLaMEASAGE2026}. Van Stein \cite{vanStein2025} formalizes this direction through an explainable AAD framework that maps LLM-driven code edits to problem-class characteristics, identifying structural features that drive performance gains. Surveys confirm that language models functioning as semantic mutation operators constitute the primary architecture in automated heuristic design \cite{ZhangSurvey2025}. However, frameworks such as EvoPrompt and LLaMEA-SAGE continue to benchmark candidate algorithms exclusively against noiseless, analytical objective functions.
 
-Evolutionary computation provides the mathematical foundation for these automated discovery loops \cite{Burke2013}. Classical Evolutionary Algorithms (EAs) iterate through variation, fitness evaluation, and environmental selection \cite{Burke2013}. In continuous optimization, multi-parent evolution strategies $(\mu/\mu_I, \lambda)\text{-ES}$ use population diversity to maintain stable progress \cite{Arnold2003, Jin2005}. Multi-parent recombination filters zero-mean evaluation noise to prevent step-size stagnation \cite{Arnold2003}. However, maintaining large populations $(\mu, \lambda)$ is computationally impractical during LLM code synthesis due to generation latency and context-window growth \cite{Jin2005}.
+Evolutionary Computation (EC) provides the theoretical foundation for this automated search process \cite{Eiben2015}. As formulated by Goldberg \cite{Goldberg1989} and Eiben and Smith \cite{Eiben2015}, classical Evolutionary Algorithms (EAs) navigate non-linear parameter spaces through four canonical phases: initialization, variation, fitness evaluation, and selection. An initial population $\mathcal{P}_0 = \{\theta_1, \dots, \theta_\mu\}$ of $\mu$ candidates is sampled across the search domain. Successive generational cycles apply stochastic variation operators. Recombination exchanges parameter sub-blocks between parent solutions, while mutation introduces localized perturbations to prevent premature convergence. An evaluation routine assigns a scalar fitness score $f(\theta)$ to each candidate, providing the quantitative metric for selection into population $\mathcal{P}_{g+1}$ \cite{Eiben2015}.
 
-Consequently, automated code discovery pipelines frequently adopt single-parent $(1+1)$ Evolution Strategies. The limitations of this design are formalized by Qian et al.~\cite{Qian2020}, who proved that standard $(1+1)$ selection fails on noisy objective surfaces when point queries cannot distinguish real improvements from stochastic variance. Without parent or offspring resampling, the $(1+1)$ selection mechanism accepts deceptive outliers, leading to exponential runtime bounds. This theoretical failure mode governs single-parent LLM code discovery when fitness evaluations are corrupted by noise.
-
-This structural dynamic is operationalized by the Large Language Model Evolutionary Algorithm (LLaMEA) \cite{LLaMEA2024}. Engineered specifically to automate the discovery of continuous black-box optimization heuristics, LLaMEA structures an LLM within a $(1+1)$ Evolution Strategy. Under this paradigm, the language model serves as a semantic variation operator that iteratively generates complete, reusable Python classes. These candidates are executed within a validation harness via the \texttt{IOHexperimenter} benchmarking suite \cite{deNobel2024}, with runtime error tracebacks and aggregated convergence metrics fed directly back into the context window to drive self-debugging and iterative refinement.
-
-To evaluate heuristic quality across continuous problem instances, foundational LLaMEA aggregates trajectory data into the Area Over the Convergence Curve (AOCC) metric, evaluated over an execution budget of $B$ function queries on target precision $\Delta f_t$:
-\begin{equation}\label{eq:aocc_metric_bg}
-    \text{AOCC} = \frac{1}{B} \sum_{k=1}^{B} \left( 1 - \frac{\log_{10}(\min(\max(\Delta f(x_k), 10^{-8}), 10^2)) - \log_{10}(10^{-8})}{\log_{10}(10^2) - \log_{10}(10^{-8})} \right)
+Evolutionary trajectories depend on the balance between exploration and exploitation \cite{Goldberg1989}. Variation operators search unvisited regions of the representation space; selection concentrates evaluations around historically competitive solutions. Classical implementations employ multi-parent populations, such as $(\mu/\mu_I, \lambda)$ or $(\mu + \lambda)$, to smooth fitness variance across multimodal surfaces. The single-parent $(1+1)$ Evolution Strategy reduces this structure to one parent generating a single mutated offspring under greedy selection:
+\begin{equation}\label{eq:standard_one_plus_one}
+    \theta^{(g+1)} = 
+    \begin{cases}
+        \theta_{\text{child}}^{(g)} & \text{if } f(\theta_{\text{child}}^{(g)}) \le f(\theta_{\text{parent}}^{(g)}) \\
+        \theta_{\text{parent}}^{(g)} & \text{otherwise}
+    \end{cases}
 \end{equation}
-where $\Delta f(x_k) = f_{\text{clean}}(x_k) - f(x^*)$ represents the uncorrupted distance to the global minimum at evaluation step $k$. Clamping the precision delta within $[10^{-8}, 10^2]$ normalizes the score to $[0, 1]$. An AOCC of $1.0$ indicates that the solver reached the target precision $\Delta f_t \le 10^{-8}$ on its initial evaluation, whereas an AOCC of $0.0$ indicates zero reduction in the initial optimality gap.
+The $(1+1)$ scheme minimizes computational overhead and accelerates local convergence. However, lacking population-level variance reduction, greedy replacement is fragile when exposed to corrupted fitness feedback or non-deterministic objective evaluations \cite{Goldberg1989, Eiben2015}.
 
-Empirically, foundational experiments proved that LLaMEA-generated algorithms discovered novel heuristic logic that outcompeted state-of-the-art metaheuristics, including vanilla CMA-ES and Differential Evolution, on the 5-dimensional continuous BBOB suite, while maintaining competitive generalizability when zero-shot scaled to unseen 10-dimensional and 20-dimensional instances \cite{LLaMEA2024}. Recent extensions, such as LLaMEA-BO \cite{LLaMEABO2025}, have further validated the framework's capability to synthesize Bayesian Optimization components and surrogate-assisted search logic.
+The Large Language Model Evolutionary Algorithm (LLaMEA) \cite{LLaMEA2024} operationalizes this search process for continuous black-box optimization. It embeds a foundation model within an evolutionary loop to iteratively synthesize, execute, and refine heuristic code.
+
+Candidate algorithms are structured as self-contained Python classes governed by an Object-Oriented Programming (OOP) interface. Each script must implement two entry points:
+\begin{enumerate}
+    \item \textbf{Initialization Method (\texttt{\_\_init\_\_}):} Sets internal hyperparameters, memory buffers, step-size parameters, and population states.
+    \item \textbf{Execution Method (\texttt{\_\_call\_\_(problem, budget)}):} Receives an unconstrained continuous black-box objective $f$ alongside a maximum evaluation budget $B$. It queries $f(x)$ until the budget is exhausted and returns the best spatial coordinate vector discovered.
+\end{enumerate}
+
+LLaMEA executes this program-space search via a $(1+1)$ Evolution Strategy mediated through the LLM context window. In each generation $g \in \{1 \dots G\}$, the model functions as a semantic variation operator. Generating a child algorithm $\mathcal{A}_{\text{child}}$ requires dynamic compilation of a four-part prompt context $\mathcal{C}_g$:
+\begin{equation}\label{eq:llamea_context_assembly}
+    \mathcal{C}_g = \left\{ \mathcal{P}_{\text{task}}, \mathcal{H}_{1 \dots g-1}, \mathcal{T}_{\text{incumbent}}, F_{\text{directive}} \right\}
+\end{equation}
+where:
+\begin{itemize}
+    \item $\mathcal{P}_{\text{task}}$ specifies the search domain, bound constraints $[-5, 5]^D$, evaluation budgets, and class interface requirements.
+    \item $\mathcal{H}_{1 \dots g-1}$ maintains a registry of previous algorithm names and their scalar scores to prevent redundant code generation.
+    \item $\mathcal{T}_{\text{incumbent}}$ provides the complete implementation, benchmark scores, and execution tracebacks of the active parent $\mathcal{A}_{\text{parent}}$.
+    \item $F_{\text{directive}}$ issues mutation instructions (e.g., \textit{"Either refine or redesign to improve the algorithm"}), allowing the LLM to choose between localized hyperparameter adjustments and complete algorithmic redesigns.
+\end{itemize}
+
+Generated code strings are extracted via regular expressions to remove conversational tokens before dynamic loading into the execution runtime. In standard implementations, candidates are evaluated on deterministic test functions via \texttt{IOHexperimenter} \cite{deNobel2024}. The harness tracks anytime precision deltas $\Delta f(x_k) = f(x_k) - f(x^*)$ across budget $B$ against the standard BBOB target threshold $\Delta f_t \le 10^{-8}$ \cite{Hansen2010, LLaMEA2024}.
+
+To map multidimensional convergence trajectories into a scalar fitness score, LLaMEA computes the normalized Area Over the Convergence Curve (AOCC) across the benchmark suite \cite{LLaMEA2024}:
+\begin{equation}\label{eq:aocc_metric_bg}
+    \text{AOCC}(y_{a,f}) = \frac{1}{B} \sum_{i=1}^{B} \left( 1 - \frac{\min(\max(y_i, \text{lb}), \text{ub}) - \text{lb}}{\text{ub} - \text{lb}} \right)
+\end{equation}
+where $y_i = \log_{10}(f(x_i) - f(x^*))$ denotes the log-scaled distance to the global minimum at evaluation step $i$, computed across $B$ queries between bounds $\text{lb} = 10^{-8}$ and $\text{ub} = 10^2$. The mean AOCC across target problem instances acts as the fitness function $f(a)$, driving parent replacement in the $(1+1)$ selection step while providing a terminal metric for baseline comparisons \cite{LLaMEA2024}.
+
+Selection proceeds via standard $(1+1)$ replacement:
+\begin{equation}\label{eq:one_plus_one_selection}
+    \mathcal{A}_{\text{parent}}^{(g+1)} = 
+    \begin{cases}
+        \mathcal{A}_{\text{child}}^{(g)} & \text{if } f(\mathcal{A}_{\text{child}}^{(g)}) \ge f(\mathcal{A}_{\text{parent}}^{(g)}) \\
+        \mathcal{A}_{\text{parent}}^{(g)} & \text{otherwise}
+    \end{cases}
+\end{equation}
+When candidate code raises an unhandled runtime exception---such as a singular matrix inversion or division by zero---execution terminates immediately. The framework assigns $f(a) = 0$ and appends the raw Python traceback to $\mathcal{T}_{\text{incumbent}}$, allowing the model to attempt code repair in generation $g+1$.
+
+On 5-dimensional continuous BBOB benchmarks, LLaMEA synthesizes optimizers that match or exceed human-engineered metaheuristics, transferring effectively to 10-dimensional and 20-dimensional instances without fine-tuning \cite{LLaMEA2024}. Subsequent extensions, such as LLaMEA-BO \cite{LLaMEABO2025}, confirm that this evolutionary code-synthesis loop can generate specialized surrogate modeling components and acquisition logic.
 
 However, evaluating a $(1+1)$ Evolution Strategy within a non-deterministic evaluation sandbox introduces the \textit{Ghost Parent} failure mode. If a poorly designed child algorithm evaluates a sequence of coordinates that receive an unusually favorable negative noise draw ($z \ll 0$), its recorded performance metric becomes artificially inflated. Under strict elitist selection, this over-evaluated child replaces the parent and becomes an un-killable statistical ghost parent. Subsequent, structurally superior offspring are repeatedly rejected because they cannot match the ghost parent's mathematically unachievable baseline score.
 
-Existing code-generation frameworks operate almost entirely on deterministic, noiseless objective functions. Consequently, the ability of LLM evolutionary loops to synthesize noise-resistant search logic—and the specific role prompt scaffolding plays in that process—remains unmeasured. This thesis investigates whether closed-loop evolutionary selection can guide foundation models to synthesize robust continuous metaheuristics under persistent stochastic evaluation noise.
+Existing code-generation frameworks operate almost entirely on deterministic, noiseless objective functions. Consequently, the ability of LLM evolutionary loops to synthesize noise-resistant search logic---and the specific role prompt scaffolding plays in that process---remains unmeasured. This thesis investigates whether closed-loop evolutionary selection can guide foundation models to synthesize robust continuous metaheuristics under persistent stochastic evaluation noise.
