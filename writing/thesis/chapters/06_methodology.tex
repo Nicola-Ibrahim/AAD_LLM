@@ -4,311 +4,329 @@
 
 \chapter{Methodology}\label{chap:methodology}
 
-Deploying Large Language Models to generate noise-resilient continuous optimizers requires restructuring the evaluation harness. Standard evolutionary loops suffer from fitness deception when objective evaluations contain stochastic variance. The execution environment must filter this variance while preserving the feedback needed for programmatic mutation. The architecture developed in this thesis decouples candidate exploration feedback from internal benchmark tracking within an automated design loop.
+Evolutionary loops operating over stochastic fitness evaluations suffer from deceptive selection signals. When objective returns carry variance, candidate algorithms easily exploit lucky evaluation samples, which stalls code generation routines that rely on reliable directional feedback. Resolving this failure mode requires an execution environment that isolates stochastic noise during candidate evaluation while maintaining clean progress metrics for outer-loop selection.
 
-The chapter builds from core mathematical components up to system orchestration. First, it defines the optimality-gap heteroscedastic noise model. Second, it specifies the sandboxed execution environment and Abstract Syntax Tree (AST) validation rules. Third, it formalizes the evolutionary selection mechanics alongside the parent resampling policy. Fourth, it outlines four distinct prompt scaffolding configurations. Finally, it presents the complete pipeline execution flow and the statistical testing protocols used for empirical validation.
+This chapter establishes the mathematical specifications, execution sandboxing, and statistical protocols of the automated algorithm design system. First, we formalize the optimality-gap heteroscedastic noise model and trace its behavior across representative continuous topologies. We then define the dual-evaluation decoupling layer that isolates candidate search logic from diagnostic telemetry, followed by the Abstract Syntax Tree (AST) validation rules, execution timeouts, and traceback recovery pipelines. Subsequent sections detail the evolutionary selection operators, the stochastic parent resampling policy ($K=3$), and the prompt scaffolding configurations evaluated in our experiments. We conclude by specifying the orchestration lifecycle and the non-parametric statistical hypothesis testing protocol used for empirical verification.
 
 %-------------------------------------------------------------------------------
-\section{The Stochastic Sandbox and Optimality-Gap Heteroscedastic Noise}\label{sec:method_sandbox}
+\section{Noise Modeling}\label{sec:noise_modeling}
 
-Evaluating whether generative models can discover noise-tolerant optimization heuristics requires testing candidate code against non-deterministic objective functions \cite{Jin2005}. This work uses the continuous Black-Box Optimization Benchmark (BBOB) suite as its foundational testbed \cite{Hansen2010}. Because the base BBOB functions are deterministic, evaluating stochastic resilience requires injecting noise at the evaluation wrapper level.
+Automated synthesis of noise-resilient continuous heuristics requires benchmarking against stochastic fitness surfaces \cite{Jin2005}. We use the continuous Black-Box Optimization Benchmark (BBOB) suite as our base testbed \cite{Hansen2010}. Because standard BBOB functions evaluate deterministically, the execution wrapper must inject controlled variance directly at the interface level.
 
-Stochastic optimization literature commonly introduces uncertainty through static additive Gaussian noise \cite{Jin2005}:
+In experimental optimization and physical engineering domains---such as chemical process control, wind turbine aerodynamics, and physical sensor telemetry---observed measurement uncertainty rarely stems from a single isolated source. Instead, it arises from the continuous aggregation of countless independent micro-disturbances. By the Central Limit Theorem (CLT), the sum of these independent stochastic errors naturally converges to a normal distribution, establishing additive Gaussian noise $\mathcal{N}(0, \sigma^2)$ as the most physically realistic model for continuous search environments \cite{Shir2012, Spall2003}.
+
+Beyond physical realism, zero-mean Gaussian perturbations guarantee an unbiased mathematical expectation ($\mathbb{E}[z] = 0$). Consequently, the expected value of any corrupted observation strictly equals the underlying true objective elevation: $\mathbb{E}[f_{\text{noisy}}(x)] = f_{\text{clean}}(x)$ \cite{Spall2003}. This unbiased property is vital for Automated Algorithm Design: it ensures that if the language model successfully synthesizes noise-mitigation mechanics---such as Monte Carlo sample averaging ($\frac{1}{K} \sum_{i=1}^K f_{\text{noisy}}(x_i)$) or momentum-based filtering---the heuristic will consistently converge toward the true uncorrupted mean without accumulating systematic mathematical bias.
+
+In the optimization literature, Gaussian uncertainty is commonly formulated either as homoscedastic static additive noise \cite{Jin2005}:
 \begin{equation}\label{eq:static_noise_lit}
     f_{\text{noisy}}(x) = f_{\text{clean}}(x) + \mathcal{N}(0, \sigma^2)
 \end{equation}
-or through point-wise multiplicative noise \cite{Jin2005}:
+or through point-wise multiplicative variance \cite{Jin2005}:
 \begin{equation}\label{eq:naive_multiplicative_lit}
     f_{\text{noisy}}(x) = f_{\text{clean}}(x) \cdot \left(1 + \mathcal{N}(0, \text{CV}^2)\right)
 \end{equation}
-where $x \in \mathbb{R}^D$ denotes a $D$-dimensional coordinate vector, $f_{\text{clean}}(x) \in \mathbb{R}$ is the uncorrupted objective value, $\sigma^2 \in \mathbb{R}^+$ is a fixed variance, $\text{CV} \in \mathbb{R}^+$ is the dimensionless Coefficient of Variation ($\text{CV} = \sigma / \mu$), and $f_{\text{noisy}}(x) \in \mathbb{R}$ is the noisy value returned to the search heuristic.
+where $x \in \mathbb{R}^D$ denotes a $D$-dimensional coordinate vector, $f_{\text{clean}}(x) \in \mathbb{R}$ is the true objective value, $\sigma^2 \in \mathbb{R}^+$ is a fixed variance, $\text{CV} \in \mathbb{R}^+$ is the dimensionless Coefficient of Variation ($\text{CV} = \sigma / \mu$), and $f_{\text{noisy}}(x) \in \mathbb{R}$ represents the corrupted signal returned to the optimizer.
 
-Both formulations exhibit severe structural flaws across heterogeneous benchmark suites \cite{Hansen2010}. Static noise (Equation~\ref{eq:static_noise_lit}) applies a fixed variance $\sigma^2$ regardless of functional scale. On flat surfaces where objective values near the minimum approach $10^{-5}$, fixed variance drowns out the true gradient. Conversely, when objective values reach $10^6$ on steep surfaces, the same variance constitutes a negligible fraction of the local gradient, allowing algorithms to optimize without developing noise-filtering behavior \cite{Hansen2010}.
+Both formulations break down across heterogeneous benchmark suites \cite{Hansen2010}. Homoscedastic additive noise (Equation~\ref{eq:static_noise_lit}) applies constant variance regardless of objective magnitude. Near the optimum where objective values drop to $10^{-5}$, this constant variance produces an overwhelmingly low Signal-to-Noise Ratio (SNR) that obliterates descent gradients. Conversely, on steep sections where objective values exceed $10^6$, the identical additive variance becomes negligible, allowing optimizers to converge without developing explicit noise-filtering routines \cite{Hansen2010}.
 
-Multiplicative noise (Equation~\ref{eq:naive_multiplicative_lit}) introduces a different artifact: it scales variance with the raw coordinate value $f_{\text{clean}}(x)$. The raw evaluation includes any arbitrary vertical offset $f(x^*)$ added to the global minimum, which carries no information about the spatial distance to the target. Shifting a function vertically via $g(x) = f(x) + 10\,000$ multiplies the noise variance by orders of magnitude, destroying the underlying basin geometry.
+Multiplicative noise (Equation~\ref{eq:naive_multiplicative_lit}) introduces a different artifact by scaling variance directly against raw elevation $f_{\text{clean}}(x)$. This formulation includes any vertical translation $f(x^*)$ added to the global minimum. Adding a vertical offset $g(x) = f(x) + 10\,000$ scales the variance by orders of magnitude, corrupting the local basin structure without altering the underlying spatial topography.
 
-BBOB Function $f_{21}$ (Gallagher's Gaussian 101 Peaks) illustrates this distortion directly. The global minimum has an offset of $f(x^*) \approx 40.78$, and the total dynamic range spans approximately 50 units (between 40 and 90). Under multiplicative noise with $\text{CV} = 0.05$, evaluating a candidate point in the optimal basin at $f_{\text{clean}}(x) = 41.0$ yields a standard deviation of:
+BBOB function $f_{21}$ (Gallagher's Gaussian 101 Peaks) highlights the ranking vulnerability of naive multiplicative and homoscedastic models. The global minimum sits at an analytical offset of $f(x^*) \approx 40.78$, across a total dynamic range of roughly 50 units. Under naive multiplicative noise with $\text{CV} = 0.05$, a coordinate evaluated near the global optimum at $f_{\text{clean}}(x) = 41.0$ yields a standard deviation of:
 \begin{equation}\label{eq:f21_naive_std}
     \sigma = 0.05 \cdot 41.0 = 2.05
 \end{equation}
-A variation of $\pm 2.05$ covers 4\% of the function's entire range. On a multimodal surface where local peak differences range between 2 and 5 units, this variance erases local basin distinctions. Evaluating two nearby candidate vectors $x_a$ ($f = 41.5$) and $x_b$ ($f = 42.0$) generates heavily overlapping distributions: $f_{\text{noisy}}(x_a) \sim \mathcal{N}(41.5, 2.075^2)$ and $f_{\text{noisy}}(x_b) \sim \mathcal{N}(42.0, 2.1^2)$. The resulting sample draws invert the true ranking and obscure the local gradient.
+This deviation spans $4\%$ of the total function range. Because peak elevation gaps in $f_{21}$ span only $2$ to $5$ units, this variance erases local basin boundaries. Evaluating adjacent coordinates $x_a$ ($f_{\text{clean}} = 41.5$) and $x_b$ ($f_{\text{clean}} = 42.0$) produces heavily overlapping distributions: $f_{\text{noisy}}(x_a) \sim \mathcal{N}(41.5, 2.075^2)$ and $f_{\text{noisy}}(x_b) \sim \mathcal{N}(42.0, 2.1^2)$. Stochastic draws frequently invert the true ranking ($f_{\text{noisy}}(x_a) > f_{\text{noisy}}(x_b)$), depriving search routines of usable directional signals.
 
-Pure multiplicative noise also creates an uncorrupted zone near zero-valued minima. As search coordinates approach $f(x^*) = 0$, local variance vanishes:
-\begin{equation}\label{eq:vanishing_variance}
-    \lim_{f(x) \to f(x^*)} \operatorname{Var}\left(f_{\text{noisy}}(x)\right) = 0
-\end{equation}
-where $\operatorname{Var}(\cdot)$ denotes the variance operator. Algorithms near convergence receive noise-free feedback, which circumvents the stochastic requirements of the benchmark.
-
-To correct these issues, this thesis formulates the \textbf{Optimality-Gap Heteroscedastic Noise Model with a Non-Zero Baseline Noise Floor}. Rather than scaling variance by raw function values, the formulation ties variance directly to the true optimality gap. For an evaluation coordinate $x_k \in \mathbb{R}^D$ sampled at step $k$, the local standard deviation $\sigma_{\text{dynamic}}(x_k)$ is proportional to the distance from the known global minimum $f(x^*)$, bound by a lower threshold $\sigma_{\text{floor}} > 0$:
+We resolve these discrepancies using a \textbf{Heteroscedastic Optimality-Gap Noise Model}. Rather than scaling variance against arbitrary raw function values, variance is tied directly to the distance from the global minimum. For any coordinate $x_k \in \mathbb{R}^D$ queried at step $k$, the local standard deviation $\sigma_{\text{dynamic}}(x_k)$ scales strictly with the absolute optimality gap:
 \begin{equation}\label{eq:proportional_dynamic_std}
-    \sigma_{\text{dynamic}}(x_k) = \text{CV} \cdot \left| f_{\text{clean}}(x_k) - f(x^*) \right| + \sigma_{\text{floor}}
+    \sigma_{\text{dynamic}}(x_k) = \text{CV} \cdot \left| f_{\text{clean}}(x_k) - f(x^*) \right|
 \end{equation}
-where $\text{CV} \ge 0$ specifies the relative noise magnitude, $\left| f_{\text{clean}}(x_k) - f(x^*) \right|$ is the true functional distance to the optimum, and $\sigma_{\text{floor}} = 10^{-8}$ prevents the variance from dropping to zero at the minimum.
+where $\text{CV} \ge 0$ parameterizes the noise severity (corresponding to the standard deviation scale in the execution wrapper), and $\left| f_{\text{clean}}(x_k) - f(x^*) \right|$ is the true spatial error.
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[scale=0.95]
-    % Axes
-    \draw[->, thick] (0,0) -- (8.5,0) node[anchor=north] {True Objective Elevation $|f(x) - f(x^*)|$};
-    \draw[->, thick] (0,0) -- (0,5.5) node[anchor=east] {Noise Standard Deviation ($\sigma$)};
-
-    % 1. Static Noise Line
-    \draw[thick, dashed, red] (0,3.5) -- (8.0,3.5) node[anchor=west] {Static Noise (Overwhelms near optimum)};
-
-    % 2. Naive Multiplicative Noise
-    \draw[thick, dotted, blue] (0,1.8) -- (8.0,4.8) node[anchor=west] {Naive Multiplicative (Offset by $f(x^*)$ shift)};
-
-    % 3. Optimality-Gap Noise
-    \draw[thick, blue!60!cyan] (0,0.3) -- (8.0,2.8) node[anchor=west] {\textbf{Optimality-Gap Model} (Scale-Invariant)};
-
-    % Floor annotation
-    \draw[<->, thin] (-0.2,0) -- (-0.2,0.3) node[midway, left] {$\sigma_{\text{floor}}$};
-
-    % Optimum Point
-    \filldraw[black] (0,0) circle (2pt) node[anchor=north east] {$f(x^*)$};
-\end{tikzpicture}
-\caption{Comparison of stochastic noise injection models. Static noise dominates evaluations near the global minimum, whereas naive multiplicative noise shifts variance according to arbitrary vertical function offsets. The Optimality-Gap model maintains a stable Signal-to-Noise Ratio (SNR) across functional scales and enforces a positive noise floor at the global minimum.}
-\label{fig:noise_variance_comparison}
-\end{figure}
-
-The benchmark harness stores the analytical minimum $f(x^*)$ internally while hiding it from the candidate algorithm. The noisy observation returned to the candidate optimizer at step $k$ is:
+The benchmark harness preserves the true minimum $f(x^*)$ internally while hiding it from the generated Python script. At evaluation step $k$, the candidate receives a corrupted scalar observation:
 \begin{equation}\label{eq:proportional_gaussian_noise}
     f_{\text{noisy}}(x_k) = f_{\text{clean}}(x_k) + z_k, \quad z_k \sim \mathcal{N}\left(0, \sigma_{\text{dynamic}}^2(x_k)\right)
 \end{equation}
-where $z_k \in \mathbb{R}$ is an independent zero-mean Gaussian perturbation sampled at step $k$. The probability density function $p(z_k)$ governing this perturbation is:
+where $z_k \in \mathbb{R}$ is an independent Gaussian perturbation sampled with density:
 \begin{equation}\label{eq:gaussian_pdf_dynamic}
     p(z_k) = \frac{1}{\sqrt{2\pi \sigma_{\text{dynamic}}^2(x_k)}} \exp\left( -\frac{z_k^2}{2\sigma_{\text{dynamic}}^2(x_k)} \right)
 \end{equation}
-Because $p(z_k)$ is symmetric around zero with $\mathbb{E}[z_k] = 0$, the expected value of the noisy observation matches the uncorrupted evaluation:
+Because $p(z_k)$ is symmetric with zero expectation ($\mathbb{E}[z_k] = 0$), the noisy evaluation acts as an unbiased estimator of true fitness:
 \begin{equation}\label{eq:unbiased_expectation}
     \mathbb{E}[f_{\text{noisy}}(x_k)] = f_{\text{clean}}(x_k)
 \end{equation}
 
-Tying evaluation variance to the optimality gap provides three properties:
+To maintain a strict black-box operational contract, the analytical minimum $f(x^*)$ and the runtime calculation of $\sigma_{\text{dynamic}}(x_k)$ remain strictly encapsulated within the execution wrapper. The candidate heuristic receives only the scalar float $f_{\text{noisy}}(x_k)$, preventing generated algorithms from introspecting the noise envelope or directly reverse-engineering the target coordinate. Furthermore, each query issued to the interface triggers an independent and identically distributed (i.i.d.) stochastic sample $z_k$. Re-evaluating the identical coordinate $x_k$ across $K$ consecutive queries yields uncorrelated realizations, allowing candidate heuristics that implement Monte Carlo resampling to suppress effective noise variance proportionally to $1/\sqrt{K}$.
+
+Scaling variance heteroscedastically with the optimality gap provides two core properties for Automated Algorithm Design:
 \begin{enumerate}
-    \item \textbf{Oracle Preservation:} As candidate coordinates approach the global minimum ($f_{\text{clean}}(x) \to f(x^*)$), the variance converges to $\sigma_{\text{floor}} = 10^{-8}$. The global optimum remains distinguishable across all noise settings.
-    \item \textbf{Scale-Invariance:} The Signal-to-Noise Ratio (SNR) remains bounded by $1/\text{CV}$ across varying function ranges, from $f_8$ (range $\sim 10^3$) to $f_{21}$ (range $\sim 50$). This avoids per-function noise parameter retuning.
-    \item \textbf{Structured Difficulty:} Regions distant from the minimum exhibit high variance, while coordinates close to the target exhibit lower variance. This matches empirical engineering scenarios where measurement error scales with deviation from a target equilibrium state.
+    \item \textbf{Scale Invariance:} The Signal-to-Noise Ratio remains bounded by $1/\text{CV}$ across varying benchmark ranges, from $f_8$ ($\sim 10^3$) to $f_{21}$ ($\sim 50$), removing the need to calibrate noise hyperparameters per function.
+    \item \textbf{Structured Search Difficulty:} Regions far from the target exhibit high variance, while points close to the optimum narrow their variance profiles, matching empirical systems where measurement noise scales with distance from target equilibrium.
 \end{enumerate}
 
-Applying this gap-anchored model ($\text{CV} = 0.05$) to the $f_{21}$ test case, the sample coordinates $x_a$ ($f = 41.5$) and $x_b$ ($f = 42.0$) yield standard deviations of:
+Applying this model to $f_{21}$ ($\text{CV} = 0.05$), test coordinates $x_a$ ($f_{\text{clean}} = 41.5$) and $x_b$ ($f_{\text{clean}} = 42.0$) yield standard deviations of:
 \begin{equation}\label{eq:f21_gap_std_a}
-    \sigma_{\text{dynamic}}(x_a) = 0.05 \cdot |41.5 - 40.78| + 10^{-8} \approx 0.036
+    \sigma_{\text{dynamic}}(x_a) = 0.05 \cdot |41.5 - 40.78| \approx 0.036
 \end{equation}
 \begin{equation}\label{eq:f21_gap_std_b}
-    \sigma_{\text{dynamic}}(x_b) = 0.05 \cdot |42.0 - 40.78| + 10^{-8} \approx 0.061
+    \sigma_{\text{dynamic}}(x_b) = 0.05 \cdot |42.0 - 40.78| \approx 0.061
 \end{equation}
-The resulting distributions, $f_{\text{noisy}}(x_a) \sim \mathcal{N}(41.5, 0.036^2)$ and $f_{\text{noisy}}(x_b) \sim \mathcal{N}(42.0, 0.061^2)$, preserve the underlying ranking between both points and maintain a usable descent signal.
+The resulting distributions, $f_{\text{noisy}}(x_a) \sim \mathcal{N}(41.5, 0.036^2)$ and $f_{\text{noisy}}(x_b) \sim \mathcal{N}(42.0, 0.061^2)$, preserve ranking order between both points and maintain usable descent vectors. 
 
-To examine these mechanics on an ill-conditioned landscape, consider BBOB Function $f_8$ (Rosenbrock). Benchmark instances apply spatial translations $x^* \in \mathbb{R}^D$ and rotation matrices $R \in \mathbb{R}^{D \times D}$ to remove coordinate-axis alignment \cite{Hansen2010}. The analytical formulation is:
-\begin{equation}\label{eq:bbob_f8_formula}
-    f_8(x) = \sum_{i=1}^{D-1} \left[ 100 \cdot \left( y_{i+1} - y_i^2 \right)^2 + (1 - y_i)^2 \right] + f_{\text{opt}}
-\end{equation}
-where $y \in \mathbb{R}^D$ is the transformed coordinate vector $y = \max\left(1, \frac{\sqrt{D}}{8}\right) R (x - x^*) + \mathbf{1}$, $\mathbf{1} \in \mathbb{R}^D$ is a vector of ones, and $f_{\text{opt}} \in \mathbb{R}$ is the minimum value.
-
-\begin{figure}[htbp]
-\centering
-\input{figures/f8_3d_landscape}
-\caption{Objective surface of BBOB Function $f_8$. The orthogonal rotation directs a parabolic valley across the domain, producing large values near the boundaries that require scale-proportional noise modeling.}
-\label{fig:f8_3d_landscape}
-\end{figure}
-
-The quadratic term $100 \cdot (y_{i+1} - y_i^2)^2$ forms a narrow curved valley across the search space (Figure~\ref{fig:f8_3d_landscape}), pushing deviations $f_{\text{clean}}(x_k) - f_{\text{opt}}$ up to $10^3$ near domain boundaries.
-
-Under the gap-anchored model with $\text{CV} = 0.1$, exploration at the outer boundary where $f_{\text{clean}}(x_k) - f_{\text{opt}} \approx 10^3$ sets the noise standard deviation to:
-\begin{equation}\label{eq:f8_dynamic_std_boundary}
-    \sigma_{\text{dynamic}}(x_k) = 0.1 \cdot 10^3 + 10^{-8} \approx 10^2
-\end{equation}
-Once search points enter the parabolic valley where $f_{\text{clean}}(x_k) - f_{\text{opt}} \approx 10^1$, the standard deviation scales down accordingly:
-\begin{equation}\label{eq:f8_dynamic_std_valley}
-    \sigma_{\text{dynamic}}(x_k) = 0.1 \cdot 10^1 + 10^{-8} \approx 10^0
-\end{equation}
-By comparison, evaluating the isotropic sphere function $f_1(x) = \|R(x - x^*)\|^2 + f_{\text{opt}}$ near domain boundaries produces objective differences of $f_{\text{clean}}(x_k) - f_{\text{opt}} \approx 10^1$, yielding $\sigma_{\text{dynamic}} \approx 10^0$.
-
-Injecting these variance values into Equation~\ref{eq:proportional_gaussian_noise} yields perturbations $z_k \sim \mathcal{N}(0, \sigma_{\text{dynamic}}^2(x_k))$ that maintain equivalent SNR across diverse topological surfaces.
-
-%-------------------------------------------------------------------------------
-\section{Dual-Evaluation Decoupling and Distance-to-Optimum Tracking}\label{sec:method_decoupling}
-
-The evaluation framework separates the noisy feedback passed to the candidate algorithm from the ground-truth metrics used for performance tracking. Candidate routines require noisy feedback $f_{\text{noisy}}(x_k)$ to drive the development of internal filtering logic. However, logging noisy evaluations directly would distort empirical benchmarking, because a candidate could receive an extreme negative noise draw ($z_k \ll 0$) that falsely indicates convergence. Algorithms rely on $f_{\text{noisy}}(x_k)$ for coordinate updates, while the background logger computes the uncorrupted distance to the optimum:
-\begin{equation}\label{eq:clean_distance_metric}
-    \Delta f(x_k) = f_{\text{clean}}(x_k) - f(x^*)
-\end{equation}
-where $\Delta f(x_k) \in \mathbb{R}^+$ denotes the true distance between coordinate $x_k$ and the global minimizer $f(x^*)$.
-
-Over a budget of $B = 100\,000$ evaluations, the runtime progress of algorithm $\mathcal{A}$ is logged by recording the lowest uncorrupted error achieved up to step $k$:
-\begin{equation}\label{eq:best_so_far_trajectory}
-    \Delta f_{\text{best}}(k) = \min_{j \in \{1 \dots k\}} \left( f_{\text{clean}}(x_j) - f(x^*) \right)
-\end{equation}
-This separation ensures that convergence plots reflect actual spatial minimization rather than stochastic measurement noise.
-
-%-------------------------------------------------------------------------------
-\section{Execution Sandbox Defenses and Diagnostic Scoring}\label{sec:method_sandbox_defenses}
-
-Autonomous algorithm generation requires isolating the host operating system from untrusted model-generated code. Unconstrained models occasionally output malformed syntax or non-executable conversational text. The pipeline handles this through strict parsing boundaries.
-
-Generated outputs pass through a regular-expression extraction filter that isolates the executable Python block from conversational text. The isolated block is parsed through an Abstract Syntax Tree (AST) validator. This validator accepts standard numerical packages (\texttt{numpy}, \texttt{scipy}) while blocking system access libraries (\texttt{os}, \texttt{sys}, \texttt{subprocess}), preventing unauthorized process calls.
-
-To handle infinite loops or stalled iterations, the harness enforces a 10-second wall-clock timeout per run. When an algorithm exceeds this limit, the execution worker is terminated and marked as failed.
-
-Mutated algorithms also encounter mathematical runtime exceptions, including singular matrix inversions, dimensional broadcasting mismatches, and numerical overflow. When an exception occurs, the sandbox captures the Python traceback and assigns the worst possible fitness score ($\text{Fitness} = +\infty$). The full traceback string is appended to the feedback context $\mathcal{T}_{\text{feedback}}$ for the subsequent generation. Returning the runtime error trace directly to the model closes the self-debugging loop across the 20-generation evolutionary run.
-
-%-------------------------------------------------------------------------------
-\section{LLM-Driven Evolutionary Code Discovery and Parent Resampling}\label{sec:method_llamea}
-
-The system adapts the Large Language Model Evolutionary Algorithm (LLaMEA) as its core search engine \cite{LLaMEA2024}. The language model acts as a semantic variation operator that refactors algorithm structure, modifies population logic, and adjusts parameter updates based on execution feedback.
-
-The generation loop follows a single-offspring $(1+1)$ Evolution Strategy. In each generation $g \in \{1 \dots G\}$, where $G = 20$ represents the maximum generation limit, the model generates one child algorithm $\mathcal{A}_{\text{child}}$ by mutating the active parent $\mathcal{A}_{\text{parent}}$.
-
-\subsection{The Reflective Prompt Architecture}
-At generation $g$, the prompt context $\mathcal{C}_g$ is assembled from four components:
-\begin{equation}\label{eq:context_assembly}
-    \mathcal{C}_g = \left\{ \mathcal{P}_{\text{system}}, \mathcal{H}_{1 \dots g-1}, \mathcal{T}_{\text{feedback}}, F_0 \right\}
-\end{equation}
-These components contain:
-\begin{enumerate}
-    \item \textbf{Task Description ($\mathcal{P}_{\text{system}}$):} Defines the class interface. Generated optimizers must inherit from the base class and accept problem handles, budgets, dimensionality limits, and domain bounds.
-    \item \textbf{Historical Archive ($\mathcal{H}_{1 \dots g-1}$):} Maintains an indexed log of previously tested algorithms along with their numerical scores, preventing repetitive code generation.
-    \item \textbf{Incumbent Information ($\mathcal{T}_{\text{feedback}}$):} Contains the source code of the active parent algorithm, its best-so-far precision $\min_k \Delta f(x_k)$, and any runtime exceptions from previous iterations.
-    \item \textbf{Directive Instruction ($F_0$):} Prompts the model to either refine current parameters or redesign the underlying algorithm structure.
-\end{enumerate}
-
-\subsection{Mitigating False Elitism: Stochastic Parent Resampling Policy}
-Under noisy evaluations ($f_{\text{noisy}} = f_{\text{clean}} + z$), standard greedy selection fails due to false elitism \cite{Jin2005, Qian2020}. A sub-optimal child algorithm can draw an outlier negative noise sequence ($z \ll 0$), producing an artificially low error value. If this over-evaluated child replaces the parent, it sets an artificially strict fitness threshold. Structurally superior offspring generated in subsequent iterations are rejected because their uncorrupted scores cannot beat the outlier parent score, freezing optimization progress.
-
-The framework counters this vulnerability with a Stochastic Parent Resampling Policy. The fitness score of an algorithm $\mathcal{A}$ over budget $B = 100\,000$ is defined by its logarithmic precision:
-\begin{equation}\label{eq:individual_fitness}
-    \text{Fitness}(\mathcal{A}) = \log_{10} \left( \min_{k \in \{1 \dots B\}} \Delta f(x_k) \right)
-\end{equation}
-At the end of each generation cycle $g$, the active parent $\mathcal{A}_{\text{parent}}$ is re-evaluated across $K=3$ independent stochastic runs. The baseline fitness is updated to the empirical mean:
-\begin{equation}\label{eq:parent_resampling}
-    \bar{f}_{\text{parent}} = \frac{1}{K} \sum_{k=1}^{K} \text{Fitness}^{(k)}\left(\mathcal{A}_{\text{parent}}\right)
-\end{equation}
-where $K = 3$ is the number of re-evaluation passes, and $\text{Fitness}^{(k)}\left(\mathcal{A}_{\text{parent}}\right)$ is the score on pass $k$. Resampling reduces the survival time of transient noise outliers, ensuring that selection favors algorithms with structural noise resistance.
-
-%-------------------------------------------------------------------------------
-\section{Prompt Scaffolding Configurations}\label{sec:method_prompts}
-
-To evaluate how different prompting priors influence the generation of noise-resilient logic, the methodology defines four scaffolding configurations:
-\begin{enumerate}
-    \item \textbf{The BASELINE Prompt:} Operates as the experimental control. It contains only the execution API requirements, with no domain hints regarding landscape topology or evaluation noise.
-    \item \textbf{The THINKING Prompt:} Applies a Chain-of-Thought (CoT) pattern. The model must output an explicit analytical reasoning block evaluating prior tracebacks and score differences before generating code.
-    \item \textbf{The VECTORIZATION Prompt:} Enforces matrix-oriented implementation constraints. It forbids standard scalar Python loops across population members, requiring vectorized NumPy broadcast operations.
-    \item \textbf{The GUIDED Prompt:} Provides domain-specific hints. The prompt notes that evaluations contain stochastic variance and suggests techniques such as momentum updates, sample averaging, and step-size damping.
-\end{enumerate}
-
-%-------------------------------------------------------------------------------
-\section{End-to-End Pipeline Orchestration}\label{sec:method_orchestration}
-
-The mathematical noise wrapper, security filters, evolutionary selection mechanics, and prompt scaffolding integrate into an automated generation loop.
+As illustrated in Figure~\ref{fig:f21_noise_distortion}, homoscedastic additive noise (Panel B) corrupts the local landscape evenly across coordinates, blurring adjacent peaks. In contrast, the heteroscedastic optimality-gap formulation (Panel C) naturally tightens its variance envelope as coordinates approach the global minimizer $x^*$, preserving basin boundaries and retaining an actionable descent signal toward the global basin.
 
 \begin{figure}[htbp]
     \centering
-    \input{figures/evolutionary_aad_loop}
-    \caption{System orchestration of the stochastic Automated Algorithm Design loop. Source code flows from the model through AST validation to the execution sandbox. Search decisions consume noisy evaluations $f_{\text{noisy}}(x_k)$, while the background logger records true precision $\Delta f(x_k)$ and applies parent resampling ($K=3$, $\bar{f}_{\text{parent}}$) to update prompt context $\mathcal{C}_g$.}
-    \label{fig:evolutionary_aad_loop}
+    \includegraphics[width=\textwidth]{images/f21/figure_1d_noise_cross_section.png}
+    \vspace{0.4cm}
+    \includegraphics[width=\textwidth]{images/f21/figure_2d_noise_topology.png}
+    \caption{Topological distortion of BBOB $f_{21}$ (Gallagher 101 Peaks). The 1D cross-section (Top) and 2D rank-normalized contours (Bottom) show that homoscedastic additive noise (B) overwhelms local basin boundaries. The heteroscedastic optimality-gap model (C) pinches variance near the global optimum ($x^*$), preserving the macro-structure and actionable descent vectors.}
+    \label{fig:f21_noise_distortion}
 \end{figure}
 
-The execution sequence proceeds through five stages per generation:
-\begin{enumerate}
-    \item \textbf{Context Assembly and Generation:} The driver builds prompt $\mathcal{C}_g$ (Equation~\ref{eq:context_assembly}) and queries the model to generate child code $\mathcal{A}_{\text{child}}$.
-    \item \textbf{Sanitization and Validation:} The code block is extracted via regex and checked by the AST validator. Unauthorized imports cause immediate candidate rejection.
-    \item \textbf{Decoupled Execution:} The candidate executes in the sandbox. Search routines receive noisy feedback $f_{\text{noisy}}(x_k)$ (Equation~\ref{eq:proportional_gaussian_noise}), while the telemetry system records the uncorrupted metric $\Delta f(x_k)$ (Equation~\ref{eq:clean_distance_metric}) over $B = 100\,000$ evaluations.
-    \item \textbf{Error Handling:} If execution fails or exceeds 10 seconds, the run is assigned $\text{Fitness} = +\infty$, and the traceback is preserved for generation $g+1$.
-    \item \textbf{Selection and Resampling:} If execution completes successfully, child fitness $\text{Fitness}(\mathcal{A}_{\text{child}})$ is compared against the parent. The incumbent parent is re-evaluated across $K=3$ runs to update $\bar{f}_{\text{parent}}$ (Equation~\ref{eq:parent_resampling}), after which the history log $\mathcal{H}_{1 \dots g}$ is updated.
-\end{enumerate}
+To evaluate behavior on large-scale, ill-conditioned geometries, consider BBOB function $f_8$ (Rosenbrock). Benchmark instances apply spatial translations $x^* \in \mathbb{R}^D$ and orthogonal rotation matrices $R \in \mathbb{R}^{D \times D}$ to eliminate coordinate alignment \cite{Hansen2010}:
+\begin{equation}\label{eq:bbob_f8_formula}
+    f_8(x) = \sum_{i=1}^{D-1} \left[ 100 \cdot \left( y_{i+1} - y_i^2 \right)^2 + (1 - y_i)^2 \right] + f_{\text{opt}}
+\end{equation}
+where $y = \max\left(1, \frac{\sqrt{D}}{8}\right) R (x - x^*) + \mathbf{1}$, $\mathbf{1} \in \mathbb{R}^D$ is a vector of ones, and $f_{\text{opt}} \in \mathbb{R}$ is the target minimum.
+
+The term $100 \cdot (y_{i+1} - y_i^2)^2$ forms a steep parabolic valley, pushing boundary deviations $f_{\text{clean}}(x_k) - f_{\text{opt}}$ up to $10^3$. Setting $\text{CV} = 0.1$, exploration along domain boundaries where $f_{\text{clean}}(x_k) - f_{\text{opt}} \approx 10^3$ sets the standard deviation to:
+\begin{equation}\label{eq:f8_dynamic_std_boundary}
+    \sigma_{\text{dynamic}}(x_k) = 0.1 \cdot 10^3 = 10^2
+\end{equation}
+As search vectors enter the valley floor where $f_{\text{clean}}(x_k) - f_{\text{opt}} \approx 10^1$, the standard deviation drops proportionally:
+\begin{equation}\label{eq:f8_dynamic_std_valley}
+    \sigma_{\text{dynamic}}(x_k) = 0.1 \cdot 10^1 = 10^0
+\end{equation}
+By comparison, evaluating the isotropic sphere function $f_1(x) = \|R(x - x^*)\|^2 + f_{\text{opt}}$ near domain boundaries produces objective differences of $f_{\text{clean}}(x_k) - f_{\text{opt}} \approx 10^1$, yielding $\sigma_{\text{dynamic}} \approx 10^0$. Sampling noise through Equation~\ref{eq:proportional_gaussian_noise} yields perturbations $z_k \sim \mathcal{N}(0, \sigma_{\text{dynamic}}^2(x_k))$ that maintain equivalent relative SNR across diverse topographies.
+
+Figure~\ref{fig:f8_noise_distortion} confirms this scaling behavior. On steep outer boundaries ($f(x) \approx 10^5$), homoscedastic noise (Panel B) represents a negligible perturbation relative to functional magnitude, while dominating and obscuring the flat valley floor near the minimum. The heteroscedastic optimality-gap formulation (Panel C) scales variance proportionally with objective magnitude across the entire coordinate range, maintaining balanced search difficulty from initial exploration down to local convergence.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{images/f8/figure_1d_noise_cross_section.png}
+    \vspace{0.4cm}
+    \includegraphics[width=\textwidth]{images/f8/figure_2d_noise_topology.png}
+    \caption{Scale-invariance on BBOB $f_8$ (Rosenbrock). The 1D cross-section (Top) and 2D contours (Bottom) show that homoscedastic noise (B) becomes negligible on steep boundary walls ($10^5$) while obscuring the flat valley floor. The heteroscedastic optimality-gap model (C) dynamically scales variance proportional to the objective magnitude, maintaining consistent search difficulty across the domain.}
+    \label{fig:f8_noise_distortion}
+\end{figure}
 
 %-------------------------------------------------------------------------------
-\section{Two-Phase Experimental Gauntlet and Cross-Validation}\label{sec:method_gauntlet}
+\section{Evaluator Architecture}\label{sec:method_decoupling}
 
-The empirical evaluation uses a two-phase benchmarking structure to manage compute requirements.
+The evaluation harness decouples the corrupted fitness returned to the candidate optimizer from the uncorrupted metric recorded by the meta-driver. Candidate algorithms require stochastic feedback $f_{\text{noisy}}(x_k)$ to develop internal variance-reduction routines. Direct logging of noisy evaluations corrupts empirical benchmarking: an optimizer drawing an extreme negative perturbation ($z_k \ll 0$) registers an artificial descent step without approaching the minimizer. The search routine consumes only $f_{\text{noisy}}(x_k)$, whereas the background harness records the true spatial error:
+\begin{equation}\label{eq:clean_distance_metric}
+\Delta f(x_k) = \left| f_{\text{clean}}(x_k) - f(x^*) \right|
+\end{equation}
+where $f(x^*) \in \mathbb{R}$ denotes the known global minimum of the benchmark instance.
 
-\subsection{Phase 1: Intra-Framework Prompt Ablation}
-Phase 1 evaluates the four prompt scaffolding strategies across five BBOB benchmark functions representing distinct topological classes:
+Candidate optimizers run as self-contained Python classes constrained by an operational black-box interface:
+\begin{equation}\label{eq:candidate_interface_call}
+\mathcal{H}: (\mathcal{O}_{\text{sandbox}}, B, D, \mathbf{lb}, \mathbf{ub}) \longmapsto (\mathbf{x}^*, y^*)
+\end{equation}
+In this contract, $\mathcal{O}_{\text{sandbox}}$ wraps the objective function, $B = 100\,000$ sets the function call budget, $D \in \mathbb{N}^+$ denotes problem dimension, and $\mathbf{lb}, \mathbf{ub} \in \mathbb{R}^D$ define domain boundaries ($[-5.0, 5.0]^D$).
+
+At step $k \in \{1 \dots B\}$, query vector $x_k \in \mathbb{R}^D$ passes to the wrapper, which evaluates the analytical BBOB target $f_{\text{clean}}(x_k)$. The wrapper injects zero-mean heteroscedastic noise $z_k \sim \mathcal{N}\left(0, \sigma_{\text{dynamic}}^2(x_k)\right)$ following Equation~\ref{eq:proportional_dynamic_std}:
+\begin{equation}\label{eq:wrapper_noise_return}
+f_{\text{noisy}}(x_k) = f_{\text{clean}}(x_k) + z_k
+\end{equation}
+The candidate algorithm has no visibility into $f(x^*)$, $f_{\text{clean}}(x_k)$, or $\sigma_{\text{dynamic}}(x_k)$.
+
+Concurrently, the background harness logs the lowest uncorrupted value found up to step $k$:
+\begin{equation}\label{eq:best_so_far_trajectory}
+\Delta f_{\text{best}}(k) = \min_{j \in \{1 \dots k\}} \left| f_{\text{clean}}(x_j) - f(x^*) \right|, \quad \forall k \in \{1 \dots B\}
+\end{equation}
+Tracking $\Delta f_{\text{best}}(k)$ isolates true coordinate descent from measurement variance.
+
+When the optimizer exhausts budget $B$, it returns estimated minimizer $\mathbf{x}^* \in \mathbb{R}^D$ alongside its self-reported objective value $y^* \in \mathbb{R}$. The evaluator discards $y^*$ and evaluates $\mathbf{x}^*$ directly on the uncorrupted function:
+\begin{equation}\label{eq:oracle_reeval}
+y_{\text{clean}} = f_{\text{clean}}(\mathbf{x}^*)
+\end{equation}
+The evolutionary driver scores algorithm $\mathcal{A}$ by taking the negated logarithm of the lowest uncorrupted error achieved during the run:
+\begin{equation}\label{eq:meta_fitness_score}
+\mathcal{F}(\mathcal{A}) = -\log_{10}\left( \max\left( \min_{k \in \{1 \dots B\}} \Delta f(x_k), \, \tau_{\text{conv}} \right) \right)
+\end{equation}
+Target precision threshold $\tau_{\text{conv}} = 10^{-8}$ matches standard BBOB precision limits. This logarithmic transform linearizes convergence differences across orders of magnitude, providing smooth selection feedback for the evolutionary search.
+
+%-------------------------------------------------------------------------------
+\section{Execution Sandbox}\label{sec:method_sandbox_defenses}
+
+Autonomous code synthesis introduces execution hazards, including process hangs, memory leaks, and invalid system calls. The execution harness isolates, parses, and times each generated script before committing evaluations to the evolutionary archive.
+
+\textbf{AST Parsing and Security Boundaries.}
+A regular-expression parser extracts Python code blocks from conversational LLM output. The raw code string passes through an Abstract Syntax Tree (AST) visitor before byte compilation:
 \begin{itemize}
-    \item \textbf{$f_1$ (Sphere):} Separable baseline for measuring unconstrained convergence rate.
-    \item \textbf{$f_8$ (Rosenbrock):} Low/moderate conditioning with a curved parabolic valley.
-    \item \textbf{$f_{10}$ (Ellipsoidal):} High conditioning with ill-conditioned coordinate axes.
-    \item \textbf{$f_{15}$ (Rastrigin):} Multimodal surface with a strong underlying global structure.
-    \item \textbf{$f_{21}$ (Gallagher 101 Peaks):} Multimodal surface with 101 local optima and weak global structure.
+\item \textbf{Import Whitelisting:} The AST allows standard numerical libraries (\texttt{numpy}, \texttt{scipy}, \texttt{math}) while raising syntax violations on system access modules (\texttt{os}, \texttt{sys}, \texttt{subprocess}, \texttt{shutil}, \texttt{socket}, \texttt{importlib}).
+\item \textbf{Built-in Sanitization:} Dynamic execution built-ins (\texttt{eval}, \texttt{exec}, \texttt{open}, \texttt{compile}, \texttt{\_\_import\_\_}) cause immediate rejection during AST traversal.
+\item \textbf{Interface Conformance:} The visitor verifies that the script defines the target optimizer class along with the entry methods specified by the API contract.
 \end{itemize}
-LLaMEA runs independently on each function under the Optimality-Gap noise model ($\text{CV} = 0.05, 0.1$) to identify the best-performing algorithm per prompt setting.
+Scripts violating these checks fail before execution.
 
-\subsection{Phase 2: Baseline Benchmarking and Dimensional Transfer}
-Phase 2 compares the champion algorithms from Phase 1 against three human-designed baselines: Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001}, Differential Evolution (DE) \cite{Storn1997}, and Particle Swarm Optimization (PSO) \cite{Kennedy1995}.
+\textbf{Process Timeouts and Spatial Integrity.}
+Synthesized routines risk infinite loops, divergent matrix decompositions, or recursive thrashing. Each candidate executes in a detached worker process governed by a 10.0-second wall-clock timeout ($T_{\text{max}} = 10.0\,\text{s}$). If execution exceeds $T_{\text{max}}$, the parent process issues a \texttt{SIGKILL} and logs a timeout failure.
 
-The evaluation tests two conditions:
-\begin{enumerate}
-    \item \textbf{Deterministic Evaluation ($\text{CV} = 0$):} Tests whether algorithms evolved under noise maintain optimization performance on clean objective surfaces.
-    \item \textbf{Stochastic Evaluation ($\text{CV} > 0$):} Measures the performance degradation of classical baselines relative to the noise-evolved optimizers under increasing variance.
-\end{enumerate}
-To assess structural scalability, algorithms evolved on 5-dimensional (5D) problems are tested on 10D and 20D instances of the same problem classes without code modifications.
+After execution terminates, a boundary validator checks returned coordinate $\mathbf{x}^*$. The run is discarded if $\mathbf{x}^* \notin [\mathbf{lb}, \mathbf{ub}]^D$ or if numerical overflow produces \texttt{NaN} or \texttt{Inf} coordinates.
+
+\textbf{Traceback Capture and Tiered Penalties.}
+Runtime exceptions---such as matrix singularity during covariance updates or array broadcasting mismatches---are caught by the harness wrapper. The system logs the full traceback and assigns a tiered failure score:
+\begin{equation}\label{eq:failure_penalties}
+\mathcal{F}_{\text{failure}} =
+\begin{cases}
+-1.0 \times 10^7, & \text{if Execution Timeout } (t_{\text{wall}} > T_{\text{max}}) \\
+-1.0 \times 10^8, & \text{if Runtime Numerical or Dimensional Exception} \\
+-1.0 \times 10^9, & \text{if AST Validation or Syntax Compilation Failure}
+\end{cases}
+\end{equation}
+This tiered assignment maintains selection pressure toward syntactically valid and executable candidates. The parser strips non-informative frames from the traceback string, isolating the failing line pointer (e.g., \texttt{LinAlgError: Matrix is singular at line 48}). This diagnostic snippet is appended to feedback buffer $\mathcal{T}_{\text{feedback}}$, giving the model actionable debugging information for generation $g+1$.
 
 %-------------------------------------------------------------------------------
-\section{Empirical Evaluation Metrics and Statistical Protocols}\label{sec:method_stats}
+\section{Evolutionary Code Discovery}\label{sec:method_llamea}
 
-Each algorithm configuration is evaluated over $N_{\text{trials}} = 30$ independent random seeds. Performance is tracked using anytime convergence profiles and non-parametric Empirical Cumulative Distribution Functions (ECDFs) \cite{Hansen2021COCO, deNobel2024}.
+The search engine builds upon the Large Language Model Evolutionary Algorithm (LLaMEA) framework \cite{LLaMEA2024}, treating the language model as a semantic mutation operator.
 
-\subsection{Anytime Convergence Trajectory Analysis}
-Anytime curves track optimization error as a function of the expended evaluation budget. Let $x_k \in \mathbb{R}^D$ be the coordinate queried at step $k \in \{1 \dots B\}$, with budget $B = 100\,000$. The candidate algorithm uses noisy observations $f_{\text{noisy}}(x_k)$, while the logging layer records the true error:
+\textbf{The $(1+1)$ Evolution Loop.}
+The pipeline executes a $(1+1)$ Evolution Strategy over $G = 20$ generations. At generation $g \in \{1 \dots G\}$, the model mutates incumbent algorithm $\mathcal{A}_{\text{parent}}$ into a single offspring candidate $\mathcal{A}_{\text{child}}$ conditioned on prompt context $\mathcal{C}_g$:
+\begin{equation}\label{eq:context_assembly}
+\mathcal{C}_g = \left\{ \mathcal{P}_{\text{system}}, \mathcal{H}_{1 \dots g-1}, \mathcal{T}_{\text{feedback}}, \mathcal{I}_{\text{directive}} \right\}
+\end{equation}
+The context integrates four structural streams:
+\begin{enumerate}
+\item \textbf{System Specification ($\mathcal{P}_{\text{system}}$):} Defines the optimizer base class, evaluation budget ($B = 100\,000$), coordinate dimensionality, and spatial domain limits.
+\item \textbf{Historical Archive ($\mathcal{H}_{1 \dots g-1}$):} An indexed list of prior candidate implementations paired with their scalar fitness values $\mathcal{F}$, preventing cycling into previously explored search spaces.
+\item \textbf{Incumbent Profile ($\mathcal{T}_{\text{feedback}}$):} Contains the active parent implementation $\mathcal{A}_{\text{parent}}$, its lowest uncorrupted error $\min_k \Delta f(x_k)$, convergence dynamics, and tracebacks generated by recent failed mutations.
+\item \textbf{Evolutionary Directive ($\mathcal{I}_{\text{directive}}$):} Instructions prompting the model to diagnose failure modes (such as step-size collapse or variance loss) and synthesize structural improvements.
+\end{enumerate}
+
+\textbf{False Elitism and Stochastic Parent Resampling.}
+Under stochastic noise ($f_{\text{noisy}} = f_{\text{clean}} + z$), standard elitist selection breaks down due to false elitism \cite{Jin2005, Qian2020}. A candidate algorithm drawing an extreme negative perturbation ($z_k \ll 0$) receives an artificially deflated error score. If selected as parent, this over-evaluated candidate sets an unattainable fitness target. Subsequent offspring with superior structural mechanics are rejected because their realistic evaluation passes cannot beat the uncorrupted outlier score of the parent, halting optimization.
+
+To address this vulnerability, the framework applies a Stochastic Parent Resampling Policy. At the end of generation $g$, incumbent parent $\mathcal{A}_{\text{parent}}$ is re-evaluated across $K = 3$ independent stochastic passes using fresh random seeds. The incumbent selection score updates to its sample mean:
+\begin{equation}\label{eq:parent_resampling}
+\bar{\mathcal{F}}_{\text{parent}} = \frac{1}{K} \sum_{k=1}^{K} \mathcal{F}^{(k)}\left(\mathcal{A}_{\text{parent}}\right)
+\end{equation}
+where $\mathcal{F}^{(k)}(\mathcal{A}_{\text{parent}})$ denotes the scalar score from Equation~\ref{eq:meta_fitness_score} on pass $k$. Averaging over multiple evaluations reduces the influence of transient noise spikes, selecting for heuristics with structural variance tolerance.
+
+%-------------------------------------------------------------------------------
+\section{Prompt Archetypes}\label{sec:method_prompts}
+
+We evaluate four prompt configurations to test how different semantic constraints affect the discovery of noise-resilient optimizers.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Prompt Scaffolding Archetypes and Injected Inductive Biases.}
+\label{tab:prompt_scaffoldings}
+\begin{tabularx}{\textwidth}{l p{4.2cm} X}
+\toprule
+\textbf{Configuration} & \textbf{Core Mechanism} & \textbf{Injected Inductive Bias / Prompt Elements} \\
+\midrule
+\textbf{BASELINE} & Uninformed Control & Minimal API specification, boundary constraints, and evaluation budget; zero domain hints regarding noise or topology. \\
+\addlinespace
+\textbf{THINKING} & Chain-of-Thought (CoT) Deliberation & Mandatory analytical reasoning block prior to code output; requires diagnosis of parent failure modes, step-size mechanics, and population dynamics. \\
+\addlinespace
+\textbf{VECTORIZATION} & Syntactic Array-Broadcasting Prior & Explicit constraint prohibiting explicit Python iteration over population members; mandates vectorized NumPy matrix operations to accelerate throughput. \\
+\addlinespace
+\textbf{GUIDED} & Domain-Specific Algorithmic Priors & Explicit notification of evaluation uncertainty; suggests algorithmic noise-mitigation primitives including Monte Carlo resampling, momentum updates, and exponential moving averages. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{enumerate}
+\item \textbf{BASELINE (Control):} Specifies interface rules and budget limits without providing domain context on noise characteristics or optimizer architecture.
+\item \textbf{THINKING (Chain-of-Thought):} Requires an analytical preamble before code emission. The model must output a Markdown block detailing: (i) mathematical critique of parent mechanics, (ii) suspected failure modes such as variance collapse, and (iii) rationale for proposed algorithmic modifications.
+\item \textbf{VECTORIZATION (Broadcasting Prior):} Restricts code syntax by penalizing scalar Python loops over candidate solutions. Population updates must use vectorized NumPy operations, keeping execution within the 10-second timeout.
+\item \textbf{GUIDED (Domain Prior):} States that objective feedback contains heteroscedastic noise. The prompt suggests concrete algorithmic components, including multi-sample averaging, momentum terms, fitness smoothing, and rank-based selection.
+\end{enumerate}
+
+%-------------------------------------------------------------------------------
+\section{System Orchestration}\label{sec:method_orchestration}
+
+The interaction between the heteroscedastic noise model, sandboxed execution, prompt scaffolding, and parent resampling forms a closed-loop search system.
+
+\begin{figure}[htbp]
+\centering
+\input{figures/evolutionary_aad_loop}
+\caption{System orchestration of the stochastic Automated Algorithm Design loop. Source code flows from the model through AST validation to the execution sandbox. Search decisions consume noisy evaluations $f_{\text{noisy}}(x_k)$, while the background logger records true precision $\Delta f(x_k)$ and applies parent resampling ($K=3$, $\bar{f}_{\text{parent}}$) to update prompt context $\mathcal{C}_g$.}
+\label{fig:evolutionary_aad_loop}
+\end{figure}
+
+Each generation $g \in \{1 \dots G\}$ proceeds through five phases:
+\begin{enumerate}
+\item \textbf{Context Assembly and Generation:} The driver builds prompt packet $\mathcal{C}_g$ (Equation~\ref{eq:context_assembly}) containing the chosen prompt archetype, parent code $\mathcal{A}_{\text{parent}}$, and prior error traces. The model mutates the parent to produce $\mathcal{A}_{\text{child}}$.
+\item \textbf{Sanitization and Validation:} The harness extracts the code block using regular expressions and parses the AST. Scripts with unauthorized imports or blacklisted built-ins receive $\mathcal{F} = -10^9$ and terminate immediately.
+\item \textbf{Decoupled Execution:} The validated candidate executes inside an isolated worker under budget $B = 100\,000$ and timeout $T_{\text{max}} = 10.0\,\text{s}$. The candidate receives noisy values $f_{\text{noisy}}(x_k)$ (Equation~\ref{eq:wrapper_noise_return}), while the background harness logs uncorrupted spatial error $\Delta f(x_k)$ (Equation~\ref{eq:clean_distance_metric}).
+\item \textbf{Error Handling and Oracle Scoring:} If execution fails or times out, the run receives tiered penalty $\mathcal{F}_{\text{failure}}$ (Equation~\ref{eq:failure_penalties}), and the formatted traceback appends to $\mathcal{T}_{\text{feedback}}$. If execution completes, final coordinate $\mathbf{x}^*$ is evaluated on clean oracle $f_{\text{clean}}(\mathbf{x}^*)$ to assign scalar fitness $\mathcal{F}(\mathcal{A}_{\text{child}})$ via Equation~\ref{eq:meta_fitness_score}.
+\item \textbf{Selection and Parent Resampling:} Child fitness $\mathcal{F}(\mathcal{A}_{\text{child}})$ is compared against incumbent score $\bar{\mathcal{F}}_{\text{parent}}$. If $\mathcal{F}(\mathcal{A}_{\text{child}}) > \bar{\mathcal{F}}_{\text{parent}}$, the child becomes the candidate parent. The incumbent is re-evaluated across $K = 3$ stochastic runs to update baseline $\bar{\mathcal{F}}_{\text{parent}}$ (Equation~\ref{eq:parent_resampling}), and the history archive $\mathcal{H}_{1 \dots g}$ logs the step.
+\end{enumerate}
+
+%-------------------------------------------------------------------------------
+\section{Experimental Gauntlet}\label{sec:method_gauntlet}
+
+The experimental protocol divides into two phases: prompt ablation and comparative baseline validation.
+
+\textbf{Phase 1: Intra-Framework Prompt Ablation.}
+Phase 1 tests the four prompt configurations (BASELINE, THINKING, VECTORIZATION, GUIDED) across five BBOB objective functions spanning distinct topological properties:
+\begin{itemize}
+\item \textbf{$f_1$ (Sphere):} Unimodal separable surface for measuring convergence rate and gradient alignment.
+\item \textbf{$f_8$ (Rosenbrock):} Non-separable surface with a curved parabolic valley, testing search through low-to-moderate conditioning.
+\item \textbf{$f_{10}$ (Ellipsoidal):} Ill-conditioned unimodal surface with an extreme condition number ($10^6$), assessing anisotropic coordinate scaling.
+\item \textbf{$f_{15}$ (Rastrigin):} Multimodal surface with a sinusoidal grid overlaying a global quadratic basin, testing local optima escape.
+\item \textbf{$f_{21}$ (Gallagher 101 Peaks):} Asymmetric multimodal surface containing 101 randomly distributed Gaussian peaks, evaluating basin hopping without global gradient structure.
+\end{itemize}
+Runs execute under heteroscedastic noise regimes ($\text{CV} \in \{0.05, 0.10\}$) in dimension $D = 5$ to produce candidate optimizers for downstream testing.
+
+\textbf{Phase 2: Comparative Benchmarking and Dimensional Transfer.}
+Phase 2 benchmarks the top-performing synthesized algorithms against three established numerical optimizers: Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001}, Differential Evolution (DE) \cite{Storn1997}, and Particle Swarm Optimization (PSO) \cite{Kennedy1995}.
+
+The post-hoc benchmark evaluates two settings:
+\begin{enumerate}
+\item \textbf{Deterministic Baseline Validation ($\text{CV} = 0.0$):} Checks whether heuristics evolved under noise maintain convergence rates on clean objective landscapes.
+\item \textbf{Stochastic Robustness Validation ($\text{CV} > 0.0$):} Measures the performance degradation of standard baseline optimizers against synthesized heuristics as noise variance increases.
+\end{enumerate}
+To test structural generalizability, algorithms evolved in dimension $D = 5$ are evaluated directly on higher dimensions ($D \in \{10, 20\}$) without code modifications or parameter retraining.
+
+%-------------------------------------------------------------------------------
+\section{Evaluation Metrics}\label{sec:method_stats}
+
+Benchmarking runs across $N_{\text{trials}} = 30$ independent random seeds for each problem instance, noise level, and search dimension. Performance is assessed using anytime convergence curves, Empirical Cumulative Distribution Functions (ECDFs), and non-parametric hypothesis testing.
+
+\textbf{Anytime Convergence Trajectory Analysis.}
+Optimization dynamics are logged by tracking the uncorrupted optimality gap at each evaluation step $k \in \{1 \dots B\}$:
 \begin{equation}\label{eq:clean_delta_step}
-    \Delta f(x_k) = f_{\text{clean}}(x_k) - f(x^*)
+\Delta f(x_k) = \left| f_{\text{clean}}(x_k) - f(x^*) \right|
 \end{equation}
-where $f(x^*) \in \mathbb{R}$ is the theoretical minimum.
-
-The anytime metric tracks the lowest true error found up to evaluation $k$:
+The anytime performance metric records the best uncorrupted error found up to step $k$:
 \begin{equation}\label{eq:best_so_far_trajectory_eval}
-    \Delta f_{\text{best}}(k) = \min_{j \in \{1 \dots k\}} \left( f_{\text{clean}}(x_j) - f(x^*) \right)
+\Delta f_{\text{best}}(k) = \min_{j \in \{1 \dots k\}} \left| f_{\text{clean}}(x_j) - f(x^*) \right|
 \end{equation}
-Across 30 runs, results are summarized using geometric mean trajectories and standard error bands on logarithmic axes:
+Across $N_{\text{trials}} = 30$ runs, performance is plotted as geometric mean trajectories with shaded standard error bands on logarithmic axes:
 \begin{itemize}
-    \item \textbf{Horizontal Axis ($k$):} Function evaluations on a logarithmic scale from $1$ to $10^5$.
-    \item \textbf{Vertical Axis ($\Delta f_{\text{best}}(k)$):} True distance to the minimum from $10^6$ down to $10^{-8}$.
-    \item \textbf{Stagnation Analysis:} Horizontal asymptotic plateaus mark the budget threshold where an algorithm halts progress due to step-size collapse or ranking errors.
+\item \textbf{Horizontal Axis ($k$):} Total function evaluations on a logarithmic scale from $1$ to $10^5$.
+\item \textbf{Vertical Axis ($\Delta f_{\text{best}}(k)$):} Uncorrupted optimality gap plotted across eight orders of magnitude from $10^2$ down to $10^{-8}$.
+\item \textbf{Stagnation Tracking:} Horizontal plateauing marks the budget threshold where heuristics encounter premature convergence or variance collapse.
 \end{itemize}
 
-\subsection{Empirical Cumulative Distribution Functions (ECDFs)}
-Empirical Cumulative Distribution Functions aggregate target attainment rates across precision thresholds \cite{Hansen2021COCO}.
+\textbf{Empirical Cumulative Distribution Functions (ECDFs).}
+To aggregate performance across different problem topographies without scale distortion, empirical cumulative distribution functions (ECDFs) are constructed over a range of target precision thresholds \cite{Hansen2021COCO}.
 
-Let $\mathcal{T}$ represent a set of $M$ logarithmically spaced target precision levels:
+Let $\Theta$ define $M = 51$ logarithmically spaced precision thresholds spanning eight orders of magnitude:
 \begin{equation}\label{eq:target_precision_spectrum}
-    \mathcal{T} = \left\{ \tau \in \mathbb{R}^+ \mid 10^{-8} \le \tau \le 10^2 \right\}
+\Theta = \left\{ 10^{\theta} \mid \theta \in [-8.0, 2.0], \, \Delta \theta = 0.2 \right\}
 \end{equation}
-For $N_{\text{trials}}$ independent runs, the empirical attainment function at target precision $\tau \in \mathcal{T}$ is:
+For $N_{\text{trials}} = 30$ runs across problem instances $I$, the empirical attainment function at threshold $\tau \in \Theta$ and budget step $k$ is given by:
 \begin{equation}\label{eq:ecdf_formula}
-    F(\tau) = \frac{1}{N_{\text{trials}}} \sum_{i=1}^{N_{\text{trials}}} \mathbb{I}\left[ \Delta f_{\text{best}}^{(i)}(B) \le \tau \right]
+F(k, \tau) = \frac{1}{|I| \cdot N_{\text{trials}}} \sum_{i \in I} \sum_{r=1}^{N_{\text{trials}}} \mathbb{I}\left[ \Delta f_{\text{best}}^{(i, r)}(k) \le \tau \right]
 \end{equation}
-where $\Delta f_{\text{best}}^{(i)}(B) = \min_{k \le B} (f_{\text{clean}}^{(i)}(x_k) - f(x^*))$ is the terminal residual on trial $i$, and $\mathbb{I}[\cdot]$ is the indicator function:
+where $\mathbb{I}[\cdot]$ is the indicator function:
 \begin{equation}\label{eq:indicator_function}
-    \mathbb{I}\left[ \Delta f_{\text{best}}^{(i)}(B) \le \tau \right] = 
-    \begin{cases} 
-        1, & \text{if } \Delta f_{\text{best}}^{(i)}(B) \le \tau \\ 
-        0, & \text{if } \Delta f_{\text{best}}^{(i)}(B) > \tau 
-    \end{cases}
+\mathbb{I}\left[ \Delta f_{\text{best}}^{(i, r)}(k) \le \tau \right] =
+\begin{cases}
+1, & \text{if } \Delta f_{\text{best}}^{(i, r)}(k) \le \tau \\
+0, & \text{if } \Delta f_{\text{best}}^{(i, r)}(k) > \tau
+\end{cases}
 \end{equation}
-
-The step function characterizes overall solver reliability:
-\begin{itemize}
-    \item \textbf{Step Increments:} With finite samples $N_{\text{trials}}$, the empirical CDF rises in steps of $1/N_{\text{trials}}$ ($1/30 \approx 3.33\%$) at each recorded residual.
-    \item \textbf{Precision Axis ($\tau$):} The horizontal axis sweeps from loose tolerances ($\tau \ge 1$) to strict tolerances ($\tau \le 10^{-4}$).
-    \item \textbf{Attainment Proportion ($F(\tau)$):} The vertical axis indicates the fraction of runs ($0.0 \le F(\tau) \le 1.0$) reaching threshold $\tau$ within budget $B$.
-    \item \textbf{Comparison Criteria:} Curves positioned toward the upper-left indicate higher success rates at strict precision limits.
-\end{itemize}
-
-\subsection{Non-Parametric Hypothesis Testing and Effect Size}
-Because optimization residuals under stochastic noise are non-normal and heavily skewed, parametric tests like Student's t-test are inapplicable. Differences between candidate algorithms and baseline solvers are evaluated using the non-parametric \textbf{Mann-Whitney U Test} \cite{MannWhitney1947} with significance set at $\alpha = 0.05$.
-
-Performance margins are quantified using the \textbf{Vargha-Delaney $\hat{A}_{12}$} effect size metric \cite{VarghaDelaney2000}. The $\hat{A}_{12}$ index gives the probability that a run from the champion algorithm ($\mathcal{A}_1$) yields a lower terminal error than a run from baseline ($\mathcal{A}_2$):
-\begin{equation}\label{eq:vargha_delaney}
-    \hat{A}_{12} = \frac{R_1}{n_1 n_2} - \frac{n_1 + 1}{2 n_2}
+The Area Under the ECDF Curve ($\text{AUC-ECDF}$) integrates empirical attainment across logarithmic evaluation budgets:
+\begin{equation}\label{eq:auc_ecdf}
+\text{AUC-ECDF} = \frac{1}{|\Theta| \log_{10}(B)} \int_{1}^{B} \sum_{\tau \in \Theta} F(k, \tau) \, d(\log_{10} k)
 \end{equation}
-where $R_1$ is the rank sum of the champion runs within the pooled ranking, and $n_1 = n_2 = 30$ are the group sample sizes.
-
-The statistic $\hat{A}_{12} \in [0, 1]$ maps to standard effect size intervals \cite{VarghaDelaney2000}:
-\begin{itemize}
-    \item $\hat{A}_{12} = 0.50$: Stochastic equivalence between solvers.
-    \item $\hat{A}_{12} > 0.50$: Superiority of the champion algorithm over the baseline.
-    \item $\hat{A}_{12} \ge 0.56$: Small effect size.
-    \item $\hat{A}_{12} \ge 0.64$: Medium effect size.
-    \item $\hat{A}_{12} \ge 0.71$: Large effect size.
-\end{itemize}
+Higher $\text{AUC-ECDF}$ values denote faster convergence and higher solution rates across precision targets.
