@@ -1,0 +1,8 @@
+create a chatrs comparing different noise drops and performance
+
+stick to 10^6 for all plots ECDF and convergance
+
+use log scall on the y axis
+
+
+tell to sove noise without telling in prompt
