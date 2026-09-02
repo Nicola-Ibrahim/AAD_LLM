@@ -47,8 +47,17 @@ class IOHTraceReader:
                 parts = line.split()
                 if len(parts) >= 2:
                     try:
-                        current_evals.append(float(parts[0]))
-                        current_raw.append(float(parts[1]))
+                        eval_val = float(parts[0])
+                        raw_str = parts[1].strip()
+                        if raw_str.lower() in ("none", "null", "nan"):
+                            if current_raw:
+                                raw_val = current_raw[-1]
+                            else:
+                                continue
+                        else:
+                            raw_val = float(raw_str)
+                        current_evals.append(eval_val)
+                        current_raw.append(raw_val)
                     except ValueError:
                         continue
 

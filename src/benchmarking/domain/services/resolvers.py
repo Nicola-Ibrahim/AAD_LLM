@@ -236,20 +236,24 @@ def resolve_folder_solver_name(folder_name: str) -> str:
     if "pso" in p:
         return ClassicalSolver.PSO.value
 
-    # 2. Structured LLM Folders: {model_slug}_{strategy}
+    # 2. Structured LLM Folders: {model_slug}_{strategy} (with optional noise adaptation flag)
+    is_noise_adapted = ("_noisy" in p) or ("noisy_" in p) or ("-noisy" in p)
+    clean_p = p.replace("_noisy", "").replace("noisy_", "").replace("-noisy", "")
+    suffix = " (noise-adapted)" if is_noise_adapted else ""
+
     for s in KNOWN_STRATEGIES:
         strat_val = s.value if isinstance(s, EvaluationStrategy) else str(s)
-        if p.endswith(f"_{strat_val}") or p.endswith(f"-{strat_val}"):
-            model_part = p[: -(len(strat_val) + 1)]
+        if clean_p.endswith(f"_{strat_val}") or clean_p.endswith(f"-{strat_val}"):
+            model_part = clean_p[: -(len(strat_val) + 1)]
             model_lbl = get_clean_model_label(model_part)
-            return f"{model_lbl} / {strat_val}"
+            return f"{model_lbl} / {strat_val}{suffix}"
 
     # 3. Legacy aliases fallback
     for s in KNOWN_STRATEGIES:
         strat_val = s.value if isinstance(s, EvaluationStrategy) else str(s)
-        if strat_val in p:
-            model_lbl = get_clean_model_label(p)
-            return f"{model_lbl} / {strat_val}"
+        if strat_val in clean_p:
+            model_lbl = get_clean_model_label(clean_p)
+            return f"{model_lbl} / {strat_val}{suffix}"
 
     return raw
 

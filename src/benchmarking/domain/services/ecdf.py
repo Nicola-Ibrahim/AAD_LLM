@@ -67,12 +67,15 @@ class EcdfConvergenceEngine:
         interpolated = []
 
         for run in runs:
-            if len(run.evaluations) == 0:
+            min_len = min(len(run.evaluations), len(run.raw_objectives))
+            if min_len == 0:
                 continue
-            cum_best = np.minimum.accumulate(run.raw_objectives)
+            evals = run.evaluations[:min_len]
+            raws = run.raw_objectives[:min_len]
+            cum_best = np.minimum.accumulate(raws)
             y_interp = np.interp(
                 eval_grid,
-                run.evaluations,
+                evals,
                 cum_best,
                 left=cum_best[0],
                 right=cum_best[-1],
@@ -103,12 +106,15 @@ class EcdfConvergenceEngine:
 
         interp_matrix = []
         for run in runs:
-            if len(run.evaluations) == 0:
+            min_len = min(len(run.evaluations), len(run.raw_objectives))
+            if min_len == 0:
                 continue
-            cum_best = np.minimum.accumulate(run.raw_objectives)
+            evals = run.evaluations[:min_len]
+            raws = run.raw_objectives[:min_len]
+            cum_best = np.minimum.accumulate(raws)
             y_interp = np.interp(
                 eval_grid,
-                run.evaluations,
+                evals,
                 cum_best,
                 left=cum_best[0],
                 right=cum_best[-1],
@@ -134,18 +140,19 @@ class EcdfConvergenceEngine:
         benchmark_data: EvaluationDataset,
         solvers: list[str],
         targets: np.ndarray | dict[float, np.ndarray],
+        max_evals: int | None = 1_000_000,
         n_grid_points: int = 200,
     ) -> pd.DataFrame:
         """Compute Area Under the Runtime ECDF Curve (AUC-ECDF) for each solver across all conditions.
 
         AUC is integrated over log10(evaluations) using trapezoidal integration and normalized to [0, 1].
-        Dynamic evaluation grids (dim * 10,000) are computed per condition.
+        Standardized to 10^6 max evaluations budget across all conditions.
         Targets can be a single np.ndarray or a dictionary mapping noise_std to target arrays.
         """
         solver_aucs = {s: [] for s in solvers}
 
         for cond, s_dict in benchmark_data.items():
-            dim_budget = cond.dim * 10000
+            dim_budget = max_evals if max_evals is not None else cond.dim * 10000
             c_grid = np.logspace(0, np.log10(dim_budget), n_grid_points)
             log_x = np.log10(c_grid)
             x_range = float(log_x[-1] - log_x[0])
@@ -186,18 +193,19 @@ class EcdfConvergenceEngine:
         solvers: list[str],
         targets: np.ndarray | dict[float, np.ndarray],
         group_by: Literal["dim", "problem_id", "noise_std", "dim_noise", "problem_noise", "condition"] = "dim",
+        max_evals: int | None = 1_000_000,
         n_grid_points: int = 200,
     ) -> pd.DataFrame:
         """Compute Area Under the Runtime ECDF (AUC-ECDF) matrix disaggregated by grouping axis.
 
         Returns a long-format DataFrame with percentage AUC values scaled to [0, 100].
-        Dynamic evaluation grids (dim * 10,000) are computed per condition.
+        Standardized to 10^6 max evaluations budget across all conditions.
         Targets can be a single np.ndarray or a dictionary mapping noise_std to target arrays.
         """
         rows = []
 
         for cond, s_dict in benchmark_data.items():
-            dim_budget = cond.dim * 10000
+            dim_budget = max_evals if max_evals is not None else cond.dim * 10000
             c_grid = np.logspace(0, np.log10(dim_budget), n_grid_points)
             log_x = np.log10(c_grid)
             x_range = float(log_x[-1] - log_x[0])

@@ -254,6 +254,25 @@ class StatisticalEvaluationService:
             noisy_std=noisy_std,
         )
 
+    def compute_multi_noise_summary(
+        self,
+        benchmark_data: EvaluationDataset,
+        solvers: list[str] | None = None,
+        dims: list[int] | None = None,
+        noise_stds: list[float] | None = None,
+        problem_ids: list[int] | None = None,
+        threshold: float = 1e-8,
+    ) -> pd.DataFrame:
+        """Compute comprehensive performance degradation and robustness drop across arbitrary noise levels."""
+        return self.performance_engine.compute_multi_noise_summary(
+            benchmark_data=benchmark_data,
+            solvers=solvers,
+            dims=dims,
+            noise_stds=noise_stds,
+            problem_ids=problem_ids,
+            threshold=threshold,
+        )
+
     def compute_trajectory_and_ecdf(
         self,
         runs: list[RunTrace],
@@ -327,6 +346,7 @@ class StatisticalEvaluationService:
         benchmark_data: EvaluationDataset,
         solvers: list[str],
         targets: np.ndarray | dict[float, np.ndarray],
+        max_evals: int | None = 1_000_000,
         n_grid_points: int = 200,
     ) -> pd.DataFrame:
         """Compute Area Under the Runtime ECDF Curve (AUC-ECDF) for each solver across all conditions."""
@@ -334,6 +354,7 @@ class StatisticalEvaluationService:
             benchmark_data=benchmark_data,
             solvers=solvers,
             targets=targets,
+            max_evals=max_evals,
             n_grid_points=n_grid_points,
         )
 
@@ -343,6 +364,7 @@ class StatisticalEvaluationService:
         solvers: list[str],
         targets: np.ndarray | dict[float, np.ndarray],
         group_by: str = "dim",
+        max_evals: int | None = 1_000_000,
         n_grid_points: int = 200,
     ) -> pd.DataFrame:
         """Compute Area Under the Runtime ECDF Curve (AUC-ECDF) disaggregated by grouping axis."""
@@ -351,6 +373,7 @@ class StatisticalEvaluationService:
             solvers=solvers,
             targets=targets,
             group_by=group_by,  # type: ignore[arg-type]
+            max_evals=max_evals,
             n_grid_points=n_grid_points,
         )
 

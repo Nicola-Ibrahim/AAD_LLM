@@ -174,6 +174,104 @@ class PerformanceMetricsEngine:
 
         return valid_solvers, clean_rates, noisy_rates, deltas
 
+    def compute_multi_noise_summary(
+        self,
+        benchmark_data: EvaluationDataset,
+        solvers: list[str] | None = None,
+        dims: list[int] | None = None,
+        noise_stds: list[float] | None = None,
+        problem_ids: list[int] | None = None,
+        threshold: float = 1e-8,
+    ) -> pd.DataFrame:
+        """Compute comprehensive performance degradation and robustness drop across arbitrary noise levels.
+
+        For each combination of (Solver, Dim, Noise Std), computes:
+        - Success Rate (fraction of runs reaching delta_y <= threshold)
+        - Median Terminal Error
+        - Mean Log10 Terminal Error
+        - Absolute Fragility Drop (Clean Success Rate - Noisy Success Rate)
+        - Relative Fragility Drop Percentage ((Clean - Noisy) / Clean * 100)
+
+        Returns:
+            pd.DataFrame with columns:
+            ['Solver', 'Dim', 'Noise Std', 'Total Runs', 'Successes', 'Success Rate',
+             'Median Error', 'Mean Log Error', 'Clean Success Rate', 'Fragility Drop', 'Relative Drop Pct']
+        """
+        target_dims = dims if dims is not None else benchmark_data.dims
+        target_solvers = solvers if solvers is not None else benchmark_data.solvers
+        target_noises = sorted(noise_stds if noise_stds is not None else benchmark_data.noise_stds)
+        target_problems = problem_ids if problem_ids is not None else benchmark_data.problem_ids
+        clean_noise = (
+            0.0
+            if 0.0 in target_noises
+            else (0.0 if 0.0 in benchmark_data.noise_stds else (target_noises[0] if target_noises else 0.0))
+        )
+
+        records: list[dict[str, Any]] = []
+        for dim in target_dims:
+            clean_success_rates: dict[str, float] = {}
+            for s in target_solvers:
+                c_succ, c_tot = 0, 0
+                for p_id in target_problems:
+                    c_key = EvaluationCondition(dim=dim, noise_std=clean_noise, problem_id=p_id)
+                    for r in benchmark_data.get(c_key, {}).get(s, []):
+                        c_tot += 1
+                        if r.is_success(threshold):
+                            c_succ += 1
+                clean_success_rates[s] = (c_succ / c_tot) if c_tot > 0 else 0.0
+
+            for n_std in target_noises:
+                for s in target_solvers:
+                    tot_runs = 0
+                    succ_runs = 0
+                    final_values: list[float] = []
+
+                    for p_id in target_problems:
+                        cond = EvaluationCondition(dim=dim, noise_std=n_std, problem_id=p_id)
+                        for r in benchmark_data.get(cond, {}).get(s, []):
+                            tot_runs += 1
+                            if r.is_success(threshold):
+                                succ_runs += 1
+                            if not np.isnan(r.best_value):
+                                final_values.append(r.best_value)
+
+                    if tot_runs == 0:
+                        continue
+
+                    succ_rate = succ_runs / tot_runs
+                    med_err = float(np.median(final_values)) if final_values else 1e-16
+                    clamped_errs = np.clip(np.array(final_values) if final_values else np.array([1e-16]), 1e-16, None)
+                    mean_log_err = float(np.mean(np.log10(clamped_errs)))
+                    clean_rate = clean_success_rates.get(s, succ_rate)
+                    frag_drop = clean_rate - succ_rate
+                    rel_drop = (
+                        (frag_drop / clean_rate * 100.0)
+                        if clean_rate > 0
+                        else (0.0 if succ_rate == 0 else -100.0)
+                    )
+
+                    records.append({
+                        "Solver": s,
+                        "Dim": dim,
+                        "Noise Std": n_std,
+                        "Total Runs": tot_runs,
+                        "Successes": succ_runs,
+                        "Success Rate": succ_rate,
+                        "Median Error": med_err,
+                        "Mean Log Error": mean_log_err,
+                        "Clean Success Rate": clean_rate,
+                        "Fragility Drop": frag_drop,
+                        "Relative Drop Pct": rel_drop,
+                    })
+
+        cols = [
+            "Solver", "Dim", "Noise Std", "Total Runs", "Successes", "Success Rate",
+            "Median Error", "Mean Log Error", "Clean Success Rate", "Fragility Drop", "Relative Drop Pct"
+        ]
+        if not records:
+            return pd.DataFrame(columns=cols)
+        return pd.DataFrame(records)
+
     def compute_scaffolding_ablation(
         self,
         benchmark_data: EvaluationDataset,

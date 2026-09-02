@@ -58,4 +58,6 @@ class EvaluationConfigRepository:
                 "classical_baselines", ["cmaes", "de", "pso"]
             ),
             "baseline_labels": baseline_labels,
+            "cross_eval_clean_champions": bool(bench_cfg.get("cross_eval_clean_champions", True)),
+            "target_noise_stds": bench_cfg.get("target_noise_stds", None),
         }

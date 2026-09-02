@@ -62,29 +62,46 @@ class EvaluationService:
         self.force_rerun = cfg.get("force_rerun", False)
         self.classical_baselines = cfg.get("classical_baselines", ["cmaes", "de", "pso"])
         self.baseline_labels = cfg.get("baseline_labels", {})
+        self.cross_eval_clean_champions = cfg.get("cross_eval_clean_champions", True)
+        self.target_noise_stds = cfg.get("target_noise_stds", None)
 
     # ── Condition Discovery Helper ───────────────────────────────────────────────
 
     def _discover_target_conditions(self) -> list[tuple[int, float, int]]:
         """Discover unique (dim, noise_std, problem_id) conditions directly from SQLite or champions."""
+        raw_conditions: list[tuple[int, float, int]] = []
         if self.sqlite_repo:
             try:
-                conditions = self.sqlite_repo.get_target_conditions()
-                if conditions:
-                    return conditions
+                raw_conditions = self.sqlite_repo.get_target_conditions()
             except Exception:
-                pass
+                raw_conditions = []
 
-        champions_flat = self.champions_repo.get_champions_flat()
-        return sorted(
-            list(
-                {
-                    (c["dim"], c.get("noise_std", 0.0), c["problem_id"])
-                    for c in champions_flat.values()
-                    if "dim" in c and "problem_id" in c
-                }
-            )
-        )
+        if not raw_conditions:
+            champions_flat = self.champions_repo.get_champions_flat()
+            raw_conditions = [
+                (c["dim"], float(c.get("noise_std", 0.0)), c["problem_id"])
+                for c in champions_flat.values()
+                if "dim" in c and "problem_id" in c
+            ]
+
+        if not raw_conditions:
+            return []
+
+        # Extract all discovered dimensions, noise standard deviations, and problem IDs
+        unique_dims = {c[0] for c in raw_conditions}
+        unique_pids = {c[2] for c in raw_conditions}
+        if self.target_noise_stds is not None:
+            target_noises = sorted(list(set(float(n) for n in self.target_noise_stds)))
+        else:
+            target_noises = sorted(list({float(c[1]) for c in raw_conditions} | {0.0}))
+
+        expanded = {
+            (d, float(n), p)
+            for d in unique_dims
+            for n in target_noises
+            for p in unique_pids
+        }
+        return sorted(list(expanded))
 
     # ── Status Inspection Helper ─────────────────────────────────────────────────
 
@@ -118,45 +135,135 @@ class EvaluationService:
             return "PENDING", runs_found, med_err
         return "PENDING", 0, None
 
-    # ── Workload Auditing Facades ────────────────────────────────────────────────
+    # ── Workload Auditing Helpers & Builders ────────────────────────────────────
 
-    def audit_champions_workload(self) -> pd.DataFrame:
-        """Audit LLM-evolved champion algorithms workload against config matrix."""
-        return self.audit_workload(solver_type="champions")
+    def _build_champion_audit_row(
+        self,
+        champ_key: str,
+        champ: dict[str, Any],
+        eval_noise: float,
+        is_cross_eval: bool,
+    ) -> dict[str, Any]:
+        """Build standardized workload audit row for a champion or cross-evaluation trial."""
+        p_id = champ["problem_id"]
+        dim = champ["dim"]
+        strat = champ.get("prompt_strategy", "baseline")
+        llm_name = champ.get("llm_name", "llamea")
+        model_slug = get_model_slug(llm_name)
+        native_noise = float(champ.get("noise_std", 0.0))
+        is_clean = (champ.get("mode") == "clean") or (native_noise == 0.0)
+
+        code_path_raw = Path(champ["code_path"])
+        code_file = self.project_root / code_path_raw if not code_path_raw.is_absolute() else code_path_raw
+        code_valid = code_file.exists()
+        code_hash = compute_code_hash(code_file.read_text(encoding="utf-8")) if code_valid else None
+
+        solver_folder = f"{model_slug}_{strat}" if is_clean else f"{model_slug}_{strat}_noisy"
+        display_suffix = " (cross-eval)" if is_cross_eval else ("" if is_clean else " (noise-adapted)")
+
+        target_dir = (
+            self.state_repo.eval_dir
+            / f"{dim}D"
+            / f"std_{eval_noise}"
+            / f"f{p_id}"
+            / solver_folder
+        )
+        status, runs_found, med_err = self._inspect_solver_status(
+            target_dir, expected_code_hash=code_hash, code_valid=code_valid
+        )
+
+        row_key = f"{champ_key}_eval_std{eval_noise}" if is_cross_eval else champ_key
+        solver_type = "cross_eval" if is_cross_eval else "champion"
+
+        return {
+            "key": row_key,
+            "raw_key": champ_key,
+            "solver_type": solver_type,
+            "solver": solver_folder,
+            "display_name": f"{llm_name} ({strat}){display_suffix}",
+            "model": llm_name,
+            "strategy": strat,
+            "problem_id": p_id,
+            "dim": dim,
+            "noise_std": eval_noise,
+            "mode": "clean" if eval_noise == 0.0 else "noisy",
+            "target_runs": self.n_runs,
+            "runs_found": runs_found,
+            "status": status,
+            "median_error": med_err,
+            "is_filtered": False,
+        }
+
+    # ── Workload Auditing ────────────────────────────────────────────────────────
+
+    def audit_champions_workload(self, include_cross_eval: bool = False) -> pd.DataFrame:
+        """Audit LLM champion algorithms (evaluates native environments by default)."""
+        champions_flat = self.champions_repo.get_champions_flat()
+        rows = [
+            self._build_champion_audit_row(
+                champ_key=k,
+                champ=c,
+                eval_noise=float(c.get("noise_std", 0.0)),
+                is_cross_eval=False,
+            )
+            for k, c in champions_flat.items()
+        ]
+        df = pd.DataFrame(rows)
+        if include_cross_eval:
+            df_cross = self.audit_cross_eval_workload()
+            if not df_cross.empty:
+                df = pd.concat([df, df_cross], ignore_index=True)
+        return df
+
+    def audit_cross_eval_workload(self) -> pd.DataFrame:
+        """Audit out-of-distribution cross-environment evaluations for clean champions."""
+        champions_flat = self.champions_repo.get_champions_flat()
+        target_conditions = self._discover_target_conditions()
+        noisy_levels = sorted(list({float(c[1]) for c in target_conditions if c[1] > 0.0}))
+        if not noisy_levels:
+            return pd.DataFrame()
+
+        rows = []
+        for k, c in champions_flat.items():
+            native_noise = float(c.get("noise_std", 0.0))
+            is_clean = (c.get("mode") == "clean") or (native_noise == 0.0)
+            if not is_clean:
+                continue
+            for n_std in noisy_levels:
+                rows.append(
+                    self._build_champion_audit_row(
+                        champ_key=k,
+                        champ=c,
+                        eval_noise=n_std,
+                        is_cross_eval=True,
+                    )
+                )
+        return pd.DataFrame(rows)
 
     def audit_baselines_workload(self) -> pd.DataFrame:
-        """Audit classical baselines workload against config matrix."""
-        return self.audit_workload(solver_type="baselines")
-
-    def audit_workload(self, solver_type: str = "all") -> pd.DataFrame:
-        """Comprehensive workload audit across configured solver types."""
-        rows: list[dict[str, Any]] = []
-
-        if solver_type in ("all", "champions"):
-            champions_flat = self.champions_repo.get_champions_flat()
-            for key, champ in champions_flat.items():
-                p_id = champ["problem_id"]
-                dim = champ["dim"]
-                noise_std = champ.get("noise_std", 0.0)
-                strat = champ.get("prompt_strategy", "baseline")
-                llm_name = champ.get("llm_name", "llamea")
-                model_slug = get_model_slug(llm_name)
-
-                code_path_raw = Path(champ["code_path"])
-                code_file = self.project_root / code_path_raw if not code_path_raw.is_absolute() else code_path_raw
-                code_valid = code_file.exists()
-                code_hash = compute_code_hash(code_file.read_text(encoding="utf-8")) if code_valid else None
-
-                target_dir = self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / f"{model_slug}_{strat}"
-                status, runs_found, med_err = self._inspect_solver_status(target_dir, expected_code_hash=code_hash, code_valid=code_valid)
-
+        """Audit classical baseline algorithms across all target conditions."""
+        target_conditions = self._discover_target_conditions()
+        rows = []
+        for baseline_slug in self.classical_baselines:
+            b_name = self.baseline_labels.get(baseline_slug, baseline_slug.upper())
+            for dim, noise_std, p_id in target_conditions:
+                target_dir = (
+                    self.state_repo.eval_dir
+                    / f"{dim}D"
+                    / f"std_{noise_std}"
+                    / f"f{p_id}"
+                    / baseline_slug
+                )
+                status, runs_found, med_err = self._inspect_solver_status(
+                    target_dir, expected_code_hash=None, code_valid=True
+                )
                 rows.append({
-                    "key": key,
-                    "solver_type": "champion",
-                    "solver": f"{model_slug}_{strat}",
-                    "display_name": f"{llm_name} ({strat})",
-                    "model": llm_name,
-                    "strategy": strat,
+                    "key": f"f{p_id}_{dim}D_std{noise_std}_{baseline_slug}",
+                    "solver_type": "baseline",
+                    "solver": baseline_slug,
+                    "display_name": b_name,
+                    "model": baseline_slug,
+                    "strategy": "classical",
                     "problem_id": p_id,
                     "dim": dim,
                     "noise_std": noise_std,
@@ -167,42 +274,21 @@ class EvaluationService:
                     "median_error": med_err,
                     "is_filtered": False,
                 })
-
-        if solver_type in ("all", "baselines"):
-            target_conditions = self._discover_target_conditions()
-            for baseline_slug in self.classical_baselines:
-                b_name = self.baseline_labels.get(baseline_slug, baseline_slug.upper())
-                for dim, noise_std, p_id in target_conditions:
-                    target_dir = (
-                        self.state_repo.eval_dir
-                        / f"{dim}D"
-                        / f"std_{noise_std}"
-                        / f"f{p_id}"
-                        / baseline_slug
-                    )
-                    status, runs_found, med_err = self._inspect_solver_status(
-                        target_dir, expected_code_hash=None, code_valid=True
-                    )
-
-                    rows.append({
-                        "key": f"f{p_id}_{dim}D_std{noise_std}_{baseline_slug}",
-                        "solver_type": "baseline",
-                        "solver": baseline_slug,
-                        "display_name": b_name,
-                        "model": baseline_slug,
-                        "strategy": "classical",
-                        "problem_id": p_id,
-                        "dim": dim,
-                        "noise_std": noise_std,
-                        "mode": "clean" if noise_std == 0.0 else "noisy",
-                        "target_runs": self.n_runs,
-                        "runs_found": runs_found,
-                        "status": status,
-                        "median_error": med_err,
-                        "is_filtered": False,
-                    })
-
         return pd.DataFrame(rows)
+
+    def audit_workload(self, solver_type: str = "all") -> pd.DataFrame:
+        """Comprehensive workload audit across configured solver types ('all', 'champions', 'cross_eval', 'baselines')."""
+        dfs = []
+        if solver_type in ("all", "champions"):
+            dfs.append(self.audit_champions_workload())
+        if solver_type in ("all", "cross_eval"):
+            dfs.append(self.audit_cross_eval_workload())
+        if solver_type in ("all", "baselines"):
+            dfs.append(self.audit_baselines_workload())
+
+        if not dfs:
+            return pd.DataFrame()
+        return pd.concat(dfs, ignore_index=True)
 
     # ── Core Trial Execution Engine ──────────────────────────────────────────────
 
@@ -347,13 +433,15 @@ class EvaluationService:
     def run_champion_trials(
         self,
         champion_info: dict[str, Any],
+        target_noise_std: float | None = None,
+        solver_folder: str | None = None,
         verbose: bool = True,
     ) -> dict[str, Any]:
         """Execute empirical trials for a single LLM champion algorithm."""
         self.logger.verbose = verbose
         p_id = champion_info["problem_id"]
         dim = champion_info["dim"]
-        noise_std = champion_info.get("noise_std", 0.0)
+        noise_std = float(target_noise_std) if target_noise_std is not None else float(champion_info.get("noise_std", 0.0))
         strat = champion_info.get("prompt_strategy", "baseline")
         llm_name = champion_info.get("llm_name", "llamea")
         algo_name = champion_info.get("algorithm_name", "ChampionAlgorithm")
@@ -367,7 +455,8 @@ class EvaluationService:
         code_str = code_file.read_text(encoding="utf-8")
         code_hash = compute_code_hash(code_str)
         model_slug = get_model_slug(llm_name)
-        target_dir = self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / f"{model_slug}_{strat}"
+        folder = solver_folder or f"{model_slug}_{strat}"
+        target_dir = self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder
 
         executor = AlgorithmExecutor(timeout_seconds=self.trial_timeout_seconds)
 
@@ -448,7 +537,11 @@ class EvaluationService:
         df_audit = self.audit_workload(solver_type=solver_type)
         active = df_audit[~df_audit["is_filtered"] & (df_audit["status"] != "MISSING_CODE")]
 
-        champions_flat = self.champions_repo.get_champions_flat() if solver_type in ("all", "champions") else {}
+        champions_flat = (
+            self.champions_repo.get_champions_flat()
+            if solver_type in ("all", "champions", "cross_eval")
+            else {}
+        )
         results: list[dict[str, Any]] = []
 
         total_active = len(active)
@@ -477,12 +570,19 @@ class EvaluationService:
                 problem_name=BBOBFunction.get_name(p_id),
             )
 
-            if stype == "champion":
-                clean_k = row["key"]
-                matching = [v for k, v in champions_flat.items() if k.endswith(clean_k) or k == clean_k]
+            if stype in ("champion", "cross_eval"):
+                raw_k = row.get("raw_key", row["key"])
+                matching = [v for k, v in champions_flat.items() if k == raw_k or k.endswith(raw_k)]
+                if not matching:
+                    matching = [v for k, v in champions_flat.items() if k == row["key"] or k.endswith(row["key"])]
                 if not matching:
                     continue
-                res = self.run_champion_trials(matching[0], verbose=verbose)
+                res = self.run_champion_trials(
+                    matching[0],
+                    target_noise_std=row["noise_std"],
+                    solver_folder=row["solver"],
+                    verbose=verbose,
+                )
             else:
                 res = self.run_baseline_trials(
                     baseline_slug=row["solver"],
@@ -522,8 +622,15 @@ class EvaluationService:
         self,
         verbose: bool = True,
     ) -> pd.DataFrame:
-        """Run all pending/partial champion evaluations matching the config matrix."""
+        """Run all pending/partial native champion evaluations."""
         return self.run_evaluations(solver_type="champions", verbose=verbose)
+
+    def run_cross_evaluations(
+        self,
+        verbose: bool = True,
+    ) -> pd.DataFrame:
+        """Run all pending/partial cross-environment evaluations for clean champions."""
+        return self.run_evaluations(solver_type="cross_eval", verbose=verbose)
 
     def run_baselines(
         self,

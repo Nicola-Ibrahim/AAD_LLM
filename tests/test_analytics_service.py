@@ -334,3 +334,25 @@ class TestConvergenceTiers:
         assert len(df_res) == 2
         assert "AUC-ECDF (%)" in df_res.columns
         assert (df_res["AUC-ECDF (%)"] >= 0.0).all()
+
+    def test_compute_multi_noise_summary(self):
+        perf_engine = PerformanceMetricsEngine()
+        dataset = EvaluationDataset()
+
+        # Multi-noise levels: 0.0, 0.05, 0.1, 0.2
+        for noise in [0.0, 0.05, 0.1, 0.2]:
+            cond = EvaluationCondition(dim=2, noise_std=noise, problem_id=1)
+            # Solved on clean, degrading with noise
+            err = 1e-9 if noise == 0.0 else (1e-4 if noise == 0.05 else (0.5 if noise == 0.1 else 50.0))
+            r = RunTrace(evaluations=np.array([1, 100]), raw_objectives=np.array([100.0, err]))
+            dataset.add_run(cond, "DynamicSolver", r)
+
+        df_summary = perf_engine.compute_multi_noise_summary(dataset)
+        assert len(df_summary) == 4
+        assert list(df_summary["Noise Std"]) == [0.0, 0.05, 0.1, 0.2]
+        assert df_summary.loc[df_summary["Noise Std"] == 0.0, "Success Rate"].iloc[0] == 1.0
+        assert df_summary.loc[df_summary["Noise Std"] == 0.05, "Success Rate"].iloc[0] == 0.0
+        assert df_summary.loc[df_summary["Noise Std"] == 0.05, "Fragility Drop"].iloc[0] == 1.0
+        assert "Mean Log Error" in df_summary.columns
+        assert "Median Error" in df_summary.columns
+

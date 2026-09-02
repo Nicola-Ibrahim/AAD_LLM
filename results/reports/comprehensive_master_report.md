@@ -17,8 +17,8 @@
 - **10D**: 10 / 10 conditions reject null hypothesis
 
 ## 3. Pairwise Comparisons & FDR Correction
-- **Total Pairwise Hypothesis Tests**: 2640
-- **Significant Differences after FDR Correction ($\alpha=0.05$)**: 2107 / 2640 (79.8%)
+- **Total Pairwise Hypothesis Tests**: 5623
+- **Significant Differences after FDR Correction ($\alpha=0.05$)**: 4398 / 5623 (78.2%)
 
 ### Comparison Tier Breakdown
-- **Tier 3 (Classical vs. Classical)**: 2107 / 2640 pairs significant
+- **Tier 3 (Classical vs. Classical)**: 4398 / 5623 pairs significant

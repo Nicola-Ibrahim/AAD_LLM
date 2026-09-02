@@ -442,6 +442,168 @@ target_noise_levels = [0.0]
     assert "CMA-ES" in buf.getvalue()
 
 
+def test_cross_eval_clean_champions_workload_audit(tmp_path: Path):
+    """Verify that clean champions are audited across multiple target noise levels when cross_eval is enabled."""
+    eval_dir = tmp_path / "evaluations"
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+
+    cfg_file = tmp_path / "benchmark.toml"
+    cfg_file.write_text(
+        """
+[benchmarking]
+target_eval_runs = 2
+budget_multiplier = 50
+eval_timeout_seconds = 5.0
+classical_baselines = ["cmaes"]
+cross_eval_clean_champions = true
+target_noise_stds = [0.0, 0.05, 0.1]
+""",
+        encoding="utf-8",
+    )
+
+    code_file = project_root / "champ.py"
+    code_file.write_text("class DummyOpt: pass", encoding="utf-8")
+
+    champions_json = tmp_path / "champions.json"
+    champions_json.write_text(
+        json.dumps({
+            "qwen": {
+                "f1_2D_clean_baseline": {
+                    "problem_id": 1,
+                    "dim": 2,
+                    "mode": "clean",
+                    "noise_std": 0.0,
+                    "prompt_strategy": "baseline",
+                    "llm_name": "qwen_14b",
+                    "algorithm_name": "DummyOpt",
+                    "code_path": "champ.py",
+                }
+            }
+        }),
+        encoding="utf-8",
+    )
+
+    session_factory = create_db_session_factory()
+    sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
+    champions_repo = ChampionsReadRepository(session_factory, champions_path=champions_json)
+    trace_repo = IOHTraceReader(eval_dir=eval_dir)
+    state_repo = EvaluationStateRepository(eval_dir=eval_dir)
+    config_repo = EvaluationConfigRepository(config_path=cfg_file)
+    logger = EvaluationLogger()
+
+    service = EvaluationService(
+        sqlite_repo=sqlite_repo,
+        champions_repo=champions_repo,
+        trace_repo=trace_repo,
+        state_repo=state_repo,
+        config_repo=config_repo,
+        logger=logger,
+        project_root=project_root,
+    )
+
+    df_native = service.audit_champions_workload()
+    assert len(df_native) == 1
+    assert df_native.iloc[0]["noise_std"] == 0.0
+    assert df_native.iloc[0]["solver_type"] == "champion"
+
+    df_cross = service.audit_cross_eval_workload()
+    assert len(df_cross) == 2
+    assert set(df_cross["noise_std"]) == {0.05, 0.1}
+    assert all(df_cross["solver_type"] == "cross_eval")
+    assert all(df_cross["solver"] == "qwen_14b_baseline")
+
+    df_all = service.audit_workload(solver_type="all")
+    # 1 native champion + 2 cross-evals + 3 baselines (dim 2, 3 noises = 3 runs)
+    assert len(df_all[df_all["solver_type"] == "champion"]) == 1
+    assert len(df_all[df_all["solver_type"] == "cross_eval"]) == 2
+
+
+def test_cross_eval_default_behavior_without_toml_flags(tmp_path: Path):
+    """Verify that cross-eval is enabled by default even with minimal benchmark.toml."""
+    eval_dir = tmp_path / "evaluations"
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+
+    cfg_file = tmp_path / "benchmark.toml"
+    cfg_file.write_text(
+        """
+[benchmarking]
+target_eval_runs = 2
+budget_multiplier = 50
+eval_timeout_seconds = 5.0
+classical_baselines = ["cmaes"]
+""",
+        encoding="utf-8",
+    )
+
+    code_file = project_root / "champ.py"
+    code_file.write_text("class DummyOpt: pass", encoding="utf-8")
+
+    champions_json = tmp_path / "champions.json"
+    champions_json.write_text(
+        json.dumps({
+            "qwen": {
+                "f1_2D_clean_baseline": {
+                    "problem_id": 1,
+                    "dim": 2,
+                    "mode": "clean",
+                    "noise_std": 0.0,
+                    "prompt_strategy": "baseline",
+                    "llm_name": "qwen_14b",
+                    "algorithm_name": "DummyOpt",
+                    "code_path": "champ.py",
+                },
+                "f1_2D_noisy_baseline": {
+                    "problem_id": 1,
+                    "dim": 2,
+                    "mode": "noisy",
+                    "noise_std": 0.05,
+                    "prompt_strategy": "baseline",
+                    "llm_name": "qwen_14b",
+                    "algorithm_name": "DummyOpt",
+                    "code_path": "champ.py",
+                },
+            }
+        }),
+        encoding="utf-8",
+    )
+
+    session_factory = create_db_session_factory()
+    sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
+    champions_repo = ChampionsReadRepository(session_factory, champions_path=champions_json)
+    trace_repo = IOHTraceReader(eval_dir=eval_dir)
+    state_repo = EvaluationStateRepository(eval_dir=eval_dir)
+    config_repo = EvaluationConfigRepository(config_path=cfg_file)
+    logger = EvaluationLogger()
+
+    service = EvaluationService(
+        sqlite_repo=sqlite_repo,
+        champions_repo=champions_repo,
+        trace_repo=trace_repo,
+        state_repo=state_repo,
+        config_repo=config_repo,
+        logger=logger,
+        project_root=project_root,
+    )
+
+    # Defaults to True for cross_eval_clean_champions
+    assert service.cross_eval_clean_champions is True
+
+    df_native = service.audit_champions_workload()
+    assert len(df_native) == 2  # clean champion and noisy champion
+    assert any(row["noise_std"] == 0.0 and row["solver"] == "qwen_14b_baseline" for _, row in df_native.iterrows())
+    assert any(row["noise_std"] == 0.05 and row["solver"] == "qwen_14b_baseline_noisy" for _, row in df_native.iterrows())
+
+    df_cross = service.audit_cross_eval_workload()
+    assert len(df_cross) == 1
+    assert df_cross.iloc[0]["noise_std"] == 0.05
+    assert df_cross.iloc[0]["solver"] == "qwen_14b_baseline"
+    assert df_cross.iloc[0]["solver_type"] == "cross_eval"
+
+
+
+
 
 
 

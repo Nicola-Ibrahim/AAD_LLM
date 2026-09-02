@@ -1,7 +1,8 @@
 """RunTrace and SolverRunCollection Value Objects representing empirical optimization convergence traces."""
 
+from typing import Self
 import numpy as np
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from benchmarking.domain.base import ValueObject
 
@@ -11,6 +12,17 @@ class RunTrace(ValueObject):
 
     evaluations: np.ndarray = Field(description="Array of cumulative function evaluations.")
     raw_objectives: np.ndarray = Field(description="Array of objective error values at each evaluation checkpoint.")
+
+    @model_validator(mode="after")
+    def validate_lengths(self) -> Self:
+        """Guarantee evaluations and raw_objectives have identical length."""
+        len_evals = len(self.evaluations)
+        len_raw = len(self.raw_objectives)
+        if len_evals != len_raw:
+            min_len = min(len_evals, len_raw)
+            self.evaluations = self.evaluations[:min_len]
+            self.raw_objectives = self.raw_objectives[:min_len]
+        return self
 
     @property
     def final_value(self) -> float:
