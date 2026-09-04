@@ -47,10 +47,15 @@ def test_nb02_synthesis_pipeline():
     cfg = config_repo.load_config()
     assert "matrix" in cfg
     assert "evolution" in cfg
+    assert "problem_targets" in cfg
+    assert len(cfg["problem_targets"]) == 5
+    assert cfg["problem_ids"] == [1, 8, 11, 15, 21]
+    assert cfg["dimensions"] == [2, 3, 5]
 
     matrix_df, summary = service.audit_matrix()
     assert not matrix_df.empty
     assert "total_conditions" in summary
+    assert "problem_targets" in summary
 
     tasks = service.build_tasks()
     assert len(tasks) > 0
@@ -184,9 +189,85 @@ def test_nb05_analysis_pipeline():
     print("✅ NB05 statistical analysis & figures pipeline verified.")
 
 
+def test_synthesis_config_problem_targets_and_fallbacks(tmp_path):
+    """Verify Option 3 problem_targets parsing, per-problem dimensions, and legacy fallback."""
+    from unittest.mock import MagicMock
+    from evolution.application.synthesis_service import LLaMEASynthesisService
+    from evolution.infra.storage.synthesis_config import SynthesisConfigRepository
+
+    # 1. Custom per-problem dimensions
+    custom_toml = tmp_path / "custom.toml"
+    custom_toml.write_text("""
+[matrix]
+problem_targets = [
+  { id = 1, dimensions = [2, 5] },
+  { id = 8, dimensions = [3] },
+]
+noise_conditions = [
+  { std = 0.0, model = "none" },
+]
+prompt_strategies = ["baseline"]
+
+[evolution]
+iterations = 1
+budget = 1000
+runs_per_config = 1
+""")
+    repo = SynthesisConfigRepository(config_path=custom_toml)
+    cfg = repo.load_config()
+    assert cfg["problem_targets"] == [
+        {"id": 1, "dimensions": [2, 5]},
+        {"id": 8, "dimensions": [3]},
+    ]
+    assert cfg["problem_ids"] == [1, 8]
+    assert cfg["dimensions"] == [2, 3, 5]
+
+    mock_sqlite = MagicMock()
+    mock_sqlite.load.return_value = []
+    mock_llm = MagicMock()
+    mock_llm.model.name = "mock_model"
+    mock_logger = MagicMock()
+
+    service = LLaMEASynthesisService(
+        sqlite_repo=mock_sqlite,
+        config_repo=repo,
+        llm_client=mock_llm,
+        logger=mock_logger,
+    )
+
+    tasks = service.build_tasks()
+    # Problem 1 has 2D and 5D (2 tasks), Problem 8 has 3D (1 task) -> total 3 tasks
+    assert len(tasks) == 3
+    task_keys = [t.key for t in tasks]
+    assert any("f1_2D" in k for k in task_keys)
+    assert any("f1_5D" in k for k in task_keys)
+    assert any("f8_3D" in k for k in task_keys)
+    assert not any("f8_2D" in k for k in task_keys)
+    assert not any("f8_5D" in k for k in task_keys)
+
+    # 2. Legacy fallback
+    legacy_toml = tmp_path / "legacy.toml"
+    legacy_toml.write_text("""
+[matrix]
+problem_ids = [1, 11]
+dimensions = [2, 3]
+noise_stds = [0.0]
+prompt_strategies = ["baseline"]
+""")
+    legacy_repo = SynthesisConfigRepository(config_path=legacy_toml)
+    legacy_cfg = legacy_repo.load_config()
+    assert legacy_cfg["problem_targets"] == [
+        {"id": 1, "dimensions": [2, 3]},
+        {"id": 11, "dimensions": [2, 3]},
+    ]
+    assert legacy_cfg["problem_ids"] == [1, 11]
+    assert legacy_cfg["dimensions"] == [2, 3]
+
+
 if __name__ == "__main__":
     test_nb01_noise_pipeline()
     test_nb02_synthesis_pipeline()
     test_nb03_evaluation_pipeline()
     test_nb04_audit_pipeline()
     test_nb05_analysis_pipeline()
+

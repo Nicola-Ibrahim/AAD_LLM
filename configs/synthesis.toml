@@ -8,28 +8,28 @@
 # 1. WHAT TO SYNTHESIZE (Search Space Matrix)
 # ==============================================================================
 [matrix]
-# Target BBOB Problem Suite IDs:
+# Target BBOB Problem Suite IDs & Evaluated Dimensionalities (Option 3):
 #   1  : Sphere (Separable, smooth, unimodal)
 #   8  : Rosenbrock (Moderate conditioning, curved valley)
 #   11 : Discus (High conditioning, asymmetric ridge)
 #   15 : Rastrigin (Strong multi-modal, highly rugged)
 #   21 : Gallagher 101 (Weak multi-modal, deceptive Gaussian peaks)
-problem_ids = [1, 8, 11, 15, 21]
+problem_targets = [
+  { id = 1,  dimensions = [2, 3, 5] },
+  { id = 8,  dimensions = [2, 3, 5] },
+  { id = 11, dimensions = [2, 3, 5] },
+  { id = 15, dimensions = [2, 3, 5] },
+  { id = 21, dimensions = [2, 3, 5] },
+]
 
-# Evaluated Search Space Dimensionalities (D):
-dimensions = [2, 3, 5]
-
-# Noise Levels (Standard Deviation):
-#   • 0.0  = Clean Ground-Truth (No Noise)
-#   • 0.05 = Stochastic Noise Injection
-noise_stds = [0.0, 0.05]
-
-# Noise Injection Model Strategy:
-#   • "heteroscedastic"       : Multiplicative noise N(y, (noise_std * |y - y*|)^2)
-#   • "homoscedastic_additive": Landscape-scaled additive Gaussian noise
-#   • "awgn"                  : Constant-variance Additive White Gaussian Noise
-#   • "none"                  : No noise injection
-noise_model = "heteroscedastic"
+# Evaluated Noise Conditions (Pairs of standard deviation and noise model strategy):
+# Supported models: "none", "heteroscedastic", "homoscedastic_additive", "awgn"
+noise_conditions = [
+  { std = 0.0,  model = "none" },
+  { std = 0.05, model = "heteroscedastic" },
+  { std = 0.1,  model = "heteroscedastic" },
+  { std = 0.2,  model = "heteroscedastic" },
+]
 
 # Prompt Engineering Strategies evaluated during algorithm synthesis:
 # Options: "baseline", "thinking", "vectorization", "guided"

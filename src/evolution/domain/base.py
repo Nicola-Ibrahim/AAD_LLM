@@ -17,12 +17,6 @@ class DomainEntity(BaseModel):
     id: EntityID | None = Field(
         default=None,
         description="Globally unique entity primary key.",
-        validation_alias=AliasChoices("id", "experiment_id", "problem_id"),
     )
 
     model_config = ConfigDict(populate_by_name=True)
-
-    @property
-    def experiment_id(self) -> EntityID | None:
-        """Property alias for experiment_id."""
-        return self.id

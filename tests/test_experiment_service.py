@@ -7,6 +7,7 @@ import pytest
 from llamea import Solution
 from sqlalchemy.orm import sessionmaker
 
+from evolution.domain.entities import ExperimentSummary
 from evolution.domain.vos import (
     Code,
     Convergence,
@@ -337,7 +338,10 @@ def test_sqlite_create_and_append(db_session_factory):
     )
 
     repo.append_iteration(ctx1, it_meta)
-    repo.mark_completed(ctx1)
+    summary = repo.load(experiment_id=ctx1)[0]
+    summary.record_iteration(it_meta, 1)
+    summary.complete()
+    repo.save_experiment_summary(summary)
 
     # Verify save
     with db_session_factory() as session:
@@ -396,7 +400,10 @@ def test_sqlite_append_with_error(db_session_factory):
     )
 
     repo.append_iteration(ctx, it_meta)
-    repo.mark_completed(ctx)
+    summary = repo.load(experiment_id=ctx)[0]
+    summary.record_iteration(it_meta, 1)
+    summary.complete()
+    repo.save_experiment_summary(summary)
 
     # Load and verify error_log relation mapping
     loaded = repo.load(problem_id=1)
@@ -723,7 +730,9 @@ def test_prompt_strategy_persisted(db_session_factory, tmp_path):
         llm_name="test-llm",
         prompt_strategy=PromptStrategy.VECTORIZATION,
     )
-    repo.mark_completed(exp_id)
+    summary = repo.load(experiment_id=exp_id)[0]
+    summary.complete()
+    repo.save_experiment_summary(summary)
 
     summaries = repo.load(problem_id=1, prompt_strategy=PromptStrategy.VECTORIZATION)
     assert len(summaries) == 1
@@ -936,3 +945,99 @@ class BadMatrixOpt:
     # Option D check: numpy warning captured
     assert "NumPy/Runtime Warnings raised during execution" in scored.feedback
     assert "invalid value encountered in sqrt" in scored.feedback
+
+
+def test_experiment_summary_domain_aggregate(db_session_factory):
+    """Verify ExperimentSummary behavioral methods and save_experiment_summary persistence."""
+    repo = SQLiteSynthesisRepository(db_session_factory)
+    profile = ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0)
+    exp_id = repo.create_experiment(
+        problem=profile,
+        mode=SynthesisMode.CLEAN,
+        llm_name="test-llm",
+    )
+
+    exp = ExperimentSummary.new(
+        experiment_id=exp_id,
+        problem=profile,
+        mode=SynthesisMode.CLEAN,
+        llm_name="test-llm",
+    )
+    assert exp.status == "running"
+    assert exp.best_final_error is None
+    assert exp.best_iteration is None
+
+    # Record first iteration with final_error = 10.0
+    it1 = IterationMetadata(
+        iteration=1,
+        algorithm_name="Algo1",
+        execution=Execution(timed_out=False, runtime_seconds=0.1, llm_generation_time=0.5, evaluations_used=10, budget_consumed_pct=1.0, evals_per_second=100.0),
+        fitness=Fitness(raw_fitness=10.0, final_error=10.0, relative_error=10.0, error_per_evaluation=1.0),
+        code=Code(code_lines=5, code_length=100),
+        error=Error(error_type=None, error_message=None, error_traceback=None),
+        convergence=Convergence(converged=False, convergence_threshold=1e-6),
+    )
+    exp.record_iteration(it1)
+    assert exp.best_final_error == 10.0
+    assert exp.best_algorithm == "Algo1"
+    assert exp.best_iteration == 1
+
+    # Record second iteration with better error = 2.0
+    it2 = IterationMetadata(
+        iteration=2,
+        algorithm_name="Algo2",
+        execution=Execution(timed_out=False, runtime_seconds=0.1, llm_generation_time=0.5, evaluations_used=10, budget_consumed_pct=1.0, evals_per_second=100.0),
+        fitness=Fitness(raw_fitness=2.0, final_error=2.0, relative_error=2.0, error_per_evaluation=0.2),
+        code=Code(code_lines=5, code_length=100),
+        error=Error(error_type=None, error_message=None, error_traceback=None),
+        convergence=Convergence(converged=False, convergence_threshold=1e-6),
+    )
+    exp.record_iteration(it2)
+    assert exp.best_final_error == 2.0
+    assert exp.best_algorithm == "Algo2"
+    assert exp.best_iteration == 2
+
+    # Record third iteration with worse error = 5.0 (should not change champion)
+    it3 = IterationMetadata(
+        iteration=3,
+        algorithm_name="Algo3",
+        execution=Execution(timed_out=False, runtime_seconds=0.1, llm_generation_time=0.5, evaluations_used=10, budget_consumed_pct=1.0, evals_per_second=100.0),
+        fitness=Fitness(raw_fitness=5.0, final_error=5.0, relative_error=5.0, error_per_evaluation=0.5),
+        code=Code(code_lines=5, code_length=100),
+        error=Error(error_type=None, error_message=None, error_traceback=None),
+        convergence=Convergence(converged=False, convergence_threshold=1e-6),
+    )
+    exp.record_iteration(it3)
+    assert exp.best_final_error == 2.0
+    assert exp.best_algorithm == "Algo2"
+    assert exp.best_iteration == 2
+
+    # Record fourth iteration with failure (final_error = None / Inf)
+    it4 = IterationMetadata(
+        iteration=4,
+        algorithm_name="Algo4",
+        execution=Execution(timed_out=False, runtime_seconds=0.1, llm_generation_time=0.5, evaluations_used=10, budget_consumed_pct=1.0, evals_per_second=100.0),
+        fitness=Fitness(raw_fitness=None, final_error=None, relative_error=None, error_per_evaluation=None),
+        code=Code(code_lines=5, code_length=100),
+        error=Error(error_type="SyntaxError", error_message="invalid", error_traceback="tb"),
+        convergence=Convergence(converged=False, convergence_threshold=1e-6),
+    )
+    exp.record_iteration(it4)
+    assert exp.best_final_error == 2.0
+    assert exp.best_algorithm == "Algo2"
+    assert exp.best_iteration == 2
+
+    # Complete and save to repository
+    exp.complete()
+    assert exp.status == "completed"
+    assert exp.finished_at is not None
+
+    repo.save_experiment_summary(exp)
+
+    # Verify persisted values in database
+    loaded = repo.load(criteria=None, experiment_id=exp_id)[0]
+    assert loaded.status == "completed"
+    assert loaded.best_final_error == 2.0
+    assert loaded.best_algorithm == "Algo2"
+    assert loaded.best_iteration == 2
+    assert loaded.finished_at == exp.finished_at

@@ -13,12 +13,13 @@ from evolution.domain.vos import (
     Convergence,
     Error,
     Execution,
+    ExperimentFilter,
     Fitness,
     IterationMetadata,
     ProblemProfile,
 )
 from evolution.infra.storage.base import SynthesisRepository
-from shared.tables import ErrorLogORM, ExperimentMode, ExperimentORM, IterationORM
+from shared.tables import ErrorLogORM, ExperimentORM, IterationORM
 
 
 class SQLiteSynthesisRepository(SynthesisRepository):
@@ -129,35 +130,19 @@ class SQLiteSynthesisRepository(SynthesisRepository):
             session.add(iteration_orm)
             session.commit()
 
-    def mark_completed(self, experiment_id: int) -> None:
-        """Marks synthesis completed and computes best_* rollup fields from iterations table."""
+    def save_experiment_summary(self, exp: ExperimentSummary) -> None:
+        """Persists the domain-calculated summary and champion fields to the experiments table."""
         with self.SessionLocal() as session:
-            exp = session.get(ExperimentORM, experiment_id)
-            if not exp:
-                print(f"[WARN] mark_completed: no experiment row for id={experiment_id}")
+            row = session.get(ExperimentORM, exp.id)
+            if not row:
+                print(f"[WARN] save_experiment_summary: no experiment row for id={exp.id}")
                 return
 
-            stmt = (
-                select(IterationORM)
-                .where(
-                    IterationORM.experiment_id == experiment_id,
-                    IterationORM.final_error.isnot(None),
-                )
-                .order_by(IterationORM.final_error.asc())
-            )
-            best_row = session.execute(stmt).scalars().first()
-
-            if best_row:
-                count_stmt = select(func.count(IterationORM.id)).where(
-                    IterationORM.experiment_id == experiment_id,
-                    IterationORM.id <= best_row.id,
-                )
-                exp.best_iteration = session.execute(count_stmt).scalar()
-                exp.best_algorithm = best_row.algorithm_name
-                exp.best_final_error = best_row.final_error
-
-            exp.status = "completed"
-            exp.finished_at = datetime.now(timezone.utc).isoformat()
+            row.best_iteration = exp.best_iteration
+            row.best_algorithm = exp.best_algorithm
+            row.best_final_error = exp.best_final_error
+            row.status = exp.status
+            row.finished_at = exp.finished_at
             session.commit()
 
         self.checkpoint_wal()
@@ -203,6 +188,8 @@ class SQLiteSynthesisRepository(SynthesisRepository):
 
     def load(
         self,
+        criteria: ExperimentFilter | None = None,
+        *,
         experiment_id: int | None = None,
         problem_id: int | None = None,
         instance_id: int | None = None,
@@ -213,25 +200,37 @@ class SQLiteSynthesisRepository(SynthesisRepository):
         status: str | None = None,
     ) -> list[ExperimentSummary]:
         """Loads and filters ExperimentSummary objects from SQLite database using SQLAlchemy 2.0 select."""
+        if criteria is None:
+            criteria = ExperimentFilter(
+                experiment_id=experiment_id,
+                problem_id=problem_id,
+                instance_id=instance_id,
+                llm_name=llm_name,
+                dim=dim,
+                mode=mode,
+                prompt_strategy=prompt_strategy,
+                status=status,
+            )
+
         stmt = select(ExperimentORM).options(
             selectinload(ExperimentORM.iterations).selectinload(IterationORM.error_log)
         )
 
         raw_filters = {
-            "id": experiment_id,
-            "problem_id": problem_id,
-            "instance_id": instance_id,
-            "llm_name": llm_name,
-            "dim": dim,
-            "prompt_strategy": PromptStrategy(prompt_strategy) if prompt_strategy else None,
-            "status": status,
+            "id": criteria.experiment_id,
+            "problem_id": criteria.problem_id,
+            "instance_id": criteria.instance_id,
+            "llm_name": criteria.llm_name,
+            "dim": criteria.dim,
+            "prompt_strategy": criteria.prompt_strategy,
+            "status": criteria.status,
         }
         active_filters = {k: v for k, v in raw_filters.items() if v is not None}
         if active_filters:
             stmt = stmt.filter_by(**active_filters)
 
-        if mode is not None:
-            stmt = stmt.where(ExperimentORM.mode == mode)
+        if criteria.mode is not None:
+            stmt = stmt.where(ExperimentORM.mode == criteria.mode)
 
         stmt = stmt.order_by(ExperimentORM.problem_id.asc(), ExperimentORM.llm_name.asc())
 

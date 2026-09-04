@@ -11,7 +11,7 @@ import pandas as pd
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import BBOBFunction, NoiseModelEnum, PromptStrategy, SynthesisMode
 from evolution.domain.services.noise_strategy import NoiseStrategyFactory
-from evolution.domain.vos import ProblemProfile
+from evolution.domain.vos import ProblemProfile, SynthesisCondition
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
 from evolution.infra.problems.bbob import BBOBProblem
@@ -49,8 +49,24 @@ class LLaMEASynthesisService:
         self.retry_failed_synthesis: bool = bool(self.cfg["retry_failed_synthesis"])
         self.only_incomplete: bool = bool(self.cfg["only_incomplete"])
         self.target_exp_ids: list[int] | None = self.cfg["target_exp_ids"]
-        self.noise_model: NoiseModelEnum = NoiseModelEnum(
-            self.cfg.get("noise_model", "heteroscedastic")
+        raw_noise_conds = self.cfg.get("noise_conditions")
+        if raw_noise_conds:
+            self.noise_conditions: list[tuple[float, NoiseModelEnum]] = [
+                (
+                    float(c["std"]),
+                    NoiseModelEnum(str(c.get("model", "none" if float(c["std"]) == 0.0 else "heteroscedastic")).lower()),
+                )
+                for c in raw_noise_conds
+            ]
+        else:
+            default_model = NoiseModelEnum(self.cfg.get("noise_model", "heteroscedastic"))
+            self.noise_conditions = [
+                (float(s), NoiseModelEnum.NONE if float(s) == 0.0 else default_model)
+                for s in self.cfg.get("noise_stds", [0.0, 0.05])
+            ]
+        self.noise_stds: list[float] = [cond[0] for cond in self.noise_conditions]
+        self.noise_model: NoiseModelEnum = (
+            self.noise_conditions[0][1] if self.noise_conditions else NoiseModelEnum.HETEROSCEDASTIC
         )
         raw_mode = self.cfg.get("synthesis_mode")
         self.synthesis_mode: SynthesisMode | None = (
@@ -58,11 +74,27 @@ class LLaMEASynthesisService:
         )
 
         # 3. Search space dimensions and prompt strategies
-        self.problems: list[int] = [
-            int(p) for p in self.cfg.get("problem_ids", [1, 8, 11, 15, 21])
-        ]
-        self.dimensions: list[int] = [int(d) for d in self.cfg.get("dimensions", [2, 3, 5])]
-        self.noise_stds: list[float] = [float(s) for s in self.cfg.get("noise_stds", [0.0, 0.05])]
+        raw_targets = self.cfg.get("problem_targets")
+        if raw_targets:
+            self.problem_targets: list[dict[str, Any]] = [
+                {
+                    "id": int(t["id"]),
+                    "dimensions": [int(d) for d in t.get("dimensions", [2, 3, 5])],
+                }
+                for t in raw_targets
+            ]
+        else:
+            default_p_ids = [int(p) for p in self.cfg.get("problem_ids", [1, 8, 11, 15, 21])]
+            default_dims = [int(d) for d in self.cfg.get("dimensions", [2, 3, 5])]
+            self.problem_targets = [
+                {"id": p, "dimensions": list(default_dims)}
+                for p in default_p_ids
+            ]
+
+        self.problems: list[int] = [t["id"] for t in self.problem_targets]
+        self.dimensions: list[int] = sorted(
+            list({d for t in self.problem_targets for d in t["dimensions"]})
+        )
 
         raw_strats = self.cfg.get("prompt_strategies", ["baseline"])
         if isinstance(raw_strats, str):
@@ -86,26 +118,34 @@ class LLaMEASynthesisService:
         )
 
         matrix_rows = []
-        for dim in self.dimensions:
-            for noise_std in self.noise_stds:
-                noise_val = round(noise_std, 4)
-                if self.synthesis_mode and noise_std > 0:
-                    mode_enum = self.synthesis_mode
-                    mode_label = (
-                        f"Implicit ({noise_std})"
-                        if mode_enum == SynthesisMode.IMPLICIT
-                        else f"Noisy ({noise_std})"
-                    )
-                else:
-                    mode_enum = SynthesisMode.CLEAN if noise_std == 0.0 else SynthesisMode.NOISY
-                    mode_label = "Clean (0.0)" if noise_std == 0.0 else f"Noisy ({noise_std})"
+        for target in self.problem_targets:
+            p_id = target["id"]
+            for dim in target["dimensions"]:
+                for noise_std, noise_model in self.noise_conditions:
+                    noise_val = round(noise_std, 4)
+                    if self.synthesis_mode and noise_std > 0:
+                        mode_enum = self.synthesis_mode
+                        mode_label = (
+                            f"Implicit ({noise_std})"
+                            if mode_enum == SynthesisMode.IMPLICIT
+                            else f"Noisy ({noise_std})"
+                        )
+                    else:
+                        mode_enum = SynthesisMode.CLEAN if noise_std == 0.0 else SynthesisMode.NOISY
+                        mode_label = "Clean (0.0)" if noise_std == 0.0 else f"Noisy ({noise_std})"
 
-                for strat in self.prompt_strategies:
-                    for p_id in self.problems:
-                        cfg_key = (p_id, dim, mode_enum, noise_val, strat)
-                        n_comp = len(db_comp.get(cfg_key, []))
-                        n_fail = len(db_fail.get(cfg_key, []))
-                        n_run = len(db_run.get(cfg_key, []))
+                    for strat in self.prompt_strategies:
+                        cond = SynthesisCondition(
+                            problem_id=p_id,
+                            dim=dim,
+                            mode=mode_enum,
+                            noise_std=noise_val,
+                            noise_model=noise_model,
+                            strategy=strat,
+                        )
+                        n_comp = len(db_comp.get(cond, []))
+                        n_fail = len(db_fail.get(cond, []))
+                        n_run = len(db_run.get(cond, []))
 
                         if n_comp >= self.runs_per_config:
                             status_label = "✅ Completed (Valid Champion)"
@@ -140,6 +180,7 @@ class LLaMEASynthesisService:
             "retry_failed_synthesis": self.retry_failed_synthesis,
             "auto_resume": self.auto_resume,
             "skip_completed": self.skip_completed,
+            "problem_targets": self.problem_targets,
             "problem_ids": self.problems,
             "dimensions": self.dimensions,
             "noise_stds": self.noise_stds,
@@ -169,27 +210,35 @@ class LLaMEASynthesisService:
         )
 
         tasks: list[EvolutionTask] = []
-        for dim in self.dimensions:
-            for noise_std in self.noise_stds:
-                noise_val = round(noise_std, 4)
-                if self.synthesis_mode and noise_std > 0:
-                    mode_enum = self.synthesis_mode
-                    mode_label = (
-                        f"implicit_std_{noise_std}"
-                        if mode_enum == SynthesisMode.IMPLICIT
-                        else f"noisy_std_{noise_std}"
-                    )
-                    task_mode = mode_enum
-                else:
-                    mode_enum = SynthesisMode.CLEAN if noise_std == 0.0 else SynthesisMode.NOISY
-                    mode_label = "clean" if noise_std == 0.0 else f"noisy_std_{noise_std}"
-                    task_mode = None
+        for target in self.problem_targets:
+            p_id = target["id"]
+            for dim in target["dimensions"]:
+                for noise_std, noise_model in self.noise_conditions:
+                    noise_val = round(noise_std, 4)
+                    if self.synthesis_mode and noise_std > 0:
+                        mode_enum = self.synthesis_mode
+                        mode_label = (
+                            f"implicit_std_{noise_std}"
+                            if mode_enum == SynthesisMode.IMPLICIT
+                            else f"noisy_std_{noise_std}"
+                        )
+                        task_mode = mode_enum
+                    else:
+                        mode_enum = SynthesisMode.CLEAN if noise_std == 0.0 else SynthesisMode.NOISY
+                        mode_label = "clean" if noise_std == 0.0 else f"noisy_std_{noise_std}"
+                        task_mode = None
 
-                for strat in self.prompt_strategies:
-                    for p_id in self.problems:
-                        cfg_key = (p_id, dim, mode_enum, noise_val, strat)
-                        completed_list = db_comp.get(cfg_key, [])
-                        running_list = db_run.get(cfg_key, [])
+                    for strat in self.prompt_strategies:
+                        cond = SynthesisCondition(
+                            problem_id=p_id,
+                            dim=dim,
+                            mode=mode_enum,
+                            noise_std=noise_val,
+                            noise_model=noise_model,
+                            strategy=strat,
+                        )
+                        completed_list = db_comp.get(cond, [])
+                        running_list = db_run.get(cond, [])
 
                         # Step A: Resume interrupted/running runs from DB if AUTO_RESUME enabled
                         if self.auto_resume:
@@ -222,6 +271,7 @@ class LLaMEASynthesisService:
                                         p_id=p_id,
                                         dim=dim,
                                         noise_std=noise_std,
+                                        noise_model=noise_model,
                                         mode_label=mode_label,
                                         strat=strat,
                                         run_idx=run_idx,
@@ -281,26 +331,33 @@ class LLaMEASynthesisService:
         self,
         experiments: list[ExperimentSummary],
         retry_failed_synthesis: bool,
-    ) -> tuple[dict[tuple, list], dict[tuple, list], dict[tuple, list]]:
+    ) -> tuple[dict[SynthesisCondition, list], dict[SynthesisCondition, list], dict[SynthesisCondition, list]]:
         """Partitions database experiment records into completed, running, and failed groups."""
-        db_completed: dict[tuple, list] = {}
-        db_running: dict[tuple, list] = {}
-        db_failed_synthesis: dict[tuple, list] = {}
+        db_completed: dict[SynthesisCondition, list] = {}
+        db_running: dict[SynthesisCondition, list] = {}
+        db_failed_synthesis: dict[SynthesisCondition, list] = {}
 
         for exp in experiments:
             noise_val = round(exp.problem.noise_std, 4) if exp.problem.noise_std else 0.0
-            key = (exp.problem.problem_id, exp.problem.dim, exp.mode, noise_val, exp.prompt_strategy)
+            cond = SynthesisCondition(
+                problem_id=exp.problem.problem_id,
+                dim=exp.problem.dim,
+                mode=exp.mode,
+                noise_std=noise_val,
+                noise_model=exp.problem.noise_model,
+                strategy=exp.prompt_strategy,
+            )
 
             has_valid_champion = (
                 exp.best_final_error is not None and np.isfinite(exp.best_final_error)
             )
             if exp.status == "completed":
                 if has_valid_champion or not retry_failed_synthesis:
-                    db_completed.setdefault(key, []).append(exp)
+                    db_completed.setdefault(cond, []).append(exp)
                 else:
-                    db_failed_synthesis.setdefault(key, []).append(exp)
+                    db_failed_synthesis.setdefault(cond, []).append(exp)
             elif exp.status == "running":
-                db_running.setdefault(key, []).append(exp)
+                db_running.setdefault(cond, []).append(exp)
 
         return db_completed, db_running, db_failed_synthesis
 
@@ -383,12 +440,14 @@ class LLaMEASynthesisService:
         mode_label: str,
         strat: PromptStrategy,
         run_idx: int,
+        noise_model: NoiseModelEnum | None = None,
         key_prefix: str = "",
         synthesis_mode: SynthesisMode | None = None,
     ) -> EvolutionTask:
         """Registers a new experiment record in the database and returns a fresh EvolutionTask."""
+        effective_noise_model = noise_model or self.noise_model
         noise_strat = NoiseStrategyFactory.create(
-            noise_model=self.noise_model,
+            noise_model=effective_noise_model,
             noise_std=noise_std,
         )
         problem = BBOBProblem(

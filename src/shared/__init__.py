@@ -28,7 +28,6 @@ from shared.execution import (
 from shared.tables import (
     Base,
     ErrorLogORM,
-    ExperimentMode,
     ExperimentORM,
     IterationORM,
 )
@@ -56,7 +55,6 @@ __all__ = [
     "ExperimentORM",
     "IterationORM",
     "ErrorLogORM",
-    "ExperimentMode",
     # Execution Infrastructure
     "CodeCompiler",
     "AlgorithmExecutor",

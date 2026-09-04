@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.vos import IterationMetadata, ProblemProfile
+from evolution.domain.vos.experiment_filter import ExperimentFilter
 
 
 class SynthesisRepository(ABC):
@@ -11,6 +12,8 @@ class SynthesisRepository(ABC):
     @abstractmethod
     def load(
         self,
+        criteria: ExperimentFilter | None = None,
+        *,
         experiment_id: int | None = None,
         problem_id: int | None = None,
         instance_id: int | None = None,
@@ -20,7 +23,7 @@ class SynthesisRepository(ABC):
         prompt_strategy: PromptStrategy | None = None,
         status: str | None = None,
     ) -> list[ExperimentSummary]:
-        """Loads and filters stored ExperimentSummary objects."""
+        """Loads and filters stored ExperimentSummary objects matching criteria."""
         pass
 
     @abstractmethod
@@ -51,8 +54,8 @@ class SynthesisRepository(ABC):
         pass
 
     @abstractmethod
-    def mark_completed(self, experiment_id: int) -> None:
-        """Marks experiment completed and computes best_* rollup fields from iterations."""
+    def save_experiment_summary(self, exp: ExperimentSummary) -> None:
+        """Persists the domain-calculated summary and champion fields to the experiments table."""
         pass
 
     @abstractmethod

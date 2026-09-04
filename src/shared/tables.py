@@ -1,16 +1,12 @@
 """Shared declarative database models and schema definitions.
 
-Defines `ExperimentORM`, `IterationORM`, `ErrorLogORM`, and `ExperimentMode`
-shared across bounded contexts (evolution, benchmarking, analytics).
+Defines `ExperimentORM`, `IterationORM`, and `ErrorLogORM`.
 """
-
-import enum
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
-    Enum,
     Float,
     ForeignKey,
     Index,
@@ -23,13 +19,6 @@ from sqlalchemy.orm import declarative_base, relationship
 Base = declarative_base()
 
 
-class ExperimentMode(enum.StrEnum):
-    CLEAN = "clean"
-    NOISY = "noisy"
-    IMPLICIT = "implicit"
-
-
-
 class ExperimentORM(Base):
     """One row per experiment execution."""
 
@@ -40,7 +29,7 @@ class ExperimentORM(Base):
     problem_id = Column(Integer, nullable=False)
     instance_id = Column(Integer, nullable=False, default=1, server_default=text("1"))
     dim = Column(Integer, nullable=False)
-    mode = Column(Enum(ExperimentMode), nullable=False)
+    mode = Column(String, nullable=False)
     llm_name = Column(String, nullable=False)
     prompt_strategy = Column(
         String, nullable=False, default="baseline", server_default=text("'baseline'")

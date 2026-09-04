@@ -8,8 +8,10 @@ from typing import Any
 from llamea import LLaMEA
 
 from shared.config import DATA_DIR
+from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces import BaseProblem
+from evolution.domain.vos.problem_profile import ProblemProfile
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
 from evolution.infra.prompts import (
@@ -89,6 +91,24 @@ class LLaMEASession:
         self._stagnation_threshold = stagnation_threshold
         self._logger = logger or SynthesisLogger()
         self._synthesis_mode = SynthesisMode(synthesis_mode) if synthesis_mode is not None else problem.mode
+
+        problem_profile = ProblemProfile(
+            problem_id=self._problem.problem_id,
+            dim=self._problem.dim,
+            noise_std=self._problem.noise_std,
+            noise_model=self._problem.noise_model,
+            instance_id=self._problem.instance_id,
+            true_optimum=self._problem.true_optimum,
+        )
+        self._experiment = ExperimentSummary.new(
+            experiment_id=self._experiment_id,
+            problem=problem_profile,
+            mode=self._synthesis_mode,
+            llm_name=self._llm_client.model.name,
+            prompt_strategy=self._prompt_strategy,
+            budget=self._budget,
+            max_iterations=self._iterations,
+        )
 
         self._archive_dir = (
             DATA_DIR
@@ -171,10 +191,12 @@ class LLaMEASession:
             synthesis_engine = self._create_synthesis_engine(evaluator, task_prompt)
             synthesis_engine.run()
         except Exception as e:
+            self._experiment.fail()
             self._db_repo.mark_failed(self._experiment_id, str(e))
             raise
         else:
-            self._db_repo.mark_completed(self._experiment_id)
+            self._experiment.complete()
+            self._db_repo.save_experiment_summary(self._experiment)
             return synthesis_engine, evaluator
 
     def run(self) -> SessionResult:
@@ -237,6 +259,7 @@ class LLaMEASession:
             initial_iteration=self._initial_iteration,
             stagnation_threshold=self._stagnation_threshold,
             logger=self._logger,
+            experiment=self._experiment,
         )
 
     def _print_report(

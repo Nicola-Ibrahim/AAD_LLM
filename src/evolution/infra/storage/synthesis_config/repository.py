@@ -32,15 +32,54 @@ class SynthesisConfigRepository:
         evolution_cfg = cfg.get("evolution", {})
         exec_meta = cfg.get("execution", {})
 
+        raw_noise_conditions = matrix_cfg.get("noise_conditions")
+        if raw_noise_conditions:
+            noise_conditions = [
+                {
+                    "std": float(c["std"]),
+                    "model": str(c.get("model", "none" if float(c["std"]) == 0.0 else "heteroscedastic")),
+                }
+                for c in raw_noise_conditions
+            ]
+        else:
+            default_model = matrix_cfg.get("noise_model", "heteroscedastic")
+            noise_stds_raw = [float(s) for s in matrix_cfg.get("noise_stds", [0.0, 0.05])]
+            noise_conditions = [
+                {"std": s, "model": "none" if s == 0.0 else default_model}
+                for s in noise_stds_raw
+            ]
+
+        raw_problem_targets = matrix_cfg.get("problem_targets")
+        if raw_problem_targets:
+            problem_targets = [
+                {
+                    "id": int(t["id"]),
+                    "dimensions": [int(d) for d in t.get("dimensions", [2, 3, 5])],
+                }
+                for t in raw_problem_targets
+            ]
+        else:
+            default_p_ids = [int(p) for p in matrix_cfg.get("problem_ids", [1, 8, 11, 15, 21])]
+            default_dims = [int(d) for d in matrix_cfg.get("dimensions", [2, 3, 5])]
+            problem_targets = [
+                {"id": p, "dimensions": list(default_dims)}
+                for p in default_p_ids
+            ]
+
+        problem_ids = [t["id"] for t in problem_targets]
+        all_dimensions = sorted(list({d for t in problem_targets for d in t["dimensions"]}))
+
         return {
             "matrix": matrix_cfg,
             "evolution": evolution_cfg,
             "execution": exec_meta,
             "name": evolution_cfg.get("name", "bbob_comprehensive_matrix"),
+            "noise_conditions": noise_conditions,
             "noise_model": matrix_cfg.get("noise_model", "heteroscedastic"),
-            "problem_ids": [int(p) for p in matrix_cfg.get("problem_ids", [1, 8, 11, 15, 21])],
-            "dimensions": [int(d) for d in matrix_cfg.get("dimensions", [2, 3, 5])],
-            "noise_stds": [float(s) for s in matrix_cfg.get("noise_stds", [0.0, 0.05])],
+            "problem_targets": problem_targets,
+            "problem_ids": problem_ids,
+            "dimensions": all_dimensions,
+            "noise_stds": [c["std"] for c in noise_conditions],
             "prompt_strategies": matrix_cfg.get(
                 "prompt_strategies", ["baseline", "thinking", "vectorization", "guided"]
             ),

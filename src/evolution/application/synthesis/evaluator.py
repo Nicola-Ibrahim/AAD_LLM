@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 from llamea import Solution
 
+from evolution.domain.entities import ExperimentSummary
 from evolution.domain.interfaces import BaseProblem
 from evolution.domain.vos import (
     Code,
@@ -94,6 +95,7 @@ class Evaluator:
         convergence_threshold: float = 1e-6,
         stagnation_threshold: int = 3,
         logger: SynthesisLogger | None = None,
+        experiment: ExperimentSummary | None = None,
     ) -> None:
         """Initialize the evaluator.
 
@@ -111,6 +113,7 @@ class Evaluator:
             convergence_threshold: Target error threshold required to consider a run converged, by default 1e-6.
             stagnation_threshold: Number of consecutive failure iterations before triggering diversity injection, by default 3.
             logger: SynthesisLogger instance for console output.
+            experiment: Optional live ExperimentSummary domain aggregate to update with iteration champions.
         """
         self._problem = problem
         self._db_repo = db_repo
@@ -124,6 +127,16 @@ class Evaluator:
         self._stagnation_threshold = stagnation_threshold
         self._consecutive_failures = 0
         self._logger = logger or SynthesisLogger()
+        self._experiment = experiment
+
+    @property
+    def experiment(self) -> ExperimentSummary | None:
+        """Expose the associated live ExperimentSummary entity."""
+        return self._experiment
+
+    @experiment.setter
+    def experiment(self, value: ExperimentSummary | None) -> None:
+        self._experiment = value
 
     @property
     def problem_profile(self) -> ProblemProfile:
@@ -582,6 +595,10 @@ class Evaluator:
             experiment_id=self._experiment_id,
             metadata=final_metadata,
         )
+
+        # 3. Update in-memory domain aggregate
+        if self._experiment is not None:
+            self._experiment.record_iteration(final_metadata, self._current_iteration)
 
     def __call__(self, solution: Solution, explogger: Any | None = None) -> Solution:
         """Execute and score a candidate optimization algorithm solution.
