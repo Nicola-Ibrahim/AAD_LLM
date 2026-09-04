@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
-from evolution.domain.enums import ProblemMode
+from evolution.domain.enums import SynthesisMode
 
 
 class BaseProblem(ABC):
@@ -17,8 +17,8 @@ class BaseProblem(ABC):
 
     @property
     @abstractmethod
-    def mode(self) -> ProblemMode:
-        """Return ProblemMode (NOISY or CLEAN)."""
+    def mode(self) -> SynthesisMode:
+        """Return default SynthesisMode (NOISY or CLEAN) for this problem landscape."""
         ...
 
     @property

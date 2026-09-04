@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from evolution.domain.entities import ExperimentSummary
-from evolution.domain.enums import BBOBFunction, NoiseModelEnum, PromptStrategy
+from evolution.domain.enums import BBOBFunction, NoiseModelEnum, PromptStrategy, SynthesisMode
 from evolution.domain.services.noise_strategy import NoiseStrategyFactory
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.llm.client import LLMClient
@@ -52,6 +52,10 @@ class LLaMEASynthesisService:
         self.noise_model: NoiseModelEnum = NoiseModelEnum(
             self.cfg.get("noise_model", "heteroscedastic")
         )
+        raw_mode = self.cfg.get("synthesis_mode")
+        self.synthesis_mode: SynthesisMode | None = (
+            SynthesisMode(raw_mode.lower()) if raw_mode else None
+        )
 
         # 3. Search space dimensions and prompt strategies
         self.problems: list[int] = [
@@ -64,7 +68,7 @@ class LLaMEASynthesisService:
         if isinstance(raw_strats, str):
             raw_strats = [raw_strats]
         self.prompt_strategies: list[PromptStrategy] = [
-            getattr(PromptStrategy, s.upper()) if isinstance(s, str) else s for s in raw_strats
+            PromptStrategy(s.lower()) if isinstance(s, str) else s for s in raw_strats
         ]
 
     # -------------------------------------------------------------------------
@@ -84,13 +88,21 @@ class LLaMEASynthesisService:
         matrix_rows = []
         for dim in self.dimensions:
             for noise_std in self.noise_stds:
-                mode_label = "Clean (0.0)" if noise_std == 0.0 else f"Noisy ({noise_std})"
-                mode_str = "clean" if noise_std == 0.0 else "noisy"
                 noise_val = round(noise_std, 4)
+                if self.synthesis_mode and noise_std > 0:
+                    mode_enum = self.synthesis_mode
+                    mode_label = (
+                        f"Implicit ({noise_std})"
+                        if mode_enum == SynthesisMode.IMPLICIT
+                        else f"Noisy ({noise_std})"
+                    )
+                else:
+                    mode_enum = SynthesisMode.CLEAN if noise_std == 0.0 else SynthesisMode.NOISY
+                    mode_label = "Clean (0.0)" if noise_std == 0.0 else f"Noisy ({noise_std})"
 
                 for strat in self.prompt_strategies:
                     for p_id in self.problems:
-                        cfg_key = (p_id, dim, mode_str, noise_val, strat.value.lower())
+                        cfg_key = (p_id, dim, mode_enum, noise_val, strat)
                         n_comp = len(db_comp.get(cfg_key, []))
                         n_fail = len(db_fail.get(cfg_key, []))
                         n_run = len(db_run.get(cfg_key, []))
@@ -108,7 +120,7 @@ class LLaMEASynthesisService:
                             "Problem": f"f{p_id} ({BBOBFunction.get_short_name(p_id)})",
                             "Dimension": f"{dim}D",
                             "Environment": mode_label,
-                            "Strategy": strat.value.capitalize(),
+                            "Strategy": strat.capitalize(),
                             "Target Runs": self.runs_per_config,
                             "Completed": n_comp,
                             "Status": status_label,
@@ -131,7 +143,7 @@ class LLaMEASynthesisService:
             "problem_ids": self.problems,
             "dimensions": self.dimensions,
             "noise_stds": self.noise_stds,
-            "prompt_strategies": [s.value for s in self.prompt_strategies],
+            "prompt_strategies": [s for s in self.prompt_strategies],
             "target_exp_ids": self.target_exp_ids,
         }
         self.logger.audit_summary(
@@ -159,13 +171,23 @@ class LLaMEASynthesisService:
         tasks: list[EvolutionTask] = []
         for dim in self.dimensions:
             for noise_std in self.noise_stds:
-                mode_str = "clean" if noise_std == 0.0 else "noisy"
-                mode_label = "clean" if noise_std == 0.0 else f"noisy_std_{noise_std}"
                 noise_val = round(noise_std, 4)
+                if self.synthesis_mode and noise_std > 0:
+                    mode_enum = self.synthesis_mode
+                    mode_label = (
+                        f"implicit_std_{noise_std}"
+                        if mode_enum == SynthesisMode.IMPLICIT
+                        else f"noisy_std_{noise_std}"
+                    )
+                    task_mode = mode_enum
+                else:
+                    mode_enum = SynthesisMode.CLEAN if noise_std == 0.0 else SynthesisMode.NOISY
+                    mode_label = "clean" if noise_std == 0.0 else f"noisy_std_{noise_std}"
+                    task_mode = None
 
                 for strat in self.prompt_strategies:
                     for p_id in self.problems:
-                        cfg_key = (p_id, dim, mode_str, noise_val, strat.value.lower())
+                        cfg_key = (p_id, dim, mode_enum, noise_val, strat)
                         completed_list = db_comp.get(cfg_key, [])
                         running_list = db_run.get(cfg_key, [])
 
@@ -180,6 +202,7 @@ class LLaMEASynthesisService:
                                         noise_std=noise_std,
                                         mode_label=mode_label,
                                         strat=strat,
+                                        synthesis_mode=task_mode,
                                     )
                                 )
 
@@ -202,6 +225,7 @@ class LLaMEASynthesisService:
                                         mode_label=mode_label,
                                         strat=strat,
                                         run_idx=run_idx,
+                                        synthesis_mode=task_mode,
                                     )
                                 )
         return tasks
@@ -264,10 +288,8 @@ class LLaMEASynthesisService:
         db_failed_synthesis: dict[tuple, list] = {}
 
         for exp in experiments:
-            mode_str = exp.mode.lower()
             noise_val = round(exp.problem.noise_std, 4) if exp.problem.noise_std else 0.0
-            strat_str = exp.prompt_strategy.lower()
-            key = (exp.problem.problem_id, exp.problem.dim, mode_str, noise_val, strat_str)
+            key = (exp.problem.problem_id, exp.problem.dim, exp.mode, noise_val, exp.prompt_strategy)
 
             has_valid_champion = (
                 exp.best_final_error is not None and np.isfinite(exp.best_final_error)
@@ -292,8 +314,6 @@ class LLaMEASynthesisService:
             p_id = exp.problem.problem_id
             dim = exp.problem.dim
             noise_std = exp.problem.noise_std or 0.0
-            strat_str = exp.prompt_strategy.lower()
-            strat_enum = getattr(PromptStrategy, strat_str.upper())
             noise_strat = NoiseStrategyFactory.create(
                 noise_model=exp.problem.noise_model,
                 noise_std=noise_std,
@@ -308,14 +328,15 @@ class LLaMEASynthesisService:
             initial_iter = len(exp.iterations) if exp.iterations else 0
             tasks.append(
                 EvolutionTask(
-                    key=f"f{p_id}_{dim}D_{'clean' if noise_std == 0.0 else f'noisy_std_{noise_std}'}_{strat_str}_target_exp{exp.id}",
+                    key=f"f{p_id}_{dim}D_{'clean' if noise_std == 0.0 else f'noisy_std_{noise_std}'}_{exp.prompt_strategy}_target_exp{exp.id}",
                     problem=problem,
                     llm_client=self.llm_client,
                     experiment_id=exp.id,
                     initial_iteration=initial_iter,
                     budget=self.budget,
                     iterations=exp.max_iterations or self.iterations,
-                    prompt_strategy=strat_enum,
+                    prompt_strategy=exp.prompt_strategy,
+                    synthesis_mode=exp.mode,
                 )
             )
         return tasks
@@ -328,6 +349,7 @@ class LLaMEASynthesisService:
         noise_std: float,
         mode_label: str,
         strat: PromptStrategy,
+        synthesis_mode: SynthesisMode | None = None,
     ) -> EvolutionTask:
         """Constructs a resume EvolutionTask from an active running experiment in the database."""
         noise_strat = NoiseStrategyFactory.create(
@@ -342,7 +364,7 @@ class LLaMEASynthesisService:
         )
         initial_iter = len(exp.iterations) if exp.iterations else 0
         return EvolutionTask(
-            key=f"f{p_id}_{dim}D_{mode_label}_{strat.value}_resume_exp{exp.id}",
+            key=f"f{p_id}_{dim}D_{mode_label}_{strat}_resume_exp{exp.id}",
             problem=resume_problem,
             llm_client=self.llm_client,
             experiment_id=exp.id,
@@ -350,6 +372,7 @@ class LLaMEASynthesisService:
             budget=self.budget,
             iterations=exp.max_iterations or self.iterations,
             prompt_strategy=strat,
+            synthesis_mode=synthesis_mode or exp.mode,
         )
 
     def _build_fresh_task(
@@ -361,6 +384,7 @@ class LLaMEASynthesisService:
         strat: PromptStrategy,
         run_idx: int,
         key_prefix: str = "",
+        synthesis_mode: SynthesisMode | None = None,
     ) -> EvolutionTask:
         """Registers a new experiment record in the database and returns a fresh EvolutionTask."""
         noise_strat = NoiseStrategyFactory.create(
@@ -382,19 +406,20 @@ class LLaMEASynthesisService:
             instance_id=problem.instance_id,
             true_optimum=problem.true_optimum,
         )
+        exp_mode = synthesis_mode or problem.mode
         exp_id = self.sqlite_repo.create_experiment(
             problem=problem_profile,
-            mode=problem.mode,
+            mode=exp_mode,
             llm_name=self.llm_client.model.name,
-            prompt_strategy=strat.value,
+            prompt_strategy=strat,
             budget=self.budget,
             iterations=self.iterations,
         )
 
         key = (
-            f"{key_prefix}f{p_id}_{dim}D_{mode_label}_{strat.value}"
+            f"{key_prefix}f{p_id}_{dim}D_{mode_label}_{strat}"
             if key_prefix
-            else f"f{p_id}_{dim}D_{mode_label}_{strat.value}_run{run_idx}"
+            else f"f{p_id}_{dim}D_{mode_label}_{strat}_run{run_idx}"
         )
         return EvolutionTask(
             key=key,
@@ -405,4 +430,5 @@ class LLaMEASynthesisService:
             budget=self.budget,
             iterations=self.iterations,
             prompt_strategy=strat,
+            synthesis_mode=exp_mode,
         )

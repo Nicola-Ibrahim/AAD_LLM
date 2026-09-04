@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload, sessionmaker
 
 from evolution.domain.entities import ExperimentSummary
-from evolution.domain.enums import ProblemMode
+from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.vos import (
     Code,
     Convergence,
@@ -41,29 +41,22 @@ class SQLiteSynthesisRepository(SynthesisRepository):
     def create_experiment(
         self,
         problem: ProblemProfile,
-        mode: ProblemMode | str,
+        mode: SynthesisMode,
         llm_name: str,
-        prompt_strategy: str = "baseline",
+        prompt_strategy: PromptStrategy = PromptStrategy.BASELINE,
         budget: int = 1000000,
         iterations: int = 10,
     ) -> int:
-        """Creates the synthesis session DB row and returns its id."""
-        mode_str = mode.value if hasattr(mode, "value") else str(mode)
-        noise_model_str = (
-            problem.noise_model.value
-            if hasattr(problem.noise_model, "value")
-            else str(problem.noise_model)
-        )
         with self.SessionLocal() as session:
             experiment = ExperimentORM(
                 problem_id=problem.problem_id,
                 instance_id=problem.instance_id,
                 dim=problem.dim,
-                mode=ExperimentMode(mode_str),
+                mode=mode,
                 llm_name=llm_name,
                 prompt_strategy=prompt_strategy,
                 noise_std=problem.noise_std,
-                noise_model=noise_model_str,
+                noise_model=problem.noise_model,
                 budget=budget,
                 max_iterations=iterations,
                 true_optimum=problem.true_optimum,
@@ -215,8 +208,8 @@ class SQLiteSynthesisRepository(SynthesisRepository):
         instance_id: int | None = None,
         llm_name: str | None = None,
         dim: int | None = None,
-        mode: str | None = None,
-        prompt_strategy: str | None = None,
+        mode: SynthesisMode | None = None,
+        prompt_strategy: PromptStrategy | None = None,
         status: str | None = None,
     ) -> list[ExperimentSummary]:
         """Loads and filters ExperimentSummary objects from SQLite database using SQLAlchemy 2.0 select."""
@@ -230,7 +223,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
             "instance_id": instance_id,
             "llm_name": llm_name,
             "dim": dim,
-            "prompt_strategy": prompt_strategy,
+            "prompt_strategy": PromptStrategy(prompt_strategy) if prompt_strategy else None,
             "status": status,
         }
         active_filters = {k: v for k, v in raw_filters.items() if v is not None}
@@ -238,7 +231,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
             stmt = stmt.filter_by(**active_filters)
 
         if mode is not None:
-            stmt = stmt.where(ExperimentORM.mode == ExperimentMode(mode))
+            stmt = stmt.where(ExperimentORM.mode == mode)
 
         stmt = stmt.order_by(ExperimentORM.problem_id.asc(), ExperimentORM.llm_name.asc())
 
@@ -277,9 +270,9 @@ class SQLiteSynthesisRepository(SynthesisRepository):
         ]
 
         return ExperimentSummary(
-            mode=exp.mode.value,
+            mode=SynthesisMode(exp.mode),
             llm_name=exp.llm_name,
-            prompt_strategy=exp.prompt_strategy or "baseline",
+            prompt_strategy=PromptStrategy(exp.prompt_strategy) if exp.prompt_strategy else PromptStrategy.BASELINE,
             budget=exp.budget,
             max_iterations=exp.max_iterations,
             id=exp.id,

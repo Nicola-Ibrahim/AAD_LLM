@@ -23,9 +23,11 @@ from sqlalchemy.orm import declarative_base, relationship
 Base = declarative_base()
 
 
-class ExperimentMode(enum.Enum):
+class ExperimentMode(enum.StrEnum):
     CLEAN = "clean"
     NOISY = "noisy"
+    IMPLICIT = "implicit"
+
 
 
 class ExperimentORM(Base):

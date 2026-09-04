@@ -10,7 +10,7 @@ from pathlib import Path
 
 from shared.config import DATA_DIR
 from shared.database import initialize_sqlite_storage, setup_storage_environment
-from evolution.domain.enums import PromptStrategy
+from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.exceptions import OrchestrationError
 from evolution.domain.interfaces import BaseProblem
 from evolution.infra.llm.client import LLMClient
@@ -32,7 +32,8 @@ class EvolutionTask:
     initial_iteration: int = 0
     budget: int = 1000000
     iterations: int = 10
-    prompt_strategy: PromptStrategy | str = PromptStrategy.BASELINE
+    prompt_strategy: PromptStrategy = PromptStrategy.BASELINE
+    synthesis_mode: SynthesisMode | None = None
     db_path: Path = field(default_factory=lambda: DATA_DIR / "db.sqlite3")
 
     def __call__(self) -> SessionResult:
@@ -50,6 +51,7 @@ class EvolutionTask:
             code_repo=code_repo,
             budget=self.budget,
             iterations=self.iterations,
+            synthesis_mode=self.synthesis_mode,
         )
         return session.run()
 

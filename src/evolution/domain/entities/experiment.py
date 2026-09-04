@@ -4,6 +4,7 @@ from typing import Any
 from pydantic import Field, field_validator
 
 from evolution.domain.base import DomainEntity
+from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.vos.iteration import IterationMetadata
 from evolution.domain.vos.problem_profile import ProblemProfile
 
@@ -11,15 +12,14 @@ from evolution.domain.vos.problem_profile import ProblemProfile
 class ExperimentSummary(DomainEntity):
     """Aggregated result of a full LLaMEA evolution run."""
 
-    mode: str = Field(description="Experiment running mode.", examples=["noisy", "clean"])
+    mode: SynthesisMode = Field(description="Experiment running mode.")
     llm_name: str = Field(
         description="Name of the LLM used to generate algorithm candidates.",
         examples=["qwen2.5-coder-7b-instruct-q4_k_m", "gpt-4o-mini"],
     )
-    prompt_strategy: str = Field(
-        default="baseline",
+    prompt_strategy: PromptStrategy = Field(
+        default=PromptStrategy.BASELINE,
         description="Name of the prompt strategy used for algorithm synthesis.",
-        examples=["baseline", "vectorization", "math_hints", "full_scaffold"],
     )
     budget: int | None = Field(
         default=None,

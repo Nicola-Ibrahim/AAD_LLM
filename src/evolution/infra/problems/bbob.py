@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 from ioh import ProblemClass, get_problem
 
-from evolution.domain.enums import ProblemMode
+from evolution.domain.enums import SynthesisMode
 from evolution.domain.interfaces import BaseProblem
 from evolution.domain.services.noise_strategy import BaseNoiseStrategy
 
@@ -83,9 +83,9 @@ class BBOBProblem(BaseProblem):
         return val
 
     @property
-    def mode(self) -> ProblemMode:
-        """Return ProblemMode.NOISY if noise_std > 0 else ProblemMode.CLEAN."""
-        return ProblemMode.NOISY if self.noise_std > 0.0 else ProblemMode.CLEAN
+    def mode(self) -> SynthesisMode:
+        """Return SynthesisMode.NOISY if noise_std > 0 else SynthesisMode.CLEAN."""
+        return SynthesisMode.NOISY if self.noise_std > 0.0 else SynthesisMode.CLEAN
 
     def eval_scalar(self, x: np.ndarray) -> float:
         """Evaluate the objective function at point `x` and return a single scalar float."""

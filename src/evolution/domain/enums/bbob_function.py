@@ -60,7 +60,7 @@ class BBOBFunction(IntEnum):
             23: "Katsuura",
             24: "Lunacek bi-Rastrigin",
         }
-        return names.get(self.value, f"Function {self.value}")
+        return names.get(self, f"Function {self}")
 
     @property
     def short_name(self) -> str:

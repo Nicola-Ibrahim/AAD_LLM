@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from evolution.domain.entities import ExperimentSummary
-from evolution.domain.enums import ProblemMode
+from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.vos import IterationMetadata, ProblemProfile
 
 
@@ -16,8 +16,8 @@ class SynthesisRepository(ABC):
         instance_id: int | None = None,
         llm_name: str | None = None,
         dim: int | None = None,
-        mode: str | None = None,
-        prompt_strategy: str | None = None,
+        mode: SynthesisMode | None = None,
+        prompt_strategy: PromptStrategy | None = None,
         status: str | None = None,
     ) -> list[ExperimentSummary]:
         """Loads and filters stored ExperimentSummary objects."""
@@ -32,9 +32,9 @@ class SynthesisRepository(ABC):
     def create_experiment(
         self,
         problem: ProblemProfile,
-        mode: ProblemMode | str,
+        mode: SynthesisMode,
         llm_name: str,
-        prompt_strategy: str = "baseline",
+        prompt_strategy: PromptStrategy = PromptStrategy.BASELINE,
         budget: int = 1000000,
         iterations: int = 10,
     ) -> int:

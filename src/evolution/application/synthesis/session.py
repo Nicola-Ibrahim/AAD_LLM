@@ -8,13 +8,13 @@ from typing import Any
 from llamea import LLaMEA
 
 from shared.config import DATA_DIR
-from evolution.domain.enums import PromptStrategy
+from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces import BaseProblem
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
 from evolution.infra.prompts import (
-    EXAMPLE_PROMPT,
-    FORMAT_PROMPT,
+    build_example_prompt,
+    build_format_prompt,
     build_task_prompt,
 )
 from evolution.infra.storage.base import SynthesisRepository
@@ -38,7 +38,7 @@ class SessionResult:
 
     problem_id: int
     dim: int
-    mode: str
+    mode: SynthesisMode
     noise_std: float
     best_error: float | None = None
     experiment_id: int = 1
@@ -61,7 +61,7 @@ class LLaMEASession:
         problem: BaseProblem,
         experiment_id: int,
         initial_iteration: int,
-        prompt_strategy: PromptStrategy | str,
+        prompt_strategy: PromptStrategy,
         llm_client: LLMClient,
         db_repo: SynthesisRepository,
         code_repo: CodeRepository,
@@ -69,6 +69,7 @@ class LLaMEASession:
         iterations: int = DEFAULT_MAX_ITERATIONS,
         stagnation_threshold: int = 3,
         logger: SynthesisLogger | None = None,
+        synthesis_mode: SynthesisMode | None = None,
     ):
         """Initializes the synthesis session with pre-resolved domain objects and database experiment ID."""
         if llm_client is None:
@@ -79,11 +80,7 @@ class LLaMEASession:
         self._problem = problem
         self._experiment_id = experiment_id
         self._initial_iteration = initial_iteration
-        self._prompt_strategy = (
-            PromptStrategy(prompt_strategy)
-            if isinstance(prompt_strategy, str)
-            else prompt_strategy
-        )
+        self._prompt_strategy = PromptStrategy(prompt_strategy)
         self._llm_client = llm_client
         self._db_repo = db_repo
         self._code_repo = code_repo
@@ -91,6 +88,7 @@ class LLaMEASession:
         self._iterations = iterations
         self._stagnation_threshold = stagnation_threshold
         self._logger = logger or SynthesisLogger()
+        self._synthesis_mode = SynthesisMode(synthesis_mode) if synthesis_mode is not None else problem.mode
 
         self._archive_dir = (
             DATA_DIR
@@ -109,11 +107,6 @@ class LLaMEASession:
 
     def _print_start_banner(self) -> None:
         """Prints the initialization banner for the evolution run."""
-        strat_str = (
-            self._prompt_strategy.value
-            if hasattr(self._prompt_strategy, "value")
-            else str(self._prompt_strategy)
-        )
         self._logger.task_start(
             index=1,
             total=1,
@@ -121,7 +114,7 @@ class LLaMEASession:
             dim=self._problem.dim,
             noise_std=self._problem.noise_std,
             problem_id=self._problem.problem_id,
-            strategy=strat_str,
+            strategy=self._prompt_strategy,
             experiment_id=self._experiment_id,
             problem_name=getattr(self._problem, "name", ""),
         )
@@ -150,7 +143,7 @@ class LLaMEASession:
         return SessionResult(
             problem_id=self._problem.problem_id,
             dim=self._problem.dim,
-            mode=self._problem.mode,
+            mode=self._synthesis_mode,
             noise_std=self._problem.noise_std,
             best_error=best_error,
             experiment_id=self._experiment_id,
@@ -170,7 +163,7 @@ class LLaMEASession:
                 dim=self._problem.dim,
                 lower_bound=self._problem.lower_bound,
                 upper_bound=self._problem.upper_bound,
-                mode=self._problem.mode,
+                mode=self._synthesis_mode,
                 strategy=self._prompt_strategy,
                 budget_hint=self._budget,
             )
@@ -220,8 +213,8 @@ class LLaMEASession:
                 n_offspring=1,
                 budget=self._iterations,
                 task_prompt=task_prompt,
-                example_prompt=EXAMPLE_PROMPT,
-                output_format_prompt=FORMAT_PROMPT,
+                example_prompt=build_example_prompt(),
+                output_format_prompt=build_format_prompt(),
                 experiment_name=self._experiment_name,
                 elitism=True,
                 log=False,

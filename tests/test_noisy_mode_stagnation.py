@@ -1,5 +1,6 @@
 from llamea import Solution
 
+from evolution.domain.enums import NoiseModelEnum, SynthesisMode
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.problems.bbob import BBOBProblem
@@ -36,10 +37,10 @@ def test_stagnation_diversity_injection(db_session_factory, tmp_path):
             problem_id=15,
             dim=3,
             noise_std=0.5,
-            noise_model="heteroscedastic",
+            noise_model=NoiseModelEnum.HETEROSCEDASTIC,
             true_optimum=problem.true_optimum,
         ),
-        mode="noisy",
+        mode=SynthesisMode.NOISY,
         llm_name="test-llm",
     )
 
@@ -91,10 +92,10 @@ def test_evaluator_noisy_feedback_no_noise_std_leak(db_session_factory, tmp_path
             problem_id=15,
             dim=3,
             noise_std=0.75,
-            noise_model="heteroscedastic",
+            noise_model=NoiseModelEnum.HETEROSCEDASTIC,
             true_optimum=problem.true_optimum,
         ),
-        mode="noisy",
+        mode=SynthesisMode.NOISY,
         llm_name="test-llm",
     )
 

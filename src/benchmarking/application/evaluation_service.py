@@ -25,6 +25,7 @@ from benchmarking.infra.logging import EvaluationLogger
 from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
 from benchmarking.infra.storage.config_repository import EvaluationConfigRepository
 from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
+from evolution.domain.enums import SynthesisMode
 from evolution.domain.services.noise_strategy import (
     HeteroscedasticNoiseStrategy,
     NoNoiseStrategy,
@@ -151,15 +152,31 @@ class EvaluationService:
         llm_name = champ.get("llm_name", "llamea")
         model_slug = get_model_slug(llm_name)
         native_noise = float(champ.get("noise_std", 0.0))
-        is_clean = (champ.get("mode") == "clean") or (native_noise == 0.0)
+        raw_mode = champ.get("mode")
+        if raw_mode:
+            mode_enum = SynthesisMode(raw_mode)
+        elif "_implicit" in champ_key:
+            mode_enum = SynthesisMode.IMPLICIT
+        elif native_noise == 0.0:
+            mode_enum = SynthesisMode.CLEAN
+        else:
+            mode_enum = SynthesisMode.NOISY
 
         code_path_raw = Path(champ["code_path"])
         code_file = self.project_root / code_path_raw if not code_path_raw.is_absolute() else code_path_raw
         code_valid = code_file.exists()
         code_hash = compute_code_hash(code_file.read_text(encoding="utf-8")) if code_valid else None
 
-        solver_folder = f"{model_slug}_{strat}" if is_clean else f"{model_slug}_{strat}_noisy"
-        display_suffix = " (cross-eval)" if is_cross_eval else ("" if is_clean else " (noise-adapted)")
+        match mode_enum:
+            case SynthesisMode.IMPLICIT:
+                solver_folder = f"{model_slug}_{strat}_implicit"
+                display_suffix = " (cross-eval)" if is_cross_eval else " (noise-implicit)"
+            case SynthesisMode.CLEAN:
+                solver_folder = f"{model_slug}_{strat}"
+                display_suffix = " (cross-eval)" if is_cross_eval else ""
+            case SynthesisMode.NOISY:
+                solver_folder = f"{model_slug}_{strat}_noisy"
+                display_suffix = " (cross-eval)" if is_cross_eval else " (noise-adapted)"
 
         target_dir = (
             self.state_repo.eval_dir
@@ -186,7 +203,7 @@ class EvaluationService:
             "problem_id": p_id,
             "dim": dim,
             "noise_std": eval_noise,
-            "mode": "clean" if eval_noise == 0.0 else "noisy",
+            "mode": SynthesisMode.CLEAN if eval_noise == 0.0 else SynthesisMode.NOISY,
             "target_runs": self.n_runs,
             "runs_found": runs_found,
             "status": status,
@@ -226,7 +243,7 @@ class EvaluationService:
         rows = []
         for k, c in champions_flat.items():
             native_noise = float(c.get("noise_std", 0.0))
-            is_clean = (c.get("mode") == "clean") or (native_noise == 0.0)
+            is_clean = (c.get("mode") == SynthesisMode.CLEAN) or (native_noise == 0.0 and c.get("mode") != SynthesisMode.IMPLICIT)
             if not is_clean:
                 continue
             for n_std in noisy_levels:
@@ -267,7 +284,7 @@ class EvaluationService:
                     "problem_id": p_id,
                     "dim": dim,
                     "noise_std": noise_std,
-                    "mode": "clean" if noise_std == 0.0 else "noisy",
+                    "mode": SynthesisMode.CLEAN if noise_std == 0.0 else SynthesisMode.NOISY,
                     "target_runs": self.n_runs,
                     "runs_found": runs_found,
                     "status": status,

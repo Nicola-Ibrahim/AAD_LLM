@@ -34,7 +34,7 @@ class BaseNoiseStrategy(ABC):
 class NoNoiseStrategy(BaseNoiseStrategy):
     """Clean strategy with no noise injection."""
 
-    name: str = NoiseModelEnum.NONE.value
+    name: str = NoiseModelEnum.NONE
 
     def __init__(self, noise_std: float = 0.0):
         super().__init__(noise_std=0.0)
@@ -46,7 +46,7 @@ class NoNoiseStrategy(BaseNoiseStrategy):
 class HeteroscedasticNoiseStrategy(BaseNoiseStrategy):
     """Heteroscedastic Gaussian Noise relative to true optimum gap: N(true_val, (noise_std * |true_val - true_optimum|)^2)."""
 
-    name: str = NoiseModelEnum.HETEROSCEDASTIC.value
+    name: str = NoiseModelEnum.HETEROSCEDASTIC
 
     def __init__(self, noise_std: float = 0.0):
         super().__init__(noise_std=noise_std)
@@ -73,7 +73,7 @@ class HeteroscedasticNoiseStrategy(BaseNoiseStrategy):
 class HomoscedasticAdditiveNoiseStrategy(BaseNoiseStrategy):
     """Homoscedastic Additive Gaussian Noise, scaled to problem landscape scale."""
 
-    name: str = NoiseModelEnum.HOMOSCEDASTIC_ADDITIVE.value
+    name: str = NoiseModelEnum.HOMOSCEDASTIC_ADDITIVE
 
     def __init__(self, noise_std: float = 0.0, n_samples: int = 200):
         super().__init__(noise_std=noise_std)
@@ -107,7 +107,7 @@ class HomoscedasticAdditiveNoiseStrategy(BaseNoiseStrategy):
 class AWGNStrategy(BaseNoiseStrategy):
     """Additive White Gaussian Noise (constant variance: true_val + N(0, noise_std^2))."""
 
-    name: str = NoiseModelEnum.AWGN.value
+    name: str = NoiseModelEnum.AWGN
 
     def __init__(self, noise_std: float = 0.0):
         super().__init__(noise_std=noise_std)

@@ -16,6 +16,7 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
+from evolution.domain.enums import NoiseModelEnum, SynthesisMode, PromptStrategy
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy, NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.code.repository import CodeRepository
@@ -73,9 +74,9 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
     )
     exp_id_clean = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem_clean.true_optimum),
-        mode="clean",
+        mode=SynthesisMode.CLEAN,
         llm_name=llm.model.name,
-        prompt_strategy="baseline",
+        prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
         iterations=2,
     )
@@ -85,9 +86,9 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
     )
     exp_id_noisy = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.5, true_optimum=problem_noisy.true_optimum),
-        mode="noisy",
+        mode=SynthesisMode.NOISY,
         llm_name=llm.model.name,
-        prompt_strategy="baseline",
+        prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
         iterations=2,
     )
@@ -119,8 +120,8 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
     assert results["clean"].experiment_id != results["noisy"].experiment_id
 
     # Verify both clean and noisy experiments are stored in the DB
-    loaded_clean = repo.load(problem_id=1, mode="clean")
-    loaded_noisy = repo.load(problem_id=1, mode="noisy")
+    loaded_clean = repo.load(problem_id=1, mode=SynthesisMode.CLEAN)
+    loaded_noisy = repo.load(problem_id=1, mode=SynthesisMode.NOISY)
 
     assert len(loaded_clean) == 1
     assert loaded_clean[0].experiment_id == results["clean"].experiment_id
@@ -142,9 +143,9 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
         problem=ProblemProfile(
             problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0
         ),
-        mode="clean",
+        mode=SynthesisMode.CLEAN,
         llm_name="dummy-llm-1.0",
-        prompt_strategy="baseline",
+        prompt_strategy=PromptStrategy.BASELINE,
         budget=1000,
         iterations=1,
     )
@@ -152,9 +153,9 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
         problem=ProblemProfile(
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem_succ.true_optimum
         ),
-        mode="clean",
+        mode=SynthesisMode.CLEAN,
         llm_name="dummy-llm-1.0",
-        prompt_strategy="baseline",
+        prompt_strategy=PromptStrategy.BASELINE,
         budget=1000,
         iterations=1,
     )
@@ -189,7 +190,7 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
     assert str(errors["failing"]) == "Job failed"
 
     # Verify success got persisted
-    loaded_success = repo.load(problem_id=1, mode="clean")
+    loaded_success = repo.load(problem_id=1, mode=SynthesisMode.CLEAN)
     assert any(exp.experiment_id == exp_id_succ for exp in loaded_success)
 
 
@@ -218,7 +219,7 @@ def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
         problem=ProblemProfile(
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
-        mode="clean",
+        mode=SynthesisMode.CLEAN,
         llm_name="dummy-llm",
     )
 
@@ -243,7 +244,7 @@ def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
     evaluator(solution)
 
     # Check that iteration was recorded in DB
-    summaries = repo.load(problem_id=1, mode="clean")
+    summaries = repo.load(problem_id=1, mode=SynthesisMode.CLEAN)
     assert len(summaries) == 1
     assert len(summaries[0].iterations) == 1
     assert summaries[0].iterations[0].iteration == 1
@@ -260,7 +261,7 @@ def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory
         problem=ProblemProfile(
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
-        mode="clean",
+        mode=SynthesisMode.CLEAN,
         llm_name="dummy-llm",
     )
 
@@ -284,7 +285,7 @@ def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory
     evaluator(solution)
 
     # Check iteration grew in DB with error logs
-    summaries = repo.load(problem_id=1, mode="clean")
+    summaries = repo.load(problem_id=1, mode=SynthesisMode.CLEAN)
     assert len(summaries) == 1
     assert len(summaries[0].iterations) == 1
     assert summaries[0].iterations[0].iteration == 1
@@ -298,7 +299,7 @@ def test_sqlite_create_and_append(db_session_factory):
 
     ctx1 = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0),
-        mode="clean",
+        mode=SynthesisMode.CLEAN,
         llm_name="dummy-llm",
     )
 
@@ -347,7 +348,7 @@ def test_sqlite_create_and_append(db_session_factory):
         assert len(exp.iterations) == 1
         assert exp.iterations[0].error_log is None
 
-    summaries = repo.load(problem_id=1, mode="clean")
+    summaries = repo.load(problem_id=1, mode=SynthesisMode.CLEAN)
     assert len(summaries) == 1
     assert summaries[0].iterations[0].iteration == 1
 
@@ -357,7 +358,7 @@ def test_sqlite_append_with_error(db_session_factory):
 
     ctx = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0),
-        mode="clean",
+        mode=SynthesisMode.CLEAN,
         llm_name="dummy-llm",
     )
 
@@ -415,7 +416,7 @@ def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
         mode=problem.mode,
         llm_name=llm.model.name,
-        prompt_strategy="baseline",
+        prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
         iterations=2,
     )
@@ -425,7 +426,7 @@ def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
         problem=problem,
         experiment_id=exp_id,
         initial_iteration=0,
-        prompt_strategy="baseline",
+        prompt_strategy=PromptStrategy.BASELINE,
         llm_client=llm,
         iterations=2,
         db_repo=repo,
@@ -437,7 +438,7 @@ def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
     assert not archive_dir.exists()
 
     # Verify DB saved the run
-    loaded_runs = repo.load(problem_id=1, mode="clean")
+    loaded_runs = repo.load(problem_id=1, mode=SynthesisMode.CLEAN)
     assert len(loaded_runs) == 1
     assert loaded_runs[0].experiment_id == res1.experiment_id
 
@@ -452,7 +453,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
         mode=problem.mode,
         llm_name=llm.model.name,
-        prompt_strategy="baseline",
+        prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
         iterations=2,
     )
@@ -460,7 +461,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
         problem=problem,
         experiment_id=exp_id1,
         initial_iteration=0,
-        prompt_strategy="baseline",
+        prompt_strategy=PromptStrategy.BASELINE,
         llm_client=llm,
         db_repo=repo,
         code_repo=code_repo,
@@ -472,7 +473,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
         mode=problem.mode,
         llm_name=llm.model.name,
-        prompt_strategy="baseline",
+        prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
         iterations=2,
     )
@@ -480,7 +481,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
         problem=problem,
         experiment_id=exp_id2,
         initial_iteration=0,
-        prompt_strategy="baseline",
+        prompt_strategy=PromptStrategy.BASELINE,
         llm_client=llm,
         db_repo=repo,
         code_repo=code_repo,
@@ -491,7 +492,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
     assert res1.experiment_id != res2.experiment_id
 
     # Verify both runs are stored in DB with distinct experiment_ids
-    runs = repo.load(problem_id=1, mode="clean")
+    runs = repo.load(problem_id=1, mode=SynthesisMode.CLEAN)
     assert len(runs) == 2
     assert {r.experiment_id for r in runs} == {res1.experiment_id, res2.experiment_id}
 
@@ -506,7 +507,7 @@ def test_session_none_llm_guard(temp_dir, db_session_factory):
             problem=problem,
             experiment_id=1,
             initial_iteration=0,
-            prompt_strategy="baseline",
+            prompt_strategy=PromptStrategy.BASELINE,
             llm_client=None,
             db_repo=repo,
             code_repo=code_repo,
@@ -523,7 +524,7 @@ def test_session_mark_failed_on_error(temp_dir, db_session_factory):
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
         mode=problem.mode,
         llm_name=llm.model.name,
-        prompt_strategy="baseline",
+        prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
         iterations=2,
     )
@@ -532,7 +533,7 @@ def test_session_mark_failed_on_error(temp_dir, db_session_factory):
         problem=problem,
         experiment_id=exp_id,
         initial_iteration=0,
-        prompt_strategy="baseline",
+        prompt_strategy=PromptStrategy.BASELINE,
         llm_client=llm,
         db_repo=repo,
         code_repo=code_repo,
@@ -563,7 +564,7 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
         problem=ProblemProfile(
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
-        mode="clean",
+        mode=SynthesisMode.CLEAN,
         llm_name=llm.model.name,
         budget=2500,
     )
@@ -597,7 +598,7 @@ def test_session_problem_validation(temp_dir, db_session_factory):
             problem=None,
             experiment_id=1,
             initial_iteration=0,
-            prompt_strategy="baseline",
+            prompt_strategy=PromptStrategy.BASELINE,
             llm_client=llm,
             db_repo=repo,
             code_repo=code_repo,
@@ -611,7 +612,7 @@ def test_evaluator_current_iteration_resumes_from_db(temp_dir, db_session_factor
 
     exp_id = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0),
-        mode="clean",
+        mode=SynthesisMode.CLEAN,
         llm_name="dummy",
     )
 
@@ -688,7 +689,7 @@ def test_all_executions_failed_session_handling(db_session_factory, tmp_path):
         problem=ProblemProfile(problem_id=24, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
         mode=problem.mode,
         llm_name=mock_llm.model.name,
-        prompt_strategy="baseline",
+        prompt_strategy=PromptStrategy.BASELINE,
         budget=10,
         iterations=2,
     )
@@ -697,7 +698,7 @@ def test_all_executions_failed_session_handling(db_session_factory, tmp_path):
         problem=problem,
         experiment_id=exp_id,
         initial_iteration=0,
-        prompt_strategy="baseline",
+        prompt_strategy=PromptStrategy.BASELINE,
         llm_client=mock_llm,
         db_repo=repo,
         code_repo=code_repo,
@@ -718,18 +719,18 @@ def test_prompt_strategy_persisted(db_session_factory, tmp_path):
     repo = SQLiteSynthesisRepository(db_session_factory)
     exp_id = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=3, noise_std=0.0, true_optimum=0.0),
-        mode="clean",
+        mode=SynthesisMode.CLEAN,
         llm_name="test-llm",
-        prompt_strategy="vectorization",
+        prompt_strategy=PromptStrategy.VECTORIZATION,
     )
     repo.mark_completed(exp_id)
 
-    summaries = repo.load(problem_id=1, prompt_strategy="vectorization")
+    summaries = repo.load(problem_id=1, prompt_strategy=PromptStrategy.VECTORIZATION)
     assert len(summaries) == 1
-    assert summaries[0].prompt_strategy == "vectorization"
+    assert summaries[0].prompt_strategy == PromptStrategy.VECTORIZATION
 
     # Filter with different strategy returns empty list
-    empty_summaries = repo.load(problem_id=1, prompt_strategy="baseline")
+    empty_summaries = repo.load(problem_id=1, prompt_strategy=PromptStrategy.BASELINE)
     assert len(empty_summaries) == 0
 
 
@@ -763,10 +764,10 @@ def test_evaluator_clean_reevaluation_with_tuple_return(db_session_factory, tmp_
             problem_id=1,
             dim=2,
             noise_std=0.5,
-            noise_model="heteroscedastic",
+            noise_model=NoiseModelEnum.HETEROSCEDASTIC,
             true_optimum=problem.true_optimum,
         ),
-        mode="noisy",
+        mode=SynthesisMode.NOISY,
         llm_name="test-llm",
     )
     evaluator = Evaluator(
@@ -803,7 +804,7 @@ def test_evaluator_out_of_bounds_best_x_rejected(db_session_factory, tmp_path):
         problem=ProblemProfile(
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
-        mode="clean",
+        mode=SynthesisMode.CLEAN,
         llm_name="test-llm",
     )
     evaluator = Evaluator(
@@ -851,7 +852,7 @@ def test_evaluator_failure_fitness_and_categorized_feedback(db_session_factory, 
         problem=ProblemProfile(
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
-        mode="clean",
+        mode=SynthesisMode.CLEAN,
         llm_name="test-llm",
     )
     evaluator = Evaluator(
@@ -898,7 +899,7 @@ def test_evaluator_enriched_feedback_and_warnings(db_session_factory, tmp_path):
         problem=ProblemProfile(
             problem_id=8, dim=3, noise_std=0.0, true_optimum=problem.true_optimum
         ),
-        mode="clean",
+        mode=SynthesisMode.CLEAN,
         llm_name="test-llm",
     )
     evaluator = Evaluator(

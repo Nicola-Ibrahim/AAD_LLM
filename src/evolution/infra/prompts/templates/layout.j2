@@ -3,7 +3,13 @@ Your task is to design a novel, continuous black-box optimization algorithm spec
 
 {{ problem_nature }}
 
-This is NOT a general-purpose solver. You are designing a bespoke algorithm tailored to exploit the specific features of this single {% if is_noisy %}noisy {% else %}noise-free {% endif %}landscape.
+{% if is_implicit %}
+This is a bespoke algorithm tailored to optimize this specific unknown black-box landscape.
+{% elif is_noisy %}
+This is NOT a general-purpose solver. You are designing a bespoke algorithm tailored to exploit the specific features of this single noisy landscape.
+{% else %}
+This is NOT a general-purpose solver. You are designing a bespoke algorithm tailored to exploit the specific features of this single noise-free landscape.
+{% endif %}
 
 Problem Parameters:
 - The search space is {{ dim }}-dimensional.

@@ -1,6 +1,6 @@
 import numpy as np
 
-from evolution.domain.enums import ProblemMode, PromptStrategy
+from evolution.domain.enums import SynthesisMode, PromptStrategy
 from evolution.domain.services.noise_strategy import NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.prompts import build_task_prompt
@@ -18,7 +18,7 @@ def test_build_task_prompt_with_array_bounds():
         dim=problem.dim,
         lower_bound=problem.lower_bound,
         upper_bound=problem.upper_bound,
-        mode=ProblemMode.CLEAN,
+        mode=SynthesisMode.CLEAN,
     )
 
     assert "BBOB Problem ID: 1" in prompt
@@ -34,7 +34,7 @@ def test_build_task_prompt_noisy():
         dim=5,
         lower_bound=np.array([-5.0] * 5),
         upper_bound=np.array([5.0] * 5),
-        mode=ProblemMode.NOISY,
+        mode=SynthesisMode.NOISY,
     )
 
     assert "stochastic" in prompt or "noise" in prompt
@@ -69,23 +69,41 @@ def test_build_task_prompt_noisy_strategies():
     ub = np.array([5.0] * 3)
 
     baseline_noisy = build_task_prompt(
-        15, 3, lb, ub, mode=ProblemMode.NOISY, strategy=PromptStrategy.BASELINE
+        15, 3, lb, ub, mode=SynthesisMode.NOISY, strategy=PromptStrategy.BASELINE
     )
     assert "stochastic" in baseline_noisy
     assert "Single-shot acceptance" in baseline_noisy
 
     thinking_noisy = build_task_prompt(
-        15, 3, lb, ub, mode=ProblemMode.NOISY, strategy=PromptStrategy.THINKING
+        15, 3, lb, ub, mode=SynthesisMode.NOISY, strategy=PromptStrategy.THINKING
     )
     assert "statistical summary" in thinking_noisy
 
     vector_noisy = build_task_prompt(
-        15, 3, lb, ub, mode=ProblemMode.NOISY, strategy=PromptStrategy.VECTORIZATION
+        15, 3, lb, ub, mode=SynthesisMode.NOISY, strategy=PromptStrategy.VECTORIZATION
     )
     assert "k_evals = np.array" in vector_noisy
 
     guided_noisy = build_task_prompt(
-        15, 3, lb, ub, mode=ProblemMode.NOISY, strategy=PromptStrategy.GUIDED
+        15, 3, lb, ub, mode=SynthesisMode.NOISY, strategy=PromptStrategy.GUIDED
     )
     assert "re-evaluation strategy" in guided_noisy
     assert "_robust_eval" in guided_noisy
+
+
+def test_build_task_prompt_implicit():
+    lb = np.array([-5.0] * 3)
+    ub = np.array([5.0] * 3)
+
+    for strat in [
+        PromptStrategy.BASELINE,
+        PromptStrategy.GUIDED,
+        PromptStrategy.THINKING,
+        PromptStrategy.VECTORIZATION,
+    ]:
+        prompt = build_task_prompt(1, 3, lb, ub, mode=SynthesisMode.IMPLICIT, strategy=strat)
+        assert "unknown real-world black-box objective function" in prompt
+        assert "noisy" not in prompt.lower()
+        assert "noise-free" not in prompt.lower()
+        assert "deterministic" not in prompt.lower()
+
