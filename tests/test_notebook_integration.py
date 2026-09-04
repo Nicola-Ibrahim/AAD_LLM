@@ -263,6 +263,88 @@ prompt_strategies = ["baseline"]
     assert legacy_cfg["problem_ids"] == [1, 11]
     assert legacy_cfg["dimensions"] == [2, 3]
 
+    # 3. Automatic multi-mode (clean, noisy, implicit)
+    multimode_toml = tmp_path / "multimode.toml"
+    multimode_toml.write_text("""
+[matrix]
+problem_targets = [
+  { id = 1, dimensions = [2] },
+]
+noise_conditions = [
+  { std = 0.0, model = "none" },
+  { std = 0.05, model = "heteroscedastic" },
+]
+synthesis_modes = ["clean", "noisy", "implicit"]
+prompt_strategies = ["baseline"]
+
+[evolution]
+iterations = 1
+budget = 1000
+runs_per_config = 1
+""")
+    mm_repo = SynthesisConfigRepository(config_path=multimode_toml)
+    mm_cfg = mm_repo.load_config()
+    assert mm_cfg["synthesis_mode_names"] == ["clean", "noisy", "implicit"]
+
+    mm_service = LLaMEASynthesisService(
+        sqlite_repo=mock_sqlite,
+        config_repo=mm_repo,
+        llm_client=mock_llm,
+        logger=mock_logger,
+    )
+    mm_tasks = mm_service.build_tasks()
+    # 1 problem, 1 dim: clean (std=0.0), noisy (std=0.05), implicit (std=0.05) -> total 3 tasks
+    assert len(mm_tasks) == 3
+    mm_keys = [t.key for t in mm_tasks]
+    assert any("clean" in k for k in mm_keys)
+    assert any("noisy_std_0.05" in k for k in mm_keys)
+    assert any("implicit_std_0.05" in k for k in mm_keys)
+
+    # 4. Structured list of dictionaries for synthesis_modes with custom strategies
+    dict_modes_toml = tmp_path / "dict_modes.toml"
+    dict_modes_toml.write_text("""
+[matrix]
+problem_targets = [
+  { id = 1, dimensions = [2] },
+]
+noise_conditions = [
+  { std = 0.05, model = "heteroscedastic" },
+]
+synthesis_modes = [
+  { mode = "noisy",    strategies = ["baseline", "thinking"] },
+  { mode = "implicit", strategies = ["guided"] },
+]
+
+[evolution]
+iterations = 1
+budget = 1000
+runs_per_config = 1
+""")
+    dm_repo = SynthesisConfigRepository(config_path=dict_modes_toml)
+    dm_cfg = dm_repo.load_config()
+    assert len(dm_cfg["synthesis_modes"]) == 2
+    assert dm_cfg["synthesis_modes"][0] == {"mode": "noisy", "strategies": ["baseline", "thinking"]}
+    assert dm_cfg["synthesis_modes"][1] == {"mode": "implicit", "strategies": ["guided"]}
+    assert dm_cfg["prompt_strategies"] == ["baseline", "guided", "thinking"]
+
+    dm_service = LLaMEASynthesisService(
+        sqlite_repo=mock_sqlite,
+        config_repo=dm_repo,
+        llm_client=mock_llm,
+        logger=mock_logger,
+    )
+    dm_tasks = dm_service.build_tasks()
+    # 1 problem, 1 dim, std=0.05:
+    # noisy has 2 strategies (baseline, thinking) -> 2 tasks
+    # implicit has 1 strategy (guided) -> 1 task
+    # total = 3 tasks
+    assert len(dm_tasks) == 3
+    dm_keys = [t.key for t in dm_tasks]
+    assert any("noisy_std_0.05_baseline" in k for k in dm_keys)
+    assert any("noisy_std_0.05_thinking" in k for k in dm_keys)
+    assert any("implicit_std_0.05_guided" in k for k in dm_keys)
+    assert not any("implicit_std_0.05_baseline" in k for k in dm_keys)
+
 
 if __name__ == "__main__":
     test_nb01_noise_pipeline()

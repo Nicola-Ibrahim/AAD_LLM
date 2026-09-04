@@ -28,7 +28,6 @@ from evolution.domain.vos.metrics import (
     Fitness,
 )
 from evolution.domain.vos.problem_profile import ProblemProfile
-from evolution.domain.vos.condition import SynthesisCondition
 from evolution.domain.vos.experiment_filter import ExperimentFilter
 
 __all__ = [
@@ -42,7 +41,6 @@ __all__ = [
     "ExperimentSummary",
     "IterationMetadata",
     "ProblemProfile",
-    "SynthesisCondition",
     "ExperimentFilter",
     "SynthesisMode",
     "PromptStrategy",

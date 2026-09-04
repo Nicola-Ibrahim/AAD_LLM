@@ -31,9 +31,15 @@ noise_conditions = [
   { std = 0.2,  model = "heteroscedastic" },
 ]
 
-# Prompt Engineering Strategies evaluated during algorithm synthesis:
-# Options: "baseline", "thinking", "vectorization", "guided"
-prompt_strategies = ["baseline", "thinking", "vectorization", "guided"]
+# Evaluated Synthesis Modes & Prompt Strategies (List of dictionaries with strategies list):
+#   • "clean"    : Evaluated on deterministic landscapes (std = 0.0) with clean landscape characteristics
+#   • "noisy"    : Evaluated on noisy landscapes (std > 0.0) with explicit stochasticity warnings
+#   • "implicit" : Evaluated on noisy landscapes (std > 0.0) with neutral black-box prompt for autonomous noise discovery
+synthesis_modes = [
+  { mode = "clean",    strategies = ["baseline", "thinking", "vectorization", "guided"] },
+  { mode = "noisy",    strategies = ["baseline", "thinking", "vectorization", "guided"] },
+  { mode = "implicit", strategies = ["baseline", "thinking", "vectorization", "guided"] },
+]
 
 # ==============================================================================
 # 2. EVOLUTIONARY SYNTHESIS SETTINGS
