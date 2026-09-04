@@ -4,43 +4,46 @@
 
 \chapter{Research Objectives}\label{chap:objectives}
 
-The primary aim of this thesis is to evaluate the capacity of Large Language Models (LLMs) to autonomously synthesize bespoke optimization heuristics that are mathematically resilient to stochastic environments. To systematically bridge the gap between existing deterministic Automated Algorithm Design (AAD) frameworks and noisy, real-world applications, this research is driven by three core objectives and their corresponding research questions:
+The primary aim of this thesis is to evaluate the capacity of Large Language Models (LLMs) to autonomously synthesize bespoke optimization heuristics that are resilient to stochastic environments. To systematically address the gap between existing deterministic Automated Algorithm Design (AAD) frameworks and noisy, real-world applications, this research is structured around three core objectives and their corresponding research questions:
 
 % ==============================================================================
 % OBJECTIVE 1
 % ==============================================================================
+
 \section*{Objective 1: Formulating a Stochastic Evaluation Sandbox}
 
-To test the adaptive limits of an LLM, the execution environment must accurately reflect non-deterministic conditions by transforming deterministic functions into noisy problem spaces. Currently, standard AAD frameworks evaluate generated code exclusively against clean, theoretical baselines. This objective seeks to answer the following core question:
+To evaluate the adaptive capabilities of an LLM, the execution environment must account for non-deterministic conditions by extending deterministic functions with controlled noise. Standard AAD frameworks primarily evaluate generated code against clean, theoretical baselines. This objective seeks to answer the following core question:
 
 \begin{quote}
 \textbf{RQ1: How can continuous optimization benchmarks be systematically extended to simulate stochastic landscapes?}
 \end{quote}
 
-To address this challenge, this objective centers on the engineering and implementation of a non-deterministic wrapper layer over continuous benchmark functions. Grounded in established optimization literature \cite{Jin2005, Hansen2009Noisy}, this phase focuses on evaluating how the systematic application of a statistical noise distribution deforms baseline evaluations. The primary goal is to establish a repeatable, secure evaluation harness that effectively masks exact analytical gradients and forces an automated agent to navigate corrupted fitness values, thereby creating the necessary environmental pressure to test for genuine stochastic adaptation in language model code synthesis.
+To address this challenge, this objective focuses on the engineering and implementation of a non-deterministic wrapper layer over continuous benchmark functions. Grounded in established optimization literature \cite{Jin2005, Hansen2009Noisy}, this phase examines how the systematic application of a statistical noise distribution affects baseline evaluations. The primary goal is to establish a repeatable and secure evaluation harness that masks the exact analytical objective values available to the optimizer and requires the automated agent to operate using corrupted fitness values. This provides the evaluation setting needed to test for stochastic adaptation in language model code synthesis.
 
 % ==============================================================================
 % OBJECTIVE 2
 % ==============================================================================
+
 \section*{Objective 2: Autonomous Synthesis of Noise-Resilient Heuristics}
 
-While recent literature confirms that automated frameworks can generate highly competitive algorithms for clean, noiseless functions, it remains an open theoretical boundary whether these generative loops can adapt to stochastic disruption. Consequently, this objective addresses the core generative question of the thesis:
+While recent literature confirms that automated frameworks can generate competitive algorithms for clean, noiseless functions, it remains an open question whether these generative loops can adapt to stochastic disruption. Consequently, this objective addresses the core generative question of the thesis:
 
 \begin{quote}
 \textbf{RQ2: Can Large Language Models, across open-weights and proprietary architectures, autonomously synthesize optimization heuristics that are resilient to noise?}
 \end{quote}
 
-To achieve this objective, the LLaMEA evolutionary framework will be deployed across a representative set of continuous mathematical landscapes using both lightweight, cost-effective language models and high-capability commercial baselines. This phase leverages closed-loop evolutionary feedback to evaluate how language models adapt executable code structures when exposed to non-deterministic landscape evaluations. By analyzing how different model architectures evolve Python optimization scripts across multiple generations, this phase aims to investigate whether closed-loop environmental pressures can drive language models to independently discover, program, and refine specialized uncertainty-handling search logic.
+To achieve this objective, the LLaMEA evolutionary framework will be deployed across a representative set of continuous mathematical landscapes using both lightweight, cost-effective language models and high-capability commercial baselines. This phase uses closed-loop evolutionary feedback to evaluate how language models adapt executable code structures when exposed to non-deterministic evaluations. By analyzing how different model architectures evolve Python optimization scripts across multiple generations, this phase investigates whether closed-loop environmental feedback can lead language models to discover, implement, and refine specialized uncertainty-handling search logic.
 
 % ==============================================================================
 % OBJECTIVE 3
 % ==============================================================================
+
 \section*{Objective 3: Empirical Benchmarking and Cross-Environment Analysis}
 
-It is critical to formally validate the performance profiles of these LLM-generated algorithms under uncertainty and isolate how their robustness shifts across varied problem conditions. This evaluation drives the final comparative question:
+The performance of these LLM-generated algorithms must be evaluated under uncertainty, while also examining how their robustness changes across different problem conditions. This evaluation leads to the final comparative question:
 
 \begin{quote}
 \textbf{RQ3: How does the cross-environment robustness of noise-evolved heuristics compare against noiseless baselines?}
 \end{quote}
 
-To validate the significance of noise-aware evolution, we will establish a rigorous comparative benchmarking framework that evaluates runtime convergence rates and solution quality within a corrupted environment. Evolved champion algorithms will be evaluated against control groups synthesized under clean conditions as well as traditional baselines. Testing these suites across identical stochastic setups allows this objective to systematically measure the exact performance differential yielded by exposing the generative model to persistent uncertainty. Finally, this phase will culminate in a comprehensive performance analysis, directly comparing our empirical results with findings from baseline literature operating under clean, noiseless criteria to isolate the structural and behavioral boundaries an automated framework independently exhibits under severe uncertainty.
+To evaluate the effect of noise-aware evolution, we will establish a comparative benchmarking framework that measures runtime convergence rates and solution quality within a corrupted environment. Evolved champion algorithms will be evaluated against control groups synthesized under clean conditions as well as traditional baselines. Testing these methods under identical stochastic setups allows this objective to measure the performance differences associated with exposing the generative model to persistent uncertainty. Finally, this phase will provide a comparative analysis of the empirical results against findings from baseline studies conducted under clean, noiseless conditions, allowing the structural and behavioral characteristics of the automated framework under uncertainty to be examined.
