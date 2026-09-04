@@ -222,15 +222,13 @@ class SQLiteSynthesisRepository(SynthesisRepository):
             "instance_id": criteria.instance_id,
             "llm_name": criteria.llm_name,
             "dim": criteria.dim,
+            "mode": criteria.mode,
             "prompt_strategy": criteria.prompt_strategy,
             "status": criteria.status,
         }
         active_filters = {k: v for k, v in raw_filters.items() if v is not None}
         if active_filters:
             stmt = stmt.filter_by(**active_filters)
-
-        if criteria.mode is not None:
-            stmt = stmt.where(ExperimentORM.mode == criteria.mode)
 
         stmt = stmt.order_by(ExperimentORM.problem_id.asc(), ExperimentORM.llm_name.asc())
 
