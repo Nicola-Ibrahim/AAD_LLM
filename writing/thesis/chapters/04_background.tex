@@ -4,14 +4,14 @@
 
 \chapter{Background}\label{chap:background}
 
-Continuous black-box optimization presents distinct failure modes when objective feedback is corrupted by stochastic noise. While Large Language Models (LLMs) can synthesize complete, executable search routines within Automated Algorithm Design (AAD) loops, these frameworks are typically evaluated under deterministic conditions. This chapter defines the mathematical formulation of continuous optimization under uncertainty, details how noise degrades classical heuristics, surveys literature on LLM-driven program evolution and prompt scaffolding, and isolates the research gap addressed in this work.
+Continuous black-box optimization presents specific failure modes when objective feedback is corrupted by stochastic noise. While Large Language Models (LLMs) can synthesize complete, executable search routines within Automated Algorithm Design (AAD) loops, these frameworks are typically evaluated under deterministic conditions. This chapter defines the mathematical formulation of continuous optimization under uncertainty, details how noise degrades classical heuristics, surveys literature on LLM-driven program evolution and prompt scaffolding, and isolates the research gap addressed in this work.
 
 %-------------------------------------------------------------------------------
 \section{Foundations of Continuous Optimization and Stochasticity}\label{sec:bg_theory}
 
 Continuous black-box optimization seeks the global minimum of an unknown, real-valued objective function:
 \begin{equation}\label{eq:bbob_min}
-    \min_{x \in \mathcal{S} \subseteq \mathbb{R}^D} f(x)
+\min_{x \in \mathcal{S} \subseteq \mathbb{R}^D} f(x)
 \end{equation}
 where $\mathcal{S}$ denotes a bounded $D$-dimensional continuous search space, set by convention to $[-5, 5]^D$. Analytical gradients $\nabla f(x)$ and underlying structural formulations remain inaccessible during execution. The algorithm must infer topological structure entirely through discrete point queries. The No Free Lunch theorem establishes that no single heuristic can outperform all alternatives across every problem class without domain-specific inductive bias \cite{Burke2013}. Manually tailoring algorithms to arbitrary objective surfaces demands substantial engineering time and remains difficult to scale across disparate physical domains \cite{Burke2013}.
 
@@ -24,39 +24,39 @@ To standardize empirical comparisons, unconstrained and box-constrained continuo
 \small
 \begin{tabularx}{\textwidth}{c c l X}
 \toprule
-\textbf{Group} & \textbf{Function Indices} & \textbf{Landscape Property} & \textbf{Core Topological Challenge} \\ 
+\textbf{Group} & \textbf{Function Indices} & \textbf{Landscape Property} & \textbf{Core Topological Challenge} \\
 \midrule
-1 & $f_1 - f_5$       & Separable Functions                & Orthogonal dimensions; can be optimized independently along coordinate axes. \\
-2 & $f_6 - f_9$       & Low/Moderate Conditioning        & Unimodal landscapes featuring smooth, single-valley gradient trajectories. \\
-3 & $f_{10} - f_{14}$ & High Conditioning            & Steep, narrow ill-conditioned valleys requiring precise coordinate rotation updates. \\
+1 & $f_1 - f_5$ & Separable Functions & Orthogonal dimensions; can be optimized independently along coordinate axes. \\
+2 & $f_6 - f_9$ & Low/Moderate Conditioning & Unimodal landscapes featuring smooth, single-valley gradient trajectories. \\
+3 & $f_{10} - f_{14}$ & High Conditioning & Steep, narrow ill-conditioned valleys requiring precise coordinate rotation updates. \\
 4 & $f_{15} - f_{19}$ & Multi-modal w/ Global Structure & Multiple deceptive local minima superimposed on an overarching global slope. \\
-5 & $f_{20} - f_{24}$ & Multi-modal w/ Weak Structure   & Highly deceptive, randomized local optima lacking strong macro-gradient signals. \\ 
+5 & $f_{20} - f_{24}$ & Multi-modal w/ Weak Structure & Highly deceptive, randomized local optima lacking strong macro-gradient signals. \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 The BBOB standard quantifies performance using Empirical Cumulative Distribution Functions (ECDFs), tracking the evaluation budget required to reach a target precision threshold ($\Delta f_t = f(x) - f(x^*) \le 10^{-8}$). Deterministic benchmarks have historically favored several human-designed heuristics, including the Nelder-Mead simplex \cite{Nelder1965}, Differential Evolution (DE) \cite{Storn1997}, Particle Swarm Optimization (PSO) \cite{Kennedy1995}, and the Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001}. On ill-conditioned and non-separable landscapes, CMA-ES frequently outperforms direct search routines such as NEWUOA \cite{Powell2006} because its second-order covariance updates adapt to anisotropic objective contours.
 
-To reduce the manual effort involved in heuristic construction, researchers developed modular algorithm frameworks \cite{vanRijn2016, deNobel2021}. Modular CMA-ES \cite{vanRijn2016} and Modular DE \cite{deNobel2021} decompose optimization routines into discrete, interchangeable algorithmic blocks, such as active covariance learning, mirrored sampling, or threshold convergence checks. Automated algorithm configurators can assemble millions of combinations from these components. Nevertheless, the search space is bounded by human domain engineering: the system cannot synthesize logic outside its hardcoded component library.
+To reduce the manual effort involved in heuristic construction, researchers developed modular algorithm frameworks \cite{vanRijn2016, deNobel2021}. Modular CMA-ES \cite{vanRijn2016} and Modular DE \cite{deNobel2021} decompose optimization routines into discrete, interchangeable algorithmic blocks, such as active covariance learning, mirrored sampling, or threshold convergence checks. Automated algorithm configurators can assemble millions of combinations from these components. Nevertheless, the search space remains bounded by the components defined by the human designer, limiting the system's ability to generate logic outside the available component library.
 
 While these solvers perform reliably on deterministic functions, physical engineering tasks frequently introduce stochastic error into the evaluation loop. In Electric Vehicle (EV) battery management, for instance, parameter identification routines estimate equivalent circuit values by minimizing an empirical error space over sensor data \cite{Plett2004, Xiong2018}. Thermal drift, electrical interference, and finite analog-to-digital sampling resolution introduce non-stationary noise into the telemetry. Analogous disturbances occur in finite-element structural dynamics updating, where physical vibration sensors distort model identification \cite{Mottershead1993, Marwala2010}.
 
 Following the uncertainty taxonomy of Jin and Branke \cite{Jin2005}, stochasticity can disrupt the parameter space, time space, surrogate model, or fitness space. This work focuses on perturbations within the fitness space, where the true invariant objective $f_{\text{clean}}(x)$ is corrupted by an additive disturbance $z$:
 \begin{equation}\label{eq:noisy_evaluation_bg}
-    f_{\text{noisy}}(x) = f_{\text{clean}}(x) + z
+f_{\text{noisy}}(x) = f_{\text{clean}}(x) + z
 \end{equation}
 The observed value $f_{\text{noisy}}(x)$ is therefore a random variable. In continuous optimization testbeds, $z$ is typically drawn from one of three statistical distributions \cite{Hansen2009Noisy}:
 \begin{enumerate}
-    \item \textbf{Additive Uniform Noise:} Simulates fixed-point truncation and digital sensor quantization: $z \sim \mathcal{U}(-a, a)$.
-    \item \textbf{Additive Cauchy Noise:} Produces heavy-tailed, high-magnitude outliers modeling physical sensor dropouts: $p(z) = (\pi \gamma [1 + (z/\gamma)^2])^{-1}$.
-    \item \textbf{Additive Gaussian Noise:} Models thermal and background white noise: $z \sim \mathcal{N}(0, \sigma^2)$.
+\item \textbf{Additive Uniform Noise:} Simulates fixed-point truncation and digital sensor quantization: $z \sim \mathcal{U}(-a, a)$.
+\item \textbf{Additive Cauchy Noise:} Produces heavy-tailed, high-magnitude outliers modeling physical sensor dropouts: $p(z) = (\pi \gamma [1 + (z/\gamma)^2])^{-1}$.
+\item \textbf{Additive Gaussian Noise:} Models thermal and background white noise: $z \sim \mathcal{N}(0, \sigma^2)$.
 \end{enumerate}
 
-Direct search algorithms fail under these conditions due to well-defined mathematical mechanics \cite{Arnold2003}. On noisy sphere surfaces ($f(x) + z$), pattern search, Nelder-Mead, and implicit filtering methods suffer from premature step-size stagnation. When the spatial search radius contracts, the true objective difference $\Delta f_{\text{clean}}$ falls below the noise magnitude $\sigma$. The algorithm mistakes stochastic fluctuations for local descent directions, shrinking its step size toward zero and halting progress far from the true minimizer $x^*$. Multi-parent evolution strategies $(\mu/\mu, \lambda)\text{-ES}$ circumvent this trap through intermediate recombination, achieving genetic repair by averaging out zero-mean noise across parent vectors to sustain productive mutation step lengths \cite{Arnold2003}.
+Direct search algorithms fail under these conditions due to well-defined mathematical mechanics \cite{Arnold2003}. On noisy sphere surfaces ($f(x) + z$), pattern search, Nelder-Mead, and implicit filtering methods suffer from premature step-size stagnation. When the spatial search radius contracts, the true objective difference $\Delta f_{\text{clean}}$ falls below the noise magnitude $\sigma$. The algorithm mistakes stochastic fluctuations for local descent directions, shrinking its step size toward zero and halting progress far from the true minimizer $x^*$. Multi-parent evolution strategies $(\mu/\mu, \lambda)\text{-ES}$ can mitigate this effect through intermediate recombination, averaging information across parent vectors and helping to maintain productive mutation step lengths \cite{Arnold2003}.
 
 In CMA-ES \cite{Hansen2001}, population updates depend on sorting candidate solutions by measured fitness. The generation mean $m^{(g+1)}$ is computed as:
 \begin{equation}\label{eq:cma_mean_update_bg}
-    m^{(g+1)} = m^{(g)} + \sum_{i=1}^{\mu} w_i \left( x_{i:\lambda} - m^{(g)} \right)
+m^{(g+1)} = m^{(g)} + \sum_{i=1}^{\mu} w_i \left( x_{i:\lambda} - m^{(g)} \right)
 \end{equation}
 where $w_1 \ge w_2 \ge \dots \ge w_\mu > 0$ are weights assigned according to the sorted sequence $f(x_{1:\lambda}) \le \dots \le f(x_{\lambda:\lambda})$. Stochastic noise corrupts this sorting order ($f_{\text{noisy}}(x_{i:\lambda}) > f_{\text{noisy}}(x_{j:\lambda})$ while $f_{\text{clean}}(x_i) < f_{\text{clean}}(x_j)$). Rank inversions assign the highest weights to inferior coordinate vectors, which skews both cumulative step-size adaptation $\sigma^{(g)}$ and covariance matrix learning $C^{(g)}$ \cite{Hansen2009Noisy, Sarafian2024}. Simple human-designed fixes, such as static sample averaging, scale computational costs by a factor of $N$ to reduce variance by $\sqrt{N}$ \cite{Jin2005}. Gradient-based optimizers degrade even more rapidly, as noisy evaluations destabilize finite-difference approximations and drive update trajectories off course \cite{Sarafian2024}. Static pre-tuning cannot resolve these dynamics across varying noise landscapes, motivating the search for generative systems that can synthesize noise-resistant algorithmic structures autonomously.
 
@@ -65,7 +65,7 @@ where $w_1 \ge w_2 \ge \dots \ge w_\mu > 0$ are weights assigned according to th
 
 Early Automated Algorithm Design (AAD) systems relied on Genetic Programming \cite{Burke2013} or hyper-heuristic selection rules. High-dimensional programmatic spaces and rigid grammar constraints often restricted these frameworks to narrow combinatorial variations. Large Language Models altered this paradigm. Romera-Paredes et al.~\cite{Romera2023} introduced FunSearch, coupling an LLM with a deterministic evaluation harness to search program space. By restricting the language model to editing specific algorithmic subroutines inside a broader code skeleton, FunSearch demonstrated that automated programmatic mutation could yield verifiable mathematical heuristics that outperform existing human baselines without generating uncompilable code.
 
-Zhang et al.~\cite{ReflectiveSurvey2025} categorize LLM-assisted evolutionary computation into three functional operators: selection operators that rank candidate code based on execution metrics; variation operators that apply semantic mutation and crossover across existing source files; and reflective operators that route compiler tracebacks and runtime profiles back into the LLM context window. Table~\ref{tab:llm_aad_comparison} compares current LLM-driven AAD architectures across output formats, search spaces, and noise handling.
+Zhang et al.~\cite{ReflectiveSurvey2025} categorize LLM-assisted evolutionary computation into three functional operators: selection operators that rank candidate code based on execution metrics; variation operators that apply semantic mutation and crossover across existing source files; and reflective operators that route compiler tracebacks and runtime profiles back to the LLM context window. Table~\ref{tab:llm_aad_comparison} compares current LLM-driven AAD architectures across output formats, search spaces, and noise handling.
 
 \begin{table}[htbp]
 \centering
@@ -104,11 +104,11 @@ Evolutionary Computation (EC) provides the theoretical foundation for this autom
 
 Evolutionary trajectories depend on the balance between exploration and exploitation \cite{Goldberg1989}. Variation operators search unvisited regions of the representation space; selection concentrates evaluations around historically competitive solutions. Classical implementations employ multi-parent populations, such as $(\mu/\mu_I, \lambda)$ or $(\mu + \lambda)$, to smooth fitness variance across multimodal surfaces. The single-parent $(1+1)$ Evolution Strategy reduces this structure to one parent generating a single mutated offspring under greedy selection:
 \begin{equation}\label{eq:standard_one_plus_one}
-    \theta^{(g+1)} = 
-    \begin{cases}
-        \theta_{\text{child}}^{(g)} & \text{if } f(\theta_{\text{child}}^{(g)}) \le f(\theta_{\text{parent}}^{(g)}) \\
-        \theta_{\text{parent}}^{(g)} & \text{otherwise}
-    \end{cases}
+\theta^{(g+1)} =
+\begin{cases}
+\theta_{\text{child}}^{(g)} & \text{if } f(\theta_{\text{child}}^{(g)}) \le f(\theta_{\text{parent}}^{(g)}) \\
+\theta_{\text{parent}}^{(g)} & \text{otherwise}
+\end{cases}
 \end{equation}
 The $(1+1)$ scheme minimizes computational overhead and accelerates local convergence. However, lacking population-level variance reduction, greedy replacement is fragile when exposed to corrupted fitness feedback or non-deterministic objective evaluations \cite{Goldberg1989, Eiben2015}.
 
@@ -116,42 +116,54 @@ The Large Language Model Evolutionary Algorithm (LLaMEA) \cite{LLaMEA2024} opera
 
 Candidate algorithms are structured as self-contained Python classes governed by an Object-Oriented Programming (OOP) interface. Each script must implement two entry points:
 \begin{enumerate}
-    \item \textbf{Initialization Method (\texttt{\_\_init\_\_}):} Sets internal hyperparameters, memory buffers, step-size parameters, and population states.
-    \item \textbf{Execution Method (\texttt{\_\_call\_\_(problem, budget)}):} Receives an unconstrained continuous black-box objective $f$ alongside a maximum evaluation budget $B$. It queries $f(x)$ until the budget is exhausted and returns the best spatial coordinate vector discovered.
+\item \textbf{Initialization Method (\texttt{\_\_init\_\_}):} Sets internal hyperparameters, memory buffers, step-size parameters, and population states.
+\item \textbf{Execution Method (\texttt{\_\_call\_\_(problem, budget)}):} Receives an unconstrained continuous black-box objective $f$ alongside a maximum evaluation budget $B$. It queries $f(x)$ until the budget is exhausted and returns the best spatial coordinate vector discovered.
 \end{enumerate}
 
 LLaMEA executes this program-space search via a $(1+1)$ Evolution Strategy mediated through the LLM context window. In each generation $g \in \{1 \dots G\}$, the model functions as a semantic variation operator. Generating a child algorithm $\mathcal{A}_{\text{child}}$ requires dynamic compilation of a four-part prompt context $\mathcal{C}_g$:
 \begin{equation}\label{eq:llamea_context_assembly}
-    \mathcal{C}_g = \left\{ \mathcal{P}_{\text{task}}, \mathcal{H}_{1 \dots g-1}, \mathcal{T}_{\text{incumbent}}, F_{\text{directive}} \right\}
+\mathcal{C}_g = \left\{ \mathcal{P}_{\text{task}}, \mathcal{H}_{1 \dots g-1}, \mathcal{T}_{\text{incumbent}}, F_{\text{directive}} \right\}
 \end{equation}
 where:
 \begin{itemize}
-    \item $\mathcal{P}_{\text{task}}$ specifies the search domain, bound constraints $[-5, 5]^D$, evaluation budgets, and class interface requirements.
-    \item $\mathcal{H}_{1 \dots g-1}$ maintains a registry of previous algorithm names and their scalar scores to prevent redundant code generation.
-    \item $\mathcal{T}_{\text{incumbent}}$ provides the complete implementation, benchmark scores, and execution tracebacks of the active parent $\mathcal{A}_{\text{parent}}$.
-    \item $F_{\text{directive}}$ issues mutation instructions (e.g., \textit{"Either refine or redesign to improve the algorithm"}), allowing the LLM to choose between localized hyperparameter adjustments and complete algorithmic redesigns.
+\item $\mathcal{P}_{\text{task}}$ specifies the search domain, bound constraints $[-5, 5]^D$, evaluation budgets, and class interface requirements.
+\item $\mathcal{H}_{1 \dots g-1}$ maintains a registry of previous algorithm names and their scalar scores to prevent redundant code generation.
+\item $\mathcal{T}_{\text{incumbent}}$ provides the complete implementation, benchmark scores, and execution tracebacks of the active parent $\mathcal{A}_{\text{parent}}$.
+\item $F_{\text{directive}}$ issues mutation instructions (e.g., \textit{"Either refine or redesign to improve the algorithm"}), allowing the LLM to choose between localized hyperparameter adjustments and complete algorithmic redesigns.
 \end{itemize}
 
 Generated code strings are extracted via regular expressions to remove conversational tokens before dynamic loading into the execution runtime. In standard implementations, candidates are evaluated on deterministic test functions via \texttt{IOHexperimenter} \cite{deNobel2024}. The harness tracks anytime precision deltas $\Delta f(x_k) = f(x_k) - f(x^*)$ across budget $B$ against the standard BBOB target threshold $\Delta f_t \le 10^{-8}$ \cite{Hansen2010, LLaMEA2024}.
 
 To map multidimensional convergence trajectories into a scalar fitness score, LLaMEA computes the normalized Area Over the Convergence Curve (AOCC) across the benchmark suite \cite{LLaMEA2024}:
 \begin{equation}\label{eq:aocc_metric_bg}
-    \text{AOCC}(y_{a,f}) = \frac{1}{B} \sum_{i=1}^{B} \left( 1 - \frac{\min(\max(y_i, \text{lb}), \text{ub}) - \text{lb}}{\text{ub} - \text{lb}} \right)
+\text{AOCC}(y_{a,f}) =
+\frac{1}{B} \sum_{i=1}^{B}
+\left(
+1 -
+\frac{
+\min(\max(y_i, \text{lb}), \text{ub}) - \text{lb}
+}{
+\text{ub} - \text{lb}
+}
+\right)
 \end{equation}
 where $y_i = \log_{10}(f(x_i) - f(x^*))$ denotes the log-scaled distance to the global minimum at evaluation step $i$, computed across $B$ queries between bounds $\text{lb} = 10^{-8}$ and $\text{ub} = 10^2$. The mean AOCC across target problem instances acts as the fitness function $f(a)$, driving parent replacement in the $(1+1)$ selection step while providing a terminal metric for baseline comparisons \cite{LLaMEA2024}.
 
 Selection proceeds via standard $(1+1)$ replacement:
 \begin{equation}\label{eq:one_plus_one_selection}
-    \mathcal{A}_{\text{parent}}^{(g+1)} = 
-    \begin{cases}
-        \mathcal{A}_{\text{child}}^{(g)} & \text{if } f(\mathcal{A}_{\text{child}}^{(g)}) \ge f(\mathcal{A}_{\text{parent}}^{(g)}) \\
-        \mathcal{A}_{\text{parent}}^{(g)} & \text{otherwise}
-    \end{cases}
+\mathcal{A}_{\text{parent}}^{(g+1)} =
+\begin{cases}
+\mathcal{A}_{\text{child}}^{(g)}
+& \text{if } f(\mathcal{A}_{\text{child}}^{(g)})
+\ge f(\mathcal{A}_{\text{parent}}^{(g)}) \\
+\mathcal{A}_{\text{parent}}^{(g)}
+& \text{otherwise}
+\end{cases}
 \end{equation}
 When candidate code raises an unhandled runtime exception---such as a singular matrix inversion or division by zero---execution terminates immediately. The framework assigns $f(a) = 0$ and appends the raw Python traceback to $\mathcal{T}_{\text{incumbent}}$, allowing the model to attempt code repair in generation $g+1$.
 
 On 5-dimensional continuous BBOB benchmarks, LLaMEA synthesizes optimizers that match or exceed human-engineered metaheuristics, transferring effectively to 10-dimensional and 20-dimensional instances without fine-tuning \cite{LLaMEA2024}. Subsequent extensions, such as LLaMEA-BO \cite{LLaMEABO2025}, confirm that this evolutionary code-synthesis loop can generate specialized surrogate modeling components and acquisition logic.
 
-However, evaluating a $(1+1)$ Evolution Strategy within a non-deterministic evaluation sandbox introduces the \textit{Ghost Parent} failure mode. If a poorly designed child algorithm evaluates a sequence of coordinates that receive an unusually favorable negative noise draw ($z \ll 0$), its recorded performance metric becomes artificially inflated. Under strict elitist selection, this over-evaluated child replaces the parent and becomes an un-killable statistical ghost parent. Subsequent, structurally superior offspring are repeatedly rejected because they cannot match the ghost parent's mathematically unachievable baseline score.
+However, evaluating a $(1+1)$ Evolution Strategy within a non-deterministic evaluation sandbox introduces the \textit{Ghost Parent} failure mode. If a poorly designed child algorithm evaluates a sequence of coordinates that receive an unusually favorable negative noise draw ($z \ll 0$), its recorded performance metric becomes artificially inflated. Under strict elitist selection, this over-evaluated child replaces the parent and becomes a persistent statistical ghost parent. Subsequent, structurally superior offspring are repeatedly rejected because they cannot match the ghost parent's mathematically unachievable baseline score.
 
 Existing code-generation frameworks operate almost entirely on deterministic, noiseless objective functions. Consequently, the ability of LLM evolutionary loops to synthesize noise-resistant search logic---and the specific role prompt scaffolding plays in that process---remains unmeasured. This thesis investigates whether closed-loop evolutionary selection can guide foundation models to synthesize robust continuous metaheuristics under persistent stochastic evaluation noise.
