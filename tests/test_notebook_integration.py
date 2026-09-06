@@ -1,6 +1,7 @@
 """Test execution of consolidated 5-notebook pipeline to ensure zero errors and data integrity."""
 
 import json
+import pandas as pd
 
 from benchmarking.application.audit_service import EvaluationAuditService
 from benchmarking.application.evaluation_service import EvaluationService
@@ -54,6 +55,11 @@ def test_nb02_synthesis_pipeline():
 
     matrix_df, summary = service.audit_matrix()
     assert not matrix_df.empty
+    assert isinstance(matrix_df.index, pd.MultiIndex)
+    assert list(matrix_df.index.names) == ["Problem", "Dimension", "Environment", "Strategy"]
+    assert "Target Runs" in matrix_df.columns
+    assert "Completed" in matrix_df.columns
+    assert "Status" in matrix_df.columns
     assert "total_conditions" in summary
     assert "problem_targets" in summary
 

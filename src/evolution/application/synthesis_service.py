@@ -111,7 +111,10 @@ class LLaMEASynthesisService:
                 "Status": status_label,
             })
 
-        df_matrix = pd.DataFrame(matrix_rows)
+        df_matrix = pd.DataFrame(matrix_rows).set_index(
+            ["Problem", "Dimension", "Environment", "Strategy"]
+        )
+
         total_cfg = len(df_matrix)
         total_done = sum(1 for r in matrix_rows if "✅" in r["Status"])
         total_retry = sum(1 for r in matrix_rows if "⚠️" in r["Status"])

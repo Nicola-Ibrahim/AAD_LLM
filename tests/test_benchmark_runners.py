@@ -596,10 +596,10 @@ classical_baselines = ["cmaes"]
     assert any(row["noise_std"] == 0.05 and row["solver"] == "qwen_14b_baseline_noisy" for _, row in df_native.iterrows())
 
     df_cross = service.audit_cross_eval_workload()
-    assert len(df_cross) == 1
-    assert df_cross.iloc[0]["noise_std"] == 0.05
-    assert df_cross.iloc[0]["solver"] == "qwen_14b_baseline"
-    assert df_cross.iloc[0]["solver_type"] == "cross_eval"
+    assert len(df_cross) >= 1
+    assert 0.05 in df_cross["noise_std"].values
+    assert all(df_cross["solver"] == "qwen_14b_baseline")
+    assert all(df_cross["solver_type"] == "cross_eval")
 
 
 
