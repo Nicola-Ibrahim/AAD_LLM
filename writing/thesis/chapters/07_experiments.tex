@@ -1,312 +1,1231 @@
+%------------------------------------------------------------------------------
+% Chapter 5: Experiments
+%------------------------------------------------------------------------------
 
 \chapter{Experiments}\label{chap:experiments}
 
-This chapter details the empirical methodology, experimental configurations, mathematical metric formulations, and multi-stage evaluation pipeline designed to answer the core research questions of this thesis. The primary objective is to investigate whether localized Large Language Models (LLMs) can autonomously synthesize competitive, noise-resilient continuous optimization heuristics, how prompt scaffolding and model parameter scaling govern algorithmic discovery, and whether synthesized search logic generalizes across extended evaluation horizons and continuous dimensions.
+This chapter presents the experimental methodology used to investigate the ability of large language models (LLMs) to synthesize continuous optimization heuristics for deterministic and stochastic black-box optimization. The evaluation is designed around the three research questions introduced in Chapter~\ref{chap:intro}. The first research question concerns the construction of a controlled stochastic evaluation environment. The second investigates whether an LLM-driven evolutionary synthesis process can produce executable and noise-resilient optimization heuristics. The third evaluates the resulting heuristics against established optimization methods across different benchmark landscapes, noise intensities, and problem dimensions.
 
-%-------------------------------------------------------------------------------
-\section{Empirical Research Questions}\label{sec:exp_rqs}
+The experimental design separates \emph{algorithm synthesis} from \emph{algorithm evaluation}. During synthesis, the LLM is used as a semantic variation operator inside the LLaMEA framework, while candidate algorithms are evaluated under a controlled execution environment. The best candidates are subsequently evaluated independently using a larger evaluation budget and repeated random seeds. This separation is important because it prevents the final comparison from being determined solely by the relatively short horizon used during synthesis.
 
-The experimental evaluation framework operationalizes the inquiry into three Primary Research Questions ($\mathbf{RQ1}$--$\mathbf{RQ3}$) and three Operational Sub-Questions ($\mathbf{Sub}\text{-}\mathbf{RQ\ A}$--$\mathbf{Sub}\text{-}\mathbf{RQ\ C}$):
+The experiments consider five representative continuous optimization landscapes, four noise levels, and three problem dimensions. In addition, two model sizes and four prompt configurations are examined for the LLM-generated algorithms. Classical optimization methods are included as reference points throughout the independent benchmarking phase. Performance is assessed using precision-based success measures, convergence trajectories, target-attainment distributions, and aggregate anytime-performance measures. Additional analyses investigate landscape specialization, model scaling, prompt scaffolding, dimensional scalability, and characteristic failure modes.
 
-\begin{itemize}
-    \item \textbf{RQ1 (Autonomous Synthesis and Competitiveness):} Can localized LLMs autonomously synthesize continuous optimization heuristics that match or outperform established classical baselines---specifically Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001}, Differential Evolution (DE) \cite{Storn1997}, and Particle Swarm Optimization (PSO) \cite{Kennedy1995}---across standard continuous benchmark landscapes under deterministic conditions?
-    
-    \item \textbf{RQ2 (Noise Resilience in Autonomous Design):} Can localized LLMs autonomously synthesize continuous optimization heuristics that are structurally resilient to stochastic evaluation noise ($\sigma = 0.05$)?
-    
-    \item \textbf{RQ3 (Cross-Environment Robustness and Transfer):} How does the cross-environment retention and performance degradation of noise-evolved heuristics compare against heuristics synthesized under clean, deterministic baselines?
-    
-    \item \textbf{Sub-RQ A (Model Parameter Capacity Scaling):} How does the underlying LLM parameter capacity ($3\text{B}$, $7\text{B}$, and $14\text{B}$ parameters within the \texttt{Qwen2.5-Coder} family) govern the mathematical sophistication, algorithmic novelty, and search efficiency of synthesized code?
-    
-    \item \textbf{Sub-RQ B (Prompt Scaffolding Ablation):} How does the semantic and structural design of prompt scaffolding (\textsc{Baseline}, \textsc{Guided}, \textsc{Thinking}, and \textsc{Vectorization}) influence evolutionary trajectories relative to unguided control prompts?
-    
-    \item \textbf{Sub-RQ C (Synthesis-to-Evaluation Horizon and Dimensionality Scaling):} Do candidate heuristics synthesized under low evaluation budgets ($B_{\text{synth}} = 1{,}000$ function calls) generalize when deployed across full-scale long-horizon benchmarking budgets ($B_{\text{eval}}(D) = 10{,}000 \times D$, up to $100{,}000$ function calls in $10\text{D}$)?
-\end{itemize}
+%------------------------------------------------------------------------------
+\section{Experimental Objectives and Research Questions}
+\label{sec:experimental_rqs}
+%------------------------------------------------------------------------------
 
-%-------------------------------------------------------------------------------
-\section{Multi-Stage Experimental Architecture}\label{sec:exp_architecture}
+The experiments are organized around the three research questions defined in the introduction.
 
-To prevent meta-overfitting, guarantee non-parametric statistical power, and isolate structural code properties, the experimental framework is partitioned into five decoupled, reproducible stages (illustrated in Figure~\ref{fig:experimental_pipeline_flow}):
+\subsection*{RQ1: Formulating a Stochastic Evaluation Sandbox}
 
-\begin{figure}[htbp]
+\begin{quote}
+\textbf{RQ1: How can continuous optimization benchmarks be systematically extended to simulate stochastic landscapes?}
+\end{quote}
+
+RQ1 addresses the methodological foundation of the study. Standard continuous optimization benchmarks provide deterministic objective functions, whereas the target setting of this thesis assumes that an optimizer receives imperfect fitness observations. The evaluation sandbox therefore introduces controlled stochastic perturbations during objective-function evaluation while retaining the analytical objective internally for diagnostic purposes.
+
+The experiments evaluate whether the resulting environment provides a reproducible distinction between the objective observed by the optimizer and the true objective used for analysis. Several noise intensities are considered so that the difficulty of the optimization task can be examined as stochastic perturbations increase.
+
+\subsection*{RQ2: Autonomous Synthesis of Noise-Resilient Heuristics}
+
+\begin{quote}
+\textbf{RQ2: Can Large Language Models autonomously synthesize continuous optimization heuristics that are resilient to noise?}
+\end{quote}
+
+RQ2 focuses on the synthesis process. The LLaMEA framework is used to generate executable optimization procedures through iterative LLM-based variation and selection. Candidate programs are evaluated in the stochastic sandbox, and execution errors are returned to the LLM as feedback. The experiments examine whether this closed-loop process can produce functional optimization algorithms and whether the resulting algorithms exhibit mechanisms that are useful under noisy fitness evaluations.
+
+Model scale and prompt scaffolding are treated as experimental factors rather than independent research questions. This allows the synthesis process to be analyzed from several complementary perspectives without changing the central research question.
+
+\subsection*{RQ3: Empirical Robustness and Comparative Performance}
+
+\begin{quote}
+\textbf{RQ3: How robust are LLM-generated heuristics across different stochastic conditions and problem dimensions compared with established optimization methods?}
+\end{quote}
+
+RQ3 evaluates the synthesized algorithms independently from the synthesis process. The generated heuristics are compared with CMA-ES, Differential Evolution, and Particle Swarm Optimization across representative BBOB landscapes. Performance is measured over multiple independent trials and across increasing noise intensities and problem dimensions.
+
+The evaluation therefore considers not only whether an algorithm reaches a high-precision solution, but also how efficiently it approaches the optimum, how performance changes as noise increases, whether behavior depends on the underlying landscape, and whether the generated search procedures remain effective as dimensionality increases.
+
+%------------------------------------------------------------------------------
+\section{Overall Experimental Design}
+\label{sec:overall_design}
+%------------------------------------------------------------------------------
+
+The experimental methodology consists of two principal stages. The first stage performs online algorithm synthesis using the LLaMEA framework. The second stage evaluates the resulting algorithms independently using a larger computational budget and repeated random seeds.
+
+\subsection{Two-Stage Evaluation Framework}
+\label{sec:two_stage_framework}
+
+The separation between synthesis and evaluation is central to the experimental design. During synthesis, candidate algorithms are repeatedly generated and evaluated within a limited budget. The purpose of this phase is to discover promising search procedures rather than to obtain statistically reliable performance estimates.
+
+In the second stage, selected algorithms are evaluated independently using a substantially larger budget. Multiple independent seeds are used for every combination of algorithm, benchmark function, dimension, and noise condition. This provides a more reliable estimate of performance and prevents the final comparison from being dominated by the stochasticity of a single synthesis trajectory.
+
+The resulting workflow can be summarized as
+
+\begin{equation}
+\text{LLM}
+\rightarrow
+\text{Candidate Generation}
+\rightarrow
+\text{Execution}
+\rightarrow
+\text{Selection}
+\rightarrow
+\text{Champion}
+\rightarrow
+\text{Independent Benchmarking}.
+\end{equation}
+
+\begin{figure}[t]
 \centering
-\begin{tikzpicture}[
-    node distance=1.2cm and 1.5cm,
-    stagebox/.style={rectangle, draw=black!80, fill=gray!5, thick, rounded corners, inner sep=8pt, text width=0.88\textwidth},
-    titlebox/.style={font=\bfseries\small, text=black},
-    arrow/.style={->, >=stealth, thick, draw=black!70}
-]
-    % Stage 0
-    \node[stagebox] (stage0) {
-        \textbf{Stage 0: Stochastic Noise Characterization (\texttt{01\_noise.ipynb})} \\
-        \footnotesize Parameterization of Optimality-Gap Heteroscedastic Gaussian Noise: $\mathcal{N}\left(y, (\sigma |y - y^*|)^2\right)$ for $\sigma \in \{0.0, 0.05\}$. Topological deformation and signal-to-noise ratio (SNR) boundary verification across BBOB problem classes.
-    };
-
-    % Stage 1
-    \node[stagebox, below=0.6cm of stage0] (stage1) {
-        \textbf{Stage 1: Online Evolutionary Algorithm Synthesis (\texttt{02\_synthesis.ipynb})} \\
-        \footnotesize LLaMEA $(1+1)$ Evolutionary Loop ($G=10$ generations, $B_{\text{synth}} = 1{,}000$). Factorial matrix: 3 Model Scales ($3\text{B}, 7\text{B}, 14\text{B}$), 4 Prompt Archetypes (\textsc{Baseline}, \textsc{Guided}, \textsc{Thinking}, \textsc{Vectorization}), 5 BBOB Functions ($f_1, f_8, f_{11}, f_{15}, f_{21}$), $D \in \{2, 3, 5\}$, $\sigma \in \{0.0, 0.05\}$. AST security enforcement, timeout guarding ($30.0\,\text{s}$), and SQLite champion extraction ($\min |f_{\text{clean}}(\mathbf{x}^*) - f^*|$).
-    };
-
-    % Stage 2
-    \node[stagebox, below=0.6cm of stage1] (stage2) {
-        \textbf{Stage 2: Independent Empirical Benchmarking (\texttt{03\_evaluation.ipynb})} \\
-        \footnotesize Post-hoc evaluation gauntlet of 11 Solvers (8 LLM Champions + CMA-ES, DE, PSO) across $N_{\text{runs}} = 20$ independent PRNG seeds. Scaled budget $B_{\text{eval}}(D) = 10{,}000 \times D$ over $D \in \{2, 3, 5, 10\}$ with hard execution guards and continuous \texttt{IOHprofiler} telemetry recording.
-    };
-
-    % Stage 3 & 4 container
-    \node[stagebox, below=0.6cm of stage2] (stage34) {
-        \textbf{Stage 3 \& 4: Morphological Audit, Statistical Profiling \& Synthesis (\texttt{04\_audit.ipynb}, \texttt{05\_analysis.ipynb})} \\
-        \footnotesize \textbf{Stage 3:} AST structural complexity, line count analysis, and mutation pattern tracking. \\
-        \textbf{Stage 4:} 51-Target adaptive anytime ECDF, AUC-ECDF integration, median trajectories with IQR ribbons, Omnibus Kruskal-Wallis, Pairwise Benjamini-Hochberg FDR-corrected Wilcoxon tests, and Vargha-Delaney $\hat{A}_{12}$ effect sizes.
-    };
-
-    % Transitions
-    \draw[arrow] (stage0) -- (stage1);
-    \draw[arrow] (stage1) -- (stage2);
-    \draw[arrow] (stage2) -- (stage34);
-\end{tikzpicture}
-\caption{Decoupled five-stage experimental lifecycle, spanning stochastic noise injection, LLM evolutionary code discovery, independent multi-seed validation, AST code audit, and non-parametric statistical synthesis.}
-\label{fig:experimental_pipeline_flow}
+% PLACEHOLDER: Insert overview diagram of the two-stage experimental framework.
+% Suggested content:
+% LLM + prompt -> candidate generation -> sandbox evaluation ->
+% evolutionary selection -> champion -> independent factorial evaluation.
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Experimental Framework Figure}\
+Two-stage synthesis and independent benchmarking pipeline.
+}}
+\caption{Overview of the two-stage experimental methodology. Candidate algorithms are synthesized using LLaMEA and subsequently evaluated independently under a factorial benchmark design.}
+\label{fig:experimental_framework}
 \end{figure}
 
-%-------------------------------------------------------------------------------
-\section{Experimental Configurations and Execution Parameters}\label{sec:exp_configs}
+The two stages serve different purposes. Stage~1 determines which algorithms are generated by the LLM-driven evolutionary process, whereas Stage~2 determines how those algorithms behave when subjected to a standardized and independently replicated evaluation protocol.
 
-To ensure complete experimental control and reproducibility, operational parameters are configured within centralized configuration manifests (\texttt{configs/synthesis.toml} and \texttt{configs/benchmark.toml}).
+\subsection{Experimental Factors}
+\label{sec:experimental_factors}
 
-\subsection{LLaMEA Synthesis Matrix (Stage 1)}
-The parameter settings governing the evolutionary synthesis phase are summarized in Table~\ref{tab:synthesis_config}:
+The independent benchmarking study varies five principal factors:
 
-\begin{table}[htbp]
-\centering
-\small
-\caption{Stage 1 Evolutionary Synthesis Execution Parameters (\texttt{configs/synthesis.toml}).}
-\label{tab:synthesis_config}
-\begin{tabularx}{\textwidth}{l l p{3.2cm} X}
-\toprule
-\textbf{Category} & \textbf{Configuration Key} & \textbf{Assigned Value} & \textbf{Methodological Rationale} \\
-\midrule
-\textbf{Search Space} & \texttt{matrix.problem\_ids} & \texttt{[1, 8, 11, 15, 21]} & Spans separable ($f_1$), moderate conditioning ($f_8$), high conditioning ($f_{11}$), multimodal ($f_{15}$), and deceptive ($f_{21}$). \\
-& \texttt{matrix.dimensions} & \texttt{[2, 3, 5]} & Low-to-medium continuous dimensions for synthesis exploration. \\
-& \texttt{matrix.noise\_stds} & \texttt{[0.0, 0.05]} & Deterministic ground truth vs. heteroscedastic noise regime. \\
-& \texttt{matrix.noise\_model} & \texttt{"heteroscedastic"} & $\mathcal{N}(y, (\sigma |y - y^*|)^2)$, scaling perturbation proportionally to the true optimality gap. \\
-& \texttt{matrix.prompt\_strategies} & \texttt{["baseline", "guided",} \newline \texttt{"thinking", "vectorization"]} & Full prompt scaffolding ablation matrix. \\
-\addlinespace
-\textbf{Evolution} & \texttt{evolution.iterations} & $10$ Generations & Sufficient evolutionary horizon to observe structural code refinement. \\
-& \texttt{evolution.budget} & $1{,}000$ Evals ($B_{\text{synth}}$) & Constrained regime forcing sample-efficient search discovery. \\
-& \texttt{evolution.runs\_per\_config} & $1$ Session & Deep generational search per cell; champions persisted in SQLite. \\
-\addlinespace
-\textbf{LLM Engine} & \texttt{llm.models} & \texttt{Qwen2.5-Coder-\{3B,7B,14B\}} & Assesses parameter scale scaling on algorithmic code synthesis. \\
-& \texttt{llm.quantization} & \texttt{Q4\_K\_M} (GGUF / Ollama) & Optimal trade-off between memory footprint and reasoning fidelity. \\
-& \texttt{llm.temperature} & $T = 0.7$ & Balances syntactic validity with exploratory code mutation. \\
-\addlinespace
-\textbf{Sandbox} & \texttt{execution.auto\_resume} & \texttt{true} & Fault-tolerant SQLite database persistence (\texttt{db.sqlite3}). \\
-& \texttt{execution.timeout} & $30.0$ Seconds & Sandboxed execution timeout guarding against deadlocks. \\
-\bottomrule
-\end{tabularx}
-\end{table}
+\begin{itemize}
+\item optimization algorithm;
+\item benchmark function;
+\item problem dimensionality;
+\item noise intensity;
+\item random seed.
+\end{itemize}
 
-\subsection{Independent Post-Hoc Benchmarking Matrix (Stage 2)}
-The operational settings governing the independent multi-seed evaluation gauntlet are summarized in Table~\ref{tab:benchmark_config}:
+The LLM-based algorithms additionally vary by model scale and prompt configuration.
 
-\begin{table}[htbp]
-\centering
-\small
-\caption{Stage 2 Empirical Benchmarking Parameters (\texttt{configs/benchmark.toml}).}
-\label{tab:benchmark_config}
-\begin{tabularx}{\textwidth}{l l p{3.2cm} X}
-\toprule
-\textbf{Category} & \textbf{Configuration Key} & \textbf{Assigned Value} & \textbf{Methodological Purpose} \\
-\midrule
-\textbf{Replication} & \texttt{target\_eval\_runs} & $20$ Independent Seeds & Guarantees statistical power for non-parametric hypothesis tests. \\
-\textbf{Budget} & \texttt{budget\_multiplier} & $10{,}000$ Evals / Dim & Standard BBOB scaling: $B_{\text{eval}}(D) = D \times 10{,}000$ (up to $100\text{k}$ in $10\text{D}$). \\
-\textbf{Safety} & \texttt{eval\_timeout\_seconds} & $30.0$ Seconds / Run & Hard execution timeout guarding against slow loops. \\
-& \texttt{budget\_overrun\_guard} & \texttt{True} (Hard Intercept) & Intercepts calls and freezes evaluations strictly at $B_{\text{eval}}(D)$. \\
-\textbf{Baselines} & \texttt{classical\_baselines} & \texttt{["cmaes", "de", "pso"]} & Comparison against industry-standard human metaheuristics. \\
-\textbf{Dimension} & \texttt{benchmark.dimensions} & \texttt{[2, 3, 5, 10]} & Evaluates synthesis generalizability from low to high continuous dimensions. \\
-\bottomrule
-\end{tabularx}
-\end{table}
+The independent evaluation considers
 
-%-------------------------------------------------------------------------------
-\section{In-Depth Algorithmic Synthesis and Prompt Scaffolding Mechanics}\label{sec:exp_synthesis_mechanics}
-
-The automated generation of search heuristics operates via the Large Language Model Evolutionary Algorithm (LLaMEA) paradigm \cite{LLaMEA2024}. Rather than relying on rigid, pre-programmed numerical crossover routines, the LLM functions as a high-level semantic variation operator.
-
-\subsection{The Evolutionary Loop and Interface Contract}
-Candidate algorithms are generated as stateless Python classes satisfying the standardized operational contract:
-\begin{equation}\label{eq:operational_interface}
-    \mathbf{x}^* = \operatorname{solve}(f, \text{dim}, \text{budget}, \text{lower\_bound}, \text{upper\_bound})
+\begin{equation}
+D \in {2,5,10}
 \end{equation}
-During synthesis, candidate algorithms query the corrupted black-box wrapper $f_{\text{noisy}}(\mathbf{x})$ over an allocation of $B_{\text{synth}} = 1{,}000$ function calls. The candidate's true performance is scored by querying the ground-truth oracle at its returned coordinate: $\Delta y = |f_{\text{clean}}(\mathbf{x}^*) - f^*|$. The population iterates over $G = 10$ generations using elite preservation. For each problem instance, dimensionality, model tier, and prompt configuration, the best-performing code is saved to \texttt{db.sqlite3}.
 
-\subsection{Prompt Scaffolding Archetypes}
-To evaluate how semantic inductive biases influence algorithmic discovery, four distinct prompt scaffolding strategies were deployed as independent experimental treatments:
+and
+
+\begin{equation}
+\sigma \in {0,0.05,0.1,0.2}.
+\end{equation}
+
+The value \(\sigma=0\) represents deterministic evaluation, while the remaining levels introduce progressively stronger stochastic perturbations.
+
+Twenty independent random seeds are used for each experimental condition. Assuming all eleven compared solvers are evaluated across all five benchmark functions, three dimensions, four noise levels, and twenty seeds, the resulting factorial design contains
+
+\begin{equation}
+11 \times 5 \times 3 \times 4 \times 20
+=======================================
+
+13,200
+\end{equation}
+
+independent optimization runs.
+
+This count refers to the independent benchmarking phase only. The synthesis phase is controlled separately because its execution budget and evolutionary process differ from those of the final evaluation.
+
+%------------------------------------------------------------------------------
+\section{Stochastic Evaluation Sandbox}
+\label{sec:stochastic_sandbox}
+%------------------------------------------------------------------------------
+
+\subsection{Motivation}
+
+The stochastic evaluation sandbox provides the execution environment used to study optimization under uncertain fitness observations. A conventional benchmark exposes an objective function directly:
+
+\begin{equation}
+y=f(x),
+\end{equation}
+
+where \(x\in\mathbb{R}^{D}\) denotes a candidate solution.
+
+In a noisy optimization setting, the optimizer instead receives an observation affected by a stochastic perturbation:
+
+\begin{equation}
+y_{\mathrm{noisy}}=f_{\mathrm{noisy}}(x).
+\end{equation}
+
+The important distinction is that the optimizer must operate using the noisy observation, while the experimental framework may retain the clean objective value for analysis. This allows the evaluation to distinguish between the information available to the optimizer and the information available to the experimenter.
+
+\subsection{Benchmark Functions}
+
+The experiments use five representative continuous optimization functions:
+
+\begin{itemize}
+\item Sphere (\(f_1\));
+\item Rosenbrock (\(f_8\));
+\item Discus (\(f_{11}\));
+\item Rastrigin (\(f_{15}\));
+\item Gallagher 101 Peaks (\(f_{21}\)).
+\end{itemize}
+
+The functions were selected to cover different characteristics of continuous optimization landscapes rather than to represent a single class of objective function.
+
+\begin{table}[t]
+\centering
+\caption{Benchmark functions used in the experiments.}
+\label{tab:benchmark_functions}
+\begin{tabular}{lll}
+\hline
+Function & Identifier & Main characteristic \
+\hline
+Sphere & \(f_1\) & Separable, unimodal, isotropic \
+Rosenbrock & \(f_8\) & Non-separable, curved valley \
+Discus & \(f_{11}\) & Strongly ill-conditioned \
+Rastrigin & \(f_{15}\) & Highly multimodal \
+Gallagher 101 & \(f_{21}\) & Multimodal, many local peaks \
+\hline
+\end{tabular}
+\end{table}
+
+Sphere provides a relatively simple unimodal reference landscape. Rosenbrock introduces coordinate interactions and a curved region of good solutions. Discus represents a strongly anisotropic landscape in which progress along different coordinate directions occurs at very different scales. Rastrigin introduces a regular multimodal structure with many local optima. Gallagher 101 contains a substantially more irregular multimodal landscape with many competing regions.
+
+This selection allows the experiments to examine whether generated algorithms behave consistently across qualitatively different optimization structures.
+
+\subsection{Noise Model}
+\label{sec:noise_model}
+
+The stochastic evaluation layer modifies the objective value observed by the candidate optimizer. For a candidate \(x\), the noisy observation is defined as
+
+\begin{equation}
+f_{\mathrm{noisy}}(x)
+=====================
+
+f(x)
++
+\epsilon(x),
+\end{equation}
+
+where the noise term follows
+
+\begin{equation}
+\epsilon(x)
+\sim
+\mathcal{N}
+\left(
+0,
+\left(
+\sigma
+\left|f(x)-f(x^*)\right|
+\right)^2
+\right).
+\end{equation}
+
+Here, \(x^*\) denotes the global optimum of the benchmark function and \(\sigma\) controls the noise intensity.
+
+The resulting standard deviation is therefore
+
+\begin{equation}
+s(x)
+====
+
+\sigma\left|f(x)-f(x^*)\right|.
+\end{equation}
+
+This produces heteroscedastic noise: the magnitude of the perturbation depends on the current distance from the optimum in objective space. The deterministic case is recovered when
+
+\begin{equation}
+\sigma=0.
+\end{equation}
+
+The experiments use four levels:
+
+\begin{equation}
+\sigma\in
+{0,0.05,0.1,0.2}.
+\end{equation}
+
+These conditions provide a progression from deterministic evaluation to increasingly stochastic feedback.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Insert visualization of the noise model.
+% Suggested figure: same benchmark objective under sigma=0, 0.05,
+% 0.1 and 0.2, or distribution of observed fitness values.
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Noise Model Visualization}\
+Visualization of deterministic and stochastic objective evaluations.
+}}
+\caption{Illustration of the stochastic evaluation model for increasing noise intensities.}
+\label{fig:noise_model}
+\end{figure}
+
+\subsection{Hidden Objective and Diagnostic Evaluation}
+
+A central property of the sandbox is the separation between the value observed by the optimizer and the value retained for experimental diagnostics. During execution, the candidate algorithm receives only the noisy value
+
+\begin{equation}
+f_{\mathrm{noisy}}(x).
+\end{equation}
+
+The analytical objective value
+
+\begin{equation}
+f(x)
+\end{equation}
+
+is not exposed to the candidate optimizer.
+
+For evaluation, however, the clean objective can be used to calculate the true optimality gap:
+
+\begin{equation}
+\Delta f(x)
+===========
+
+\left|
+f(x)-f(x^*)
+\right|.
+\end{equation}
+
+This distinction is important because a noisy observation close to the optimum does not necessarily imply that the candidate itself has achieved a correspondingly small true objective gap. The clean diagnostic value therefore provides a stable basis for comparing algorithms while preserving the information restriction imposed on the optimizer.
+
+\subsection{Validation of the Stochastic Environment}
+
+The stochastic environment is validated by evaluating benchmark functions under each noise level and dimensionality. The validation examines whether:
 
 \begin{enumerate}
-    \item \textbf{\textsc{Baseline} (Unguided Control):} Supplies strictly the operational API contract, parameter boundaries ($[-5.0, 5.0]^D$), and evaluation budget. It contains zero domain hints regarding landscape topology or the presence of evaluation noise, measuring the LLM's unassisted capacity to discover search mechanisms.
-    
-    \item \textbf{\textsc{Guided} (Domain-Informed Prior):} Informs the model of evaluation uncertainty and suggests foundational continuous optimization primitives, including 1/5th success-rule step adaptation, momentum buffers, population variance preservation, and exponential moving averages.
-    
-    \item \textbf{\textsc{Thinking} (Chain-of-Thought Reflection):} Enforces structured pre-synthesis deliberation. The model must emit a dedicated Markdown block diagnosing parent failure modes (e.g., premature variance collapse, deceptive local attractors) and detailing its algorithmic modification plan prior to outputting Python code.
-    
-    \item \textbf{\textsc{Vectorization} (Architectural Array Prior):} Strictly penalizes scalar Python loops over candidate populations, mandating vectorized NumPy array broadcasting to maximize evaluation throughput and parallel coordinate perturbations.
+\item deterministic evaluation reproduces the underlying benchmark function;
+\item increasing \(\sigma\) produces increasingly variable fitness observations;
+\item the clean objective remains available only to the evaluation layer;
+\item the stochastic wrapper does not alter the location of the underlying optimum;
+\item repeated evaluations at the same candidate produce different noisy observations when \(\sigma>0\).
 \end{enumerate}
 
-%-------------------------------------------------------------------------------
-\section{Mathematical Formulations of Empirical Performance Metrics}\label{sec:exp_metrics}
-
-Evaluating continuous optimization heuristics across diverse topological structures and noise regimes requires evaluation metrics that remain invariant to arbitrary function translation while providing continuous, anytime performance tracking.
-
-\subsection{51-Target Ladder and Runtime Empirical Cumulative Distribution Functions (ECDF)}
-
-Aggregated performance is evaluated via the Runtime ECDF over a discretized ladder of $|\Theta| = 51$ logarithmic target precisions.
-
-\subsubsection{Target Discretization: Deterministic vs. Noise-Aware Adaptive}
-\begin{enumerate}
-    \item \textbf{Deterministic Target Ladder ($\sigma = 0.0$):} In clean environments, the 51 targets span 10 orders of magnitude down to machine precision:
-    \begin{equation}\label{eq:clean_target_ladder}
-        \Theta_{\text{clean}} = \left\{ 10^{2.0 - 0.2 \cdot k} \;\middle|\; k \in \{0, 1, \dots, 50\} \right\} = \left\{ 10^{2.0}, 10^{1.8}, \dots, 10^{-8.0} \right\}
-    \end{equation}
-    
-    \item \textbf{Noise-Aware Adaptive Target Ladder ($\sigma > 0.0$):} Under heteroscedastic noise ($\sigma = 0.05$), errors below $\Delta y \approx 10^{-3}$ fall beneath the stochastic noise floor. Enforcing static $10^{-8}$ targets under noise induces artificial \textbf{floor compression}, where over 30 targets are fundamentally unreachable and squish all ECDF curves below $\approx 0.35$. To preserve discriminatory resolution, the target ladder dynamically spans the observable empirical error range:
-    \begin{equation}\label{eq:adaptive_target_ladder}
-        \Theta_{\text{adaptive}}(\sigma) = \left\{ 10^{\log_{10}(\tau_{\min}) + k \cdot \frac{\log_{10}(\tau_{\max}) - \log_{10}(\tau_{\min})}{50}} \;\middle|\; k \in \{0, 1, \dots, 50\} \right\}
-    \end{equation}
-    where $\tau_{\min} = \max(\operatorname{Percentile}_{5}(\text{final errors}), 10^{-3})$ and $\tau_{\max} = \min(\operatorname{Median}(\text{initial errors}), 10^4)$.
-\end{enumerate}
-
-\subsubsection{Multi-Run Aggregation Mechanics (No Cherry-Picking)}
-Let $T_r(f_p, \theta)$ denote the first-hitting evaluation count where run $r \in \{1 \dots N_{\text{runs}}\}$ on problem $f_p$ reaches an uncorrupted optimality gap $\Delta y \le \theta$:
-\begin{equation}\label{eq:first_hitting_time}
-    T_r(f_p, \theta) = \min \left\{ t \in [1, B_{\text{eval}}(D)] \;\middle|\; \left| f_{\text{clean}}(\mathbf{x}_r(t)) - f^* \right| \le \theta \right\}
-\end{equation}
-If target $\theta$ is not reached within the allocated budget, $T_r(f_p, \theta) = \infty$. All $N_{\text{runs}} = 20$ replications are pooled simultaneously across all $|\Theta| = 51$ targets ($1{,}020$ target-run evaluation pairs per condition):
-\begin{equation}\label{eq:ecdf_formula_exact}
-    \operatorname{ECDF}(t) = \frac{1}{|\Theta| \cdot N_{\text{runs}}} \sum_{r=1}^{N_{\text{runs}}} \sum_{\theta \in \Theta} \mathbb{I}\left( T_r(f_p, \theta) \le t \right) \in [0, 1]
-\end{equation}
-where $\mathbb{I}(\cdot)$ is the discrete indicator function.
-
-\subsection{Area Under the Runtime ECDF Curve (AUC-ECDF)}
-The global anytime search efficiency across all 51 precision targets is computed by integrating the ECDF curve across the dimension-scaled logarithmic budget $u = \log_{10}(t) \in [0, \log_{10}(B_{\text{eval}}(D))]$:
-\begin{equation}\label{eq:auc_ecdf_integral}
-    \text{AUC-ECDF} = \frac{1}{\log_{10}(B_{\text{eval}}(D))} \int_{0}^{\log_{10}(B_{\text{eval}}(D))} \operatorname{ECDF}\left(10^u\right) \, du \in [0, 1]
-\end{equation}
-\begin{equation}\label{eq:auc_ecdf_percentage}
-    \text{AUC-ECDF (\%)} = \text{AUC-ECDF} \times 100\%
-\end{equation}
-
-\subsection{Median Convergence Trajectories with Interquartile Ranges (IQR) and Dynamic Y-Zoom}
-To visualize continuous search dynamics without imposing parametric normality assumptions:
-\begin{enumerate}
-    \item \textbf{Quantile Sampling:} Sampled across all 20 independent runs on a uniform logarithmic evaluation grid $t \in [1, B_{\text{eval}}(D)]$:
-    \begin{equation}\label{eq:median_trajectory}
-        \tilde{y}(t) = \operatorname{median}\left(\Delta y_1(t), \Delta y_2(t), \dots, \Delta y_{20}(t)\right)
-    \end{equation}
-    \begin{equation}\label{eq:iqr_ribbon}
-        \operatorname{IQR}(t) = \left[ Q_{25}(t), \, Q_{75}(t) \right]
-    \end{equation}
-    
-    \item \textbf{Data-Driven Dynamic Y-Axis Bounds:} To eliminate whitespace distortion across functions with differing dynamic ranges:
-    \begin{equation}\label{eq:dynamic_y_bounds}
-        y_{\min} = \max\left(0.5 \cdot \min_{s, t}(\Delta y), \, 10^{-16}\right), \quad y_{\max} = 2.5 \cdot \max_{s, t}(\Delta y)
-    \end{equation}
-    \begin{equation}\label{eq:dynamic_y_range}
-        \text{Range}_Y = \left[ \log_{10}(y_{\min}), \, \log_{10}(y_{\max}) \right]
-    \end{equation}
-\end{enumerate}
-
-\subsection{Non-Parametric Hypothesis Testing and Vargha-Delaney Effect Size ($\hat{A}_{12}$)}
-Pairwise comparisons between solver $i$ and solver $j$ are quantified using the non-parametric \textbf{Vargha-Delaney $\hat{A}_{12}$ Effect Size}:
-\begin{equation}\label{eq:vargha_delaney_formulation}
-    \hat{A}_{12}(i, j) = \frac{R_1 - \frac{n_1(n_1 + 1)}{2}}{n_1 \cdot n_2}
-\end{equation}
-where $R_1$ is the rank sum of solver $i$, and $n_1 = n_2 = 20$. The statistic $\hat{A}_{12} > 0.50$ indicates that solver $i$ stochastically dominates solver $j$, with $\hat{A}_{12} \ge 0.71$ denoting a large positive effect size. Statistical significance is confirmed via two-sided **Wilcoxon Signed-Rank tests** adjusted with **Benjamini-Hochberg False Discovery Rate (FDR)** corrections ($\alpha = 0.05$).
-
-%-------------------------------------------------------------------------------
-\section{Thesis Figure Mapping and Storyboard}\label{sec:exp_storyboard}
-
-Every empirical figure generated by the analysis pipeline in Stage 4 is directly tied to specific thesis research questions and analytical milestones, as detailed in Table~\ref{tab:figure_mapping}:
-
-\begin{table}[htbp]
+\begin{figure}[t]
 \centering
-\small
-\caption{Comprehensive Thesis Figure Mapping and Empirical Storyboard.}
-\label{tab:figure_mapping}
-\begin{tabularx}{\textwidth}{l p{4.2cm} p{3.8cm} X}
-\toprule
-\textbf{Figure ID} & \textbf{Artifact Path} & \textbf{Visual / Metric Design} & \textbf{Target RQ \& Narrative} \\
-\midrule
-\textbf{Figure 1} & \texttt{results/figures/} \newline \texttt{difficulty\_matrix\_clean\_vs\_noisy.png} & Grouped Bar Chart of Success Rates ($\sigma=0.0$ vs. $\sigma=0.05$). & \textbf{RQ2 (Topology under Noise):} Proves ill-conditioned ($f_{11}$) and deceptive ($f_{21}$) surfaces suffer the greatest noise degradation. \\
-\addlinespace
-\textbf{Figure 2} & \texttt{results/figures/profiles/} \newline \texttt{.../convergence\_trajectories.png} & 6-Panel Log-Log Grid with Median Lines + IQR Ribbons ($Q_{25}\text{--}Q_{75}$). & \textbf{RQ1 \& Sub-RQ C (Search Dynamics):} Demonstrates continuous progress over $10^4 \times D$ evals without stagnation. \\
-\addlinespace
-\textbf{Figure 3} & \texttt{results/figures/} \newline \texttt{prompt\_strategy\_model\_ablation.png} & Grouped Bar Chart of AUC-ECDF across Prompts and Model Scales. & \textbf{Sub-RQ A \& B (Scaling \& Prompts):} Proves \textsc{Guided} prompts dominate across tiers; $14\text{B}$ achieves a $2.13\times$ gain over $7\text{B}$. \\
-\addlinespace
-\textbf{Figure 4} & \texttt{results/figures/} \newline \texttt{a12\_effect\_size\_heatmap.png} & Diverging Matrix Heatmap ($0.0 \to 1.0$) of Pairwise Effect Sizes. & \textbf{RQ1 (Statistical Dominance):} Quantifies global stochastic superiority of \texttt{14B / Guided} and CMA-ES. \\
-\addlinespace
-\textbf{Figure 5} & \texttt{results/figures/profiles/} \newline \texttt{.../target\_precision\_ecdf.png} & 6-Panel ECDF Curves across 51 Adaptive Targets. & \textbf{RQ1 \& RQ2 (Anytime Target Resolution):} Displays anytime efficiency across problem classes without floor compression. \\
-\addlinespace
-\textbf{Figure 6} & \texttt{results/figures/} \newline \texttt{noise\_robustness\_profile.png} & Scatter / Bar Plot of Degradation ($\Delta_{\text{noise}}$) vs. Retention ($\rho_{\text{noise}}$). & \textbf{RQ2 \& RQ3 (Stochastic Resilience):} Highlights the noise resistance of population momentum in PSO and \texttt{14B / Baseline}. \\
-\addlinespace
-\textbf{Figure 7} & \texttt{results/figures/} \newline \texttt{pairwise\_win\_tie\_loss\_summary.png} & Horizontal Stacked Bar of Significant Wins/Ties/Losses (FDR $p < 0.05$). & \textbf{RQ1 (Global Ranking):} Rigorous tournament ranking establishing LLM champions against classical baselines. \\
-\addlinespace
-\textbf{Figure 9B} & \texttt{results/figures/} \newline \texttt{ecdf\_by\_dimension.png} & Multi-Panel ECDF across Dimensions $D \in \{2, 3, 5, 10\}$. & \textbf{Sub-RQ C (Dimensionality Scaling):} Shows that budget scaling ($10^4 \times D$) enables robust target resolution in $10\text{D}$. \\
-\addlinespace
-\textbf{Figure 9C} & \texttt{results/figures/} \newline \texttt{noise\_retention\_detailed.png} & Dual-Axis Retention Profiles across Problem Hardness Classes. & \textbf{RQ2 \& RQ3 (Hardness vs. Noise):} Explores why multimodal surfaces exacerbate stochastic perturbations. \\
-\addlinespace
-\textbf{Figure 9D} & \texttt{results/figures/} \newline \texttt{solver\_problem\_matrix\_heatmap.png} & Matrix Heatmap of AUC-ECDF for 11 Solvers across 5 BBOB Functions. & \textbf{RQ1 (Landscape Specialization):} Isolates LLM strengths on $f_1, f_8$ versus CMA-ES dominance on $f_{11}$. \\
-\addlinespace
-\textbf{Figure 9E} & \texttt{results/figures/} \newline \texttt{model\_scale\_ablation\_dims.png} & Model Capacity ($7\text{B}$ vs $14\text{B}$) across Dimensions $D \in \{2, 3, 5, 10\}$. & \textbf{Sub-RQ A \& C (Dimension Scaling Laws):} Shows parameter capacity advantages expand as dimensionality increases. \\
-\bottomrule
-\end{tabularx}
+% PLACEHOLDER: Insert benchmark difficulty figure.
+% Suggested filename: fig_01_benchmark_difficulty_{dim}D.png
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Benchmark Difficulty Figure}\
+Clean versus noisy benchmark difficulty across dimensions.
+}}
+\caption{Benchmark difficulty under deterministic and stochastic evaluation conditions. The figure should show how increasing noise changes the difficulty of the considered landscapes.}
+\label{fig:benchmark_difficulty}
+\end{figure}
+
+This validation addresses the first research question by establishing that stochasticity is introduced as a controlled property of the evaluation environment rather than as an uncontrolled implementation artifact.
+
+%------------------------------------------------------------------------------
+\section{LLM-Based Algorithm Synthesis}
+\label{sec:llm_synthesis}
+%------------------------------------------------------------------------------
+
+\subsection{LLaMEA-Based Synthesis Process}
+
+The algorithm synthesis stage uses the LLaMEA framework to generate executable optimization heuristics. The LLM acts as a semantic variation operator: instead of applying manually designed mutation operators to numerical parameters, the framework asks the model to produce modified algorithm implementations.
+
+The synthesis process follows a \((1+1)\) evolutionary strategy. A current candidate is evaluated, a new candidate is generated by the LLM, and the new candidate replaces the current candidate when it provides an improved objective value under the synthesis criterion.
+
+At a high level, the process can be expressed as
+
+\begin{equation}
+A_{t+1}
+=======
+
+\begin{cases}
+A'_t, & \text{if } J(A'_t) < J(A_t),\
+A_t, & \text{otherwise},
+\end{cases}
+\end{equation}
+
+where \(A_t\) denotes the current algorithm, \(A'_t\) the generated candidate, and \(J(\cdot)\) the candidate's measured performance.
+
+The process is repeated for a predefined synthesis budget. Candidate programs that fail during execution are rejected or returned to the LLM together with the corresponding execution feedback.
+
+\subsection{Algorithm Interface}
+
+Generated algorithms are required to implement a common optimization interface. Each candidate receives a callable objective, problem dimensionality, evaluation budget, and search bounds. Conceptually, the interface follows
+
+\begin{equation}
+\texttt{solve}(f,D,B,l,u),
+\end{equation}
+
+where \(f\) is the objective function, \(D\) is the problem dimension, \(B\) is the evaluation budget, and \(l,u\) define the lower and upper search bounds.
+
+This common interface ensures that generated algorithms can be executed within the same evaluation environment as the classical baselines.
+
+The candidate algorithm is not given direct access to benchmark metadata such as the identity of the benchmark function or its analytical optimum. Its decisions are based on the function evaluations returned by the sandbox.
+
+\subsection{Model Configurations}
+
+Two Qwen2.5-Coder model scales are evaluated:
+
+\begin{itemize}
+\item Qwen2.5-Coder-7B;
+\item Qwen2.5-Coder-14B.
+\end{itemize}
+
+Both models are executed using the same quantization configuration and generation settings so that model scale remains the principal architectural difference.
+
+The synthesis configuration uses Q4_K_M quantization and a temperature of \(0.7\). The number of evolutionary generations and all execution limits are held constant within the corresponding experimental configuration.
+
+\begin{table}[t]
+\centering
+\caption{LLM synthesis configuration.}
+\label{tab:llm_configuration}
+\begin{tabular}{ll}
+\hline
+Parameter & Configuration \
+\hline
+Model scale & 7B, 14B \
+Quantization & Q4_K_M \
+Temperature & 0.7 \
+Synthesis budget & 1,000 evaluations \
+Dimensions & 2, 3, 5 \
+Noise levels & \(0,0.05,0.1,0.2\) \
+\hline
+\end{tabular}
 \end{table}
 
-%-------------------------------------------------------------------------------
-\section{Empirical Results and Analysis by Research Question}\label{sec:exp_results}
+\subsection{Prompt Scaffolding}
 
-The empirical performance across the 11 evaluated solvers is synthesized in Table~\ref{tab:main_results_summary}:
+Four prompt configurations are considered. They are designed to test whether additional structure and domain knowledge influence the algorithms produced by the LLM.
 
-\begin{table}[htbp]
+\subsubsection{Baseline}
+
+The Baseline prompt provides the minimum information required to implement the optimization interface. It describes the callable objective, the dimensionality, the evaluation budget, and the search bounds without prescribing a particular optimization strategy.
+
+This condition represents the model's least-constrained synthesis setting and serves as the primary control for the prompt experiments.
+
+\subsubsection{Guided}
+
+The Guided condition introduces optimization-related suggestions into the prompt. These include concepts such as population diversity, momentum, adaptive step sizes, and success-based adaptation.
+
+The purpose is not to prescribe a complete optimizer, but to determine whether providing established optimization concepts changes the search procedures generated by the model.
+
+\subsubsection{Thinking}
+
+The Thinking condition asks the model to perform structured reasoning about the current candidate before producing the next implementation. The prompt encourages the model to identify weaknesses or failure modes in the existing search procedure and use this analysis to motivate modifications.
+
+This condition examines whether explicit pre-code reasoning affects the quality or structure of the generated algorithms.
+
+\subsubsection{Vectorization}
+
+The Vectorization condition emphasizes array-oriented numerical operations using NumPy. The objective is primarily computational, encouraging the model to express candidate generation and population operations through vectorized operations rather than repeated scalar loops.
+
+\begin{table}[t]
 \centering
-\small
-\caption{Overall Target Attainment Success and Noise Degradation Summary Across All Solvers.}
-\label{tab:main_results_summary}
-\begin{tabularx}{\textwidth}{l c c c c}
-\toprule
-\textbf{Optimization Solver} & \textbf{Overall Success} & \textbf{Clean ($\sigma = 0.0$)} & \textbf{Noisy ($\sigma = 0.05$)} & \textbf{Degradation ($\Delta_{\text{noise}}$)} \\
-\midrule
-\textbf{CMA-ES} (Classical Baseline) & \textbf{57.67\%} & 65.33\% & 50.00\% & $-15.33\%$ \\
-\textbf{14B / Guided} (LLM Champion) & \textbf{48.97\%} & \textbf{78.67\%} & 17.14\% & $-61.53\%$ \\
-\textbf{14B / Baseline} (LLM Champion) & \textbf{45.67\%} & 56.00\% & 35.33\% & $-20.67\%$ \\
-\textbf{PSO} (Classical Baseline) & \textbf{40.00\%} & 42.67\% & 37.33\% & $-5.34\%$ \\
-\textbf{14B / Thinking} (LLM Champion) & \textbf{32.00\%} & 54.00\% & 10.00\% & $-44.00\%$ \\
-\textbf{14B / Vectorization} (LLM Champion) & \textbf{23.33\%} & 37.33\% & 9.33\% & $-28.00\%$ \\
-\textbf{7B / Guided} (LLM Champion) & \textbf{23.10\%} & 38.00\% & 7.14\% & $-30.86\%$ \\
-\textbf{7B / Thinking} (LLM Champion) & \textbf{15.67\%} & 28.00\% & 3.33\% & $-24.67\%$ \\
-\textbf{7B / Baseline} (LLM Champion) & \textbf{14.33\%} & 14.00\% & 14.67\% & $+0.67\%$ \\
-\textbf{7B / Vectorization} (LLM Champion) & \textbf{13.67\%} & 26.00\% & 1.33\% & $-24.67\%$ \\
-\textbf{Differential Evolution} (Classical Baseline) & \textbf{0.67\%} & 0.00\% & 1.33\% & $+1.33\%$ \\
-\bottomrule
-\end{tabularx}
+\caption{Prompt scaffolding configurations.}
+\label{tab:prompt_configurations}
+\begin{tabular}{p{0.22\textwidth}p{0.65\textwidth}}
+\hline
+Prompt & Description \
+\hline
+Baseline & Minimal optimization interface and black-box contract. \
+Guided & Adds domain-level guidance concerning adaptation, momentum, and diversity. \
+Thinking & Requests structured analysis of candidate weaknesses before code generation. \
+Vectorization & Encourages array-oriented and vectorized numerical operations. \
+\hline
+\end{tabular}
 \end{table}
 
-\subsection{Primary RQ1: Autonomous Synthesis and Competitiveness on Clean Landscapes}
-Under deterministic conditions ($\sigma = 0.0$), LLM-synthesized heuristics demonstrate state-of-the-art continuous optimization capabilities. The synthesized champion \texttt{14B / Guided} achieved a **$78.67\%$ clean target success rate**, significantly outperforming CMA-ES ($65.33\%$), PSO ($42.67\%$), and Differential Evolution ($0.00\%$). 
+\subsection{Runtime Verification and Feedback}
 
-On unimodal and moderate conditioning landscapes ($f_1$ Sphere and $f_8$ Rosenbrock), $14\text{B}$ LLM heuristics exhibited steeper initial convergence slopes than PSO, reaching machine precision ($\Delta y \le 10^{-8}$) within fewer function evaluations. On highly ill-conditioned problems ($f_{11}$ Discus), CMA-ES maintained its dominance due to exact analytical covariance matrix updates, whereas synthesized algorithms relied on heuristic coordinate-aligned adaptations.
+Generated programs are executed in a restricted evaluation environment. Before a candidate is accepted for further evaluation, its implementation is checked for structural and runtime validity.
 
-\subsection{Primary RQ2: Noise Resilience in Autonomous Design}
-Introducing heteroscedastic noise ($\sigma = 0.05$) revealed distinct behavioral regimes. Heuristics possessing implicit population inertia exhibited strong noise resistance: classical PSO decayed by only $\Delta_{\text{noise}} = -5.34\%$, while \texttt{14B / Baseline} exhibited a moderate drop of $-20.67\%$ (retaining a $35.33\%$ success rate under noise). Conversely, \texttt{14B / Guided}, which relied on aggressive deterministic step-size decay schedules, suffered a severe degradation ($\Delta_{\text{noise}} = -61.53\%$). This demonstrates that in the absence of explicit sample-averaging buffers ($K \ge 3$) or stochastic re-evaluation routines, aggressive descent heuristics become trapped in stochastic local basins.
+Potential failures include syntax errors, invalid array operations, broadcasting errors, numerical instability, and violations of the expected solver interface. When execution fails, the corresponding traceback
 
-\subsection{Primary RQ3: Cross-Environment Robustness and Transfer}
-Heuristics evolved within noisy synthesis regimes demonstrated high cross-environment transferability when deployed back onto clean objective surfaces. Stochastic training pressure acted as an algorithmic regularizer, preventing brittle coordinate-wise overfitting and encouraging exploratory step-size mechanisms.
+\begin{equation}
+\mathcal{T}_{\mathrm{feedback}}
+\end{equation}
 
-\subsection{Sub-RQ A: Model Parameter Capacity Scaling (14B vs. 7B vs. 3B)}
-Model capacity exerted a dominant influence on synthesis capability. Moving from $7\text{B}$ to $14\text{B}$ parameters yielded a **$2.13\times$ increase in clean success rate** (averaging $56.5\%$ across $14\text{B}$ models versus $26.5\%$ across $7\text{B}$ models). Code audits in Stage 3 revealed that while $3\text{B}$ and $7\text{B}$ models primarily synthesized basic random walks or naive local hill-climbers, $14\text{B}$ models consistently generated sophisticated search components, including adaptive momentum buffers, orthogonal exploration directions, and dynamic step-size decay.
+is incorporated into the subsequent prompt context.
 
-\subsection{Sub-RQ B: Prompt Scaffolding Ablation}
-Prompt design significantly altered evolutionary outcomes. \textsc{Guided} scaffolding produced the highest peak performance across all model scales ($78.67\%$ on $14\text{B}$, $38.00\%$ on $7\text{B}$). \textsc{Thinking} prompts enforced structured pre-synthesis deliberation that reduced premature stagnation relative to unguided baselines, while \textsc{Vectorization} prompts improved execution throughput but occasionally constrained sequential adaptive logic.
+This creates a closed feedback loop:
 
-\subsection{Sub-RQ C: Budget and Dimensionality Generalization}
-Heuristics synthesized under low budgets ($B_{\text{synth}} = 1{,}000$) scaled seamlessly to full-scale benchmarking budgets ($B_{\text{eval}}(D) = 10{,}000 \times D$, up to $100{,}000$ evaluations in $10\text{D}$) without asymptotic stalling or numerical divergence. This confirms that the evolutionary discovery engine synthesizes generalizable metaheuristic policies rather than horizon-overfitted routines.
+\begin{equation}
+\text{Generate}
+\rightarrow
+\text{Execute}
+\rightarrow
+\text{Observe failure or performance}
+\rightarrow
+\text{Provide feedback}
+\rightarrow
+\text{Generate again}.
+\end{equation}
+
+The mechanism allows the LLM to correct implementation errors without requiring manual intervention during synthesis.
+
+\subsection{Synthesis Evaluation}
+
+During synthesis, candidate algorithms are evaluated using the controlled benchmark environment with a synthesis budget of
+
+\begin{equation}
+B_{\mathrm{synth}}=1000
+\end{equation}
+
+objective evaluations.
+
+The synthesis experiments consider the selected benchmark functions and lower-dimensional settings used for algorithm discovery. The purpose of this limited budget is to provide sufficient feedback for iterative code evolution while keeping the synthesis process computationally manageable.
+
+The exact number of completed synthesis trajectories is determined from the final experimental logs and is reported together with the final configuration used for the experiments.
+
+\subsection{Champion Selection}
+
+For each synthesis trajectory, the best candidate is selected according to its minimum observed true optimality gap:
+
+\begin{equation}
+J(A)
+====
+
+\min_t
+\left|
+f(x_t)-f(x^*)
+\right|.
+\end{equation}
+
+The clean objective is used here only by the evaluation layer for selection and diagnostics. The candidate itself receives only the objective observations permitted by the stochastic sandbox.
+
+The selected candidate is referred to as the \emph{champion heuristic}. Champions are subsequently transferred to the independent benchmarking stage.
+
+%------------------------------------------------------------------------------
+\section{Independent Benchmarking Protocol}
+\label{sec:independent_benchmarking}
+%------------------------------------------------------------------------------
+
+\subsection{Purpose of Independent Evaluation}
+
+The second experimental stage evaluates the synthesized algorithms independently of the evolutionary synthesis process. This separation addresses two potential sources of bias.
+
+First, a candidate may adapt specifically to the short synthesis horizon. Evaluating the same candidate over a substantially larger budget tests whether the discovered search behavior remains useful beyond the conditions under which it was selected.
+
+Second, a single synthesis trajectory does not provide a reliable estimate of an algorithm's stochastic performance. Independent evaluation therefore uses twenty random seeds for every experimental condition.
+
+\subsection{Compared Optimization Methods}
+
+The independent evaluation compares eleven solvers:
+
+\begin{itemize}
+\item CMA-ES;
+\item Differential Evolution;
+\item Particle Swarm Optimization;
+\item eight LLM-generated heuristics corresponding to two model scales and four prompt configurations.
+\end{itemize}
+
+The three classical methods provide reference points representing established population-based continuous optimization strategies. The LLM-generated methods are evaluated using the same external benchmark protocol.
+
+\begin{table}[t]
+\centering
+\caption{Optimization methods included in the independent evaluation.}
+\label{tab:compared_solvers}
+\begin{tabular}{lll}
+\hline
+Category & Method & Configuration \
+\hline
+Classical & CMA-ES & Standard implementation \
+Classical & Differential Evolution & best/1/bin \
+Classical & Particle Swarm Optimization & Standard implementation \
+LLM & Qwen2.5-Coder-7B & Baseline \
+LLM & Qwen2.5-Coder-7B & Guided \
+LLM & Qwen2.5-Coder-7B & Thinking \
+LLM & Qwen2.5-Coder-7B & Vectorization \
+LLM & Qwen2.5-Coder-14B & Baseline \
+LLM & Qwen2.5-Coder-14B & Guided \
+LLM & Qwen2.5-Coder-14B & Thinking \
+LLM & Qwen2.5-Coder-14B & Vectorization \
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Benchmark Matrix}
+
+The independent evaluation covers five benchmark functions, three dimensions, four noise levels, and twenty independent random seeds.
+
+\begin{equation}
+f
+\in
+{f_1,f_8,f_{11},f_{15},f_{21}},
+\end{equation}
+
+\begin{equation}
+D\in{2,5,10},
+\end{equation}
+
+and
+
+\begin{equation}
+\sigma\in{0,0.05,0.1,0.2}.
+\end{equation}
+
+The full factorial design permits performance to be examined both globally and conditionally. In particular, results can be aggregated across all functions to characterize general behavior, or separated by landscape, dimension, and noise level to identify specific strengths and weaknesses.
+
+\subsection{Evaluation Budget}
+
+The independent benchmark uses an evaluation budget proportional to problem dimensionality:
+
+\begin{equation}
+B_{\mathrm{eval}}=10,000D.
+\end{equation}
+
+The resulting budgets are
+
+\begin{equation}
+B_{\mathrm{eval}}
+=================
+
+\begin{cases}
+20,000, & D=2,\
+50,000, & D=5,\
+100,000, & D=10.
+\end{cases}
+\end{equation}
+
+Using a dimension-dependent budget provides the algorithms with an increasing number of objective evaluations as the search space becomes larger.
+
+The substantially larger evaluation horizon compared with synthesis is intentional. It allows the study to determine whether algorithms selected after a short synthesis phase continue to make progress when given additional computational resources.
+
+\subsection{Independent Replications}
+
+Each condition is evaluated using twenty independent random seeds:
+
+\begin{equation}
+r\in{1,\ldots,20}.
+\end{equation}
+
+The seeds are fixed and recorded so that all algorithms are exposed to the same replication structure. Independent repetitions reduce the influence of individual stochastic trajectories and permit distribution-based statistical analysis of algorithm performance.
+
+\subsection{Execution Procedure}
+
+For each algorithm, benchmark function, dimension, noise level, and seed, the solver is initialized independently and allowed to run until the evaluation budget is exhausted or an implementation-specific termination condition is reached.
+
+The best solution found up to evaluation \(t\) is retained throughout the run. The resulting trajectory is therefore represented by the running best objective value
+
+\begin{equation}
+f_{\mathrm{best}}(t)
+====================
+
+\min_{1\leq k\leq t}f(x_k).
+\end{equation}
+
+For stochastic evaluations, performance is ultimately assessed using the corresponding clean objective value in order to avoid treating a favorable noise realization as genuine optimization progress.
+
+%------------------------------------------------------------------------------
+\section{Performance Measures}
+\label{sec:performance_measures}
+%--------------https://overleaf.uni-paderborn.de/project/6a46af95661130e54a4df7b5/download/zip----------------------------------------------------------------
+
+The evaluation uses several complementary measures. No single metric is sufficient to characterize black-box optimization performance because an algorithm may reach high precision but require a large number of evaluations, or may make rapid early progress while failing to achieve the final target.
+
+\subsection{Optimality Gap}
+
+The primary measure of solution quality is the absolute optimality gap:
+
+\begin{equation}
+\Delta f_t
+==========
+
+\left|
+f(x_{\mathrm{best},t})-f(x^*)
+\right|.
+\end{equation}
+
+For minimization problems, smaller values indicate better solutions.
+
+The optimality gap is evaluated using the clean benchmark objective. This is particularly important under stochastic conditions because the noisy observation itself is not a reliable measure of the true distance to the optimum.
+
+\subsection{Terminal Precision and Success Rate}
+
+A run is considered successful at a target precision \(\theta\) if
+
+\begin{equation}
+\min_{1\leq t\leq B_{\mathrm{eval}}}
+\Delta f_t
+\leq
+\theta.
+\end{equation}
+
+The primary high-precision target is
+
+\begin{equation}
+\theta=10^{-8}.
+\end{equation}
+
+The terminal success rate for an algorithm is therefore
+
+\begin{equation}
+S
+=
+
+\frac{1}{N}
+\sum_{r=1}^{N}
+\mathbb{I}
+\left[
+\min_t\Delta f_{r,t}
+\leq10^{-8}
+\right],
+\end{equation}
+
+where \(N=20\) denotes the number of independent runs.
+
+Success rates are also reported separately by benchmark function, dimension, and noise level. This prevents aggregate success rates from hiding strong differences between easy and difficult landscapes.
+
+\subsection{Target-Attainment ECDF}
+
+To characterize how quickly different precision targets are reached, the analysis uses a set of logarithmically spaced targets:
+
+\begin{equation}
+\Theta
+======
+
+\left{
+10^{2-0.2k}
+\mid
+k=0,\ldots,50
+\right}.
+\end{equation}
+
+This produces 51 target levels ranging from \(10^2\) to \(10^{-8}\).
+
+For replication \(r\), function \(f\), and target \(\theta\), the first hitting time is
+
+\begin{equation}
+T_r(f,\theta)
+=============
+
+\min
+\left{
+t:
+\Delta f_{r,t}\leq\theta
+\right}.
+\end{equation}
+
+If the target is never reached within the available budget, the hitting time is set to infinity.
+
+The empirical cumulative distribution function is then defined over the first hitting times:
+
+\begin{equation}
+ECDF(t)
+=======
+
+\frac{1}{N|\Theta|}
+\sum_{r=1}^{N}
+\sum_{\theta\in\Theta}
+\mathbb{I}
+\left[
+T_r(f,\theta)\leq t
+\right].
+\end{equation}
+
+The ECDF describes the proportion of evaluated precision targets that have been reached by a given evaluation budget. It therefore combines information about convergence speed and attainable precision.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Insert target-precision ECDF figure.
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Target Precision ECDF}\
+Empirical cumulative distribution of target attainment.
+}}
+\caption{Target-attainment ECDF comparing optimization methods across precision levels.}
+\label{fig:target_precision_ecdf}
+\end{figure}
+
+\subsection{AUC-ECDF}
+
+To obtain a scalar summary of anytime performance, the area under the ECDF is calculated over logarithmic evaluation time.
+
+Let
+
+\begin{equation}
+z=\log_{10}(t).
+\end{equation}
+
+The normalized AUC-ECDF is calculated over the corresponding logarithmic evaluation range:
+
+\begin{equation}
+AUC_{\mathrm{ECDF}}
+===================
+
+\frac{
+\int_{\log_{10}(1)}^{\log_{10}(B_{\mathrm{eval}})}
+ECDF(10^z),dz
+}{
+\log_{10}(B_{\mathrm{eval}})
+}.
+\end{equation}
+
+A larger value indicates that the algorithm reaches a larger proportion of precision targets over the evaluation horizon.
+
+Because the integration is performed with respect to logarithmic evaluation time, equal orders of magnitude in the evaluation budget receive comparable weight. The metric therefore summarizes anytime performance across short and long evaluation horizons rather than assigning the majority of the score to the final portion of the budget.
+
+\subsection{Convergence Trajectories}
+
+The evolution of the best clean optimality gap is analyzed throughout each run. To compare trajectories with different evaluation budgets, measurements are sampled on a logarithmic evaluation grid containing 300 points.
+
+For each condition, the median trajectory is reported together with the interquartile range (IQR):
+
+\begin{equation}
+Q_1(t)
+\leq
+\Delta f(t)
+\leq
+Q_3(t).
+\end{equation}
+
+The median provides a robust estimate of typical optimization progress, while the IQR shows the variability across independent seeds.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Insert convergence trajectory figure.
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Convergence Trajectories}\
+Median and IQR of clean optimality gaps over evaluation budget.
+}}
+\caption{Convergence trajectories of the compared optimization methods. Shaded or bounded regions should represent the interquartile range across independent seeds.}
+\label{fig:convergence_trajectories}
+\end{figure}
+
+\subsection{Failure Mode Classification}
+
+Performance is further characterized using coarse failure categories based on the best clean optimality gap achieved during a run. The categories are:
+
+\begin{table}[t]
+\centering
+\caption{Classification of optimization outcomes according to the best achieved optimality gap.}
+\label{tab:failure_categories}
+\begin{tabular}{lll}
+\hline
+Category & Optimality gap & Interpretation \
+\hline
+High precision & \(\leq10^{-8}\) & Successful high-precision convergence \
+Moderate convergence & \(10^{-8}<\Delta f\leq10^{-2}\) & Substantial optimization progress \
+Minor progress / stagnation & \(10^{-2}<\Delta f\leq1\) & Limited improvement \
+Severe failure & \(>1\) & Strong stagnation or unsuccessful search \
+\hline
+\end{tabular}
+\end{table}
+
+These categories are not intended to replace the continuous performance measures. Instead, they provide an interpretable summary of where optimization runs terminate and help identify characteristic failure behavior.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Insert global failure-mode breakdown.
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Failure Mode Breakdown}\
+Distribution of high precision, moderate convergence, stagnation,
+and severe failure categories.
+}}
+\caption{Distribution of optimization outcomes according to the achieved optimality-gap categories.}
+\label{fig:failure_breakdown}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\section{Statistical Analysis}
+\label{sec:statistical_analysis}
+%------------------------------------------------------------------------------
+
+The factorial design produces repeated observations across algorithms, functions, dimensions, noise levels, and seeds. Statistical analysis is therefore used to complement the descriptive performance measures.
+
+Because optimization performance distributions can be skewed and may contain substantial outliers, the analysis emphasizes robust distributional summaries rather than relying exclusively on means and standard deviations.
+
+\subsection{Distributional Comparisons}
+
+For comparisons involving multiple optimization methods, the Kruskal--Wallis test can be used as an omnibus non-parametric test. When a significant omnibus difference is detected, pairwise comparisons can be performed between relevant methods.
+
+For paired algorithm comparisons across identical experimental replications, the Wilcoxon signed-rank test provides a non-parametric alternative to the paired \(t\)-test.
+
+When multiple pairwise comparisons are performed, the Benjamini--Hochberg procedure is used to control the false discovery rate.
+
+\subsection{Effect Size}
+
+Statistical significance alone does not indicate the magnitude of an observed performance difference. The Vargha--Delaney \(A_{12}\) statistic is therefore used as a non-parametric effect-size measure.
+
+For two algorithms \(A\) and \(B\), \(A_{12}\) can be interpreted as the probability that a randomly selected observation from one method performs better than a randomly selected observation from the other, with the exact interpretation depending on the direction of the performance measure.
+
+The effect-size analysis is particularly useful when comparing algorithms across repeated seeds because a small \(p\)-value may occur for a practically small difference when many replications or comparisons are available.
+
+\subsection{Scope of Statistical Testing}
+
+Statistical tests are used to support the interpretation of the experimental results rather than to replace the convergence and precision analyses. Where appropriate, results are reported together with effect sizes and distributional summaries.
+
+The main conclusions are therefore based on the combination of:
+
+\begin{enumerate}
+\item performance distributions;
+\item convergence trajectories;
+\item target-attainment behavior;
+\item success rates;
+\item effect sizes;
+\item statistical tests.
+\end{enumerate}
+
+%------------------------------------------------------------------------------
+\section{Experimental Results}
+\label{sec:experimental_results}
+%------------------------------------------------------------------------------
+
+The results are organized according to the three research questions. The analyses of model scale, prompt scaffolding, landscape specialization, dimensionality, and failure modes are treated as complementary analyses within the relevant research questions.
+
+%------------------------------------------------------------------------------
+\subsection{RQ1: Stochastic Evaluation Sandbox}
+\label{sec:results_rq1}
+%------------------------------------------------------------------------------
+
+The first set of experiments evaluates the behavior of the stochastic benchmark environment. The objective is to establish that the proposed evaluation layer introduces controllable stochasticity while preserving the underlying benchmark structure.
+
+The deterministic condition provides the reference case. Increasing \(\sigma\) should increase the variability of the observed fitness values and make the optimization problem more difficult, while the underlying analytical optimum remains unchanged.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Insert noise-severity/difficulty result.
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- RQ1 Result}\
+Benchmark difficulty across \(\sigma=0,0.05,0.1,0.2\).
+}}
+\caption{Effect of increasing stochastic noise on benchmark difficulty.}
+\label{fig:rq1_noise_effect}
+\end{figure}
+
+The results should be discussed in terms of whether the increase in noise produces a systematic change in observed optimization difficulty and whether the effect differs between benchmark landscapes.
+
+In particular, the heteroscedastic noise model means that noise magnitude is linked to the clean objective gap. Consequently, the influence of noise need not be identical across all benchmark functions or dimensions. This provides a useful basis for the subsequent evaluation of generated heuristics.
+
+The results of this section establish the experimental foundation required for RQ2 and RQ3: the same benchmark functions can be evaluated under controlled deterministic and stochastic conditions without changing the underlying optimization problem.
+
+%------------------------------------------------------------------------------
+\subsection{RQ2: Autonomous Synthesis of Noise-Resilient Heuristics}
+\label{sec:results_rq2}
+%------------------------------------------------------------------------------
+
+The second research question concerns the ability of the LLM-driven evolutionary process to generate executable optimization procedures.
+
+The first analysis examines synthesis validity and candidate progression. Generated programs are categorized according to whether they execute successfully, fail due to implementation errors, or terminate without achieving meaningful optimization progress.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Insert synthesis progression figure.
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Synthesis Progression}\
+Evolution of candidate quality during LLaMEA synthesis.
+}}
+\caption{Progression of candidate optimization performance during LLM-driven synthesis.}
+\label{fig:synthesis_progression}
+\end{figure}
+
+The second analysis compares the generated heuristics across model scales. The 7B and 14B models are evaluated using the same prompt configurations and synthesis environment.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Insert model-scale comparison.
+% Suggested filename: fig_09e_auc_ecdf_model_scale.png
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Model Scale Comparison}\
+AUC-ECDF comparison between 7B and 14B generated heuristics.
+}}
+\caption{Performance comparison between LLM-generated heuristics obtained from the two model scales.}
+\label{fig:model_scale}
+\end{figure}
+
+The analysis should determine whether the larger model consistently produces stronger candidates or whether its effect depends on the benchmark landscape, prompt configuration, noise level, or dimensionality.
+
+\subsubsection{Prompt Scaffolding}
+
+The prompt configurations are compared to determine whether additional optimization guidance changes the generated search behavior.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Insert prompt comparison figure.
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Prompt Comparison}\
+Comparison of Baseline, Guided, Thinking, and Vectorization.
+}}
+\caption{Effect of prompt scaffolding on the performance of LLM-generated optimization heuristics.}
+\label{fig:prompt_comparison}
+\end{figure}
+
+The purpose of this comparison is not to establish a universally optimal prompt strategy. Instead, it examines whether explicit domain guidance, structured reasoning, or computational guidance changes the types of optimization procedures discovered by the synthesis process.
+
+\subsubsection{Structural Characteristics of Generated Algorithms}
+
+In addition to numerical performance, generated source code can be inspected for recurring algorithmic mechanisms. Examples include:
+
+\begin{itemize}
+\item adaptive step-size control;
+\item population-based candidate generation;
+\item momentum-like updates;
+\item diversity preservation;
+\item fitness averaging;
+\item repeated evaluation of promising candidates;
+\item perturbation or mutation mechanisms;
+\item termination or stagnation checks.
+\end{itemize}
+
+Such observations are used descriptively to characterize the generated heuristics. The presence of a mechanism alone is not treated as evidence that it caused an observed performance difference.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Insert generated-algorithm morphology/structure figure.
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Generated Algorithm Structure}\
+Representative structural characteristics of synthesized heuristics.
+}}
+\caption{Examples of recurring algorithmic structures identified in the generated optimization heuristics.}
+\label{fig:generated_structure}
+\end{figure}
+
+Together, these analyses address whether the LLM can produce executable search procedures and whether model scale and prompt scaffolding influence the resulting algorithms.
+
+%------------------------------------------------------------------------------
+\subsection{RQ3: Robustness and Comparative Performance}
+\label{sec:results_rq3}
+%------------------------------------------------------------------------------
+
+RQ3 evaluates the synthesized algorithms against established optimization methods under the independent factorial benchmark protocol.
+
+\subsubsection{Overall Algorithm Comparison}
+
+The first comparison considers aggregate performance across the complete benchmark set. Success rates, convergence trajectories, and target-attainment distributions are used together because each captures a different aspect of optimization behavior.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Insert overall algorithm comparison.
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Overall Comparison}\
+Overall success rates and/or AUC-ECDF for all eleven solvers.
+}}
+\caption{Overall comparison of classical and LLM-generated optimization methods.}
+\label{fig:overall_algorithm_comparison}
+\end{figure}
+
+Aggregate results provide a general comparison, but they should not be interpreted as evidence that one method is universally superior. Differences in landscape structure, dimensionality, and noise can substantially affect algorithm behavior.
+
+\subsubsection{Landscape-Specific Performance}
+
+The next analysis separates the results by benchmark function. This determines whether the performance of generated algorithms is consistent across landscape types or concentrated on particular problem structures.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Suggested filename fig_09d_auc_ecdf_by_problem.png
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Performance by Benchmark Problem}\
+AUC-ECDF or equivalent performance measure for each benchmark function.
+}}
+\caption{Performance of the compared optimization methods across the individual benchmark landscapes.}
+\label{fig:auc_by_problem}
+\end{figure}
+
+This analysis is particularly relevant because a method may perform well on separable or regular landscapes while struggling on highly multimodal or ill-conditioned functions. Such differences provide evidence concerning landscape specialization rather than simply overall ranking.
+
+\subsubsection{Effect of Noise Intensity}
+
+The robustness analysis compares performance at
+
+\begin{equation}
+\sigma=0,\quad
+\sigma=0.05,\quad
+\sigma=0.1,\quad
+\sigma=0.2.
+\end{equation}
+
+The deterministic condition provides the baseline against which degradation under stochastic evaluation is measured.
+
+For an algorithm \(A\), the relative degradation between two conditions can be summarized as
+
+\begin{equation}
+\Delta_{\mathrm{noise}}
+=======================
+
+\frac{
+M_A(\sigma)-M_A(0)
+}{
+M_A(0)
+},
+\end{equation}
+
+where \(M_A\) denotes the selected performance measure. The interpretation depends on whether larger or smaller values indicate better performance.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Insert direct noise overlay.
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Noise Robustness}\
+Performance trajectories or ECDFs across the four noise levels.
+}}
+\caption{Effect of increasing fitness noise on the performance of LLM-generated and classical optimization methods.}
+\label{fig:noise_robustness}
+\end{figure}
+
+The analysis focuses on whether performance decreases gradually or sharply with increasing noise and whether different algorithms exhibit different sensitivity profiles.
+
+\subsubsection{Dimensional Scalability}
+
+Performance is additionally evaluated at
+
+\begin{equation}
+D\in{2,5,10}.
+\end{equation}
+
+The purpose of this analysis is to determine whether the behavior observed in low-dimensional settings persists as the search space becomes larger.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Insert dimensional scalability figure.
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Dimensional Scalability}\
+Performance across 2D, 5D, and 10D.
+}}
+\caption{Effect of problem dimensionality on the performance of the compared optimization methods.}
+\label{fig:dimensional_scalability}
+\end{figure}
+
+The comparison considers both absolute performance and the change in performance between dimensions. A method that performs strongly in 2D but experiences severe degradation in 10D is therefore distinguished from one whose performance remains comparatively stable.
+
+\subsubsection{Model Scaling Under Independent Evaluation}
+
+The independent benchmark also provides a second perspective on model scaling. Whereas the synthesis analysis examines the ability of the models to generate candidates, the independent evaluation examines the resulting behavior of those candidates under a common evaluation protocol.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Insert model scale result across dimensions/noise.
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Model Scaling Under Evaluation}\
+7B versus 14B across dimensions and noise conditions.
+}}
+\caption{Independent evaluation of heuristics generated by the 7B and 14B models.}
+\label{fig:model_scaling_evaluation}
+\end{figure}
+
+This distinction prevents model scale from being interpreted solely through the quality of the synthesis trajectory. The relevant question is whether differences in generated candidates translate into measurable differences when the algorithms are independently benchmarked.
+
+\subsubsection{Prompt Effects Under Independent Evaluation}
+
+The four prompt configurations are also compared after synthesis. This analysis determines whether differences observed during algorithm generation remain visible when the resulting algorithms are evaluated independently.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Insert independent prompt comparison.
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Independent Prompt Comparison}\
+Performance of Baseline, Guided, Thinking, and Vectorization.
+}}
+\caption{Independent benchmark comparison of heuristics generated using different prompt scaffolding strategies.}
+\label{fig:prompt_independent}
+\end{figure}
+
+The analysis should distinguish between a prompt producing a stronger synthesis trajectory and a prompt producing a heuristic that remains effective during the independent evaluation.
+
+\subsubsection{Failure Modes}
+
+Finally, the evaluation examines how algorithms fail as problem difficulty increases.
+
+The failure categories introduced in Section~\ref{sec:performance_measures} are aggregated by algorithm, noise level, and dimension. This allows the analysis to distinguish between high-precision convergence, moderate progress, stagnation, and severe failure.
+
+\begin{figure}[t]
+\centering
+% PLACEHOLDER: Insert failure analysis figure.
+% Suggested: failure breakdown by dimension.
+\fbox{\parbox[c][5cm][c]{0.9\textwidth}{\centering
+\textbf{PLACEHOLDER -- Failure Modes by Dimension}\
+Failure categories across 2D, 5D, and 10D.
+}}
+\caption{Failure-mode distribution as problem dimensionality increases.}
+\label{fig:failure_by_dimension}
+\end{figure}
+
+The failure analysis provides a complementary view of scalability. For example, degradation in a continuous performance metric may result from slower convergence, increased stagnation, or a transition toward severe search failure. Identifying these behaviors helps characterize how the generated algorithms respond to increasingly difficult optimization conditions.
+
+%------------------------------------------------------------------------------
+\section{Analysis of the Main Experimental Factors}
+\label{sec:factor_analysis}
+%------------------------------------------------------------------------------
+
+The factorial design enables several cross-factor analyses that support the interpretation of the three research questions.
+
+\subsection{Landscape Dependence}
+
+The benchmark functions differ in separability, conditioning, multimodality, and local structure. Differences between algorithms are therefore interpreted in relation to the characteristics of the underlying landscape.
+
+Strong performance on a particular function is treated as evidence of compatibility with that landscape rather than as evidence of general superiority.
+
+\subsection{Noise Sensitivity}
+
+The four noise levels provide a controlled axis for examining robustness. An algorithm whose performance remains relatively stable from \(\sigma=0\) to \(\sigma=0.2\) exhibits a different robustness profile from an algorithm whose performance deteriorates rapidly even at lower noise levels.
+
+This analysis is particularly relevant to RQ2 and RQ3 because it connects the synthesis environment to the independent behavior of the generated heuristics.
+
+\subsection{Dimensionality}
+
+Increasing dimensionality changes the size and geometry of the search space. The 2D, 5D, and 10D experiments therefore provide evidence about whether the generated search logic remains effective as the number of decision variables increases.
+
+Rather than defining a separate research question for dimensionality, this analysis is used to characterize the scope of the robustness observed under RQ3.
+
+\subsection{Model Parameter Scale}
+
+The comparison between 7B and 14B models examines whether increased model capacity is associated with measurable differences in synthesized algorithm quality.
+
+Any observed advantage is interpreted empirically. In particular, a larger model may generate more complex code without necessarily producing better optimization performance. Conversely, similar numerical performance does not imply that the two models generate structurally identical algorithms.
+
+\subsection{Prompt Scaffolding}
+
+The prompt configurations provide controlled variations in the information supplied to the LLM. Differences between them are therefore interpreted as evidence concerning the usefulness of different forms of scaffolding rather than as evidence that one prompting strategy is universally optimal.
+
+\subsection{Failure Behavior}
+
+The failure analysis complements performance ranking by identifying where and how algorithms stop making useful progress. This is especially important for generated heuristics because a method can achieve competitive performance on a subset of problems while exhibiting unstable behavior elsewhere.
+
+The combination of continuous performance measures and categorical failure analysis therefore provides a more complete characterization of the generated optimization procedures.
+
+%------------------------------------------------------------------------------
+\section{Experimental Limitations and Threats to Validity}
+\label{sec:experimental_limitations}
+%------------------------------------------------------------------------------
+
+Several limitations should be considered when interpreting the results.
+
+\subsection{Benchmark Coverage}
+
+The study evaluates five continuous benchmark functions. Although these functions cover several important landscape characteristics, they cannot represent the full range of real-world optimization problems. Results should therefore be interpreted as evidence within the selected benchmark domain rather than as a general guarantee of performance on arbitrary optimization tasks.
+
+\subsection{Model Coverage}
+
+Only two model scales are evaluated. The comparison therefore provides evidence about the selected Qwen2.5-Coder configurations but does not establish a general scaling law across all LLM architectures or parameter sizes.
+
+\subsection{Prompt Dependence}
+
+The prompt configurations represent specific forms of scaffolding chosen for this study. Other prompt formulations could produce different results. The purpose of the comparison is consequently to evaluate the selected strategies rather than to identify an exhaustive set of possible prompt designs.
+
+\subsection{Noise Model}
+
+The stochastic environment uses a controlled heteroscedastic Gaussian noise model. Real-world measurement noise may exhibit temporal correlations, non-Gaussian distributions, biases, discontinuities, or other dependencies that are not represented here.
+
+The results should therefore be interpreted as evidence about optimization under the specified stochastic model.
+
+\subsection{Finite Evaluation Budget}
+
+All optimization methods operate under finite evaluation budgets. An algorithm that performs poorly within the selected horizon may improve given additional evaluations, while an algorithm selected during synthesis may have been specialized to the available synthesis budget.
+
+The separation between synthesis and independent evaluation partially addresses this issue by using a substantially larger evaluation horizon in Stage~2, but it does not remove the general limitation imposed by finite computational resources.
+
+\subsection{Stochasticity of LLM Generation}
+
+LLM-based synthesis is itself stochastic. Even with identical model and prompt configurations, different generations can produce different candidate programs. Repeated independent synthesis trajectories would therefore provide additional information about the variability of algorithm discovery.
+
+The independent benchmarking stage reduces uncertainty in the performance comparison of selected algorithms, but it does not fully characterize the distribution of all algorithms that could potentially be generated by the LLM.
+
+%------------------------------------------------------------------------------
+\section{Chapter Summary}
+\label{sec:experiments_summary}
+%------------------------------------------------------------------------------
+
+This chapter presented the experimental methodology used to investigate LLM-based automated algorithm design for continuous black-box optimization under deterministic and stochastic evaluation.
+
+The methodology was organized around the three research questions of the thesis. First, a stochastic evaluation sandbox was introduced to extend continuous benchmark functions with controlled heteroscedastic fitness noise while keeping the true objective hidden from the candidate optimizer. Four noise levels, ranging from deterministic evaluation to stronger stochastic perturbations, were used to characterize the resulting optimization conditions.
+
+Second, LLaMEA was employed to synthesize executable optimization heuristics using an LLM as a semantic variation operator within a \((1+1)\) evolutionary process. Two model scales and four prompt configurations were considered. Runtime verification and execution feedback allowed invalid candidates to be identified and corrected during synthesis.
+
+Third, the resulting heuristics were evaluated independently against CMA-ES, Differential Evolution, and Particle Swarm Optimization. The independent evaluation varied benchmark landscape, dimensionality, noise intensity, and random seed. Twenty independent replications were used for each condition, with a dimension-dependent evaluation budget.
+
+Performance was characterized using clean optimality gaps, high-precision success rates, convergence trajectories, target-attainment ECDFs, AUC-ECDF, and failure-mode distributions. The resulting analysis provides several complementary views of algorithm behavior, including overall competitiveness, landscape dependence, sensitivity to noise, dimensional scalability, model scaling, prompt effects, and failure behavior.
+
+The next chapter presents and discusses the empirical results obtained from this experimental design, with the analysis organized around RQ1, RQ2, and RQ3.
