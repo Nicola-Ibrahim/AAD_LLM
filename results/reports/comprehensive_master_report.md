@@ -7,18 +7,18 @@
 - **Effect Size Metric**: Vargha-Delaney $\hat{A}_{12}$ non-parametric effect size
 
 ## 2. Omnibus Kruskal-Wallis Significance Summary
-- **Total Experimental Conditions Evaluated**: 40
-- **Statistically Significant omnibus Differences ($p < 0.05$)**: 40 / 40 (100.0%)
+- **Total Experimental Conditions Evaluated**: 80
+- **Statistically Significant omnibus Differences ($p < 0.05$)**: 72 / 80 (90.0%)
 
 ### Omnibus Differences by Problem Dimension
-- **2D**: 10 / 10 conditions reject null hypothesis
-- **3D**: 10 / 10 conditions reject null hypothesis
-- **5D**: 10 / 10 conditions reject null hypothesis
-- **10D**: 10 / 10 conditions reject null hypothesis
+- **2D**: 18 / 20 conditions reject null hypothesis
+- **3D**: 19 / 20 conditions reject null hypothesis
+- **5D**: 18 / 20 conditions reject null hypothesis
+- **10D**: 17 / 20 conditions reject null hypothesis
 
 ## 3. Pairwise Comparisons & FDR Correction
-- **Total Pairwise Hypothesis Tests**: 5623
-- **Significant Differences after FDR Correction ($\alpha=0.05$)**: 4398 / 5623 (78.2%)
+- **Total Pairwise Hypothesis Tests**: 5764
+- **Significant Differences after FDR Correction ($\alpha=0.05$)**: 4548 / 5764 (78.9%)
 
 ### Comparison Tier Breakdown
-- **Tier 3 (Classical vs. Classical)**: 4398 / 5623 pairs significant
+- **Tier 3 (Classical vs. Classical)**: 4548 / 5764 pairs significant

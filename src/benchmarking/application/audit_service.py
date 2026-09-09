@@ -69,11 +69,16 @@ class EvaluationAuditService:
         if df_db.empty:
             return pd.DataFrame(), {}
 
-        unique_conditions = (
-            df_db[["dim", "noise_std", "problem_id"]]
-            .drop_duplicates()
-            .sort_values(by=["dim", "noise_std", "problem_id"])
-        )
+        unique_dims = sorted(list({int(d) for d in df_db["dim"].dropna()}))
+        unique_noises = sorted(list({float(n) for n in df_db["noise_std"].dropna()}))
+        unique_pids = sorted(list({int(p) for p in df_db["problem_id"].dropna()}))
+
+        unique_conditions = [
+            (d, n, p)
+            for d in unique_dims
+            for n in unique_noises
+            for p in unique_pids
+        ]
         unique_models = sorted(df_db["llm_name"].dropna().unique())
         strategies = ["baseline", "guided", "thinking", "vectorization"]
         baselines = self.classical_baselines
@@ -84,10 +89,7 @@ class EvaluationAuditService:
         partial_cells = 0
         missing_cells = 0
 
-        for _, cond in unique_conditions.iterrows():
-            dim = int(cond["dim"])
-            noise_std = float(cond["noise_std"])
-            p_id = int(cond["problem_id"])
+        for dim, noise_std, p_id in unique_conditions:
 
             row: dict[str, Any] = {
                 "Dim": f"{dim}D",
@@ -175,15 +177,23 @@ class EvaluationAuditService:
         noise_levels = sorted(list({float(n.replace("std_", "")) for n in df_matrix["Noise"]}))
         problem_ids = sorted(list({int(re.search(r"f(\d+)", p).group(1)) for p in df_matrix["Problem"] if re.search(r"f(\d+)", p)}))
 
-        eval_counts: dict[Any, Any] = {}
+        eval_counts: dict[Any, Any] = {
+            (d, n, p): {s: 0 for s in solver_cols}
+            for d in dims
+            for n in noise_levels
+            for p in problem_ids
+        }
+        for d in dims:
+            for n in noise_levels:
+                for p in problem_ids:
+                    for s in solver_cols:
+                        eval_counts[(d, n, p, s)] = 0
+
         for _, row in df_matrix.iterrows():
             d = int(row["Dim"].replace("D", ""))
             n = float(row["Noise"].replace("std_", ""))
             p_m = re.search(r"f(\d+)", row["Problem"])
             p = int(p_m.group(1)) if p_m else 1
-
-            if (d, n, p) not in eval_counts:
-                eval_counts[(d, n, p)] = {}
 
             for s in solver_cols:
                 val = str(row[s])
