@@ -5,41 +5,8 @@
 \chapter*{Abstract}
 \addcontentsline{toc}{chapter}{Abstract}
 
-Continuous black-box optimization provides the computational machinery for hardware parameter extraction and physical engineering simulations. Classical derivative-free metaheuristics struggle when objective feedback contains stochastic noise. In applied settings, physical sensor errors and finite measurement precision introduce rank inversions, distorting population-based descent updates and causing premature step-size stagnation far from the global minimizer. Hand-crafting specialized filtering logic for each target domain demands extensive developer hours. Automated Algorithm Design (AAD) offers an alternative by treating the search heuristic itself as an optimizable artifact.
+Automated Algorithm Design (AAD) aims to reduce the manual effort required to develop optimization algorithms by automating the design of the search procedure itself. Large Language Models (LLMs) have recently made it possible to generate executable optimization algorithms from natural-language descriptions. This raises the question of whether such models can generate useful heuristics for continuous black-box optimization when fitness evaluations are affected by stochastic noise.
 
-This thesis investigates whether Large Language Models (LLMs) embedded in an evolutionary generation loop can synthesize complete, noise-resilient Python optimizers. Using the Large Language Model Evolutionary Algorithm (LLaMEA) as our operational framework, we model the LLM as a semantic variation operator inside a $(1+1)$ Evolution Strategy. To drive code adaptation, candidate algorithms are evaluated inside a sandboxed environment against continuous Black-Box Optimization Benchmark (BBOB) instances subjected to an optimality-gap heteroscedastic noise model. The evaluation wrapper returns raw execution tracebacks and performance profiles into the prompt history to guide reflective debugging across 20-generation horizons. To prevent deceptive noise outliers from permanently stalling the selection loop, we introduce a stochastic parent resampling policy ($K=3$) that eliminates false elitist retention.
+This thesis investigates LLM-based synthesis of continuous optimization heuristics under deterministic and noisy conditions using the Large Language Model Evolutionary Algorithm (LLaMEA). Candidate Python optimizers are generated and evaluated on continuous Black-Box Optimization Benchmark (BBOB) functions with controlled heteroscedastic fitness noise. Two model scales and four prompt configurations are considered during synthesis. The resulting heuristics are then independently evaluated alongside CMA-ES, Differential Evolution, and Particle Swarm Optimization on representative unimodal, ill-conditioned, and multimodal problems in 2D, 5D, and 10D, using four noise levels ranging from deterministic to increasingly noisy evaluations.
 
-We evaluate evolved heuristics across 30 independent random seed replicates using Empirical Cumulative Distribution Functions (ECDFs), Area Over the Convergence Curve (AOCC), and non-parametric Mann-Whitney $U$ tests paired with Vargha-Delaney $\hat{A}_{12}$ effect sizes. Testing across 5-dimensional BBOB functions ($f_1, f_8, f_{10}, f_{15}, f_{21}$) and zero-shot transfers to 10D and 20D spaces measures whether closed-loop generative selection drives foundation models to invent genuine variance-filtering mechanisms rather than overfit to static coordinate distributions.
-
-
-
-% PART 1: BROAD CONTEXT & EMERGING PARADIGM (1-2 sentences)
-% CRITICAL COVERAGE: Define Automated Algorithm Design (AAD) and the transition 
-% from human-derived heuristics to autonomous source-code synthesis using LLMs.
-
-% PART 2: THE SCIENTIFIC PROBLEM & LANDSCAPE DECEPTION (2 sentences)
-% CRITICAL COVERAGE: Mathematically isolate why continuous black-box optimization 
-% fails here. Explicitly name how stochastic noise distorts fitness landscapes, 
-% introduces false local optima, and causes premature convergence due to deceptive gradients.
-% This thesis targets a notoriously difficult computational bottleneck within this paradigm: continuous black-box optimization operating within highly non-deterministic, noisy environments. Traditional human-engineered heuristics and existing deterministic code-generation models fundamentally degrade when traversing landscapes corrupted by stochastic sensor or thermal interference; the resulting fitness anomalies introduce deceptive local optima and false gradients that trap search trajectories, forcing premature convergence.
-
-% PART 3: THE PROPOSED METHODOLOGY & SANDBOX MECHANICS (2 sentences)
-% CRITICAL COVERAGE: Introduce the LLaMEA framework and your specific 
-% methodology contribution. Highlight the injection of systematic noise into the 
-% evaluation Sandbox and the closed-loop reflexive feedback tracking runtime errors.
-% To overcome this vulnerability, this research extends the Large Language Model Evolutionary Algorithm (LLaMEA) framework by constructing a closed-loop evolutionary pipeline running inside a secure, stochastic execution sandbox. Evolving programmatic Python classes are systematically evaluated against selected landscapes from the continuous Black-Box Optimization Benchmark (BBOB) suite wrapped in a dynamic, parameter-controlled noise layer, forcing the language model to rely on reflexive feedback loops and runtime error tracebacks to iteratively engineer alternative logic.
-
-% PART 4: EMPIRICAL FINDINGS & QUANTITATIVE RESULTS (2-3 sentences)
-% CRITICAL COVERAGE: PLACEHOLDER FOR FINAL DATA runs. When your experiments finish, 
-% replace the text below with exact percentage improvements, global minima convergence 
-% differentials, and dimensional scaling values (e.g., 5-D vs 10-D).
-% ------------------------------------------------------------------------------
-% [!!! THESIS WRITING NOTE: INSERT YOUR FINAL NUMERICAL DATA HERE !!!]
-% The empirical evaluations demonstrate that subjecting the generative loop to persistent stochastic pressure effectively drives the LLM to synthesize robust, independent uncertainty-handling mechanisms. Evolved champion algorithms successfully achieved a global minima convergence rate that outpaced equivalent heuristics trained strictly on clean, deterministic landscapes by [X]\%, while maintaining stable search trajectories across severe noise floors. Furthermore, these noise-specialized agents demonstrated high cross-environment generalizability when scaled to unseen dimensional instances of the benchmark suite.
-% ------------------------------------------------------------------------------
-
-% PART 5: WHITE-BOX ANALYSIS & THEORETICAL CONTRIBUTION (1-2 sentences)
-% CRITICAL COVERAGE: Summarize the qualitative code inspection. What did the AI 
-% actually invent under pressure (e.g., momentum smoothing, dynamic sampling)? 
-% State the final impact on autonomous scientific discovery.
-% A white-box structural inspection of the evolved code bases isolates the novel mathematical properties discovered by the model, documenting autonomous implementations of adaptive step-size filtering and history-aware momentum smoothing. Ultimately, these results provide concrete validation of a language model’s capacity for self-directed, complex engineering discovery under high uncertainty, charting a definitive path toward robust, fully autonomous algorithmic synthesis.
+Performance is evaluated through optimality gaps, success rates, convergence trajectories, target-attainment ECDFs, and anytime-performance measures over repeated trials. The experiments focus on how model scale, prompt configuration, noise level, problem structure, and dimensionality affect the generated heuristics. The results are used to compare their performance with established optimization methods and to identify the conditions under which LLM-generated algorithms succeed, degrade, or fail.
