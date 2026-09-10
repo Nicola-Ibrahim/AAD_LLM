@@ -1,117 +1,135 @@
 \begin{tikzpicture}[
-    node distance=1.1cm,
+    node distance=1.0cm,
     font=\small\sffamily,
     >=Stealth,
-    % --- Node Styles ---
-    ioNode/.style={
-        rectangle, 
-        rounded corners=4pt, 
-        draw=gray!70!black, 
-        fill=gray!10, 
-        thick, 
-        minimum width=7.2cm, 
-        minimum height=1.1cm, 
-        align=center
+    baseNode/.style={
+        rectangle,
+        thick,
+        align=center,
+        minimum width=7.2cm,
+        text width=7.0cm
     },
-    stageNode/.style={
-        rectangle, 
-        rounded corners=5pt, 
-        draw=#1!80!black, 
-        fill=#1!8, 
-        thick, 
-        minimum width=7.2cm, 
-        minimum height=1.2cm, 
-        align=center
+    ioNode/.style={
+        baseNode,
+        rounded corners=4pt,
+        draw=gray!70!black,
+        fill=gray!10,
+        minimum height=1.1cm
+    },
+    stageBlue/.style={
+        baseNode,
+        rounded corners=5pt,
+        draw=blue!80!black,
+        fill=blue!8,
+        minimum height=1.2cm
+    },
+    stageRed/.style={
+        baseNode,
+        rounded corners=5pt,
+        draw=red!80!black,
+        fill=red!8,
+        minimum height=1.2cm
+    },
+    stageGreen/.style={
+        baseNode,
+        rounded corners=5pt,
+        draw=green!60!black,
+        fill=green!8,
+        minimum height=1.2cm
     },
     outNode/.style={
-        rectangle, 
-        rounded corners=4pt, 
-        draw=orange!80!black, 
-        fill=yellow!20, 
-        thick, 
-        minimum width=7.2cm, 
-        minimum height=1.1cm, 
-        align=center
+        baseNode,
+        rounded corners=4pt,
+        draw=orange!80!black,
+        fill=yellow!20,
+        minimum height=1.1cm
     },
-    % --- Path Styles ---
     mainArrow/.style={
-        ->, 
-        very thick, 
+        ->,
+        very thick,
         draw=gray!75!black
     },
     feedbackArrow/.style={
-        ->, 
-        very thick, 
-        draw=blue!80!black, 
+        ->,
+        very thick,
+        draw=blue!80!black,
         dashed
     }
 ]
 
     % =========================================================================
-    % VERTICAL PIPELINE NODES
+    % VERTICAL PIPELINE
     % =========================================================================
 
     % System Input
     \node (input) [ioNode] {
-        \textbf{Problem Specification}\\[-1pt]
-        \footnotesize Problem Definition, Search Bounds, and Interface Template
+        \textbf{Problem Specification}\\[2pt]
+        \footnotesize Problem Definition, Search Bounds, and Algorithm Interface
     };
 
-    % Stage 1: LLM Engine
-    \node (llm) [stageNode=blue, below=1.0cm of input] {
-        \textbf{Stage 1: Generative Model}\\[-1pt]
-        \footnotesize Synthesizes and Modifies Optimization Code
+    % Stage 1: Algorithm Generation
+    \node (generation) [stageBlue, below=1.0cm of input] {
+        \textbf{Stage 1: Algorithm Generation}\\[2pt]
+        \footnotesize LLM Synthesizes and Modifies Optimization Code
     };
 
-    % Stage 2: Sandbox
-    \node (sandbox) [stageNode=red, below=1.0cm of llm] {
-        \textbf{Stage 2: Execution Sandbox}\\[-1pt]
-        \footnotesize Runs Candidate Algorithm on Target Functions
+    % Stage 2: Candidate Evaluation
+    \node (evaluation) [stageRed, below=1.0cm of generation] {
+        \textbf{Stage 2: Candidate Evaluation}\\[2pt]
+        \footnotesize Executes Candidate Algorithm on Target Functions
     };
 
-    % Stage 3: Evaluation Module
-    \node (eval) [stageNode=green!70!black, below=1.0cm of sandbox] {
-        \textbf{Stage 3: Performance Assessment}\\[-1pt]
-        \footnotesize Computes Target Metrics and Logs Runtime Feedback
+    % Stage 3: Performance Assessment
+    \node (assessment) [stageGreen, below=1.0cm of evaluation] {
+        \textbf{Stage 3: Performance Assessment}\\[2pt]
+        \footnotesize Measures Performance and Collects Execution Feedback
     };
 
     % System Output
-    \node (output) [outNode, below=1.0cm of eval] {
-        \textbf{Discovered Optimization Algorithm}\\[-1pt]
+    \node (output) [outNode, below=1.0cm of assessment] {
+        \textbf{Discovered Optimization Algorithm}\\[2pt]
         \footnotesize Final Evolved Search Heuristic
     };
 
     % =========================================================================
-    % FORWARD ARROWS (NO LABELS)
+    % FORWARD ARROWS
     % =========================================================================
 
-    \draw [mainArrow] (input) -- (llm);
-    \draw [mainArrow] (llm) -- (sandbox);
-    \draw [mainArrow] (sandbox) -- (eval);
-    \draw [mainArrow] (eval) -- (output);
+    \draw [mainArrow] (input) -- (generation);
+    \draw [mainArrow] (generation) -- (evaluation);
+    \draw [mainArrow] (evaluation) -- (assessment);
+    \draw [mainArrow] (assessment) -- (output);
 
     % =========================================================================
     % EVOLUTIONARY FEEDBACK LOOP
     % =========================================================================
 
-    \draw [feedbackArrow] (eval.west) 
-        .. controls ($(eval.west)+(-3.2,0)$) and ($(llm.west)+(-3.2,0)$) .. 
-        node[left=6pt, align=center, text=blue!80!black, font=\footnotesize\sffamily] {
+    \draw [feedbackArrow] (assessment.west)
+        .. controls ($(assessment.west)+(-3.2cm,0)$)
+                   and ($(generation.west)+(-3.2cm,0)$) ..
+        node [
+            midway,
+            left=6pt,
+            align=center,
+            text=blue!80!black,
+            font=\footnotesize\sffamily
+        ] {
             \textbf{Evolutionary Feedback Loop}\\[2pt]
-            Generations $1 \dots N-1$\\[3pt]
-            Performance Metrics \&\\
-            Execution Logs
-        } (llm.west);
+            Performance and\\
+            Execution Feedback
+        }
+        (generation.west);
 
     % =========================================================================
     % OUTER CONTAINER
     % =========================================================================
+
     \node[
-        draw=gray!40, 
-        dashed, 
-        inner sep=0.4cm, 
-        rounded corners=8pt, 
-        fit=(llm) (sandbox) (eval)
+        draw=gray!40,
+        dashed,
+        inner sep=0.4cm,
+        rounded corners=8pt,
+        fit=(generation) (evaluation) (assessment)
     ] {};
 
 \end{tikzpicture}
