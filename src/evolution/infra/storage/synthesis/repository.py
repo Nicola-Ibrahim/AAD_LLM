@@ -45,8 +45,8 @@ class SQLiteSynthesisRepository(SynthesisRepository):
         mode: SynthesisMode,
         llm_name: str,
         prompt_strategy: PromptStrategy = PromptStrategy.BASELINE,
-        budget: int = 1000000,
-        iterations: int = 10,
+        budget: int = 1_000_000,
+        max_iterations: int = 10,
     ) -> int:
         with self.SessionLocal() as session:
             experiment = ExperimentORM(
@@ -59,7 +59,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
                 noise_std=problem.noise_std,
                 noise_model=problem.noise_model,
                 budget=budget,
-                max_iterations=iterations,
+                max_iterations=max_iterations,
                 true_optimum=problem.true_optimum,
                 status="running",
                 started_at=datetime.now(timezone.utc).isoformat(),

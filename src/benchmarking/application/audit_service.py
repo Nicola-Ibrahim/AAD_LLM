@@ -13,6 +13,7 @@ from benchmarking.domain.services.resolvers import get_clean_model_label, get_mo
 from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage.config_repository import EvaluationConfigRepository
 from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
+from benchmarking.application.evaluation_config import EvaluationConfig
 
 
 class AuditCoverageSummary(BaseModel):
@@ -59,9 +60,9 @@ class EvaluationAuditService:
         self.trace_repo = trace_repo
         self.config_repo = config_repo
 
-        cfg = self.config_repo.load_config()
-        self.target_runs = int(cfg.get("target_eval_runs", 20))
-        self.classical_baselines = cfg.get("classical_baselines", ["cmaes", "de", "pso"])
+        self.config: EvaluationConfig = self.config_repo.load_config()
+        self.target_runs = self.config.target_eval_runs
+        self.classical_baselines = self.config.classical_baselines
 
     def get_audit_matrix(self) -> tuple[pd.DataFrame, dict[str, Any]]:
         """Generate the complete 30-condition audit matrix across discovered models and baselines."""

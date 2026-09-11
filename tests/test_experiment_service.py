@@ -17,6 +17,7 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
+from evolution.application.synthesis.config import SessionConfig
 from evolution.domain.enums import NoiseModelEnum, SynthesisMode, PromptStrategy
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy, NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
@@ -79,7 +80,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
-        iterations=2,
+        max_iterations=2,
     )
 
     problem_noisy = BBOBProblem(
@@ -91,7 +92,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
-        iterations=2,
+        max_iterations=2,
     )
 
     tasks = [
@@ -100,7 +101,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
             problem=problem_clean,
             llm_client=llm,
             experiment_id=exp_id_clean,
-            iterations=2,
+            config=SessionConfig(iterations=2),
             db_path=db_path,
         ),
         EvolutionTask(
@@ -108,7 +109,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
             problem=problem_noisy,
             llm_client=llm,
             experiment_id=exp_id_noisy,
-            iterations=2,
+            config=SessionConfig(iterations=2),
             db_path=db_path,
         ),
     ]
@@ -148,7 +149,7 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
         llm_name="dummy-llm-1.0",
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000,
-        iterations=1,
+        max_iterations=1,
     )
     exp_id_succ = repo.create_experiment(
         problem=ProblemProfile(
@@ -158,7 +159,7 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
         llm_name="dummy-llm-1.0",
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000,
-        iterations=1,
+        max_iterations=1,
     )
 
     tasks = [
@@ -167,8 +168,7 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
             problem=problem_fail,
             llm_client=DummyLLM(),
             experiment_id=exp_id_fail,
-            iterations=1,
-            budget=1000,
+            config=SessionConfig(budget=1000, iterations=1),
             db_path=db_path,
         ),
         EvolutionTask(
@@ -176,8 +176,7 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
             problem=problem_succ,
             llm_client=DummyLLM(),
             experiment_id=exp_id_succ,
-            iterations=1,
-            budget=1000,
+            config=SessionConfig(budget=1000, iterations=1),
             db_path=db_path,
         ),
     ]
@@ -226,10 +225,10 @@ def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
 
     evaluator = Evaluator(
         problem=problem,
-        budget=10,
-        experiment_id=exp_id,
         db_repo=repo,
         code_repo=code_repo,
+        experiment_id=exp_id,
+        config=SessionConfig(budget=10),
     )
 
     # Run evaluation
@@ -268,10 +267,10 @@ def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory
 
     evaluator = Evaluator(
         problem=problem,
-        budget=10,
-        experiment_id=exp_id,
         db_repo=repo,
         code_repo=code_repo,
+        experiment_id=exp_id,
+        config=SessionConfig(budget=10),
     )
 
     # Invalid syntax code to trigger compiler failure
@@ -425,7 +424,7 @@ def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
-        iterations=2,
+        max_iterations=2,
     )
 
     # 1. Run evolution for 2 iterations (budget=2).
@@ -435,9 +434,9 @@ def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
         initial_iteration=0,
         prompt_strategy=PromptStrategy.BASELINE,
         llm_client=llm,
-        iterations=2,
         db_repo=repo,
         code_repo=code_repo,
+        config=SessionConfig(iterations=2),
     )
     res1 = session1.run()
 
@@ -462,7 +461,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
-        iterations=2,
+        max_iterations=2,
     )
     session1 = LLaMEASession(
         problem=problem,
@@ -472,7 +471,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
         llm_client=llm,
         db_repo=repo,
         code_repo=code_repo,
-        iterations=2,
+        config=SessionConfig(iterations=2),
     )
     res1 = session1.run()
 
@@ -482,7 +481,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
-        iterations=2,
+        max_iterations=2,
     )
     session2 = LLaMEASession(
         problem=problem,
@@ -492,7 +491,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
         llm_client=llm,
         db_repo=repo,
         code_repo=code_repo,
-        iterations=2,
+        config=SessionConfig(iterations=2),
     )
     res2 = session2.run()
 
@@ -504,21 +503,9 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
     assert {r.experiment_id for r in runs} == {res1.experiment_id, res2.experiment_id}
 
 
-def test_session_none_llm_guard(temp_dir, db_session_factory):
-    repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=temp_dir)
-    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
-
-    with pytest.raises(ValueError, match="LLaMEASession requires a valid LLMClient"):
-        LLaMEASession(
-            problem=problem,
-            experiment_id=1,
-            initial_iteration=0,
-            prompt_strategy=PromptStrategy.BASELINE,
-            llm_client=None,
-            db_repo=repo,
-            code_repo=code_repo,
-        )
+def test_session_missing_required_params_raises_type_error():
+    with pytest.raises(TypeError):
+        LLaMEASession()
 
 
 def test_session_mark_failed_on_error(temp_dir, db_session_factory):
@@ -533,7 +520,7 @@ def test_session_mark_failed_on_error(temp_dir, db_session_factory):
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
-        iterations=2,
+        max_iterations=2,
     )
 
     session = LLaMEASession(
@@ -544,7 +531,7 @@ def test_session_mark_failed_on_error(temp_dir, db_session_factory):
         llm_client=llm,
         db_repo=repo,
         code_repo=code_repo,
-        iterations=2,
+        config=SessionConfig(iterations=2),
     )
 
     # Inject an error into _setup_evaluator to force run() to fail
@@ -582,33 +569,34 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
         llm_client=llm,
         experiment_id=exp_id,
         initial_iteration=0,
-        budget=2500,
-        iterations=2,
+        config=SessionConfig(budget=2500, iterations=2),
         db_path=temp_dir / "test.db",
     )
     assert task.experiment_id == exp_id
     assert task.problem.problem_id == 1
     assert task.problem.dim == 2
-    assert task.budget == 2500
+    assert task.config.budget == 2500
     res = task()
     assert res is not None
     assert res.experiment_id == exp_id
 
 
-def test_session_problem_validation(temp_dir, db_session_factory):
+def test_session_missing_single_param_raises_type_error(temp_dir, db_session_factory):
     repo = SQLiteSynthesisRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
-    with pytest.raises(ValueError, match="LLaMEASession requires a valid problem"):
+    with pytest.raises(TypeError):
         LLaMEASession(
-            problem=None,
+            problem=problem,
             experiment_id=1,
             initial_iteration=0,
             prompt_strategy=PromptStrategy.BASELINE,
             llm_client=llm,
             db_repo=repo,
             code_repo=code_repo,
+            # config is omitted
         )
 
 
@@ -632,6 +620,7 @@ def test_evaluator_current_iteration_resumes_from_db(temp_dir, db_session_factor
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
+        config=SessionConfig(),
     )
     assert evaluator1._current_iteration == 0
 
@@ -664,6 +653,7 @@ def test_evaluator_current_iteration_resumes_from_db(temp_dir, db_session_factor
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
+        config=SessionConfig(),
         initial_iteration=max_iter,
     )
     assert evaluator2._current_iteration == 3
@@ -698,7 +688,7 @@ def test_all_executions_failed_session_handling(db_session_factory, tmp_path):
         llm_name=mock_llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=10,
-        iterations=2,
+        max_iterations=2,
     )
 
     session = LLaMEASession(
@@ -709,8 +699,7 @@ def test_all_executions_failed_session_handling(db_session_factory, tmp_path):
         llm_client=mock_llm,
         db_repo=repo,
         code_repo=code_repo,
-        budget=10,
-        iterations=2,
+        config=SessionConfig(budget=10, iterations=2),
     )
 
     # Must complete without throwing AttributeError or crashing
@@ -783,8 +772,8 @@ def test_evaluator_clean_reevaluation_with_tuple_return(db_session_factory, tmp_
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        budget=10,
         experiment_id=exp_id,
+        config=SessionConfig(budget=10),
     )
 
     good_code = """
@@ -820,8 +809,8 @@ def test_evaluator_out_of_bounds_best_x_rejected(db_session_factory, tmp_path):
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        budget=10,
         experiment_id=exp_id,
+        config=SessionConfig(budget=10),
     )
 
     out_of_bounds_code = """
@@ -868,8 +857,8 @@ def test_evaluator_failure_fitness_and_categorized_feedback(db_session_factory, 
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        budget=10,
         experiment_id=exp_id,
+        config=SessionConfig(budget=10),
     )
 
     # Test Runtime Error (ZeroDivisionError / Math Error)
@@ -915,8 +904,8 @@ def test_evaluator_enriched_feedback_and_warnings(db_session_factory, tmp_path):
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        budget=10,
         experiment_id=exp_id,
+        config=SessionConfig(budget=10),
     )
 
     # Candidate code with runtime error and numpy warning

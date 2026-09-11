@@ -12,7 +12,7 @@ from benchmarking.application.audit_service import (
     AuditMatrixData,
     EvaluationAuditService,
 )
-from benchmarking.application.evaluation_service import EvaluationService
+from benchmarking.application.evaluation_service import EvaluationConfig, EvaluationService
 from benchmarking.application.selection_service import ChampionSelectionService
 from benchmarking.application.statistical_service import (
     StatisticalEvaluationService,
@@ -24,6 +24,7 @@ __all__ = [
     "AuditMatrixData",
     "ChampionSelectionService",
     "EvaluationAuditService",
+    "EvaluationConfig",
     "EvaluationService",
     "StatisticalEvaluationService",
     "generate_markdown_report",

@@ -12,6 +12,7 @@ from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces import BaseProblem
 from evolution.domain.vos.problem_profile import ProblemProfile
+from evolution.application.synthesis.config import SessionConfig
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
 from evolution.infra.prompts import (
@@ -30,9 +31,6 @@ warnings.filterwarnings(
     message=r".*SequentialBackend.*does not support timeout.*",
 )
 
-DEFAULT_BUDGET: int = 1000000
-DEFAULT_MAX_ITERATIONS: int = 10
-
 
 @dataclass
 class SessionResult:
@@ -42,12 +40,12 @@ class SessionResult:
     dim: int
     mode: SynthesisMode
     noise_std: float
+    experiment_id: int
     best_error: float | None = None
-    experiment_id: int = 1
     run_history: list[Any] = field(default_factory=list)
     experiment_name: str = ""
     llm_name: str = ""
-    error_msg: str | None = None
+    error_msg: str = ""
     best_solution: Any = None
     problem_profile: Any = None
 
@@ -55,44 +53,71 @@ class SessionResult:
 class LLaMEASession:
     """Manages the lifecycle and execution of a single LLaMEA synthesis session on an optimization problem.
 
-    Executes the iterative evolutionary loop for a pre-registered experiment ID and returns a SessionResult.
-    """
+    Workflow:
+                 Problem, LLMClient, Storage Repositories, SessionConfig
+                                │
+                                ▼
+                 Session Initialization & Domain Setup
+                 • Create ExperimentSummary domain aggregate
+                 • Setup archive directory for state checkpoints
+                                │
+                                ▼
+                 Evaluator & Prompt Construction
+                 • Instantiate Evaluator with session execution knobs
+                 • Build dynamic task, format, and example prompts
+                                │
+                                ▼
+                 LLaMEA Engine Instantiation / Warm-Start
+                 • Try warm start from state checkpoint
+                 • Else instantiate fresh LLaMEA loop
+                                │
+                                ▼
+                 LLaMEA Evolutionary Loop (Generations)
+                 ┌──────────────────────────────────────┐
+                 │ For each iteration:                  │
+                 │ 1. LLM synthesizes new algorithm code│
+                 │ 2. Evaluator validates & runs trial  │
+                 │ 3. Score assigned via error/penalties│
+                 │ 4. Champion updated if score improved│
+                 │ 5. DB updated with iteration log     │
+                 └──────────────────┬───────────────────┘
+                                    │
+               ┌────────────────────┴────────────────────┐
+            Success                                   Failure
+        (Loop completes)                        (Unhandled Exception)
+               │                                         │
+               ▼                                         ▼
+        1. Extract champion solution            1. Mark experiment failed in DB
+        2. Mark experiment completed in DB      2. Re-raise exception
+        3. Persist final ExperimentSummary
+               │
+               ▼
+        Print Summary Report & Return SessionResult
+        """
 
     def __init__(
         self,
         problem: BaseProblem,
         experiment_id: int,
-        initial_iteration: int,
         prompt_strategy: PromptStrategy,
         llm_client: LLMClient,
         db_repo: SynthesisRepository,
         code_repo: CodeRepository,
-        budget: int = DEFAULT_BUDGET,
-        timeout_seconds: float = 30.0,
-        iterations: int = DEFAULT_MAX_ITERATIONS,
-        stagnation_threshold: int = 3,
-        logger: SynthesisLogger | None = None,
-        synthesis_mode: SynthesisMode | None = None,
+        config: SessionConfig,
+        initial_iteration: int = 0,
+        synthesis_mode: SynthesisMode = SynthesisMode.CLEAN,
     ):
-        """Initializes the synthesis session with pre-resolved domain objects and database experiment ID."""
-        if llm_client is None:
-            raise ValueError("LLaMEASession requires a valid LLMClient")
-        if problem is None:
-            raise ValueError("LLaMEASession requires a valid problem")
-
+        """Initializes the synthesis session with pre-resolved domain objects and execution configuration."""
         self._problem = problem
         self._experiment_id = experiment_id
-        self._initial_iteration = initial_iteration
         self._prompt_strategy = PromptStrategy(prompt_strategy)
         self._llm_client = llm_client
         self._db_repo = db_repo
         self._code_repo = code_repo
-        self._budget = budget
-        self._timeout_seconds = timeout_seconds
-        self._iterations = iterations
-        self._stagnation_threshold = stagnation_threshold
-        self._logger = logger or SynthesisLogger()
-        self._synthesis_mode = SynthesisMode(synthesis_mode) if synthesis_mode is not None else problem.mode
+        self._config = config
+        self._initial_iteration = initial_iteration
+        self._logger = SynthesisLogger()
+        self._synthesis_mode = SynthesisMode(synthesis_mode) if synthesis_mode != SynthesisMode.CLEAN else problem.mode
 
         problem_profile = ProblemProfile(
             problem_id=self._problem.problem_id,
@@ -108,8 +133,8 @@ class LLaMEASession:
             mode=self._synthesis_mode,
             llm_name=self._llm_client.model.name,
             prompt_strategy=self._prompt_strategy,
-            budget=self._budget,
-            max_iterations=self._iterations,
+            budget=self._config.budget,
+            max_iterations=self._config.iterations,
         )
 
         self._archive_dir = (
@@ -121,6 +146,15 @@ class LLaMEASession:
             / f"experiment_{self._experiment_id}"
         )
         self._archive_dir.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def logger(self) -> SynthesisLogger:
+        """Expose the session synthesis logger."""
+        return self._logger
+
+    @logger.setter
+    def logger(self, value: SynthesisLogger) -> None:
+        self._logger = value
 
     @property
     def _experiment_name(self) -> str:
@@ -173,7 +207,7 @@ class LLaMEASession:
             experiment_name=self._experiment_name,
             llm_name=self._llm_client.model.name,
             best_solution=synthesis_engine.best_so_far,
-            error_msg=None,
+            error_msg="",
             problem_profile=evaluator.problem_profile,
         )
 
@@ -187,7 +221,7 @@ class LLaMEASession:
                 upper_bound=self._problem.upper_bound,
                 mode=self._synthesis_mode,
                 strategy=self._prompt_strategy,
-                budget_hint=self._budget,
+                budget_hint=self._config.budget,
             )
             evaluator = self._setup_evaluator()
             synthesis_engine = self._create_synthesis_engine(evaluator, task_prompt)
@@ -223,7 +257,7 @@ class LLaMEASession:
                     self._logger.resuming(
                         self._experiment_id,
                         synthesis_engine.generation,
-                        self._iterations,
+                        self._config.iterations,
                     )
             except Exception as e:
                 self._logger.warning(f"Warm start failed, starting fresh: {e}")
@@ -235,7 +269,7 @@ class LLaMEASession:
                 llm=self._llm_client,
                 n_parents=1,
                 n_offspring=1,
-                budget=self._iterations,
+                budget=self._config.iterations,
                 task_prompt=task_prompt,
                 example_prompt=build_example_prompt(),
                 output_format_prompt=build_format_prompt(),
@@ -252,18 +286,18 @@ class LLaMEASession:
 
     def _setup_evaluator(self) -> Evaluator:
         """Initializes the problem evaluator with experiment metadata and budget limits."""
-        return Evaluator(
+        evaluator = Evaluator(
             problem=self._problem,
             db_repo=self._db_repo,
             code_repo=self._code_repo,
-            budget=self._budget,
-            timeout_seconds=self._timeout_seconds,
             experiment_id=self._experiment_id,
+            config=self._config,
             initial_iteration=self._initial_iteration,
-            stagnation_threshold=self._stagnation_threshold,
-            logger=self._logger,
-            experiment=self._experiment,
         )
+        evaluator.experiment = self._experiment
+        evaluator.logger = self._logger
+        return evaluator
+
 
     def _print_report(
         self,

@@ -2,6 +2,7 @@ import math
 import re
 import time
 import traceback
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -18,6 +19,7 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
+from evolution.application.synthesis.config import SessionConfig
 from shared.execution import AlgorithmExecutor, AlgorithmTimeoutException
 from evolution.infra.logging import SynthesisLogger
 from evolution.infra.storage.base import SynthesisRepository
@@ -32,6 +34,25 @@ _DIVERSITY_INJECTION_MSG = (
     "or a hill-climber with noise-averaged comparisons. The root issue is that your "
     "algorithm is not accounting for the stochastic nature of the objective function."
 )
+
+
+@dataclass
+class _ExecutionRunContext:
+    """Internal value object encapsulating execution telemetry and candidate output.
+
+    Consolidates data clumps across evaluator scoring and metadata construction methods.
+    """
+
+    algorithm_name: str
+    runtime_seconds: float
+    code_lines: int
+    code_length: int
+    llm_generation_time: float = 0.0
+    evaluations_used: int = 0
+    algorithm_returned_fitness: float = 0.0
+    best_x: np.ndarray | None = None
+    candidate_code: str = ""
+    captured_warnings: list[str] = field(default_factory=list)
 
 
 class Evaluator:
@@ -50,17 +71,17 @@ class Evaluator:
            │                                                             │
            ▼                                                             ▼
     1. Validate bounds & dim                             1. Classify failure tier:
-    2. Re-evaluate clean optimum:                           • Timeout:  -5e8
-       y_clean = problem.eval_clean(best_x)                 • Runtime:  -7e8
-       error = |y_clean - y*|                               • Syntax:   -1e9
+    2. Re-evaluate clean optimum:                           • Timeout: -4.0e8
+       y_clean = problem.eval_clean(best_x)                 • Runtime: -4.5e8
+       error = |y_clean - y*|                               • Failure: -5.0e8
     3. Fitness score = -error                            2. Extract traceback code snippet
     4. Reset consecutive failures                        3. Increment consecutive failures
            │                                                             │
            └────────────────────────────┬────────────────────────────────┘
                                         ▼
                          Stagnation Detection Check:
-                 If consecutive_failures >= threshold (3):
-                 Inject [META-FEEDBACK] (Force PSO/CMA-ES paradigm shift)
+                 If consecutive_failures >= stagnation_threshold:
+                 Inject [META-FEEDBACK] (Force paradigm shift)
                                         │
                                         ▼
                          solution.set_scores(fitness, feedback)
@@ -74,9 +95,9 @@ class Evaluator:
                                  Return solution
     """
 
-    FAILURE_FITNESS: float = -1e9
-    RUNTIME_FAILURE_FITNESS: float = -7e8
-    TIMEOUT_FAILURE_FITNESS: float = -5e8
+    FAILURE_FITNESS: float = -5e8
+    RUNTIME_FAILURE_FITNESS: float = -4.5e8
+    TIMEOUT_FAILURE_FITNESS: float = -4e8
 
     @classmethod
     def is_failure(cls, score: float) -> bool:
@@ -88,14 +109,9 @@ class Evaluator:
         problem: BaseProblem,
         db_repo: SynthesisRepository,
         code_repo: CodeRepository,
-        budget: int = 1000000,
-        timeout_seconds: float = 30.0,
-        experiment_id: int = 1,
+        experiment_id: int,
+        config: SessionConfig,
         initial_iteration: int = 0,
-        convergence_threshold: float = 1e-6,
-        stagnation_threshold: int = 3,
-        logger: SynthesisLogger | None = None,
-        experiment: ExperimentSummary | None = None,
     ) -> None:
         """Initialize the evaluator.
 
@@ -103,31 +119,38 @@ class Evaluator:
             problem: Fully-configured optimization problem instance implementing BaseProblem interface.
             db_repo: ExperimentRepository to persist incremental iteration records.
             code_repo: CodeRepository to persist algorithm source code per iteration.
-            budget: Maximum allowed objective function evaluations passed to the algorithm
-                as a stopping criterion (analogous to a convergence threshold in gradient
-                descent), by default 1000. It is NOT used for multi-run comparison or luck checking.
-            timeout_seconds: Maximum wall-clock execution time allowed for one algorithm run,
-                by default 30.0.
-            experiment_id: Globally unique experiment primary key, by default 1.
+            experiment_id: Globally unique experiment primary key.
+            config: Strongly-typed SessionConfig parameter object.
             initial_iteration: Starting iteration counter (e.g. from warm start), by default 0.
-            convergence_threshold: Target error threshold required to consider a run converged, by default 1e-6.
-            stagnation_threshold: Number of consecutive failure iterations before triggering diversity injection, by default 3.
-            logger: SynthesisLogger instance for console output.
-            experiment: Optional live ExperimentSummary domain aggregate to update with iteration champions.
         """
         self._problem = problem
         self._db_repo = db_repo
         self._code_repo = code_repo
-        self._budget = budget
-        self._timeout_seconds = timeout_seconds
+        self._config = config
         self._experiment_id = experiment_id
-        self._executor = AlgorithmExecutor(timeout_seconds=self._timeout_seconds)
+        self._executor = AlgorithmExecutor(timeout_seconds=config.timeout_seconds)
         self._current_iteration = initial_iteration
-        self._convergence_threshold = convergence_threshold
-        self._stagnation_threshold = stagnation_threshold
         self._consecutive_failures = 0
-        self._logger = logger or SynthesisLogger()
-        self._experiment = experiment
+        self._logger = SynthesisLogger()
+        self._experiment: ExperimentSummary | None = None
+
+    @property
+    def logger(self) -> SynthesisLogger:
+        """Expose the logger used by this evaluator."""
+        return self._logger
+
+    @logger.setter
+    def logger(self, value: SynthesisLogger) -> None:
+        self._logger = value
+
+    @property
+    def executor(self) -> AlgorithmExecutor:
+        """Expose the algorithm executor instance."""
+        return self._executor
+
+    @executor.setter
+    def executor(self, value: AlgorithmExecutor) -> None:
+        self._executor = value
 
     @property
     def experiment(self) -> ExperimentSummary | None:
@@ -229,7 +252,7 @@ class Evaluator:
             f"on BBOB Problem {self._problem.problem_id}{noise_desc}. "
             "Improve convergence speed and resilience to minimize the final error."
         )
-        if self._problem.noise_std > 0 and final_error > self._convergence_threshold * 100:
+        if self._problem.noise_std > 0 and final_error > self._config.convergence_threshold * 100:
             msg += (
                 "\n\n[NOISY PROBLEM] Your algorithm returned a large error on a noisy objective function. "
                 "This typically happens when selection decisions are made from a single noisy observation. "
@@ -247,41 +270,35 @@ class Evaluator:
 
     def _build_success_metadata(
         self,
-        algorithm_name: str,
-        algorithm_returned_fitness: float,
+        ctx: _ExecutionRunContext,
         final_error: float,
-        runtime_seconds: float,
-        evaluations_used: int,
-        code_lines: int,
-        code_length: int,
-        llm_generation_time: float | None = None,
     ) -> IterationMetadata:
         """Construct IterationMetadata object for successful algorithm executions."""
         true_optimum = self._problem.true_optimum
-        budget_consumed_pct = (evaluations_used / self._budget * 100) if self._budget > 0 else 0.0
+        budget_consumed_pct = (ctx.evaluations_used / self._config.budget * 100) if self._config.budget > 0 else 0.0
         relative_error = (final_error / abs(true_optimum)) if true_optimum != 0.0 else final_error
-        evals_per_second = (evaluations_used / runtime_seconds) if runtime_seconds > 0.0 else 0.0
-        error_per_evaluation = (final_error / evaluations_used) if evaluations_used > 0 else None
+        evals_per_second = (ctx.evaluations_used / ctx.runtime_seconds) if ctx.runtime_seconds > 0.0 else 0.0
+        error_per_evaluation = (final_error / ctx.evaluations_used) if ctx.evaluations_used > 0 else None
 
         return IterationMetadata(
-            algorithm_name=algorithm_name,
+            algorithm_name=ctx.algorithm_name,
             execution=Execution(
                 timed_out=False,
-                runtime_seconds=runtime_seconds,
-                llm_generation_time=llm_generation_time,
-                evaluations_used=evaluations_used,
+                runtime_seconds=ctx.runtime_seconds,
+                llm_generation_time=ctx.llm_generation_time,
+                evaluations_used=ctx.evaluations_used,
                 budget_consumed_pct=budget_consumed_pct,
                 evals_per_second=evals_per_second,
             ),
             fitness=Fitness(
-                raw_fitness=algorithm_returned_fitness,
+                raw_fitness=ctx.algorithm_returned_fitness,
                 final_error=final_error,
                 relative_error=relative_error,
                 error_per_evaluation=error_per_evaluation,
             ),
             code=Code(
-                code_lines=code_lines,
-                code_length=code_length,
+                code_lines=ctx.code_lines,
+                code_length=ctx.code_length,
                 code_path=None,
             ),
             error=Error(
@@ -289,42 +306,25 @@ class Evaluator:
                 error_message=None,
                 error_traceback=None,
             ),
-            convergence=Convergence.evaluate(final_error, self._convergence_threshold),
+            convergence=Convergence.evaluate(final_error, self._config.convergence_threshold),
         )
 
     def _calculate_fitness_and_feedback(
         self,
-        algorithm_returned_fitness: float,
-        best_x: np.ndarray | None,
-        algorithm_name: str,
-        runtime_seconds: float,
-        evaluations_used: int,
-        code_lines: int,
-        code_length: int,
-        llm_generation_time: float | None = None,
-        captured_warnings: list[str] | None = None,
+        ctx: _ExecutionRunContext,
     ) -> tuple[float, str, IterationMetadata]:
-        """
-        Compute final error, fitness score, feedback message, and metadata object.
+        """Compute final error, fitness score, feedback message, and metadata object.
+
         Re-evaluates best_x on the clean underlying problem to calculate an unbiased final error.
         """
         true_optimum = self._problem.true_optimum
-        clean_y = self._resolve_clean_objective(best_x, algorithm_returned_fitness)
+        clean_y = self._resolve_clean_objective(ctx.best_x, ctx.algorithm_returned_fitness)
         final_error = abs(clean_y - true_optimum)
 
         feedback = self._build_success_feedback(
-            final_error, true_optimum, captured_warnings=captured_warnings
+            final_error, true_optimum, captured_warnings=ctx.captured_warnings
         )
-        metadata = self._build_success_metadata(
-            algorithm_name=algorithm_name,
-            algorithm_returned_fitness=algorithm_returned_fitness,
-            final_error=final_error,
-            runtime_seconds=runtime_seconds,
-            evaluations_used=evaluations_used,
-            code_lines=code_lines,
-            code_length=code_length,
-            llm_generation_time=llm_generation_time,
-        )
+        metadata = self._build_success_metadata(ctx, final_error)
 
         # LLaMEA expects a fitness score where higher is better.
         # We negate the final_error so that an error of 0 is the max (0.0), and larger errors are more negative.
@@ -332,12 +332,12 @@ class Evaluator:
 
         self._logger.generation(
             gen_idx=self._current_iteration + 1,
-            total_gens=10,
-            algo_name=algorithm_name or "Candidate",
+            total_gens=self._config.iterations,
+            algo_name=ctx.algorithm_name or "Candidate",
             error=final_error,
             fitness=fitness_score,
-            evals_used=evaluations_used,
-            runtime=runtime_seconds,
+            evals_used=ctx.evaluations_used,
+            runtime=ctx.runtime_seconds,
             is_failure=False,
         )
 
@@ -359,35 +359,41 @@ class Evaluator:
                 name=solution.name,
                 dim=self._problem.dim,
                 problem=problem_fn,
-                budget=self._budget,
+                budget=self._config.budget,
             )
             elapsed_time = time.perf_counter() - start_time
             evals_used = self._problem.evaluations
-            captured = getattr(self._executor, "last_captured_warnings", [])
+            captured = list(getattr(self._executor, "last_captured_warnings", []))
 
-            return self._calculate_fitness_and_feedback(
-                algorithm_returned_fitness,
-                best_x,
-                solution.name,
-                elapsed_time,
-                evals_used,
-                code_lines,
-                code_length,
+            ctx = _ExecutionRunContext(
+                algorithm_name=solution.name,
+                runtime_seconds=elapsed_time,
+                code_lines=code_lines,
+                code_length=code_length,
                 llm_generation_time=llm_gen_time,
-                captured_warnings=captured,
-            )
-        except Exception as error:
-            captured = getattr(self._executor, "last_captured_warnings", [])
-            return self._score_failed_algorithm(
-                error,
-                solution.name,
-                start_time,
-                code_lines,
-                code_length,
-                llm_gen_time,
+                evaluations_used=evals_used,
+                algorithm_returned_fitness=algorithm_returned_fitness,
+                best_x=best_x,
                 candidate_code=solution.code,
                 captured_warnings=captured,
             )
+            return self._calculate_fitness_and_feedback(ctx)
+        except Exception as error:
+            elapsed_time = time.perf_counter() - start_time
+            evals_used = self._problem.evaluations
+            captured = list(getattr(self._executor, "last_captured_warnings", []))
+            ctx = _ExecutionRunContext(
+                algorithm_name=solution.name,
+                runtime_seconds=elapsed_time,
+                code_lines=code_lines,
+                code_length=code_length,
+                llm_generation_time=llm_gen_time,
+                evaluations_used=evals_used,
+                candidate_code=solution.code,
+                captured_warnings=captured,
+            )
+            return self._score_failed_algorithm(ctx, error)
+
 
     def _generate_error_feedback(
         self,
@@ -399,7 +405,7 @@ class Evaluator:
         """Generate categorized feedback message based on exception type."""
         if is_timeout:
             msg = (
-                f"[TIMEOUT] Execution failed: Your algorithm exceeded the {self._timeout_seconds}-second time limit. "
+                f"[TIMEOUT] Execution failed: Your algorithm exceeded the {self._config.timeout_seconds}-second time limit. "
                 "Please optimize your loops and make the code more efficient."
             )
         elif isinstance(error, (SyntaxError, IndentationError)):
@@ -466,18 +472,10 @@ class Evaluator:
 
     def _score_failed_algorithm(
         self,
+        ctx: _ExecutionRunContext,
         error: Exception,
-        solution_name: str,
-        start_time: float,
-        code_lines: int,
-        code_length: int,
-        llm_gen_time: float | None,
-        candidate_code: str = "",
-        captured_warnings: list[str] | None = None,
     ) -> tuple[float, str, IterationMetadata]:
         """Handle execution timeout or runtime error, generating failure feedback and metadata."""
-        elapsed_time = time.perf_counter() - start_time
-        evals_used = self._problem.evaluations
         is_timeout = isinstance(error, AlgorithmTimeoutException)
 
         if is_timeout:
@@ -493,29 +491,24 @@ class Evaluator:
         feedback = self._generate_error_feedback(
             error=error,
             is_timeout=is_timeout,
-            candidate_code=candidate_code,
-            captured_warnings=captured_warnings,
+            candidate_code=ctx.candidate_code,
+            captured_warnings=ctx.captured_warnings,
         )
 
         metadata = self._build_failure_metadata(
+            ctx=ctx,
             error=error,
-            solution_name=solution_name,
-            elapsed_time=elapsed_time,
-            evals_used=evals_used,
-            code_lines=code_lines,
-            code_length=code_length,
-            llm_gen_time=llm_gen_time,
             is_timeout=is_timeout,
         )
 
         self._logger.generation(
             gen_idx=self._current_iteration + 1,
-            total_gens=10,
-            algo_name=solution_name or "Candidate",
+            total_gens=self._config.iterations,
+            algo_name=ctx.algorithm_name or "Candidate",
             error=None,
             fitness=None,
-            evals_used=evals_used,
-            runtime=elapsed_time,
+            evals_used=ctx.evaluations_used,
+            runtime=ctx.runtime_seconds,
             is_failure=True,
             failure_reason=type(error).__name__,
         )
@@ -524,27 +517,22 @@ class Evaluator:
 
     def _build_failure_metadata(
         self,
+        ctx: _ExecutionRunContext,
         error: Exception,
-        solution_name: str,
-        elapsed_time: float,
-        evals_used: int,
-        code_lines: int,
-        code_length: int,
-        llm_gen_time: float | None,
         is_timeout: bool,
     ) -> IterationMetadata:
         """Construct IterationMetadata for a failed run."""
         error_traceback = None if is_timeout else traceback.format_exc()
-        budget_consumed_pct = (evals_used / self._budget * 100) if self._budget > 0 else 0.0
-        evals_per_second = (evals_used / elapsed_time) if elapsed_time > 0.0 else 0.0
+        budget_consumed_pct = (ctx.evaluations_used / self._config.budget * 100) if self._config.budget > 0 else 0.0
+        evals_per_second = (ctx.evaluations_used / ctx.runtime_seconds) if ctx.runtime_seconds > 0.0 else 0.0
 
         return IterationMetadata(
-            algorithm_name=solution_name,
+            algorithm_name=ctx.algorithm_name,
             execution=Execution(
                 timed_out=is_timeout,
-                runtime_seconds=elapsed_time,
-                llm_generation_time=llm_gen_time,
-                evaluations_used=evals_used,
+                runtime_seconds=ctx.runtime_seconds,
+                llm_generation_time=ctx.llm_generation_time,
+                evaluations_used=ctx.evaluations_used,
                 budget_consumed_pct=budget_consumed_pct,
                 evals_per_second=evals_per_second,
             ),
@@ -555,8 +543,8 @@ class Evaluator:
                 error_per_evaluation=None,
             ),
             code=Code(
-                code_lines=code_lines,
-                code_length=code_length,
+                code_lines=ctx.code_lines,
+                code_length=ctx.code_length,
                 code_path=None,
             ),
             error=Error(
@@ -564,8 +552,9 @@ class Evaluator:
                 error_message=str(error),
                 error_traceback=error_traceback,
             ),
-            convergence=Convergence.evaluate(None, self._convergence_threshold),
+            convergence=Convergence.evaluate(None, self._config.convergence_threshold),
         )
+
 
     def _persist_iteration(self, solution: Solution, metadata: IterationMetadata) -> None:
         """Record iteration count, save code file, and persist metadata to database repo."""
@@ -630,9 +619,9 @@ class Evaluator:
             self._consecutive_failures = 0
 
         diversity_text = ""
-        if self._consecutive_failures >= self._stagnation_threshold:
-            self._logger.stagnation_warning(self._consecutive_failures, self._stagnation_threshold)
-            diversity_text = _DIVERSITY_INJECTION_MSG.format(n=self._stagnation_threshold)
+        if self._consecutive_failures >= self._config.stagnation_threshold:
+            self._logger.stagnation_warning(self._consecutive_failures, self._config.stagnation_threshold)
+            diversity_text = _DIVERSITY_INJECTION_MSG.format(n=self._config.stagnation_threshold)
             self._consecutive_failures = 0
 
         final_feedback = feedback + diversity_text
@@ -651,7 +640,7 @@ class Evaluator:
     def __setstate__(self, state: dict[str, Any]) -> None:
         self.__dict__.update(state)
         # Re-initialize the executor and logger on resume.
-        self._executor = AlgorithmExecutor(timeout_seconds=self._timeout_seconds)
+        self._executor = AlgorithmExecutor(timeout_seconds=self._config.timeout_seconds)
         self._logger = getattr(self, "_logger", None) or SynthesisLogger()
         if self._db_repo is None:
             print(

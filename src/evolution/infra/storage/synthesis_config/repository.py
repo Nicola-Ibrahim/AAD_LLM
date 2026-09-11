@@ -171,9 +171,8 @@ class SynthesisConfigRepository:
 
         # 5. Assemble SynthesisConfig
         num_workers = int(exec_meta.get("max_workers", 0)) or os.cpu_count() or 8
-        target_ids = exec_meta.get("target_experiment_ids")
-        if target_ids is not None:
-            target_ids = [int(i) for i in target_ids]
+        target_ids_raw = exec_meta.get("target_experiment_ids")
+        target_ids: list[int] = [int(i) for i in target_ids_raw] if target_ids_raw is not None else []
 
         timeout_sec = float(
             evolution_cfg.get(

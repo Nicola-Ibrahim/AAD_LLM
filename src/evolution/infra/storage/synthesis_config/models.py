@@ -1,9 +1,8 @@
-"""Strongly-typed Pydantic models for synthesis configuration and search space matrices."""
-
 from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from evolution.domain.enums import NoiseModelEnum, PromptStrategy, SynthesisMode
+
 
 
 class ProblemTarget(BaseModel):
@@ -176,9 +175,9 @@ class MatrixCondition(BaseModel):
         return "clean"
 
     @property
-    def synthesis_mode(self) -> SynthesisMode | None:
-        """SynthesisMode passed to EvolutionTask session kwargs (None for clean)."""
-        return self.mode if self.mode != SynthesisMode.CLEAN else None
+    def synthesis_mode(self) -> SynthesisMode:
+        """SynthesisMode passed to EvolutionTask session."""
+        return self.mode
 
     def __getitem__(self, key: str) -> Any:
         if hasattr(self, key):
@@ -208,7 +207,7 @@ class SynthesisConfig(BaseModel):
     skip_completed: bool = True
     retry_failed_synthesis: bool = True
     only_incomplete: bool = False
-    target_exp_ids: list[int] | None = None
+    target_exp_ids: list[int] = Field(default_factory=list)
     name: str = "bbob_comprehensive_matrix"
     noise_model: NoiseModelEnum = NoiseModelEnum.HETEROSCEDASTIC
 
@@ -254,12 +253,22 @@ class SynthesisConfig(BaseModel):
         return sorted(list(all_s), key=lambda x: str(x.value))
 
     @property
-    def target_experiment_ids(self) -> list[int] | None:
+    def target_experiment_ids(self) -> list[int]:
         return self.target_exp_ids
 
     @property
     def max_workers(self) -> int:
         return self.num_processes
+
+    def to_session_config_dict(self) -> dict[str, Any]:
+        """Derive a dictionary of session execution configuration parameters."""
+        return {
+            "budget": self.budget,
+            "timeout_seconds": self.timeout_seconds,
+            "iterations": self.iterations,
+            "stagnation_threshold": int(self.evolution.get("stagnation_threshold", 3)),
+            "convergence_threshold": float(self.evolution.get("convergence_threshold", 1e-6)),
+        }
 
     # Dictionary emulation for backward compatibility:
     def __getitem__(self, key: str) -> Any:

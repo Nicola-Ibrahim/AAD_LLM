@@ -18,12 +18,11 @@ class SynthesisRepository(ABC):
         problem_id: int | None = None,
         instance_id: int | None = None,
         llm_name: str | None = None,
-        dim: int | None = None,
         mode: SynthesisMode | None = None,
         prompt_strategy: PromptStrategy | None = None,
-        status: str | None = None,
+        noise_std: float | None = None,
     ) -> list[ExperimentSummary]:
-        """Loads and filters stored ExperimentSummary objects matching criteria."""
+        """Loads experiment results matching filtering criteria."""
         pass
 
     @abstractmethod
@@ -38,8 +37,8 @@ class SynthesisRepository(ABC):
         mode: SynthesisMode,
         llm_name: str,
         prompt_strategy: PromptStrategy = PromptStrategy.BASELINE,
-        budget: int = 1000000,
-        iterations: int = 10,
+        budget: int = 1_000_000,
+        max_iterations: int = 10,
     ) -> int:
         """Creates the experiment DB row and returns its id."""
         pass

@@ -25,18 +25,46 @@ from benchmarking.infra.logging import EvaluationLogger
 from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
 from benchmarking.infra.storage.config_repository import EvaluationConfigRepository
 from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
+from benchmarking.application.evaluation_config import EvaluationConfig
+
 from evolution.domain.enums import SynthesisMode
 from evolution.domain.services.noise_strategy import (
+    BaseNoiseStrategy,
     HeteroscedasticNoiseStrategy,
     NoNoiseStrategy,
 )
+
 from evolution.infra.problems.bbob import BBOBProblem
 from shared.config import PROJECT_ROOT
 from shared.execution import AlgorithmExecutor
 
 
 class EvaluationService:
-    """Unified application service for workload auditing and empirical benchmark execution."""
+    """Unified application service for workload auditing and empirical benchmark execution.
+
+    Workflow Architecture:
+    ┌────────────────────────────────────────────────────────┐
+    │              EvaluationConfigRepository                │
+    │         (benchmark.toml -> EvaluationConfig)           │
+    └───────────────────────────┬────────────────────────────┘
+                                │
+                                ▼
+    ┌────────────────────────────────────────────────────────┐
+    │                   EvaluationService                    │
+    │                                                        │
+    │  1. audit_workload()                                   │
+    │     Inspect targets, completed runs, pending trials    │
+    │                                                        │
+    │  2. run_evaluation()                                   │
+    │     ├── Synthesized LLM Champions                      │
+    │     │   └── Execute on BBOBProblem across N runs       │
+    │     ├── Classical Baselines (CMA-ES, DE, PSO)          │
+    │     │   └── Execute on BBOBProblem across N runs       │
+    │     └── IOHprofiler / Trace Persistence                │
+    │         ├── Write IOH data (.dat, .json)               │
+    │         └── Update EvaluationStateRepository           │
+    └────────────────────────────────────────────────────────┘
+    """
 
     def __init__(
         self,
@@ -56,15 +84,15 @@ class EvaluationService:
         self.logger = logger
         self.project_root = Path(project_root)
 
-        cfg = self.config_repo.load_config()
-        self.n_runs = cfg.get("target_eval_runs", 20)
-        self.budget_multiplier = cfg.get("budget_multiplier", 10000)
-        self.trial_timeout_seconds = cfg.get("eval_timeout_seconds", 30.0)
-        self.force_rerun = cfg.get("force_rerun", False)
-        self.classical_baselines = cfg.get("classical_baselines", ["cmaes", "de", "pso"])
-        self.baseline_labels = cfg.get("baseline_labels", {})
-        self.cross_eval_clean_champions = cfg.get("cross_eval_clean_champions", True)
-        self.target_noise_stds = cfg.get("target_noise_stds", None)
+        self.config: EvaluationConfig = self.config_repo.load_config()
+        self.n_runs = self.config.target_eval_runs
+        self.budget_multiplier = self.config.budget_multiplier
+        self.trial_timeout_seconds = self.config.eval_timeout_seconds
+        self.force_rerun = self.config.force_rerun
+        self.classical_baselines = self.config.classical_baselines
+        self.baseline_labels = self.config.baseline_labels
+        self.cross_eval_clean_champions = self.config.cross_eval_clean_champions
+        self.target_noise_stds = self.config.target_noise_stds
 
     # ── Condition Discovery Helper ───────────────────────────────────────────────
 
@@ -91,7 +119,7 @@ class EvaluationService:
         # Extract all discovered dimensions, noise standard deviations, and problem IDs
         unique_dims = {c[0] for c in raw_conditions}
         unique_pids = {c[2] for c in raw_conditions}
-        if self.target_noise_stds is not None:
+        if self.target_noise_stds:
             target_noises = sorted(list(set(float(n) for n in self.target_noise_stds)))
         else:
             target_noises = sorted(list({float(c[1]) for c in raw_conditions} | {0.0}))

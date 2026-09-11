@@ -37,11 +37,28 @@ class LLMClient:
     telemetry, and safe serialization.
     """
 
-    def __init__(self, provider: Provider | str, skip_validation: bool = False, **kwargs):
+    def __init__(
+        self,
+        provider: Provider | str,
+        validate_on_init: bool = False,
+        **kwargs,
+    ):
         self.provider = provider if isinstance(provider, Provider) else Provider(provider)
-        self.skip_validation = skip_validation
+        self.validate_on_init = validate_on_init
         self.kwargs = kwargs
         self._client = self._init_client()
+
+    def validate_connection(self) -> None:
+        """Explicitly probe and validate network reachability to the LLM backend."""
+        match self.provider:
+            case Provider.LOCAL:
+                base_url = os.environ.get("LOCAL_LLM_BASE_URL", "http://localhost:1234/v1")
+                self._check_connection(base_url, "local")
+            case Provider.LMSTUDIO:
+                base_url = os.environ.get("LLM_STUDIO_BASE_URL", "http://localhost:1234/v1")
+                self._check_connection(base_url, "LM Studio")
+            case _:
+                pass
 
     @staticmethod
     def _check_connection(base_url: str, provider_name: str) -> None:
@@ -78,7 +95,7 @@ class LLMClient:
         return "local-model"
 
     def _init_client(self) -> LLM:
-        skip_val = self.skip_validation or os.environ.get("SKIP_LLM_VALIDATION") == "True"
+        should_validate = self.validate_on_init and os.environ.get("SKIP_LLM_VALIDATION") != "True"
 
         match self.provider:
             case Provider.GEMINI:
@@ -95,7 +112,7 @@ class LLMClient:
                 api_key = os.environ.get("LOCAL_LLM_API_KEY", "not-needed")
                 base_url = os.environ.get("LOCAL_LLM_BASE_URL", "http://localhost:1234/v1")
 
-                if not skip_val:
+                if should_validate:
                     self._check_connection(base_url, "local")
                     model = self._get_local_model_name(base_url)
                 else:
@@ -112,7 +129,7 @@ class LLMClient:
                 model = os.environ.get("LLM_STUDIO_MODEL", "local-model")
                 base_url = os.environ.get("LLM_STUDIO_BASE_URL", "http://localhost:1234/v1")
 
-                if not skip_val:
+                if should_validate:
                     self._check_connection(base_url, "LM Studio")
 
                 llm = OpenAI_LLM(api_key=api_key, model=model, **self.kwargs)
@@ -120,6 +137,7 @@ class LLMClient:
                 llm._client_kwargs["base_url"] = base_url
                 llm.client = openai.OpenAI(**llm._client_kwargs)
                 return llm
+
 
             case _:
                 raise ValueError(
@@ -165,21 +183,23 @@ class LLMClient:
         return ModelInfo(raw_model)
 
     def __getattr__(self, name):
+        if "_client" not in self.__dict__:
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
         return getattr(self._client, name)
 
     def __getstate__(self):
         return {
             "provider": self.provider,
-            "skip_validation": self.skip_validation,
+            "validate_on_init": getattr(self, "validate_on_init", False),
             "kwargs": self.kwargs,
             "model": getattr(self._client, "model", None),
         }
 
     def __setstate__(self, state):
         self.provider = state["provider"]
-        # Skip blocking healthchecks during multiprocessing worker unpickling
-        self.skip_validation = True
+        self.validate_on_init = False
         self.kwargs = state["kwargs"]
         self._client = self._init_client()
         if state.get("model") is not None:
             self._client.model = state["model"]
+

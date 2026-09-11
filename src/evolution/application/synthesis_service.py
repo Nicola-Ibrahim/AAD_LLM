@@ -24,12 +24,53 @@ from evolution.infra.storage.synthesis_config import (
     SynthesisModeConfig,
 )
 from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
+from evolution.application.synthesis.config import SessionConfig
 from evolution.application.synthesis.session import SessionResult
 from evolution.application.tasks import EvolutionTask, TaskOrchestrator
 
 
 class LLaMEASynthesisService:
-    """Application use case service managing algorithm synthesis campaigns."""
+    """Application use case service managing algorithm synthesis campaigns.
+
+    Workflow Architecture:
+    ┌────────────────────────────────────────────────────────┐
+    │              SynthesisConfigRepository                 │
+    │         (YAML Configuration -> SynthesisConfig)        │
+    └───────────────────────────┬────────────────────────────┘
+                                │
+                                ▼
+    ┌────────────────────────────────────────────────────────┐
+    │                LLaMEASynthesisService                  │
+    │                                                        │
+    │  1. audit_matrix()                                     │
+    │     Reconcile Config Conditions vs SQLite DB Records   │
+    │     ├── Completed (Valid Champions)                    │
+    │     ├── Failed Synthesis (Candidates for Retry)        │
+    │     └── Running / Incomplete (Candidates for Resume)   │
+    │                                                        │
+    │  2. build_tasks()                                      │
+    │     Generate Concrete Task Dispatch Matrix             │
+    │     ├── Targeted Tasks  ──> Target Experiment IDs      │
+    │     ├── Resume Tasks    ──> Interrupted DB Experiments │
+    │     └── Fresh Tasks     ──> Upfront DB Record Created  │
+    │                                                        │
+    │  3. run_synthesis()                                    │
+    │     ┌──────────────────────────────────────────────┐   │
+    │     │               TaskOrchestrator               │   │
+    │     │       ProcessPoolExecutor (N Workers)        │   │
+    │     └──────────────┬───────────────────────────────┘   │
+    │                    │                                   │
+    │         ┌──────────┴──────────┐                        │
+    │         ▼                     ▼                        │
+    │   EvolutionTask 1       EvolutionTask N                │
+    │         │                     │                        │
+    │         ▼                     ▼                        │
+    │   LLaMEASession         LLaMEASession                  │
+    │                                                        │
+    │  4. Results Aggregation & Logging                      │
+    │     Harvest SessionResult, summarize champion metrics  │
+    └────────────────────────────────────────────────────────┘
+    """
 
     def __init__(
         self,
@@ -45,7 +86,6 @@ class LLaMEASynthesisService:
 
         # 1. Load strongly-typed synthesis configuration directly from repository
         self.config: SynthesisConfig = self.config_repo.load_config()
-        self.cfg = self.config  # Preserved for backward compatibility
 
         # 2. Execution knobs & parameters (direct dot-access from dataclass)
         self.budget: int = self.config.budget
@@ -57,7 +97,7 @@ class LLaMEASynthesisService:
         self.skip_completed: bool = self.config.skip_completed
         self.retry_failed_synthesis: bool = self.config.retry_failed_synthesis
         self.only_incomplete: bool = self.config.only_incomplete
-        self.target_exp_ids: list[int] | None = self.config.target_exp_ids
+        self.target_exp_ids: list[int] = self.config.target_exp_ids
 
         # 3. Search space targets, noise conditions, and synthesis modes
         self.problem_targets: list[ProblemTarget] = self.config.problem_targets
@@ -285,6 +325,9 @@ class LLaMEASynthesisService:
 
         return db_completed, db_running, db_failed_synthesis
 
+    def _build_session_config(self) -> SessionConfig:
+        return SessionConfig(**self.config.to_session_config_dict())
+
     def _build_targeted_tasks(
         self,
         target_ids: list[int],
@@ -307,6 +350,10 @@ class LLaMEASynthesisService:
                 noise_strategy=noise_strat,
             )
             initial_iter = len(exp.iterations) if exp.iterations else 0
+            target_cfg = self._build_session_config()
+            if exp.max_iterations:
+                target_cfg = target_cfg.model_copy(update={"iterations": exp.max_iterations})
+
             tasks.append(
                 EvolutionTask(
                     key=f"f{p_id}_{dim}D_{'clean' if noise_std == 0.0 else f'noisy_std_{noise_std}'}_{exp.prompt_strategy}_target_exp{exp.id}",
@@ -314,11 +361,9 @@ class LLaMEASynthesisService:
                     llm_client=self.llm_client,
                     experiment_id=exp.id,
                     initial_iteration=initial_iter,
-                    budget=self.budget,
-                    timeout_seconds=self.timeout_seconds,
-                    iterations=exp.max_iterations or self.iterations,
                     prompt_strategy=exp.prompt_strategy,
                     synthesis_mode=exp.mode,
+                    config=target_cfg,
                 )
             )
         return tasks
@@ -331,7 +376,7 @@ class LLaMEASynthesisService:
         noise_std: float,
         mode_label: str,
         strat: PromptStrategy,
-        synthesis_mode: SynthesisMode | None = None,
+        synthesis_mode: SynthesisMode = SynthesisMode.CLEAN,
     ) -> EvolutionTask:
         """Constructs a resume EvolutionTask from an active running experiment in the database."""
         noise_strat = NoiseStrategyFactory.create(
@@ -345,17 +390,20 @@ class LLaMEASynthesisService:
             noise_strategy=noise_strat,
         )
         initial_iter = len(exp.iterations) if exp.iterations else 0
+        resume_cfg = self._build_session_config()
+        if exp.max_iterations:
+            resume_cfg = resume_cfg.model_copy(update={"iterations": exp.max_iterations})
+
+        resolved_mode = synthesis_mode if synthesis_mode != SynthesisMode.CLEAN else exp.mode
         return EvolutionTask(
             key=f"f{p_id}_{dim}D_{mode_label}_{strat}_resume_exp{exp.id}",
             problem=resume_problem,
             llm_client=self.llm_client,
             experiment_id=exp.id,
             initial_iteration=initial_iter,
-            budget=self.budget,
-            timeout_seconds=self.timeout_seconds,
-            iterations=exp.max_iterations or self.iterations,
             prompt_strategy=strat,
-            synthesis_mode=synthesis_mode or exp.mode,
+            synthesis_mode=resolved_mode,
+            config=resume_cfg,
         )
 
     def _build_fresh_task(
@@ -366,14 +414,13 @@ class LLaMEASynthesisService:
         mode_label: str,
         strat: PromptStrategy,
         run_idx: int,
-        noise_model: NoiseModelEnum | None = None,
+        noise_model: NoiseModelEnum = NoiseModelEnum.HETEROSCEDASTIC,
         key_prefix: str = "",
-        synthesis_mode: SynthesisMode | None = None,
+        synthesis_mode: SynthesisMode = SynthesisMode.CLEAN,
     ) -> EvolutionTask:
         """Registers a new experiment record in the database and returns a fresh EvolutionTask."""
-        effective_noise_model = noise_model or self.noise_model
         noise_strat = NoiseStrategyFactory.create(
-            noise_model=effective_noise_model,
+            noise_model=noise_model,
             noise_std=noise_std,
         )
         problem = BBOBProblem(
@@ -391,14 +438,15 @@ class LLaMEASynthesisService:
             instance_id=problem.instance_id,
             true_optimum=problem.true_optimum,
         )
-        exp_mode = synthesis_mode or problem.mode
+        exp_mode = synthesis_mode if synthesis_mode != SynthesisMode.CLEAN else problem.mode
+        fresh_cfg = self._build_session_config()
         exp_id = self.sqlite_repo.create_experiment(
             problem=problem_profile,
             mode=exp_mode,
             llm_name=self.llm_client.model.name,
             prompt_strategy=strat,
-            budget=self.budget,
-            iterations=self.iterations,
+            budget=fresh_cfg.budget,
+            max_iterations=fresh_cfg.iterations,
         )
 
         key = (
@@ -412,9 +460,8 @@ class LLaMEASynthesisService:
             llm_client=self.llm_client,
             experiment_id=exp_id,
             initial_iteration=0,
-            budget=self.budget,
-            timeout_seconds=self.timeout_seconds,
-            iterations=self.iterations,
             prompt_strategy=strat,
             synthesis_mode=exp_mode,
+            config=fresh_cfg,
         )
+

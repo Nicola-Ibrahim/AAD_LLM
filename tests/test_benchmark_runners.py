@@ -319,30 +319,30 @@ def test_evaluation_config_repository_edge_cases(tmp_path: Path):
         baselines_path=tmp_path / "nonexistent_base.toml",
     )
     cfg_missing = repo_missing.load_config()
-    assert cfg_missing["target_eval_runs"] == 20
-    assert "cmaes" in cfg_missing["baseline_labels"]
+    assert cfg_missing.target_eval_runs == 20
+    assert "cmaes" in cfg_missing.baseline_labels
 
     # 2. Empty TOML file
     empty_cfg_file = tmp_path / "empty_bench.toml"
     empty_cfg_file.write_text("", encoding="utf-8")
     repo_empty = EvaluationConfigRepository(config_path=empty_cfg_file)
     cfg_empty = repo_empty.load_config()
-    assert cfg_empty["target_eval_runs"] == 20
+    assert cfg_empty.target_eval_runs == 20
 
     # 3. File with empty [benchmarking] section
     bench_empty_file = tmp_path / "bench_empty.toml"
     bench_empty_file.write_text("[benchmarking]\n", encoding="utf-8")
     repo_bench_empty = EvaluationConfigRepository(config_path=bench_empty_file)
     cfg_bench_empty = repo_bench_empty.load_config()
-    assert cfg_bench_empty["target_eval_runs"] == 20
-    assert cfg_bench_empty["budget_multiplier"] == 10000
+    assert cfg_bench_empty.target_eval_runs == 20
+    assert cfg_bench_empty.budget_multiplier == 10000
 
     # 4. File with [evaluation] section fallback
     eval_file = tmp_path / "eval_fallback.toml"
     eval_file.write_text("[evaluation]\ntarget_eval_runs = 5\n", encoding="utf-8")
     repo_eval = EvaluationConfigRepository(config_path=eval_file)
     cfg_eval = repo_eval.load_config()
-    assert cfg_eval["target_eval_runs"] == 5
+    assert cfg_eval.target_eval_runs == 5
 
 
 def test_evaluation_logger(tmp_path: Path):

@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 from evolution.application.synthesis.evaluator import Evaluator
 from evolution.application.synthesis.session import LLaMEASession
+from evolution.application.synthesis.config import SessionConfig
 from evolution.domain.services.noise_strategy import NoNoiseStrategy
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.llm.client import LLMClient, Provider
@@ -43,9 +44,15 @@ def test_repos(tmp_path):
 def test_pickle_llamea(tmp_path, test_repos):
     db_repo, code_repo = test_repos
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
-    llm = LLMClient(Provider.LOCAL, skip_validation=True)
+    llm = LLMClient(Provider.LOCAL)
 
-    evaluator = Evaluator(problem=problem, db_repo=db_repo, code_repo=code_repo, budget=10)
+    evaluator = Evaluator(
+        problem=problem,
+        db_repo=db_repo,
+        code_repo=code_repo,
+        experiment_id=1,
+        config=SessionConfig(budget=10),
+    )
     opt = LLaMEA(f=evaluator, llm=llm, log=False)
 
     opt.logger = MockLogger(dirname=str(tmp_path))
@@ -65,7 +72,7 @@ def test_pickle_llamea(tmp_path, test_repos):
 
 def test_llm_client_pickling(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
-    wrapper = LLMClient(provider="gemini", skip_validation=True)
+    wrapper = LLMClient(provider="gemini")
     assert wrapper.model == "gemini-2.0-flash"
     assert wrapper.provider == "gemini"
 
@@ -80,7 +87,7 @@ def test_llm_client_pickling(monkeypatch):
 def test_warm_start_rehydration(tmp_path, test_repos):
     db_repo, code_repo = test_repos
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
-    llm = LLMClient(Provider.LOCAL, skip_validation=True)
+    llm = LLMClient(Provider.LOCAL)
 
     problem_profile = ProblemProfile(
         problem_id=problem.problem_id,
@@ -96,7 +103,7 @@ def test_warm_start_rehydration(tmp_path, test_repos):
         llm_name=llm.model.name,
         prompt_strategy="baseline",
         budget=1000000,
-        iterations=5,
+        max_iterations=5,
     )
 
     session = LLaMEASession(
@@ -107,7 +114,7 @@ def test_warm_start_rehydration(tmp_path, test_repos):
         llm_client=llm,
         db_repo=db_repo,
         code_repo=code_repo,
-        iterations=5,
+        config=SessionConfig(iterations=5),
     )
 
     evaluator = session._setup_evaluator()

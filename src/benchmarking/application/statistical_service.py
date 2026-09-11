@@ -100,6 +100,22 @@ class StatisticalEvaluationService:
         self.ecdf_engine = ecdf_engine or EcdfConvergenceEngine()
         self.performance_engine = performance_engine or PerformanceMetricsEngine()
 
+    @classmethod
+    def create_standard(
+        cls,
+        sqlite_repo: SQLiteSynthesisReadRepository,
+        trace_repo: IOHTraceReader | None = None,
+    ) -> "StatisticalEvaluationService":
+        """Factory method to construct StatisticalEvaluationService with standard domain engines."""
+        return cls(
+            sqlite_repo=sqlite_repo,
+            trace_repo=trace_repo,
+            hypothesis_engine=HypothesisTestingEngine(),
+            ecdf_engine=EcdfConvergenceEngine(),
+            performance_engine=PerformanceMetricsEngine(),
+        )
+
+
     def get_synthesis_dataframes(self) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Query synthesis database for completed experiment metadata and iteration metrics."""
         return self.sqlite_repo.get_synthesis_dataframes()

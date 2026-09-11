@@ -10,6 +10,8 @@ import tomllib
 
 from shared.config import CONFIGS_DIR
 
+from benchmarking.application.evaluation_config import EvaluationConfig
+
 
 class EvaluationConfigRepository:
     """Infrastructure repository for reading and parsing benchmark.toml and baselines.toml."""
@@ -33,8 +35,8 @@ class EvaluationConfigRepository:
         with open(self.baselines_path, "rb") as f:
             return tomllib.load(f).get("baselines", {})
 
-    def load_config(self) -> dict[str, Any]:
-        """Loads and parses the benchmark.toml configuration."""
+    def load_config(self) -> EvaluationConfig:
+        """Loads and parses the benchmark.toml configuration into an EvaluationConfig model."""
         cfg: dict[str, Any] = {}
         if self.config_path.exists():
             with open(self.config_path, "rb") as f:
@@ -47,17 +49,21 @@ class EvaluationConfigRepository:
             for slug, info in baselines_data.items()
         }
 
-        return {
-            "benchmarking": bench_cfg,
-            "target_eval_runs": int(bench_cfg.get("target_eval_runs", 20)),
-            "budget_multiplier": int(bench_cfg.get("budget_multiplier", 10000)),
-            "eval_timeout_seconds": float(bench_cfg.get("eval_timeout_seconds", 30.0)),
-            "force_rerun": bool(bench_cfg.get("force_rerun", False)),
-            "fill_missing_only": bool(bench_cfg.get("fill_missing_only", True)),
-            "classical_baselines": bench_cfg.get(
+        raw_noises = bench_cfg.get("target_noise_stds")
+        target_noise_stds = [float(n) for n in raw_noises] if raw_noises is not None else []
+
+        return EvaluationConfig(
+            benchmarking=bench_cfg,
+            target_eval_runs=int(bench_cfg.get("target_eval_runs", 20)),
+            budget_multiplier=int(bench_cfg.get("budget_multiplier", 10000)),
+            eval_timeout_seconds=float(bench_cfg.get("eval_timeout_seconds", 30.0)),
+            force_rerun=bool(bench_cfg.get("force_rerun", False)),
+            fill_missing_only=bool(bench_cfg.get("fill_missing_only", True)),
+            classical_baselines=bench_cfg.get(
                 "classical_baselines", ["cmaes", "de", "pso"]
             ),
-            "baseline_labels": baseline_labels,
-            "cross_eval_clean_champions": bool(bench_cfg.get("cross_eval_clean_champions", True)),
-            "target_noise_stds": bench_cfg.get("target_noise_stds", None),
-        }
+            baseline_labels=baseline_labels,
+            cross_eval_clean_champions=bool(bench_cfg.get("cross_eval_clean_champions", True)),
+            target_noise_stds=target_noise_stds,
+        )
+

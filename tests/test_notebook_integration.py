@@ -31,7 +31,7 @@ def test_nb02_synthesis_pipeline():
     # Explicit repository and logger dependency injection
     sqlite_repo = initialize_sqlite_storage()
     config_repo = SynthesisConfigRepository()
-    llm = LLMClient("local", skip_validation=True)
+    llm = LLMClient("local")
     logger = SynthesisLogger(verbose=False)
     service = LLaMEASynthesisService(
         sqlite_repo=sqlite_repo,

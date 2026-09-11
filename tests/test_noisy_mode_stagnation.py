@@ -3,6 +3,7 @@ from llamea import Solution
 from evolution.domain.enums import NoiseModelEnum, SynthesisMode
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy
 from evolution.domain.vos import ProblemProfile
+from evolution.application.synthesis.config import SessionConfig
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
@@ -48,9 +49,8 @@ def test_stagnation_diversity_injection(db_session_factory, tmp_path):
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        budget=100,
         experiment_id=exp_id,
-        stagnation_threshold=3,
+        config=SessionConfig(budget=100, stagnation_threshold=3),
     )
 
     failing_code = """
@@ -103,8 +103,8 @@ def test_evaluator_noisy_feedback_no_noise_std_leak(db_session_factory, tmp_path
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        budget=100,
         experiment_id=exp_id,
+        config=SessionConfig(budget=100),
     )
 
     success_code = """
