@@ -175,12 +175,20 @@ class SynthesisConfigRepository:
         if target_ids is not None:
             target_ids = [int(i) for i in target_ids]
 
+        timeout_sec = float(
+            evolution_cfg.get(
+                "timeout_seconds",
+                evolution_cfg.get("eval_timeout_seconds", 30.0),
+            )
+        )
+
         return SynthesisConfig(
             problem_targets=problem_targets,
             noise_conditions=noise_conditions,
             synthesis_modes=synthesis_modes,
             matrix_conditions=matrix_conditions,
             budget=int(evolution_cfg.get("budget", 1_000_000)),
+            timeout_seconds=timeout_sec,
             iterations=int(evolution_cfg.get("iterations", 10)),
             runs_per_config=int(evolution_cfg.get("runs_per_config", 1)),
             num_processes=num_workers,

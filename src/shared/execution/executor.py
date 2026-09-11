@@ -44,7 +44,7 @@ class AlgorithmExecutor:
 
     def __init__(
         self,
-        timeout_seconds: float = 10.0,
+        timeout_seconds: float = 30.0,
         compiler: CodeCompiler | None = None,
     ) -> None:
         """

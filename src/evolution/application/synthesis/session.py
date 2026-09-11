@@ -68,6 +68,7 @@ class LLaMEASession:
         db_repo: SynthesisRepository,
         code_repo: CodeRepository,
         budget: int = DEFAULT_BUDGET,
+        timeout_seconds: float = 30.0,
         iterations: int = DEFAULT_MAX_ITERATIONS,
         stagnation_threshold: int = 3,
         logger: SynthesisLogger | None = None,
@@ -87,6 +88,7 @@ class LLaMEASession:
         self._db_repo = db_repo
         self._code_repo = code_repo
         self._budget = budget
+        self._timeout_seconds = timeout_seconds
         self._iterations = iterations
         self._stagnation_threshold = stagnation_threshold
         self._logger = logger or SynthesisLogger()
@@ -255,6 +257,7 @@ class LLaMEASession:
             db_repo=self._db_repo,
             code_repo=self._code_repo,
             budget=self._budget,
+            timeout_seconds=self._timeout_seconds,
             experiment_id=self._experiment_id,
             initial_iteration=self._initial_iteration,
             stagnation_threshold=self._stagnation_threshold,

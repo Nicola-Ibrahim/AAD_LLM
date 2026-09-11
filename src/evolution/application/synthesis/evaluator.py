@@ -89,7 +89,7 @@ class Evaluator:
         db_repo: SynthesisRepository,
         code_repo: CodeRepository,
         budget: int = 1000000,
-        timeout_seconds: float = 10.0,
+        timeout_seconds: float = 30.0,
         experiment_id: int = 1,
         initial_iteration: int = 0,
         convergence_threshold: float = 1e-6,
@@ -107,7 +107,7 @@ class Evaluator:
                 as a stopping criterion (analogous to a convergence threshold in gradient
                 descent), by default 1000. It is NOT used for multi-run comparison or luck checking.
             timeout_seconds: Maximum wall-clock execution time allowed for one algorithm run,
-                by default 10.0.
+                by default 30.0.
             experiment_id: Globally unique experiment primary key, by default 1.
             initial_iteration: Starting iteration counter (e.g. from warm start), by default 0.
             convergence_threshold: Target error threshold required to consider a run converged, by default 1e-6.

@@ -200,6 +200,7 @@ class SynthesisConfig(BaseModel):
 
     # 2. Execution & Evolutionary Hyperparameters
     budget: int = 1_000_000
+    timeout_seconds: float = 30.0
     iterations: int = 10
     runs_per_config: int = 1
     num_processes: int = 8

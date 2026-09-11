@@ -49,6 +49,7 @@ class LLaMEASynthesisService:
 
         # 2. Execution knobs & parameters (direct dot-access from dataclass)
         self.budget: int = self.config.budget
+        self.timeout_seconds: float = self.config.timeout_seconds
         self.iterations: int = self.config.iterations
         self.runs_per_config: int = self.config.runs_per_config
         self.num_processes: int = self.config.num_processes
@@ -314,6 +315,7 @@ class LLaMEASynthesisService:
                     experiment_id=exp.id,
                     initial_iteration=initial_iter,
                     budget=self.budget,
+                    timeout_seconds=self.timeout_seconds,
                     iterations=exp.max_iterations or self.iterations,
                     prompt_strategy=exp.prompt_strategy,
                     synthesis_mode=exp.mode,
@@ -350,6 +352,7 @@ class LLaMEASynthesisService:
             experiment_id=exp.id,
             initial_iteration=initial_iter,
             budget=self.budget,
+            timeout_seconds=self.timeout_seconds,
             iterations=exp.max_iterations or self.iterations,
             prompt_strategy=strat,
             synthesis_mode=synthesis_mode or exp.mode,
@@ -410,6 +413,7 @@ class LLaMEASynthesisService:
             experiment_id=exp_id,
             initial_iteration=0,
             budget=self.budget,
+            timeout_seconds=self.timeout_seconds,
             iterations=self.iterations,
             prompt_strategy=strat,
             synthesis_mode=exp_mode,

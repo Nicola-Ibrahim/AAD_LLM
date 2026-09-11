@@ -53,6 +53,10 @@ iterations = 10
 # Function Evaluation Budget: Max objective evaluations per candidate algorithm
 budget = 1000000
 
+# Maximum wall-clock execution time allowed per candidate algorithm execution (seconds)
+# Set to 30.0s to allow candidate metaheuristics to complete up to 1,000,000 evaluations without false timeouts
+timeout_seconds = 30.0
+
 # Statistical Replicates: Number of independent repeat runs per unique matrix configuration
 #   • 1   = Single execution per condition (extracting the best champion algorithm)
 runs_per_config = 1

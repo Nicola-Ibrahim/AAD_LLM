@@ -51,7 +51,7 @@ def test_nb02_synthesis_pipeline():
     assert "problem_targets" in cfg
     assert len(cfg["problem_targets"]) == 5
     assert cfg["problem_ids"] == [1, 8, 11, 15, 21]
-    assert cfg["dimensions"] == [2, 3, 5]
+    assert cfg["dimensions"] == [2, 3, 5, 10]
 
     matrix_df, summary = service.audit_matrix()
     assert not matrix_df.empty

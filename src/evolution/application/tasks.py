@@ -31,6 +31,7 @@ class EvolutionTask:
     experiment_id: int = 1
     initial_iteration: int = 0
     budget: int = 1000000
+    timeout_seconds: float = 30.0
     iterations: int = 10
     prompt_strategy: PromptStrategy = PromptStrategy.BASELINE
     synthesis_mode: SynthesisMode | None = None
@@ -50,6 +51,7 @@ class EvolutionTask:
             db_repo=db_repo,
             code_repo=code_repo,
             budget=self.budget,
+            timeout_seconds=self.timeout_seconds,
             iterations=self.iterations,
             synthesis_mode=self.synthesis_mode,
         )
