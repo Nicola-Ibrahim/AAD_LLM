@@ -6,8 +6,12 @@ Has zero dependencies on application services or domain contracts.
 
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from typing import TypeVar
 
 from evolution.domain.exceptions import OrchestrationError
+
+T = TypeVar("T")
+R = TypeVar("R")
 
 
 class ProcessPoolRunner:
@@ -21,7 +25,7 @@ class ProcessPoolRunner:
         """
         self.max_workers = max_workers
 
-    def run[T, R](
+    def run(
         self,
         fn: Callable[[T], R],
         items: list[T],

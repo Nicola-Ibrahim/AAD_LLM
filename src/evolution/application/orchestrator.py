@@ -3,11 +3,13 @@
 Coordinates parallel execution of EvolutionTask units using ProcessPoolRunner.
 """
 
+from typing import TypeAlias
+
 from evolution.application.synthesis_service import EvolutionTask, SessionResult
 from evolution.application.worker import run_evolution_worker
 from evolution.infra.concurrency.runner import ProcessPoolRunner
 
-type TaskResults = dict[str, SessionResult]
+TaskResults: TypeAlias = dict[str, SessionResult]
 
 
 class TaskOrchestrator:

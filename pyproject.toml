@@ -3,7 +3,7 @@ name = "aad-llm"
 version = "0.1.0"
 description = "LLaMEA-driven evolution of black-box optimization algorithms for noisy BBOB functions"
 readme = "README.md"
-requires-python = ">=3.13,<4"
+requires-python = ">=3.11,<4"
 dependencies = [
     "llamea>=0.1.0",
     "ioh>=0.3.14",
@@ -49,6 +49,7 @@ build-backend = "hatchling.build"
 packages = ["src"]
 
 [tool.ruff]
+target-version = "py311"
 line-length = 100
 src = ["src"]
 extend-exclude = ["notebooks"]

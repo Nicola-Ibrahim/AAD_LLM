@@ -6,7 +6,7 @@ task construction, upfront synthesis session persistence, and parallel multi-pro
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeAlias
 
 import numpy as np
 import pandas as pd
@@ -104,8 +104,8 @@ class EvolutionTask:
     db_path: Path | None = None
 
 
-type TaskMatrix = list[EvolutionTask]
-type CampaignResults = dict[str, SessionResult]
+TaskMatrix: TypeAlias = list[EvolutionTask]
+CampaignResults: TypeAlias = dict[str, SessionResult]
 
 
 class SynthesisService:
