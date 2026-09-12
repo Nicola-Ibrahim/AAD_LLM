@@ -12,13 +12,13 @@ from shared.tables import Base
 @pytest.fixture(autouse=True)
 def isolate_test_data_dir(tmp_path, monkeypatch):
     """Ensure tests write temporary logs and state to an isolated tmp directory."""
-    import evolution.application.synthesis.session
+    import evolution.infra.engines.llamea.runner
     import evolution.infra.problems.analyzer
     import shared.config
 
     monkeypatch.setattr(shared.config, "DATA_DIR", tmp_path)
     monkeypatch.setattr(evolution.infra.problems.analyzer, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(evolution.application.synthesis.session, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(evolution.infra.engines.llamea.runner, "DATA_DIR", tmp_path)
 
 
 def pytest_sessionfinish(session, exitstatus):

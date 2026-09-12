@@ -13,7 +13,6 @@ from evolution.domain.enums import BBOBFunction, NoiseModelEnum, PromptStrategy,
 from evolution.domain.services.noise_strategy import NoiseStrategyFactory
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.llm.client import LLMClient
-from evolution.infra.logging import SynthesisLogger
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.synthesis_config import (
     MatrixCondition,
@@ -24,12 +23,13 @@ from evolution.infra.storage.synthesis_config import (
     SynthesisModeConfig,
 )
 from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
-from evolution.application.synthesis.config import SessionConfig
-from evolution.application.synthesis.session import SessionResult
+from evolution.application.config import SessionConfig
+from evolution.application.interfaces import BaseLogger
+from evolution.application.result import SessionResult
 from evolution.application.tasks import EvolutionTask, TaskOrchestrator
 
 
-class LLaMEASynthesisService:
+class SynthesisService:
     """Application use case service managing algorithm synthesis campaigns.
 
     Workflow Architecture:
@@ -40,7 +40,7 @@ class LLaMEASynthesisService:
                                 │
                                 ▼
     ┌────────────────────────────────────────────────────────┐
-    │                LLaMEASynthesisService                  │
+    │                    SynthesisService                    │
     │                                                        │
     │  1. audit_matrix()                                     │
     │     Reconcile Config Conditions vs SQLite DB Records   │
@@ -54,7 +54,7 @@ class LLaMEASynthesisService:
     │     ├── Resume Tasks    ──> Interrupted DB Experiments │
     │     └── Fresh Tasks     ──> Upfront DB Record Created  │
     │                                                        │
-    │  3. run_synthesis()                                    │
+    │  3. run_campaign() / run_task()                        │
     │     ┌──────────────────────────────────────────────┐   │
     │     │               TaskOrchestrator               │   │
     │     │       ProcessPoolExecutor (N Workers)        │   │
@@ -77,7 +77,7 @@ class LLaMEASynthesisService:
         sqlite_repo: SQLiteSynthesisRepository,
         config_repo: SynthesisConfigRepository,
         llm_client: LLMClient,
-        logger: SynthesisLogger,
+        logger: BaseLogger,
     ):
         self.sqlite_repo = sqlite_repo
         self.config_repo = config_repo
@@ -244,11 +244,32 @@ class LLaMEASynthesisService:
                     )
         return tasks
 
-    def run_synthesis(
+    def run_task(
+        self,
+        task: EvolutionTask,
+        verbose: bool = True,
+    ) -> SessionResult:
+        """Executes a single evolution task in the current process."""
+        self.logger.verbose = verbose
+        self.logger.header(
+            title="LLaMEA Synthesis",
+            subtitle=f"Single run: {task.key}",
+        )
+        result = task()
+        self.logger.summary(
+            title="Task Complete",
+            stats={
+                "Key": task.key,
+                "Best Error": result.best_error,
+            },
+        )
+        return result
+
+    def run_campaign(
         self,
         verbose: bool = True,
     ) -> dict[str, SessionResult]:
-        """Builds tasks and executes the evolutionary synthesis in parallel using TaskOrchestrator."""
+        """Builds tasks and executes the evolutionary synthesis campaign in parallel using TaskOrchestrator."""
         self.logger.verbose = verbose
         workers = self.num_processes
 
@@ -464,4 +485,3 @@ class LLaMEASynthesisService:
             synthesis_mode=exp_mode,
             config=fresh_cfg,
         )
-

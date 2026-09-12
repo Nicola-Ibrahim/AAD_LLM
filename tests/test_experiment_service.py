@@ -17,7 +17,7 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
-from evolution.application.synthesis.config import SessionConfig
+from evolution.application.config import SessionConfig
 from evolution.domain.enums import NoiseModelEnum, SynthesisMode, PromptStrategy
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy, NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
@@ -25,8 +25,7 @@ from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from shared.database import build_engine
 from shared.tables import Base, ExperimentORM
-from evolution.application.synthesis.evaluator import Evaluator
-from evolution.application.synthesis.session import LLaMEASession
+from evolution.infra.engines.llamea import Evaluator, LLaMEAEngine, LLaMEASession
 from evolution.application.tasks import (
     EvolutionTask,
     TaskOrchestrator,

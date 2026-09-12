@@ -22,7 +22,9 @@ def test_nb01_noise_pipeline():
 
 def test_nb02_synthesis_pipeline():
     """Verify Notebook 02 (02_synthesis.ipynb: Evolutionary Synthesis Service & Task Construction)."""
-    from evolution.application.synthesis_service import LLaMEASynthesisService
+    from evolution.application.interfaces import BaseLogger
+    from evolution.application.synthesis_service import SynthesisService
+    from evolution.infra.engines.llamea import LLaMEAEngine
     from evolution.infra.llm.client import LLMClient
     from evolution.infra.logging import SynthesisLogger
     from evolution.infra.storage.synthesis_config.repository import SynthesisConfigRepository
@@ -33,7 +35,7 @@ def test_nb02_synthesis_pipeline():
     config_repo = SynthesisConfigRepository()
     llm = LLMClient("local")
     logger = SynthesisLogger(verbose=False)
-    service = LLaMEASynthesisService(
+    service = SynthesisService(
         sqlite_repo=sqlite_repo,
         config_repo=config_repo,
         llm_client=llm,
@@ -44,6 +46,9 @@ def test_nb02_synthesis_pipeline():
     assert service.config_repo is config_repo
     assert service.llm_client is llm
     assert service.logger is logger
+    assert isinstance(service.logger, BaseLogger)
+    assert hasattr(service, "run_task")
+    assert hasattr(service, "run_campaign")
 
     cfg = config_repo.load_config()
     assert "matrix" in cfg
@@ -198,7 +203,8 @@ def test_nb05_analysis_pipeline():
 def test_synthesis_config_problem_targets_and_fallbacks(tmp_path):
     """Verify Option 3 problem_targets parsing, per-problem dimensions, and legacy fallback."""
     from unittest.mock import MagicMock
-    from evolution.application.synthesis_service import LLaMEASynthesisService
+    from evolution.application.synthesis_service import SynthesisService
+    from evolution.infra.engines.llamea import LLaMEAEngine
     from evolution.infra.storage.synthesis_config import SynthesisConfigRepository
 
     # 1. Custom per-problem dimensions
@@ -233,8 +239,7 @@ runs_per_config = 1
     mock_llm = MagicMock()
     mock_llm.model.name = "mock_model"
     mock_logger = MagicMock()
-
-    service = LLaMEASynthesisService(
+    service = SynthesisService(
         sqlite_repo=mock_sqlite,
         config_repo=repo,
         llm_client=mock_llm,
@@ -292,7 +297,7 @@ runs_per_config = 1
     mm_cfg = mm_repo.load_config()
     assert mm_cfg["synthesis_mode_names"] == ["clean", "noisy", "implicit"]
 
-    mm_service = LLaMEASynthesisService(
+    mm_service = SynthesisService(
         sqlite_repo=mock_sqlite,
         config_repo=mm_repo,
         llm_client=mock_llm,
@@ -333,7 +338,7 @@ runs_per_config = 1
     assert dm_cfg["synthesis_modes"][1] == {"mode": "implicit", "strategies": ["guided"]}
     assert dm_cfg["prompt_strategies"] == ["baseline", "guided", "thinking"]
 
-    dm_service = LLaMEASynthesisService(
+    dm_service = SynthesisService(
         sqlite_repo=mock_sqlite,
         config_repo=dm_repo,
         llm_client=mock_llm,
@@ -352,10 +357,144 @@ runs_per_config = 1
     assert not any("implicit_std_0.05_baseline" in k for k in dm_keys)
 
 
+def test_custom_minimal_base_logger():
+    """Verify that any new custom logger only needs to implement info, warning, error.
+
+    All domain telemetry methods (header, task_start, generation, resuming, cached,
+    stagnation_warning, task_complete, audit_summary, summary, success) execute without
+    errors and route to the core logging methods.
+    """
+    from evolution.application.interfaces import BaseLogger
+
+    class MinimalLogger(BaseLogger):
+        def __init__(self, verbose: bool = True):
+            super().__init__(verbose=verbose)
+            self.logs: list[tuple[str, str]] = []
+
+        def info(self, msg: str) -> None:
+            self.logs.append(("INFO", msg))
+
+        def warning(self, msg: str) -> None:
+            self.logs.append(("WARNING", msg))
+
+        def error(self, msg: str) -> None:
+            self.logs.append(("ERROR", msg))
+
+    logger = MinimalLogger(verbose=True)
+    assert logger.verbose is True
+
+    # Test all domain telemetry methods without overriding them
+    logger.header("Test Header", subtitle="Test Sub")
+    logger.task_start(1, 10, "test-model", 2, 0.05, 1, "baseline", 101)
+    logger.generation(1, 10, "Algo1", error=0.01, fitness=-0.01, evals_used=100, runtime=1.5)
+    logger.generation(
+        2, 10, "Algo2", error=None, fitness=None, evals_used=0, runtime=0.5, is_failure=True, failure_reason="SyntaxError"
+    )
+    logger.resuming(101, 2, 10)
+    logger.cached(101, 10, 0.005)
+    logger.stagnation_warning(3, 3)
+    logger.task_complete(101, "Algo1", 0.01, raw_obj=0.01, true_opt=0.0)
+    logger.audit_summary("test-model", 10, 5, 4, 1, 50.0)
+    logger.summary("Test Summary", {"Metric1": 100, "Metric2": "Pass"})
+    logger.success("All tasks finished successfully")
+
+    # Assert that all calls were routed to info and warning
+    info_logs = [msg for level, msg in logger.logs if level == "INFO"]
+    warn_logs = [msg for level, msg in logger.logs if level == "WARNING"]
+
+    assert len(info_logs) >= 9
+    assert len(warn_logs) >= 1
+    assert any("TEST HEADER" in m for m in info_logs)
+    assert any("Stagnation warning" in m for m in warn_logs)
+    assert any("[SUCCESS]" in m for m in info_logs)
+
+
+def test_synthesis_service_run_task_and_campaign():
+    """Verify SynthesisService run_task and run_campaign methods."""
+    from unittest.mock import MagicMock, patch
+    from evolution.application.result import SessionResult
+    from evolution.application.synthesis_service import SynthesisService
+    from evolution.domain.enums import SynthesisMode
+
+    mock_sqlite = MagicMock()
+    mock_config = MagicMock()
+    mock_config.load_config.return_value = MagicMock(
+        budget=1000,
+        timeout_seconds=60.0,
+        iterations=5,
+        runs_per_config=1,
+        num_processes=2,
+        auto_resume=False,
+        skip_completed=True,
+        retry_failed_synthesis=False,
+        only_incomplete=False,
+        target_exp_ids=[],
+        problem_targets=[],
+        problems=[1],
+        dimensions=[2],
+        noise_conditions=[],
+        noise_stds=[0.0],
+        noise_model=MagicMock(),
+        synthesis_modes=[],
+        mode_enums=[SynthesisMode.CLEAN],
+        synthesis_mode=SynthesisMode.CLEAN,
+        prompt_strategies=[],
+        matrix_conditions=[],
+    )
+    mock_llm = MagicMock()
+    mock_llm.model.name = "mock_model"
+    mock_logger = MagicMock()
+
+    service = SynthesisService(
+        sqlite_repo=mock_sqlite,
+        config_repo=mock_config,
+        llm_client=mock_llm,
+        logger=mock_logger,
+    )
+
+    # 1. Test run_task
+    mock_task = MagicMock()
+    mock_task.key = "test_task_key"
+    dummy_result = SessionResult(
+        problem_id=1,
+        dim=2,
+        mode=SynthesisMode.CLEAN,
+        noise_std=0.0,
+        experiment_id=999,
+        best_error=0.05,
+    )
+    mock_task.return_value = dummy_result
+
+    res = service.run_task(mock_task, verbose=True)
+    assert res is dummy_result
+    mock_task.assert_called_once()
+    mock_logger.header.assert_called_with(title="LLaMEA Synthesis", subtitle="Single run: test_task_key")
+    mock_logger.summary.assert_called()
+
+    # 2. Test run_campaign when no tasks
+    with patch.object(service, "build_tasks", return_value=[]):
+        empty_res = service.run_campaign()
+        assert empty_res == {}
+        mock_logger.success.assert_called()
+
+    # 3. Test run_campaign when tasks exist
+    with patch.object(service, "build_tasks", return_value=[mock_task]):
+        with patch("evolution.application.synthesis_service.TaskOrchestrator") as MockOrch:
+            orch_instance = MockOrch.return_value
+            orch_instance.run.return_value = {"test_task_key": dummy_result}
+
+            campaign_res = service.run_campaign()
+            assert campaign_res == {"test_task_key": dummy_result}
+            orch_instance.run.assert_called_once_with([mock_task])
+
+
 if __name__ == "__main__":
     test_nb01_noise_pipeline()
     test_nb02_synthesis_pipeline()
     test_nb03_evaluation_pipeline()
     test_nb04_audit_pipeline()
     test_nb05_analysis_pipeline()
+    test_custom_minimal_base_logger()
+    test_synthesis_service_run_task_and_campaign()
+
 

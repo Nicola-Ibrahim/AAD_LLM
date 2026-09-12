@@ -152,11 +152,6 @@ class MatrixCondition(BaseModel):
         )
 
     @property
-    def condition(self) -> "MatrixCondition":
-        """Returns self for backward compatibility."""
-        return self
-
-    @property
     def env_label(self) -> str:
         """Display label for environment status in audit table."""
         if self.mode == SynthesisMode.IMPLICIT:
@@ -211,7 +206,7 @@ class SynthesisConfig(BaseModel):
     name: str = "bbob_comprehensive_matrix"
     noise_model: NoiseModelEnum = NoiseModelEnum.HETEROSCEDASTIC
 
-    # 3. Raw dictionary sections preserved for backward compatibility
+    # 3. Raw configuration dictionary sections
     matrix: dict[str, Any] = Field(default_factory=dict)
     evolution: dict[str, Any] = Field(default_factory=dict)
     execution: dict[str, Any] = Field(default_factory=dict)
@@ -270,7 +265,7 @@ class SynthesisConfig(BaseModel):
             "convergence_threshold": float(self.evolution.get("convergence_threshold", 1e-6)),
         }
 
-    # Dictionary emulation for backward compatibility:
+    # Dictionary-style mapping interface
     def __getitem__(self, key: str) -> Any:
         if hasattr(self, key):
             return getattr(self, key)

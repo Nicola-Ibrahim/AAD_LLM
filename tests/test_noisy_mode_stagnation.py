@@ -3,11 +3,11 @@ from llamea import Solution
 from evolution.domain.enums import NoiseModelEnum, SynthesisMode
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy
 from evolution.domain.vos import ProblemProfile
-from evolution.application.synthesis.config import SessionConfig
+from evolution.application.config import SessionConfig
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
-from evolution.application.synthesis.evaluator import Evaluator
+from evolution.infra.engines.llamea import Evaluator
 from shared.execution import AlgorithmExecutor, CodeCompiler
 
 

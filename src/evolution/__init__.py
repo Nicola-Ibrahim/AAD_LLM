@@ -6,11 +6,12 @@ candidate evaluation, and experiment tracking for continuous optimization proble
 
 from evolution.application import (
     EvolutionTask,
-    LLaMEASynthesisService,
+    SynthesisService,
     SessionResult,
+    SessionConfig,
     TaskOrchestrator,
 )
-from evolution.application.synthesis import LLaMEASession
+from evolution.infra.engines import LLaMEASession
 from evolution.domain import (
     AWGNStrategy,
     AlgorithmTimeoutException,
@@ -67,7 +68,7 @@ __all__ = [
     "Error",
     "Convergence",
     # Application & Task Execution
-    "LLaMEASynthesisService",
+    "SynthesisService",
     "TaskOrchestrator",
     "EvolutionTask",
     "LLaMEASession",

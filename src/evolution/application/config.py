@@ -1,4 +1,4 @@
-"""Application synthesis configuration objects.
+"""Application configuration objects.
 
 Defines runtime configuration contracts for synthesis sessions and evaluators.
 """
@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class SessionConfig(BaseModel):
-    """Runtime configuration for an evolutionary synthesis session (LLaMEASession).
+    """Runtime configuration for an evolutionary synthesis session.
 
     Serves as the strongly-typed parameter object for runtime budgets, timeouts,
     iterations, stagnation thresholds, and convergence criteria.
@@ -40,6 +40,3 @@ class SessionConfig(BaseModel):
     )
 
     model_config = ConfigDict(frozen=True)
-
-
-__all__ = ["SessionConfig"]

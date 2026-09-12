@@ -58,6 +58,3 @@ class EvaluationConfig(BaseModel):
     )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
-
-__all__ = ["EvaluationConfig"]

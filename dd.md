@@ -13,11 +13,11 @@ graph TD
     subgraph AppLayer ["Application Layer (Use Cases)"]
         Service["SynthesisService (Sole Application Service)"]
         TaskSpec["EvolutionTaskSpec (DTO)"]
-        EnginePort["SynthesisEngine (Protocol Port)"]
+        EnginePort["SynthesisEngine (ABC Port in interfaces/engine.py)"]
     end
 
     subgraph InfraLayer ["Infrastructure Layer (Adapters & Tools)"]
-        LLaMEAEngine["LLaMEAEngine / LLaMEARunner"]
+        LLaMEAEngine["LLaMEAEngine"]
         EvaluatorAdapter["EvaluatorAdapter (LLaMEA Callback)"]
         ExtLLaMEA["LLaMEA Framework (External Library)"]
         SQLiteRepo["SQLiteSynthesisRepository"]

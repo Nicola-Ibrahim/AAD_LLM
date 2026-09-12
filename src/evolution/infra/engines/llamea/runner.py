@@ -1,7 +1,15 @@
+"""LLaMEA Evolutionary Synthesis Engine & Session (Infrastructure Adapter).
+
+Implements the evolutionary synthesis engine using the 3rd-party LLaMEA optimization library.
+Manages the evolutionary synthesis loop, prompt injection, warm-start checkpointing,
+sandboxed evaluation, and persistence of iteration telemetry and champion algorithms.
+"""
+
 import math
 import shutil
 import warnings
 from dataclasses import dataclass, field
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -12,7 +20,9 @@ from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces import BaseProblem
 from evolution.domain.vos.problem_profile import ProblemProfile
-from evolution.application.synthesis.config import SessionConfig
+from evolution.application.config import SessionConfig
+from evolution.application.interfaces import BaseLogger
+from evolution.application.result import SessionResult
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
 from evolution.infra.prompts import (
@@ -22,7 +32,7 @@ from evolution.infra.prompts import (
 )
 from evolution.infra.storage.base import SynthesisRepository
 from evolution.infra.storage.code.repository import CodeRepository
-from evolution.application.synthesis.evaluator import Evaluator
+from evolution.infra.engines.llamea.evaluator import Evaluator
 
 # Suppress joblib warning when LLaMEA passes timeout to SequentialBackend
 warnings.filterwarnings(
@@ -30,24 +40,6 @@ warnings.filterwarnings(
     category=UserWarning,
     message=r".*SequentialBackend.*does not support timeout.*",
 )
-
-
-@dataclass
-class SessionResult:
-    """Immutable contract returned per-problem by LLaMEASession.run()."""
-
-    problem_id: int
-    dim: int
-    mode: SynthesisMode
-    noise_std: float
-    experiment_id: int
-    best_error: float | None = None
-    run_history: list[Any] = field(default_factory=list)
-    experiment_name: str = ""
-    llm_name: str = ""
-    error_msg: str = ""
-    best_solution: Any = None
-    problem_profile: Any = None
 
 
 class LLaMEASession:
@@ -93,7 +85,7 @@ class LLaMEASession:
                │
                ▼
         Print Summary Report & Return SessionResult
-        """
+    """
 
     def __init__(
         self,
@@ -148,12 +140,12 @@ class LLaMEASession:
         self._archive_dir.mkdir(parents=True, exist_ok=True)
 
     @property
-    def logger(self) -> SynthesisLogger:
+    def logger(self) -> BaseLogger:
         """Expose the session synthesis logger."""
         return self._logger
 
     @logger.setter
-    def logger(self, value: SynthesisLogger) -> None:
+    def logger(self, value: BaseLogger) -> None:
         self._logger = value
 
     @property
@@ -298,7 +290,6 @@ class LLaMEASession:
         evaluator.logger = self._logger
         return evaluator
 
-
     def _print_report(
         self,
         algorithm_name: str,
@@ -318,3 +309,33 @@ class LLaMEASession:
         """Silently removes the temporary evolution_state checkpoint directory upon successful experiment completion."""
         if self._archive_dir.exists():
             shutil.rmtree(self._archive_dir, ignore_errors=True)
+
+
+class LLaMEAEngine:
+    """Infrastructure synthesis engine using LLaMEASession."""
+
+    def run(
+        self,
+        problem: BaseProblem,
+        experiment_id: int,
+        prompt_strategy: PromptStrategy,
+        llm_client: LLMClient,
+        db_repo: SynthesisRepository,
+        code_repo: CodeRepository,
+        config: SessionConfig,
+        initial_iteration: int = 0,
+        synthesis_mode: SynthesisMode = SynthesisMode.CLEAN,
+    ) -> SessionResult:
+        """Executes a single algorithm synthesis run using LLaMEASession."""
+        session = LLaMEASession(
+            problem=problem,
+            experiment_id=experiment_id,
+            prompt_strategy=prompt_strategy,
+            llm_client=llm_client,
+            db_repo=db_repo,
+            code_repo=code_repo,
+            config=config,
+            initial_iteration=initial_iteration,
+            synthesis_mode=synthesis_mode,
+        )
+        return session.run()

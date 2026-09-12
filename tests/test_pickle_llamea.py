@@ -4,9 +4,8 @@ import pytest
 from llamea import LLaMEA
 from sqlalchemy.orm import sessionmaker
 
-from evolution.application.synthesis.evaluator import Evaluator
-from evolution.application.synthesis.session import LLaMEASession
-from evolution.application.synthesis.config import SessionConfig
+from evolution.application.config import SessionConfig
+from evolution.infra.engines.llamea import Evaluator, LLaMEASession
 from evolution.domain.services.noise_strategy import NoNoiseStrategy
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.llm.client import LLMClient, Provider

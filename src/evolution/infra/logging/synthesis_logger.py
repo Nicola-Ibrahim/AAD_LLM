@@ -9,6 +9,8 @@ import logging
 import sys
 from typing import Any, TextIO
 
+from evolution.application.interfaces import BaseLogger
+
 
 class Colors:
     """ANSI color codes for rich terminal output."""
@@ -38,7 +40,7 @@ class SynthesisFormatter(logging.Formatter):
         return record.getMessage()
 
 
-class SynthesisLogger:
+class SynthesisLogger(BaseLogger):
     """Specialized synthesis logger utilizing standard Python logging.Logger with custom colorization and emojis."""
 
     def __init__(
@@ -57,7 +59,7 @@ class SynthesisLogger:
         self.logger.handlers.clear()
         self.logger.addHandler(self._handler)
 
-        self.verbose = verbose
+        super().__init__(verbose=verbose)
 
     @property
     def verbose(self) -> bool:

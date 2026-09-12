@@ -13,10 +13,11 @@ from shared.database import initialize_sqlite_storage, setup_storage_environment
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.exceptions import OrchestrationError
 from evolution.domain.interfaces import BaseProblem
-from evolution.application.synthesis.config import SessionConfig
+from evolution.application.config import SessionConfig
+from evolution.application.result import SessionResult
+from evolution.infra.engines.llamea import LLaMEAEngine
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.storage.code.repository import CodeRepository
-from evolution.application.synthesis.session import LLaMEASession, SessionResult
 
 
 @dataclass
@@ -29,9 +30,8 @@ class EvolutionTask:
                                 ▼
                  Worker Process Execution: task()
                  ├── Initialize process-isolated SQLite connection (WAL mode)
-                 ├── Instantiate local CodeRepository
-                 ├── Construct LLaMEASession
-                 └── Execute session.run() -> Return SessionResult
+                 ├── Instantiate LLaMEAEngine
+                 └── Execute engine.run(...) -> Return SessionResult
     """
 
     key: str
@@ -48,19 +48,19 @@ class EvolutionTask:
         """Executes the evolution task inside the worker process."""
         db_repo = initialize_sqlite_storage(self.db_path)
         code_repo = CodeRepository()
+        engine = LLaMEAEngine()
 
-        session = LLaMEASession(
+        return engine.run(
             problem=self.problem,
             experiment_id=self.experiment_id,
-            initial_iteration=self.initial_iteration,
             prompt_strategy=self.prompt_strategy,
             llm_client=self.llm_client,
             db_repo=db_repo,
             code_repo=code_repo,
             config=self.config,
+            initial_iteration=self.initial_iteration,
             synthesis_mode=self.synthesis_mode,
         )
-        return session.run()
 
 
 def _execute_task(task: EvolutionTask) -> SessionResult:

@@ -1,3 +1,9 @@
+"""LLaMEA Evaluation Adapter (Infrastructure Component).
+
+Executes generated algorithm code in a sandboxed execution harness, scores objective fitness,
+enforces timeouts and domain bounds, extracts feedback diagnostics, and persists iteration telemetry.
+"""
+
 import math
 import re
 import time
@@ -19,7 +25,8 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
-from evolution.application.synthesis.config import SessionConfig
+from evolution.application.config import SessionConfig
+from evolution.application.interfaces import BaseLogger
 from shared.execution import AlgorithmExecutor, AlgorithmTimeoutException
 from evolution.infra.logging import SynthesisLogger
 from evolution.infra.storage.base import SynthesisRepository
@@ -135,12 +142,12 @@ class Evaluator:
         self._experiment: ExperimentSummary | None = None
 
     @property
-    def logger(self) -> SynthesisLogger:
+    def logger(self) -> BaseLogger:
         """Expose the logger used by this evaluator."""
         return self._logger
 
     @logger.setter
-    def logger(self, value: SynthesisLogger) -> None:
+    def logger(self, value: BaseLogger) -> None:
         self._logger = value
 
     @property
@@ -394,7 +401,6 @@ class Evaluator:
             )
             return self._score_failed_algorithm(ctx, error)
 
-
     def _generate_error_feedback(
         self,
         error: Exception,
@@ -554,7 +560,6 @@ class Evaluator:
             ),
             convergence=Convergence.evaluate(None, self._config.convergence_threshold),
         )
-
 
     def _persist_iteration(self, solution: Solution, metadata: IterationMetadata) -> None:
         """Record iteration count, save code file, and persist metadata to database repo."""

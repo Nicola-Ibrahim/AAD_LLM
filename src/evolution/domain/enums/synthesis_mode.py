@@ -9,6 +9,3 @@ class SynthesisMode(StrEnum):
     CLEAN = "clean"
     NOISY = "noisy"
     IMPLICIT = "implicit"
-
-
-__all__ = ["SynthesisMode"]
