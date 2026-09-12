@@ -22,19 +22,25 @@ def test_nb01_noise_pipeline():
 
 def test_nb02_synthesis_pipeline():
     """Verify Notebook 02 (02_synthesis.ipynb: Evolutionary Synthesis Service & Task Construction)."""
+    from evolution.application.audit_service import SynthesisAuditService
     from evolution.application.interfaces import BaseLogger
     from evolution.application.synthesis_service import SynthesisService
-    from evolution.infra.engines.llamea import LLaMEAEngine
     from evolution.infra.llm.client import LLMClient
     from evolution.infra.logging import SynthesisLogger
     from evolution.infra.storage.synthesis_config.repository import SynthesisConfigRepository
-    from shared.database import initialize_sqlite_storage
+    from shared.database.engine import initialize_sqlite_storage
 
     # Explicit repository and logger dependency injection
     sqlite_repo = initialize_sqlite_storage()
     config_repo = SynthesisConfigRepository()
     llm = LLMClient("local")
     logger = SynthesisLogger(verbose=False)
+
+    audit_service = SynthesisAuditService(
+        sqlite_repo=sqlite_repo,
+        config_repo=config_repo,
+        logger=logger,
+    )
     service = SynthesisService(
         sqlite_repo=sqlite_repo,
         config_repo=config_repo,
@@ -47,6 +53,8 @@ def test_nb02_synthesis_pipeline():
     assert service.llm_client is llm
     assert service.logger is logger
     assert isinstance(service.logger, BaseLogger)
+    assert service.audit_service is not None
+    assert audit_service.sqlite_repo is sqlite_repo
     assert hasattr(service, "run_task")
     assert hasattr(service, "run_campaign")
 
@@ -82,7 +90,7 @@ def test_nb03_evaluation_pipeline():
         ChampionsReadRepository,
         SQLiteSynthesisReadRepository,
     )
-    from shared.database import create_db_session_factory
+    from shared.database.engine import create_db_session_factory
 
     session_factory = create_db_session_factory()
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
@@ -132,7 +140,7 @@ def test_nb04_audit_pipeline():
     print("\nTesting NB04 logic with EvaluationAuditService...")
     from benchmarking.infra.io.trace_repository import IOHTraceReader
     from benchmarking.infra.storage import EvaluationConfigRepository, SQLiteSynthesisReadRepository
-    from shared.database import create_db_session_factory
+    from shared.database.engine import create_db_session_factory
 
     session_factory = create_db_session_factory()
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
@@ -159,7 +167,7 @@ def test_nb05_analysis_pipeline():
     print("\nTesting NB05 logic with StatisticalEvaluationService...")
     from benchmarking.infra.io.trace_repository import IOHTraceReader
     from benchmarking.infra.storage import SQLiteSynthesisReadRepository
-    from shared.database import create_db_session_factory
+    from shared.database.engine import create_db_session_factory
 
     session_factory = create_db_session_factory()
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
@@ -204,7 +212,6 @@ def test_synthesis_config_problem_targets_and_fallbacks(tmp_path):
     """Verify Option 3 problem_targets parsing, per-problem dimensions, and legacy fallback."""
     from unittest.mock import MagicMock
     from evolution.application.synthesis_service import SynthesisService
-    from evolution.infra.engines.llamea import LLaMEAEngine
     from evolution.infra.storage.synthesis_config import SynthesisConfigRepository
 
     # 1. Custom per-problem dimensions
@@ -412,7 +419,7 @@ def test_custom_minimal_base_logger():
 def test_synthesis_service_run_task_and_campaign():
     """Verify SynthesisService run_task and run_campaign methods."""
     from unittest.mock import MagicMock, patch
-    from evolution.application.result import SessionResult
+    from evolution.application import SessionResult
     from evolution.application.synthesis_service import SynthesisService
     from evolution.domain.enums import SynthesisMode
 
@@ -463,11 +470,10 @@ def test_synthesis_service_run_task_and_campaign():
         experiment_id=999,
         best_error=0.05,
     )
-    mock_task.return_value = dummy_result
-
-    res = service.run_task(mock_task, verbose=True)
-    assert res is dummy_result
-    mock_task.assert_called_once()
+    with patch("evolution.application.worker.run_evolution_worker", return_value=dummy_result) as mock_worker:
+        res = service.run_task(mock_task, verbose=True)
+        assert res is dummy_result
+        mock_worker.assert_called_once_with(mock_task)
     mock_logger.header.assert_called_with(title="LLaMEA Synthesis", subtitle="Single run: test_task_key")
     mock_logger.summary.assert_called()
 
@@ -479,13 +485,50 @@ def test_synthesis_service_run_task_and_campaign():
 
     # 3. Test run_campaign when tasks exist
     with patch.object(service, "build_tasks", return_value=[mock_task]):
-        with patch("evolution.application.synthesis_service.TaskOrchestrator") as MockOrch:
+        with patch("evolution.application.orchestrator.TaskOrchestrator") as MockOrch:
             orch_instance = MockOrch.return_value
             orch_instance.run.return_value = {"test_task_key": dummy_result}
 
             campaign_res = service.run_campaign()
             assert campaign_res == {"test_task_key": dummy_result}
             orch_instance.run.assert_called_once_with([mock_task])
+
+
+def test_synthesis_audit_service_standalone():
+    """Verify SynthesisAuditService can audit database coverage without an LLMClient."""
+    from unittest.mock import MagicMock
+    from evolution.application.audit_service import SynthesisAuditService
+
+    mock_sqlite = MagicMock()
+    mock_sqlite.load.return_value = []
+    mock_config = MagicMock()
+    mock_config.load_config.return_value = MagicMock(
+        runs_per_config=2,
+        retry_failed_synthesis=True,
+        auto_resume=True,
+        skip_completed=True,
+        problem_targets=[],
+        problems=[1, 8],
+        dimensions=[2, 3],
+        noise_stds=[0.0],
+        mode_enums=[],
+        prompt_strategies=["baseline"],
+        target_exp_ids=[],
+        matrix_conditions=[],
+    )
+    mock_logger = MagicMock()
+
+    audit_service = SynthesisAuditService(
+        sqlite_repo=mock_sqlite,
+        config_repo=mock_config,
+        logger=mock_logger,
+    )
+
+    df_matrix, summary = audit_service.audit_matrix(model_name="mock_model_standalone")
+    assert df_matrix.empty
+    assert summary["model_name"] == "mock_model_standalone"
+    mock_sqlite.load.assert_called_once_with(llm_name="mock_model_standalone")
+    mock_logger.audit_summary.assert_called_once()
 
 
 if __name__ == "__main__":
@@ -496,5 +539,6 @@ if __name__ == "__main__":
     test_nb05_analysis_pipeline()
     test_custom_minimal_base_logger()
     test_synthesis_service_run_task_and_campaign()
+    test_synthesis_audit_service_standalone()
 
 

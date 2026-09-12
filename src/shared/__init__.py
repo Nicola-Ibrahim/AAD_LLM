@@ -9,27 +9,25 @@ from shared.config import (
     SCRIPTS_DIR,
     SRC_DIR,
 )
-from shared.database import (
+from shared.database.engine import (
     build_engine,
     build_session_factory,
     create_db_session_factory,
     ensure_wal_mode,
     get_db_connection,
-    get_db_engine,
     initialize_sqlite_storage,
-    setup_storage_environment,
+)
+from shared.database.tables import (
+    Base,
+    ErrorLogORM,
+    ExperimentORM,
+    IterationORM,
 )
 from shared.execution import (
     AlgorithmExecutor,
     AlgorithmTimeoutException,
     CodeCompiler,
     CodeValidationException,
-)
-from shared.tables import (
-    Base,
-    ErrorLogORM,
-    ExperimentORM,
-    IterationORM,
 )
 
 __all__ = [
@@ -43,13 +41,11 @@ __all__ = [
     "CONFIGS_DIR",
     # Database primitives
     "get_db_connection",
-    "get_db_engine",
     "create_db_session_factory",
     "initialize_sqlite_storage",
     "ensure_wal_mode",
     "build_engine",
     "build_session_factory",
-    "setup_storage_environment",
     # Schema Tables
     "Base",
     "ExperimentORM",

@@ -4,18 +4,22 @@ Coordinates synthesis configuration reading, database status reconciliation,
 task construction, upfront synthesis session persistence, and parallel multi-process dispatching.
 """
 
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel, ConfigDict, Field
+
 from evolution.domain.entities import ExperimentSummary
-from evolution.domain.enums import BBOBFunction, NoiseModelEnum, PromptStrategy, SynthesisMode
+from evolution.domain.enums import NoiseModelEnum, PromptStrategy, SynthesisMode
+from evolution.domain.interfaces import BaseProblem
 from evolution.domain.services.noise_strategy import NoiseStrategyFactory
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.synthesis_config import (
-    MatrixCondition,
     NoiseConditionConfig,
     ProblemTarget,
     SynthesisConfig,
@@ -23,10 +27,85 @@ from evolution.infra.storage.synthesis_config import (
     SynthesisModeConfig,
 )
 from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
-from evolution.application.config import SessionConfig
+from evolution.application.audit_service import SynthesisAuditService
 from evolution.application.interfaces import BaseLogger
-from evolution.application.result import SessionResult
-from evolution.application.tasks import EvolutionTask, TaskOrchestrator
+
+
+class SessionConfig(BaseModel):
+    """Runtime configuration for an evolutionary synthesis session.
+
+    Serves as the strongly-typed parameter object for runtime budgets, timeouts,
+    iterations, stagnation thresholds, and convergence criteria.
+    """
+
+    budget: int = Field(
+        default=1_000_000,
+        ge=1,
+        description="Maximum objective function evaluations allowed per algorithm candidate run.",
+    )
+    timeout_seconds: float = Field(
+        default=30.0,
+        gt=0.0,
+        description="Maximum wall-clock execution time allowed per candidate algorithm in seconds.",
+    )
+    iterations: int = Field(
+        default=10,
+        ge=1,
+        description="Total number of evolutionary iterations / generations to execute.",
+    )
+    stagnation_threshold: int = Field(
+        default=3,
+        ge=1,
+        description="Consecutive unimproved iterations before triggering mutation escalation or reset.",
+    )
+    convergence_threshold: float = Field(
+        default=1e-6,
+        ge=0.0,
+        description="Final error threshold below which optimization is considered successfully converged.",
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
+@dataclass(slots=True)
+class SessionResult:
+    """Contract returned per-problem run by an evolutionary synthesis engine."""
+
+    problem_id: int
+    dim: int
+    mode: SynthesisMode
+    noise_std: float
+    experiment_id: int
+    best_error: float | None = None
+    run_history: list[Any] = field(default_factory=list)
+    experiment_name: str = ""
+    llm_name: str = ""
+    error_msg: str = ""
+    best_solution: Any = None
+    problem_profile: Any = None
+
+
+@dataclass(slots=True)
+class EvolutionTask:
+    """A single picklable specification of an evolution work unit.
+
+    Encapsulates all necessary parameters and dependencies to execute
+    a single synthesis run inside a worker process.
+    """
+
+    key: str
+    problem: BaseProblem
+    llm_client: LLMClient
+    experiment_id: int
+    config: SessionConfig
+    initial_iteration: int = 0
+    prompt_strategy: PromptStrategy = PromptStrategy.BASELINE
+    synthesis_mode: SynthesisMode = SynthesisMode.CLEAN
+    db_path: Path | None = None
+
+
+type TaskMatrix = list[EvolutionTask]
+type CampaignResults = dict[str, SessionResult]
 
 
 class SynthesisService:
@@ -83,6 +162,11 @@ class SynthesisService:
         self.config_repo = config_repo
         self.llm_client = llm_client
         self.logger = logger
+        self.audit_service = SynthesisAuditService(
+            sqlite_repo=sqlite_repo,
+            config_repo=config_repo,
+            logger=logger,
+        )
 
         # 1. Load strongly-typed synthesis configuration directly from repository
         self.config: SynthesisConfig = self.config_repo.load_config()
@@ -119,82 +203,16 @@ class SynthesisService:
 
     def audit_matrix(self) -> tuple[pd.DataFrame, dict[str, Any]]:
         """Reconciles configured matrix against SQLite experiments for the configured LLM model."""
-        llm_name = self.llm_client.model.name
+        return self.audit_service.audit_matrix(model_name=self.llm_client.model.name)
 
-        all_db_exps = self.sqlite_repo.load(llm_name=llm_name)
-        db_comp, db_run, db_fail = self._group_experiments_by_condition(
-            experiments=all_db_exps,
-            retry_failed_synthesis=self.retry_failed_synthesis,
-        )
-
-        matrix_rows = []
-        for item in self.config.matrix_conditions:
-            n_comp = len(db_comp.get(item, []))
-            n_fail = len(db_fail.get(item, []))
-            n_run = len(db_run.get(item, []))
-
-            if n_comp >= self.runs_per_config:
-                status_label = "✅ Completed (Valid Champion)"
-            elif n_fail > 0 and self.retry_failed_synthesis:
-                status_label = f"⚠️ Failed Synthesis (To Retry, {n_fail} run)"
-            elif n_run > 0:
-                status_label = f"🔄 Incomplete/Running ({n_run})"
-            else:
-                status_label = "⏳ Pending"
-
-            matrix_rows.append({
-                "Problem": f"f{item.problem_id} ({BBOBFunction.get_short_name(item.problem_id)})",
-                "Dimension": f"{item.dim}D",
-                "Environment": item.env_label,
-                "Strategy": item.strategy.capitalize(),
-                "Target Runs": self.runs_per_config,
-                "Completed": n_comp,
-                "Status": status_label,
-            })
-
-        df_matrix = pd.DataFrame(matrix_rows).set_index(
-            ["Problem", "Dimension", "Environment", "Strategy"]
-        )
-
-        total_cfg = len(df_matrix)
-        total_done = sum(1 for r in matrix_rows if "✅" in r["Status"])
-        total_retry = sum(1 for r in matrix_rows if "⚠️" in r["Status"])
-
-        summary = {
-            "model_name": llm_name,
-            "total_conditions": total_cfg,
-            "completed_conditions": total_done,
-            "retry_conditions": total_retry,
-            "progress_pct": (total_done / max(1, total_cfg)) * 100,
-            "retry_failed_synthesis": self.retry_failed_synthesis,
-            "auto_resume": self.auto_resume,
-            "skip_completed": self.skip_completed,
-            "problem_targets": self.problem_targets,
-            "problem_ids": self.problems,
-            "dimensions": self.dimensions,
-            "noise_stds": self.noise_stds,
-            "synthesis_modes": [m.value for m in self.synthesis_modes],
-            "prompt_strategies": [s for s in self.prompt_strategies],
-            "target_exp_ids": self.target_exp_ids,
-        }
-        self.logger.audit_summary(
-            model_name=llm_name,
-            total_conditions=total_cfg,
-            completed=total_done,
-            pending=total_cfg - total_done,
-            retry=total_retry,
-            progress_pct=summary["progress_pct"],
-        )
-        return df_matrix, summary
-
-    def build_tasks(self) -> list[EvolutionTask]:
+    def build_tasks(self) -> TaskMatrix:
         """Constructs the list of EvolutionTask units to execute based on configuration."""
         # Fast path: targeted experiment IDs
         if self.target_exp_ids:
             return self._build_targeted_tasks(target_ids=self.target_exp_ids)
 
         all_db_exps = self.sqlite_repo.load(llm_name=self.llm_client.model.name)
-        db_comp, db_run, _ = self._group_experiments_by_condition(
+        db_comp, db_run, _ = self.audit_service.group_experiments_by_condition(
             experiments=all_db_exps,
             retry_failed_synthesis=self.retry_failed_synthesis,
         )
@@ -227,9 +245,7 @@ class SynthesisService:
             # Step C: Schedule remaining fresh / retry runs
             if not self.only_incomplete:
                 remaining_needed = max(0, self.runs_per_config - accounted_runs)
-                for run_idx in range(
-                    accounted_runs + 1, accounted_runs + remaining_needed + 1
-                ):
+                for run_idx in range(accounted_runs + 1, accounted_runs + remaining_needed + 1):
                     tasks.append(
                         self._build_fresh_task(
                             p_id=item.problem_id,
@@ -250,12 +266,14 @@ class SynthesisService:
         verbose: bool = True,
     ) -> SessionResult:
         """Executes a single evolution task in the current process."""
+        from evolution.application.worker import run_evolution_worker
+
         self.logger.verbose = verbose
         self.logger.header(
             title="LLaMEA Synthesis",
             subtitle=f"Single run: {task.key}",
         )
-        result = task()
+        result = run_evolution_worker(task)
         self.logger.summary(
             title="Task Complete",
             stats={
@@ -268,8 +286,10 @@ class SynthesisService:
     def run_campaign(
         self,
         verbose: bool = True,
-    ) -> dict[str, SessionResult]:
+    ) -> CampaignResults:
         """Builds tasks and executes the evolutionary synthesis campaign in parallel using TaskOrchestrator."""
+        from evolution.application.orchestrator import TaskOrchestrator
+
         self.logger.verbose = verbose
         workers = self.num_processes
 
@@ -291,9 +311,7 @@ class SynthesisService:
         results = orchestrator.run(tasks)
 
         successful_count = sum(
-            1
-            for r in results.values()
-            if r.best_error is not None and np.isfinite(r.best_error)
+            1 for r in results.values() if r.best_error is not None and np.isfinite(r.best_error)
         )
         failed_count = len(results) - successful_count
 
@@ -311,40 +329,6 @@ class SynthesisService:
     # -------------------------------------------------------------------------
     # Private Helpers (Single Responsibility)
     # -------------------------------------------------------------------------
-
-    def _group_experiments_by_condition(
-        self,
-        experiments: list[ExperimentSummary],
-        retry_failed_synthesis: bool,
-    ) -> tuple[dict[MatrixCondition, list[ExperimentSummary]], dict[MatrixCondition, list[ExperimentSummary]], dict[MatrixCondition, list[ExperimentSummary]]]:
-        """Partitions database experiment records into completed, running, and failed groups."""
-        db_completed: dict[MatrixCondition, list[ExperimentSummary]] = {}
-        db_running: dict[MatrixCondition, list[ExperimentSummary]] = {}
-        db_failed_synthesis: dict[MatrixCondition, list[ExperimentSummary]] = {}
-
-        for exp in experiments:
-            noise_val = round(exp.problem.noise_std, 4) if exp.problem.noise_std else 0.0
-            cond = MatrixCondition(
-                problem_id=exp.problem.problem_id,
-                dim=exp.problem.dim,
-                mode=exp.mode,
-                noise_std=noise_val,
-                noise_model=exp.problem.noise_model,
-                strategy=exp.prompt_strategy,
-            )
-
-            has_valid_champion = (
-                exp.best_final_error is not None and np.isfinite(exp.best_final_error)
-            )
-            if exp.status == "completed":
-                if has_valid_champion or not retry_failed_synthesis:
-                    db_completed.setdefault(cond, []).append(exp)
-                else:
-                    db_failed_synthesis.setdefault(cond, []).append(exp)
-            elif exp.status == "running":
-                db_running.setdefault(cond, []).append(exp)
-
-        return db_completed, db_running, db_failed_synthesis
 
     def _build_session_config(self) -> SessionConfig:
         return SessionConfig(**self.config.to_session_config_dict())

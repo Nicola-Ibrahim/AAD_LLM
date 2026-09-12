@@ -29,7 +29,6 @@ from benchmarking.application.evaluation_config import EvaluationConfig
 
 from evolution.domain.enums import SynthesisMode
 from evolution.domain.services.noise_strategy import (
-    BaseNoiseStrategy,
     HeteroscedasticNoiseStrategy,
     NoNoiseStrategy,
 )

@@ -19,7 +19,7 @@ from evolution.domain.vos import (
     ProblemProfile,
 )
 from evolution.infra.storage.base import SynthesisRepository
-from shared.tables import ErrorLogORM, ExperimentORM, IterationORM
+from shared.database.tables import ErrorLogORM, ExperimentORM, IterationORM
 
 
 class SQLiteSynthesisRepository(SynthesisRepository):

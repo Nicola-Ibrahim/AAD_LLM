@@ -25,7 +25,7 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
-from evolution.application.config import SessionConfig
+from evolution.application.synthesis_service import SessionConfig
 from evolution.application.interfaces import BaseLogger
 from shared.execution import AlgorithmExecutor, AlgorithmTimeoutException
 from evolution.infra.logging import SynthesisLogger

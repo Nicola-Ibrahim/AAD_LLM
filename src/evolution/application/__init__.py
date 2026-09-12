@@ -1,15 +1,21 @@
 """Evolutionary Synthesis Application Layer."""
 
-from evolution.application.config import SessionConfig
-from evolution.application.result import SessionResult
-from evolution.application.synthesis_service import SynthesisService
-from evolution.application.tasks import EvolutionTask, TaskOrchestrator
+from evolution.application.audit_service import SynthesisAuditService
+from evolution.application.orchestrator import TaskOrchestrator
+from evolution.application.synthesis_service import (
+    EvolutionTask,
+    SessionConfig,
+    SessionResult,
+    SynthesisService,
+)
+from evolution.application.worker import run_evolution_worker
 
 __all__ = [
     "EvolutionTask",
     "SessionConfig",
     "SessionResult",
+    "SynthesisAuditService",
     "SynthesisService",
     "TaskOrchestrator",
+    "run_evolution_worker",
 ]
-

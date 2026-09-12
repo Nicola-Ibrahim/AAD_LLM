@@ -4,7 +4,7 @@ import pandas as pd
 from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker
 
-from shared.tables import ExperimentORM, IterationORM
+from shared.database.tables import ExperimentORM, IterationORM
 
 
 class SQLiteSynthesisReadRepository:

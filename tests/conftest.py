@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from sqlalchemy.orm import sessionmaker
 
-from shared.database import build_engine
-from shared.tables import Base
+from shared.database.engine import build_engine
+from shared.database.tables import Base
 
 
 @pytest.fixture(autouse=True)

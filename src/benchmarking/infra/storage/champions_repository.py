@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
 from shared.config import DATA_DIR
-from shared.tables import ExperimentORM, IterationORM
+from shared.database.tables import ExperimentORM, IterationORM
 
 
 class ChampionsReadRepository:

@@ -14,7 +14,7 @@ from benchmarking.infra.storage import (
 )
 from evolution.domain.services.noise_strategy import NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
-from shared.database import create_db_session_factory
+from shared.database.engine import create_db_session_factory
 
 
 def test_baselines_callables():

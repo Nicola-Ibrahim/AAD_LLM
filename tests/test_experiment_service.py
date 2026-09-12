@@ -17,19 +17,17 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
-from evolution.application.config import SessionConfig
+from evolution.application import EvolutionTask, SessionConfig
 from evolution.domain.enums import NoiseModelEnum, SynthesisMode, PromptStrategy
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy, NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
-from shared.database import build_engine
-from shared.tables import Base, ExperimentORM
-from evolution.infra.engines.llamea import Evaluator, LLaMEAEngine, LLaMEASession
-from evolution.application.tasks import (
-    EvolutionTask,
-    TaskOrchestrator,
-)
+from shared.database.engine import build_engine
+from shared.database.tables import Base, ExperimentORM
+from evolution.infra.engines.llamea import Evaluator, LLaMEASession
+from evolution.application.orchestrator import TaskOrchestrator
+from evolution.application.worker import run_evolution_worker
 from evolution.domain.exceptions import OrchestrationError
 
 
@@ -575,7 +573,7 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
     assert task.problem.problem_id == 1
     assert task.problem.dim == 2
     assert task.config.budget == 2500
-    res = task()
+    res = run_evolution_worker(task)
     assert res is not None
     assert res.experiment_id == exp_id
 

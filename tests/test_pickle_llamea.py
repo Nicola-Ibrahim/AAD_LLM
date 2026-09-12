@@ -4,7 +4,7 @@ import pytest
 from llamea import LLaMEA
 from sqlalchemy.orm import sessionmaker
 
-from evolution.application.config import SessionConfig
+from evolution.application import SessionConfig
 from evolution.infra.engines.llamea import Evaluator, LLaMEASession
 from evolution.domain.services.noise_strategy import NoNoiseStrategy
 from evolution.domain.vos import ProblemProfile
@@ -12,8 +12,8 @@ from evolution.infra.llm.client import LLMClient, Provider
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
-from shared.database import build_engine
-from shared.tables import Base
+from shared.database.engine import build_engine
+from shared.database.tables import Base
 
 
 # Mock logger

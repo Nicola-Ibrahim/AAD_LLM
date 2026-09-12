@@ -29,7 +29,7 @@ from benchmarking.infra.storage.champions_repository import ChampionsReadReposit
 from benchmarking.infra.storage.config_repository import EvaluationConfigRepository
 from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
 from shared.config import DATA_DIR, RESULTS_DIR
-from shared.database import create_db_session_factory
+from shared.database.engine import create_db_session_factory
 
 
 class TestDomainTaxonomy:

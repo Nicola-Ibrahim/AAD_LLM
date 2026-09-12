@@ -8,10 +8,7 @@ sandboxed evaluation, and persistence of iteration telemetry and champion algori
 import math
 import shutil
 import warnings
-from dataclasses import dataclass, field
-from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
 
 from llamea import LLaMEA
 
@@ -20,9 +17,8 @@ from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces import BaseProblem
 from evolution.domain.vos.problem_profile import ProblemProfile
-from evolution.application.config import SessionConfig
 from evolution.application.interfaces import BaseLogger
-from evolution.application.result import SessionResult
+from evolution.application.synthesis_service import SessionConfig, SessionResult
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
 from evolution.infra.prompts import (

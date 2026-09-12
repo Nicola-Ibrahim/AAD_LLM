@@ -6,6 +6,7 @@ candidate evaluation, and experiment tracking for continuous optimization proble
 
 from evolution.application import (
     EvolutionTask,
+    SynthesisAuditService,
     SynthesisService,
     SessionResult,
     SessionConfig,
@@ -68,9 +69,11 @@ __all__ = [
     "Error",
     "Convergence",
     # Application & Task Execution
+    "SynthesisAuditService",
     "SynthesisService",
     "TaskOrchestrator",
     "EvolutionTask",
     "LLaMEASession",
     "SessionResult",
+    "SessionConfig",
 ]
