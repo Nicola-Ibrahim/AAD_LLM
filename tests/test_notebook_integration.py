@@ -480,7 +480,7 @@ def test_synthesis_service_run_task_and_campaign():
     # 2. Test run_campaign when no tasks
     with patch.object(service, "build_tasks", return_value=[]):
         empty_res = service.run_campaign()
-        assert empty_res == {}
+        assert empty_res.results == {}
         mock_logger.success.assert_called()
 
     # 3. Test run_campaign when tasks exist
@@ -490,7 +490,7 @@ def test_synthesis_service_run_task_and_campaign():
             orch_instance.run.return_value = {"test_task_key": dummy_result}
 
             campaign_res = service.run_campaign()
-            assert campaign_res == {"test_task_key": dummy_result}
+            assert campaign_res.results == {"test_task_key": dummy_result}
             orch_instance.run.assert_called_once_with([mock_task])
 
 

@@ -126,3 +126,21 @@ def test_warm_start_rehydration(tmp_path, test_repos):
     resumed_engine = session._create_synthesis_engine(evaluator, "task_prompt")
     assert resumed_engine is not None
     assert resumed_engine.generation == synthesis_engine.generation
+
+
+def test_llm_client_model_resolution(monkeypatch):
+    monkeypatch.setenv("LOCAL_LLM_MODEL", "qwen2.5-coder-14b-instruct-q4_k_m.gguf")
+    llm_env = LLMClient(Provider.LOCAL)
+    assert llm_env.model.name == "qwen2.5-coder-14b-instruct-q4_k_m.gguf"
+
+    llm_arg = LLMClient(Provider.LOCAL, model="qwen2.5-coder-32b-instruct-q4_k_m.gguf")
+    assert llm_arg.model.name == "qwen2.5-coder-32b-instruct-q4_k_m.gguf"
+
+
+def test_llm_client_raises_when_server_not_running(monkeypatch):
+    monkeypatch.delenv("SKIP_LLM_VALIDATION", raising=False)
+    monkeypatch.setenv("LOCAL_LLM_BASE_URL", "http://127.0.0.1:59999/v1")
+    with pytest.raises(ConnectionError, match="Could not connect to the local LLM server"):
+        LLMClient(Provider.LOCAL)
+
+

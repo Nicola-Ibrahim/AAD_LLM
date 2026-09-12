@@ -3,14 +3,9 @@
 Coordinates parallel execution of EvolutionTask units using ProcessPoolRunner.
 """
 
-from typing import TypeAlias
-
 from evolution.application.synthesis_service import EvolutionTask, SessionResult
 from evolution.application.worker import run_evolution_worker
 from evolution.infra.concurrency.runner import ProcessPoolRunner
-
-TaskResults: TypeAlias = dict[str, SessionResult]
-
 
 class TaskOrchestrator:
     """Manages multi-core parallel execution of evolution tasks."""
@@ -24,7 +19,7 @@ class TaskOrchestrator:
         self.max_workers = max_workers
         self.runner = ProcessPoolRunner(max_workers=max_workers)
 
-    def run(self, tasks: list[EvolutionTask]) -> TaskResults:
+    def run(self, tasks: list[EvolutionTask]) -> dict[str, SessionResult]:
         """Executes a list of evolution tasks concurrently in a multi-core process pool.
 
         Args:

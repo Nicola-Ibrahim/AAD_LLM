@@ -6,7 +6,7 @@ task construction, upfront synthesis session persistence, and parallel multi-pro
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TypeAlias
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -104,8 +104,28 @@ class EvolutionTask:
     db_path: Path | None = None
 
 
-TaskMatrix: TypeAlias = list[EvolutionTask]
-CampaignResults: TypeAlias = dict[str, SessionResult]
+class CampaignResults(BaseModel):
+    """Results from an evolutionary algorithm synthesis campaign."""
+
+    results: dict[str, SessionResult] = Field(default_factory=dict)
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @property
+    def total_tasks(self) -> int:
+        return len(self.results)
+
+    @property
+    def successful_tasks(self) -> int:
+        return sum(
+            1
+            for r in self.results.values()
+            if r.best_error is not None and np.isfinite(r.best_error)
+        )
+
+    @property
+    def failed_tasks(self) -> int:
+        return self.total_tasks - self.successful_tasks
 
 
 class SynthesisService:
@@ -205,7 +225,7 @@ class SynthesisService:
         """Reconciles configured matrix against SQLite experiments for the configured LLM model."""
         return self.audit_service.audit_matrix(model_name=self.llm_client.model.name)
 
-    def build_tasks(self) -> TaskMatrix:
+    def build_tasks(self) -> list[EvolutionTask]:
         """Constructs the list of EvolutionTask units to execute based on configuration."""
         # Fast path: targeted experiment IDs
         if self.target_exp_ids:
@@ -300,7 +320,7 @@ class SynthesisService:
             self.logger.success(
                 f"All requested experiments are already completed with valid champions for '{model_name}'! Nothing to run."
             )
-            return {}
+            return CampaignResults()
 
         self.logger.header(
             title="LLaMEA Evolutionary Algorithm Synthesis",
@@ -308,23 +328,19 @@ class SynthesisService:
         )
 
         orchestrator = TaskOrchestrator(max_workers=workers)
-        results = orchestrator.run(tasks)
-
-        successful_count = sum(
-            1 for r in results.values() if r.best_error is not None and np.isfinite(r.best_error)
-        )
-        failed_count = len(results) - successful_count
+        raw_results = orchestrator.run(tasks)
+        campaign_results = CampaignResults(results=raw_results)
 
         self.logger.summary(
             title="Synthesis Campaign Complete",
             stats={
                 "Model Target": model_name,
-                "Total Tasks Executed": len(results),
-                "Valid Champions Found": successful_count,
-                "Failed / Incomplete": failed_count,
+                "Total Tasks Executed": campaign_results.total_tasks,
+                "Valid Champions Found": campaign_results.successful_tasks,
+                "Failed / Incomplete": campaign_results.failed_tasks,
             },
         )
-        return results
+        return campaign_results
 
     # -------------------------------------------------------------------------
     # Private Helpers (Single Responsibility)

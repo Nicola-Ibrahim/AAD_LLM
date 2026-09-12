@@ -21,6 +21,13 @@ def isolate_test_data_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(evolution.infra.engines.llamea.runner, "DATA_DIR", tmp_path)
 
 
+@pytest.fixture(autouse=True)
+def default_test_llm_env(monkeypatch):
+    """Ensure test suite does not attempt network connections to live LLM server."""
+    monkeypatch.setenv("SKIP_LLM_VALIDATION", "True")
+    monkeypatch.setenv("LOCAL_LLM_MODEL", "mock-test-model")
+
+
 def pytest_sessionfinish(session, exitstatus):
     """Clean up any dummy test artifacts left in data directory."""
     import shutil
