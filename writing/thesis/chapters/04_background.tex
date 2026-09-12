@@ -430,9 +430,8 @@ less explored.
 
 Evolutionary Computation provides the conceptual foundation for many of the
 automated search processes discussed above \cite{Eiben2015}. Classical
-Evolutionary Algorithms repeatedly perform initialization, variation,
-fitness evaluation, and selection. An initial population can be represented
-as
+Evolutionary Algorithms repeatedly perform initialization, variation, fitness
+evaluation, and selection. An initial population can be represented as
 \begin{equation}
 \mathcal{P}_0 = \{\theta_1, \dots, \theta_\mu\},
 \end{equation}
@@ -466,7 +465,7 @@ does not have the population-level averaging available in multi-parent
 Evolution Strategies. Its replacement decision can therefore be sensitive
 to errors in the fitness information \cite{Goldberg1989,Eiben2015}.
 
-This property is particularly relevant when the individuals in the
+This property becomes particularly relevant when the individuals in the
 evolutionary process are not numerical candidate solutions but complete
 optimization algorithms. LLaMEA \cite{LLaMEA2024} applies this type of
 program-space search to continuous black-box optimization. It embeds a
@@ -505,9 +504,9 @@ $F_{\text{directive}}$ specifies the requested modification.
 
 The task description contains the continuous search domain, commonly
 $[-5,5]^D$, together with the evaluation budget and interface requirements.
-The history helps prevent the generation process from repeatedly returning
-identical candidates. The incumbent context provides the LLM with the
-current algorithm and its observed performance. The mutation directive can
+The history provides information about previously generated candidates and
+their observed performance. The incumbent context provides the LLM with the
+current algorithm and its evaluation feedback. The mutation directive can
 ask the model to refine the existing strategy or to redesign it.
 
 The generated response must be converted into executable source code before
@@ -576,52 +575,66 @@ defined. The important point here is that one candidate is retained as the
 parent, and this candidate becomes the starting point for the next
 generation.
 
-LLaMEA also uses execution feedback. If generated code raises an unhandled
-runtime exception, such as a singular matrix inversion or division by zero,
-execution terminates and the candidate receives a failed fitness value. The
-traceback is retained in the incumbent context so that the LLM can use the
-error information when generating the next candidate. Performance feedback
-and execution failures can therefore both influence later program
-modifications.
+LLaMEA also incorporates feedback from the evaluation process. When a
+generated algorithm is executed, its performance is recorded together with
+the standard deviation obtained across repeated runs and any runtime error
+information. For the elitist $(1+1)$ variant, this information is included in
+the context used to generate the next candidate, together with the current
+best-so-far algorithm and the history of previously generated algorithms
+\cite{LLaMEA2024}. Runtime errors are handled explicitly: if an evaluation
+fails, the candidate is assigned the worst fitness value in the original
+maximization formulation. The feedback therefore allows the LLM to use both
+performance information and execution errors when modifying or redesigning
+an algorithm.
 
-The dependence on a single parent creates a particular vulnerability under
-stochastic evaluation. Consider a parent algorithm $\mathcal{A}_p$ and a
-child algorithm $\mathcal{A}_c$. Their observed performance can be written
-as
+This feedback mechanism is relevant when considering LLaMEA under stochastic
+fitness. The original framework was evaluated on noiseless BBOB functions,
+so the fitness signal used for selection was not subject to the stochastic
+evaluation considered in this thesis \cite{LLaMEA2024}. If the same elitist
+$(1+1)$ selection mechanism is applied to noisy evaluations, an inferior
+child can occasionally obtain a more favorable observed fitness than its
+parent. Such a child may then be accepted as the new incumbent even though
+its underlying performance is worse.
+
+This creates a potential failure mode in the evolutionary search. Let
+$\mathcal{A}_p$ denote the current parent algorithm and
+$\mathcal{A}_c$ the generated child. Their observed performances can be
+written as
 \begin{equation}
 \widehat{F}(\mathcal{A}) =
 F(\mathcal{A})+\epsilon_{\mathcal{A}},
 \end{equation}
 where $F(\mathcal{A})$ denotes the underlying performance and
-$\epsilon_{\mathcal{A}}$ is an evaluation error.
+$\epsilon_{\mathcal{A}}$ represents the error introduced by stochastic
+evaluation.
 
-A child that is genuinely worse than its parent can therefore receive a
-favorable observation and be selected. Once selected, this child becomes the
-basis for subsequent generations. This situation can be described as the
-\emph{Ghost Parent} failure mode.
+Under a favorable noise realization, a child with lower underlying
+performance can therefore appear better than its parent. Strict elitist
+selection can then replace the parent with this statistically favored
+candidate. Since the selected candidate becomes the incumbent supplied to
+the LLM for subsequent generations, the effect of the incorrect selection
+can extend beyond the evaluation in which the ranking error occurred.
 
-Under a favorable noise realization, a poorly performing child may appear to
-achieve an unusually strong fitness score. Strict elitist selection can then
-replace the actual parent with this statistically favored candidate. Since
-subsequent LLM generations use the selected candidate as their incumbent,
-future candidates are generated from an inferior algorithm. If later
+In a program-space search such as LLaMEA, this can influence which algorithmic
+structure is used as the basis for subsequent modifications. If later
 evaluations do not reproduce the same favorable noise realization, the
-selected parent can become difficult to replace even though its underlying
-performance is worse.
+selected algorithm may no longer appear as strong as it did when it was
+accepted. The search has nevertheless already moved to a different
+incumbent. We refer to this potential failure mode as the
+\emph{Ghost Parent} effect. This term describes the mechanism considered in
+this thesis and is not a failure mode established by the original LLaMEA
+study.
 
-The effect is therefore not limited to a single incorrect evaluation. A
-noisy selection decision changes the state of the evolutionary search itself.
-In a program-space search such as LLaMEA, evaluation noise can consequently
-influence not only which algorithm is considered successful, but also which
-algorithmic structure becomes the basis for subsequent generations.
-
-This leads to an important distinction between evaluating an already generated
-algorithm under noise and performing the entire algorithm-synthesis process
-under noisy feedback. The first setting measures the robustness of an
-algorithm after it has been generated. The second also tests whether the
-evolutionary search process can reliably identify and retain useful
-algorithmic structures when its fitness signal is stochastic.
-
+The distinction between algorithm evaluation and algorithm synthesis is
+important here. Evaluating an already generated algorithm under noise
+measures how its performance changes when the fitness signal is stochastic.
+Running the synthesis process itself under noisy feedback introduces an
+additional source of uncertainty: the stochastic fitness signal can influence
+which generated algorithms are retained and subsequently used to guide
+further LLM generations. The former therefore concerns the robustness of a
+fixed algorithm, whereas the latter also concerns the reliability of the
+algorithm-generation process under stochastic selection. This thesis
+investigates the latter setting.
 
 %------------------------------------------------------------------------------
 \section{Research Gap}\label{sec:research_gap}
@@ -649,11 +662,11 @@ execution feedback to guide later generations \cite{LLaMEA2024}.
 
 These two areas have not been studied to the same extent in combination. The
 LLM-based AAD frameworks reviewed in this chapter primarily evaluate generated
-algorithms under deterministic conditions. The comparison in
-Table~\ref{tab:llm_aad_comparison} shows that existing approaches use
-different forms of performance, structural, reflective, or problem-specific
-information, but stochastic fitness is not explicitly treated as a source of
-uncertainty in the evolutionary selection process.
+algorithms under deterministic or otherwise controlled evaluation conditions.
+The comparison in Table~\ref{tab:llm_aad_comparison} shows that existing
+approaches use different forms of performance, structural, reflective, or
+problem-specific information, but stochastic fitness is not explicitly
+treated as a source of uncertainty in the evolutionary selection process.
 
 This creates a different problem from conventional noisy optimization. For an
 established optimizer, noisy fitness affects the search over numerical
@@ -671,9 +684,9 @@ It therefore remains insufficiently characterized whether LLM-generated
 continuous optimization heuristics remain effective under stochastic fitness
 evaluation, how their performance changes as the noise level increases, and
 how their behavior compares with established optimization methods under the
-same conditions. It is also not yet clear whether the feedback-driven
-generation process can produce algorithmic structures that compensate for
-noisy evaluations.
+same conditions. It is also not yet clear to what extent the feedback-driven
+generation process can produce algorithmic structures that remain effective
+under noisy evaluations.
 
 This thesis addresses this gap by studying LLM-based automated algorithm
 design under controlled stochastic fitness evaluation. The investigation uses
