@@ -45,8 +45,8 @@ mathematical model is unavailable, too expensive to evaluate directly, or not
 accurate enough for optimization. The No Free Lunch theorem also shows that
 no single optimization heuristic can outperform all alternatives on every
 possible problem class without suitable problem-specific inductive bias
-\cite{Burke2013}. The characteristics of the optimization problem therefore
-matter when choosing or designing an optimization method.
+\textcolor{red}{\cite{Wolpert1997}}. The characteristics of the optimization
+problem therefore matter when choosing or designing an optimization method.
 
 Several properties can make a continuous black-box problem difficult. These
 include separability, conditioning, modality, and interactions between
@@ -62,10 +62,10 @@ Because optimization performance depends on these characteristics,
 standardized benchmark suites are useful for comparing algorithms under
 reproducible conditions. The Black-Box Optimization Benchmark (BBOB) suite
 provides a collection of continuous test functions with different landscape
-structures \cite{Hansen2010}. The suite is integrated into experimental
-frameworks such as \texttt{IOHexperimenter} \cite{deNobel2024} and COCO. The
-known optima of the benchmark functions also make it possible to measure the
-progress of an optimizer relative to a known reference solution.
+structures \textcolor{red}{\cite{BBOB2009}}. The suite is integrated into
+experimental frameworks such as \texttt{IOHexperimenter} \cite{deNobel2024}
+and COCO. The known optima of the benchmark functions also make it possible to
+measure the progress of an optimizer relative to a known reference solution.
 
 The 24 noiseless BBOB functions are organized into five broad groups according
 to their structural characteristics. Table~\ref{tab:bbob_groups} summarizes
@@ -73,7 +73,7 @@ these groups.
 
 \begin{table}[htbp]
 \centering
-\caption{Taxonomy of the 24 Continuous Black-Box Optimization Benchmark (BBOB) Functions \cite{Hansen2010}.}
+\caption{Taxonomy of the 24 Continuous Black-Box Optimization Benchmark (BBOB) Functions \textcolor{red}{\cite{BBOB2009}}.}
 \label{tab:bbob_groups}
 \small
 \begin{tabularx}{\textwidth}{c c l X}
@@ -81,7 +81,7 @@ these groups.
 \textbf{Group} & \textbf{Function Indices} & \textbf{Landscape Property} & \textbf{Core Topological Challenge} \\
 \midrule
 1 & $f_1 - f_5$ & Separable Functions & Orthogonal dimensions; can be optimized independently along coordinate axes. \\
-2 & $f_6 - f_9$ & Low/Moderate Conditioning & Unimodal landscapes featuring smooth, single-valley search trajectories. \\
+2 & $f_6 - f_9$ & Low/Moderate Conditioning & \textcolor{yellow}{Functions with low or moderate conditioning, including both unimodal and multimodal structures.} \\
 3 & $f_{10} - f_{14}$ & High Conditioning & Steep, narrow ill-conditioned valleys requiring appropriate scaling and rotation. \\
 4 & $f_{15} - f_{19}$ & Multi-modal with Global Structure & Multiple local optima combined with an identifiable global structure. \\
 5 & $f_{20} - f_{24}$ & Multi-modal with Weak Structure & Highly deceptive local optima with weak global structure. \\
@@ -146,15 +146,15 @@ difficult.
 
 The limitations of deterministic optimization become particularly relevant in
 physical systems, where objective values are often obtained from measurements.
-In electric-vehicle battery management, for example, parameter identification
-can involve estimating equivalent-circuit parameters from measured sensor data
-\cite{Plett2004,Xiong2018}. Thermal effects, electrical interference, and
-measurement limitations can affect these observations. A similar situation
-occurs in finite-element model updating, where vibration measurements are used
-to identify or update structural models and are subject to measurement
-uncertainty \cite{Mottershead1993,Marwala2010}. These examples illustrate why
-an optimization algorithm may not always receive exactly the same objective
-value for a given candidate solution.
+\textcolor{red}{Battery-management studies provide examples of optimization and
+state-estimation problems based on noisy measured quantities, including
+electrical and thermal effects \cite{Plett2004,Xiong2018}. These examples
+illustrate how measurement uncertainty can affect model-based decision
+processes.} A similar situation occurs in finite-element model updating, where
+vibration measurements are used to identify or update structural models and
+are subject to measurement uncertainty \cite{Mottershead1993,Marwala2010}.
+These examples illustrate why an optimization algorithm may not always receive
+exactly the same objective value for a given candidate solution.
 
 %------------------------------------------------------------------------------
 \section{Noisy Optimization}\label{sec:noisy_optimization}
@@ -182,7 +182,7 @@ variable, even when the same coordinate vector $x$ is evaluated repeatedly.
 
 Different probability distributions can be used to model fitness noise.
 Common choices include Uniform, Cauchy, and Gaussian distributions
-\cite{Hansen2009Noisy}:
+\textcolor{yellow}{\cite{Hansen2009Noisy}}:
 
 \begin{enumerate}
 \item \textbf{Additive Uniform Noise:}
@@ -205,12 +205,14 @@ z \sim \mathcal{N}(0,\sigma^2).
 \end{equation}
 \end{enumerate}
 
-These distributions lead to different types of uncertainty. Uniform noise
-limits the disturbance to a fixed range, whereas Cauchy noise can produce
-occasional large deviations because of its heavy tails. Gaussian noise gives
-a continuous model in which the variance can be controlled through $\sigma$.
-The choice of noise model therefore affects both the frequency and magnitude
-of deviations between observed and underlying fitness.
+\textcolor{yellow}{These distributions provide generic examples of fitness-noise
+models. The exact noise definitions used in benchmark suites can differ from
+these simple additive formulations.} Uniform noise limits the disturbance to
+a fixed range, whereas Cauchy noise can produce occasional large deviations
+because of its heavy tails. Gaussian noise gives a continuous model in which
+the variance can be controlled through $\sigma$. The choice of noise model
+therefore affects both the frequency and magnitude of deviations between
+observed and underlying fitness.
 
 The effect of noise becomes especially important when an algorithm makes
 decisions based on relative fitness. Consider two candidate solutions for
@@ -228,15 +230,17 @@ The observed ranking is then reversed. An optimizer that relies on this
 ranking may consequently make a selection decision that differs from the one
 it would make using the clean objective.
 
-The consequences depend on the optimization method. Direct search methods can
-suffer from premature step-size reduction when objective differences become
-smaller than the magnitude of the evaluation noise \cite{Arnold2003}. On
-noisy sphere functions, for example, pattern search, Nelder--Mead, and
-implicit-filtering approaches can interpret random fluctuations as
-information about the local search direction. As the search radius decreases,
-the actual objective differences can become comparable to the noise
-magnitude. The resulting decisions may reduce the search radius even though
-the current solution is still far from the optimum.
+The consequences depend on the optimization method. \textcolor{yellow}{Direct
+search and evolution-strategy methods can respond differently to noisy
+evaluations, and noise can make objective differences unreliable when the
+search approaches the scale of the perturbations
+\cite{ArnoldB03,Arnold2003}.} \textcolor{yellow}{For direct-search methods,
+small objective differences can become difficult to distinguish from
+evaluation noise, which can affect decisions about the local search
+direction or step size.} As the search radius decreases, the actual objective
+differences can become comparable to the noise magnitude. The resulting
+decisions may reduce the search radius even though the current solution is
+still far from the optimum.
 
 Population-based Evolution Strategies can provide some robustness by using
 information from multiple candidate solutions. For example, intermediate
@@ -271,9 +275,9 @@ When the fitness evaluations are noisy, this ranking can be corrupted. A
 candidate with a worse clean objective may receive a better noisy evaluation
 and consequently a larger selection weight. These rank inversions can affect
 both cumulative step-size adaptation and covariance-matrix learning
-\cite{Hansen2009Noisy,Sarafian2024}. Noise can therefore influence not only
-which candidate is selected, but also the search distribution used in later
-generations.
+\textcolor{yellow}{\cite{Jin2005,Hansen2009Noisy}}. Noise can therefore
+influence not only which candidate is selected, but also the search
+distribution used in later generations.
 
 Repeated evaluations are one common way to reduce this problem. If a
 candidate is evaluated $N$ times and the observations are averaged, the
@@ -369,28 +373,29 @@ approaches considered in this work.
 \setlength{\tabcolsep}{3pt}
 \begin{tabularx}{\textwidth}{l p{2.6cm} X c X}
 \toprule
-\textbf{Framework} & \textbf{Output Modality} & \textbf{Search Space} & \textbf{Feedback Type} & \textbf{Uncertainty Handling} \\
+\textbf{Framework} & \textbf{Output Modality} & \textbf{Search Space} & \textbf{Feedback Type} & \textbf{Reported Evaluation Setting} \\
 \midrule
-FunSearch \cite{Romera2023} & Program Skeletons & Discrete & Score Metrics & Deterministic Only \\
-EvoLLM \cite{Lange2024} & Coordinate Vectors & Continuous & Point Distributions & Deterministic Only \\
-EvoPrompt \cite{Guo2023} & Prompt Strings & Discrete & Evolutionary Score & Deterministic Only \\
-EoH \cite{Liu2024} & Code Blocks & Combinatorial & Reflective Prompts & Deterministic Only \\
-AEL \cite{AEL2024} & Code Blocks & Combinatorial & Evolutionary Crossover & Deterministic Only \\
-ReEvo \cite{ReEvo2024} & Code Blocks & Combinatorial & AST \& Crossover & Deterministic Only \\
-AutoEP \cite{AutoEP2026} & Executable Functions & Continuous & Zero-Shot ELA Features & Deterministic Only \\
-LLaMEA-SAGE \cite{LLaMEASAGE2026} & Python Classes & Continuous & AST + XAI Scaffolding & Deterministic Only \\
-LLaMEA-BO \cite{LLaMEABO2025} & Python Classes & Continuous & Surrogate Scores & Deterministic Only \\
-LLaMEA \cite{LLaMEA2024} & Python Classes & Continuous & Tracebacks + Score & Deterministic Only \\
-\textbf{This Thesis} & \textbf{Python Classes} & \textbf{Stochastic BBOB} & \textbf{Tracebacks + Scaled Score} & \textbf{Heteroscedastic Noise} \\
+FunSearch \cite{Romera2023} & Program Skeletons & \textcolor{red}{Program Space} & Score Metrics & \textcolor{yellow}{Deterministic benchmark evaluation} \\
+EvoLLM \cite{Lange2024} & Coordinate Vectors & Continuous & Point Distributions & \textcolor{yellow}{Numerical optimization evaluation} \\
+EvoPrompt \cite{Guo2023} & Prompt Strings & \textcolor{red}{Prompt Space} & Evolutionary Score & \textcolor{yellow}{Task-dependent evaluation} \\
+EoH \cite{Liu2024} & Code Blocks & \textcolor{red}{Program Space} & Reflective Prompts & \textcolor{yellow}{Reported deterministic evaluation} \\
+AEL \cite{AEL2024} & Code Blocks & \textcolor{red}{Program Space} & Evolutionary Crossover & \textcolor{yellow}{Reported deterministic evaluation} \\
+ReEvo \cite{ReEvo2024} & Code Blocks & \textcolor{red}{Program Space} & AST \& Crossover & \textcolor{yellow}{Reported deterministic evaluation} \\
+AutoEP \cite{AutoEP2026} & \textcolor{red}{Hyperparameter Strategies} & \textcolor{red}{Structured Parameter Space} & Zero-Shot ELA Features & \textcolor{yellow}{Controlled benchmark evaluation} \\
+LLaMEA-SAGE \cite{LLaMEASAGE2026} & Python Classes & \textcolor{red}{Program Space} & AST + XAI Scaffolding & \textcolor{yellow}{Noiseless benchmark evaluation} \\
+LLaMEA-BO \cite{LLaMEABO2025} & Python Classes & \textcolor{red}{Program Space} & Surrogate Scores & \textcolor{yellow}{Benchmark evaluation} \\
+LLaMEA \cite{LLaMEA2024} & Python Classes & \textcolor{red}{Program Space} & Tracebacks + Score & \textcolor{yellow}{Noiseless benchmark evaluation} \\
+\textbf{This Thesis} & \textbf{Python Classes} & \textbf{Program Space} & \textbf{Tracebacks + Scaled Score} & \textbf{Stochastic BBOB evaluation} \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 The literature also differs in the information provided to the LLM before
 generation. AutoEP, for example, extracts Exploratory Landscape Analysis
-(ELA) features and uses them to guide algorithm generation
-\cite{AutoEP2026}. This gives the model information about the characteristics
-of the optimization problem before a candidate algorithm is generated.
+(ELA) features and uses them to guide \textcolor{red}{hyperparameter
+configuration and algorithm control} \cite{AutoEP2026}. This gives the model
+information about the characteristics of the optimization problem before a
+candidate \textcolor{red}{configuration or control strategy} is generated.
 
 Other approaches make use of execution feedback. Reflexion shows how runtime
 observations and feedback can be incorporated into later model generations
@@ -405,9 +410,10 @@ EvoPrompt treats prompts themselves as objects of evolutionary optimization
 \cite{Guo2023}. Promptomatix introduces structured constraints and schemas for
 controlling generation \cite{Murthy2025}. These approaches show that the
 prompt can form part of the search mechanism rather than simply being a fixed
-instruction. Their use as variation mechanisms for continuous optimization
-algorithm synthesis under stochastic fitness, however, has not been
-established.
+instruction. \textcolor{yellow}{Their direct use as variation mechanisms for
+continuous optimization algorithm synthesis under stochastic fitness is not
+the focus of the reported evaluations and therefore does not establish their
+effectiveness in that setting.}
 
 Structural information can also be used when generating source code.
 LLaMEA-SAGE extends the LLaMEA approach with Abstract Syntax Tree (AST) and
@@ -419,10 +425,10 @@ make use of information beyond a single scalar fitness value.
 
 Despite these developments, the evaluation setting is an important common
 point across much of this literature. The approaches summarized in
-Table~\ref{tab:llm_aad_comparison} primarily evaluate generated algorithms
-under deterministic conditions. Consequently, the effect of stochastic
-fitness on the evolutionary selection process used by these systems remains
-less explored.
+Table~\ref{tab:llm_aad_comparison} \textcolor{yellow}{primarily report
+evaluations under deterministic or otherwise controlled benchmark
+conditions}. Consequently, the effect of stochastic fitness on the
+evolutionary selection process used by these systems remains less explored.
 
 %------------------------------------------------------------------------------
 \section{Selection Under Noise}\label{sec:selection_under_noise}
@@ -485,7 +491,8 @@ programs. At generation $g$, the LLM acts as a semantic variation operator
 and produces a child algorithm using information about the current parent,
 previously evaluated candidates, and the optimization task.
 
-The generation context can be represented as
+\textcolor{yellow}{For the discussion in this thesis, the generation context
+can be represented compactly as}
 \begin{equation}\label{eq:llamea_context_assembly}
 \mathcal{C}_g =
 \left\{
@@ -501,6 +508,9 @@ $\mathcal{H}_{1\dots g-1}$ stores information about previously generated
 algorithms and their scores; $\mathcal{T}_{\text{incumbent}}$ contains the
 current parent implementation and associated feedback; and
 $F_{\text{directive}}$ specifies the requested modification.
+\textcolor{yellow}{This notation is a compact representation used in this
+thesis rather than a formal notation introduced by the original LLaMEA
+paper.}
 
 The task description contains the continuous search domain, commonly
 $[-5,5]^D$, together with the evaluation budget and interface requirements.
@@ -549,30 +559,27 @@ f(x_i)-f(x^*)
 \right)
 \end{equation}
 represents the log-scaled distance to the optimum and the bounds are defined
-by the evaluation range. The mean AOCC across benchmark instances can be
-used as the scalar fitness for candidate replacement in the original
-framework \cite{LLaMEA2024}.
+by the evaluation range. \textcolor{yellow}{In the original LLaMEA formulation,
+the convergence values are log-scaled before AOCC is calculated, and the
+resulting AOCC is aggregated over the BBOB functions and instances.}
+The mean AOCC across benchmark instances can be used as the scalar fitness for
+candidate replacement in the original framework \cite{LLaMEA2024}.
 
 Selection then follows the $(1+1)$ replacement rule:
 \begin{equation}\label{eq:one_plus_one_selection}
 \mathcal{A}_{\text{parent}}^{(g+1)} =
 \begin{cases}
-\mathcal{A}_{\text{child}}^{(g)}
-&
-\text{if }
-f(\mathcal{A}_{\text{child}}^{(g)})
-\geq
-f(\mathcal{A}_{\text{parent}}^{(g)})
-\\
-\mathcal{A}_{\text{parent}}^{(g)}
-&
-\text{otherwise}.
+\mathcal{A}_{\text{child}}^{(g)} & \text{if } f(\mathcal{A}_{\text{child}}^{(g)}) \geq f(\mathcal{A}_{\text{parent}}^{(g)}), \\
+\mathcal{A}_{\text{parent}}^{(g)} & \text{otherwise}.
 \end{cases}
 \end{equation}
 
 The direction of this comparison depends on how the scalar fitness is
-defined. The important point here is that one candidate is retained as the
-parent, and this candidate becomes the starting point for the next
+defined. \textcolor{red}{For the original LLaMEA AOCC formulation, higher
+AOCC indicates better anytime performance, so the child is retained when its
+AOCC-based fitness is at least as large as that of the parent
+\cite{LLaMEA2024}.} The important point here is that one candidate is retained
+as the parent, and this candidate becomes the starting point for the next
 generation.
 
 LLaMEA also incorporates feedback from the evaluation process. When a
@@ -581,11 +588,11 @@ the standard deviation obtained across repeated runs and any runtime error
 information. For the elitist $(1+1)$ variant, this information is included in
 the context used to generate the next candidate, together with the current
 best-so-far algorithm and the history of previously generated algorithms
-\cite{LLaMEA2024}. Runtime errors are handled explicitly: if an evaluation
-fails, the candidate is assigned the worst fitness value in the original
-maximization formulation. The feedback therefore allows the LLM to use both
-performance information and execution errors when modifying or redesigning
-an algorithm.
+\cite{LLaMEA2024}. Runtime errors are handled explicitly: if an
+evaluation fails, the candidate is assigned the worst fitness value in the
+original maximization formulation. The feedback therefore allows the LLM to
+use both performance information and execution errors when modifying or
+redesigning an algorithm.
 
 This feedback mechanism is relevant when considering LLaMEA under stochastic
 fitness. The original framework was evaluated on noiseless BBOB functions,
@@ -661,9 +668,10 @@ $(1+1)$ evolutionary search and uses measured algorithm performance and
 execution feedback to guide later generations \cite{LLaMEA2024}.
 
 These two areas have not been studied to the same extent in combination. The
-LLM-based AAD frameworks reviewed in this chapter primarily evaluate generated
-algorithms under deterministic or otherwise controlled evaluation conditions.
-The comparison in Table~\ref{tab:llm_aad_comparison} shows that existing
+LLM-based AAD frameworks reviewed in this chapter
+\textcolor{yellow}{primarily report evaluations under deterministic or
+otherwise controlled benchmark conditions}. The comparison in
+Table~\ref{tab:llm_aad_comparison} shows that existing
 approaches use different forms of performance, structural, reflective, or
 problem-specific information, but stochastic fitness is not explicitly
 treated as a source of uncertainty in the evolutionary selection process.
