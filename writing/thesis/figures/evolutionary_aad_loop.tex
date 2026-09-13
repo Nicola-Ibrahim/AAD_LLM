@@ -1,119 +1,316 @@
 \begin{tikzpicture}[
     font=\footnotesize,
     >=Stealth,
-    % --- Core Node Styles ---
     ioNode/.style={
-        rectangle, draw=black!80, fill=yellow!15,
-        text width=13cm, align=center, rounded corners=4pt,
-        inner sep=8pt, thick
+        rectangle,
+        draw=black!80,
+        fill=yellow!15,
+        text width=13cm,
+        align=center,
+        rounded corners=4pt,
+        inner sep=8pt,
+        thick
     },
-    loopNode/.style={
-        rectangle, draw=black!80, thick, rounded corners=4pt,
-        align=center, inner sep=8pt
+    processNode/.style={
+        rectangle,
+        draw=black!80,
+        fill=blue!5,
+        text width=5.7cm,
+        align=center,
+        rounded corners=4pt,
+        inner sep=7pt,
+        thick,
+        minimum height=1.45cm
     },
-    genNode/.style={loopNode, fill=red!10, text width=5.9cm, minimum height=2.3cm},
-    evalNode/.style={loopNode, fill=blue!10, text width=5.9cm, minimum height=2.3cm},
-    contextNode/.style={loopNode, fill=purple!10, text width=13cm, minimum height=1.9cm},
+    evalNode/.style={
+        processNode,
+        fill=blue!10
+    },
+    selectionNode/.style={
+        rectangle,
+        draw=black!80,
+        fill=purple!10,
+        text width=12.5cm,
+        align=center,
+        rounded corners=4pt,
+        inner sep=8pt,
+        thick,
+        minimum height=1.6cm
+    },
     decision/.style={
-        diamond, draw=black!80, fill=gray!15, thick,
-        aspect=3.2, inner sep=4pt, align=center, font=\scriptsize,
-        minimum width=6.2cm
+        diamond,
+        draw=black!80,
+        fill=gray!15,
+        thick,
+        aspect=3.0,
+        inner sep=4pt,
+        align=center,
+        font=\scriptsize,
+        minimum width=5.8cm
     },
     outNode/.style={
-        rectangle, draw=black!80, fill=green!15,
-        text width=13cm, align=center, rounded corners=4pt,
-        inner sep=8pt, thick, font=\footnotesize\bfseries
+        rectangle,
+        draw=black!80,
+        fill=green!15,
+        text width=13cm,
+        align=center,
+        rounded corners=4pt,
+        inner sep=8pt,
+        thick,
+        font=\footnotesize\bfseries
     },
-    arrow/.style={->, >=stealth, thick, draw=black!75},
-    fbArrow/.style={->, >=stealth, thick, draw=purple!80!black},
-    % edge labels sit on a white "patch" so crossing lines never look
-    % like they strike through the text
-    elbl/.style={font=\scriptsize, fill=white, inner sep=2pt, rounded corners=1pt},
-    elblB/.style={elbl, font=\scriptsize\bfseries}
+    arrow/.style={
+        ->,
+        >=Stealth,
+        thick,
+        draw=black!75
+    },
+    fbArrow/.style={
+        ->,
+        >=Stealth,
+        thick,
+        draw=purple!80!black
+    },
+    elbl/.style={
+        font=\scriptsize,
+        fill=white,
+        inner sep=2pt,
+        rounded corners=1pt
+    },
+    elblB/.style={
+        elbl,
+        font=\scriptsize\bfseries
+    }
 ]
 
-    % 1. System Inputs (Top Banner)
-    \node [ioNode] (inputs) {
-        \textbf{System Inputs \& Experimental Configuration} \\[3pt]
-        \scriptsize Target Continuous Problem $(f_p, D, \sigma)$ \quad $\bullet$ \quad
-        Prompt Scaffolding Archetype ($\mathcal{P}$) \quad $\bullet$ \quad
-        Evaluation Budget ($B_{\text{synth}}$)
-    };
+%----------------------------------------------------------------------
+% Input
+%----------------------------------------------------------------------
 
-    % 2. Generative Foundation Model (Left Inner Box)
-    \node [genNode, below left=1.8cm and 0cm of inputs.south, anchor=north west,
-           xshift=0cm] (llm) {
-        \textbf{Generative Foundation Model} \\[4pt]
-        \scriptsize Semantic Mutation Operator \\[2pt]
-        \scriptsize Synthesizes Candidate Heuristic $\mathcal{A}_{\text{child}}$
-    };
+\node[ioNode] (inputs) {
+    \textbf{Optimization Task and Synthesis Configuration} \\[3pt]
+    \scriptsize
+    Continuous black-box problem
+    \quad $\bullet$ \quad
+    Prompt configuration
+    \quad $\bullet$ \quad
+    Synthesis budget
+};
 
-    % 3. Evaluator Component Harness (Right Inner Box)
-    \node [evalNode, right=1.4cm of llm, anchor=north west] (evaluator) {
-        \textbf{Evaluator Component Harness} \\[4pt]
-        \scriptsize Sandboxed Execution \& Defensive Interception \\[2pt]
-        \scriptsize Ground-Truth Oracle Scoring \& Telemetry
-    };
+%----------------------------------------------------------------------
+% Synthesis context
+%----------------------------------------------------------------------
 
-    % 4. Context Builder & Selection (Bottom Wide Box)
-    \node [contextNode, below=1.7cm of $(llm.south)!0.5!(evaluator.south)$] (context) {
-        \textbf{Reflective Context Builder \& Selection Operator} \\[3pt]
-        \scriptsize $\bullet$ Updates Incumbent Parent Baseline ($\bar{\mathcal{F}}_{\text{parent}}$) via Stochastic Resampling ($K=3$) \\[1pt]
-        \scriptsize $\bullet$ Assembles Generation Context $\mathcal{C}_g$ (Performance History, Telemetry, Feedback Directives)
-    };
+\node[
+    processNode,
+    below=0.8cm of inputs
+] (context) {
+    \textbf{Synthesis Context} \\[3pt]
+    \scriptsize
+    Optimization task, previous candidate information,
+    incumbent, and prompt configuration
+};
 
-    % 5. Termination Decision (Rhombus)
-    \node [decision, below=1.1cm of context] (termination) {
-        \textbf{Generational Horizon Exhausted?} ($g = G$)
-    };
+%----------------------------------------------------------------------
+% Generation
+%----------------------------------------------------------------------
 
-    % 6. System Output (Bottom Banner)
-    \node [outNode, below=1.1cm of termination] (output) {
-        \textbf{Final System Output: Discovered Champion Algorithm ($\mathcal{A}^*$)} \\[3pt]
-        \scriptsize Validated Noise-Resilient Heuristic Source Script \& Generational Telemetry Records
-    };
+\node[
+    processNode,
+    below=0.8cm of context
+] (generation) {
+    \textbf{LLM Candidate Generation} \\[3pt]
+    \scriptsize
+    Generates executable optimization heuristic
+    $\mathcal{A}_{\text{child}}$
+};
 
-    % Outer Group Container for the LLaMEA Loop
-    \begin{scope}[on background layer]
-        \node [draw=gray!50, dashed, fill=gray!3, rounded corners=8pt, inner sep=14pt,
-               fit=(llm) (evaluator) (context),
-               label={[font=\bfseries\scriptsize, gray!70!black]above:Iterative Evolutionary Discovery Loop (LLaMEA)}] (loopGroup) {};
-    \end{scope}
+%----------------------------------------------------------------------
+% Code extraction and validation
+%----------------------------------------------------------------------
 
-    % --- Forward Pipeline Arrows ---
+\node[
+    processNode,
+    below=0.8cm of generation
+] (validation) {
+    \textbf{Code Extraction and Validation} \\[3pt]
+    \scriptsize
+    Extracts generated source code and checks
+    syntactic and structural constraints
+};
 
-    % 1. Inputs into LLM entry — enters top edge, right of center so it
-    %    doesn't collide with the "No" loop that also lands on the top edge
-    \draw [arrow] (inputs.south) -- ++(0,-0.35)
-          -| ($(llm.north)+(1.3,0)$);
+%----------------------------------------------------------------------
+% Execution
+%----------------------------------------------------------------------
 
-    % 2. LLM -> Evaluator (clear horizontal channel, label sits above it)
-    \draw [arrow] (llm.east) -- node[elblB, above] {Offspring Code $\mathcal{A}_{\text{child}}$} (evaluator.west);
+\node[
+    processNode,
+    below=0.8cm of validation
+] (execution) {
+    \textbf{Isolated Candidate Execution} \\[3pt]
+    \scriptsize
+    Runs the candidate under a controlled execution
+    environment and timeout
+};
 
-    % 3. Evaluator -> Context Builder — drops from a point right-of-centre
-    %    on the evaluator's south edge into the context box's top-right
-    \draw [arrow] ($(evaluator.south)+(-0.6,0)$) -- ++(0,-0.45)
-          -| node[elbl, pos=0.75, above] {Scored Payload $(\mathcal{F}, \mathcal{T}_{\text{feedback}})$}
-          ($(context.north)+(2.6,0)$);
+%----------------------------------------------------------------------
+% Evaluation: two parallel components
+%----------------------------------------------------------------------
 
-    % 4. Context Builder -> LLM (Reflective Feedback Channel)
-    %    stays INSIDE the dashed loop box, entering the LLM's south edge
-    \draw [fbArrow] ($(context.north)+(-2.6,0)$) -- ++(0,0.5)
-          -| node[elblB, pos=0.35, above, text=purple!80!black] {Reflective Context $\mathcal{C}_g$}
-          (llm.south);
+\node[
+    evalNode,
+    below left=1.0cm and 0cm of execution.south,
+    anchor=north west
+] (stochastic) {
+    \textbf{Stochastic Objective Evaluation} \\[3pt]
+    \scriptsize
+    Candidate interacts with the objective through
+    noisy fitness observations
+};
 
-    % 5. Context Builder -> Termination Check
-    \draw [arrow] (context.south) -- (termination.north);
+\node[
+    evalNode,
+    right=1.0cm of stochastic
+] (clean) {
+    \textbf{Clean Diagnostic Evaluation} \\[3pt]
+    \scriptsize
+    Returned solution is assessed using the
+    underlying clean objective
+};
 
-    % 6. Termination: Yes -> Output
-    \draw [arrow] (termination.south) -- node[elblB, right=2pt] {Yes} (output.north);
+%----------------------------------------------------------------------
+% Selection and feedback
+%----------------------------------------------------------------------
 
-    % 7. Termination: No -> outer cycle back to LLM.
-    %    Routed FAR left, outside the dashed box, and lands on the LLM's
-    %    top edge (left of center) so it never crosses the reflective
-    %    feedback arrow (#4) or the input arrow (#1).
-    \draw [arrow] (termination.west) -- ++(-2.6,0)
-          node[elblB, pos=0.5, above] {No ($g \gets g+1$)}
-          |- ($(llm.north)+(-1.3,0)$);
+\node[
+    selectionNode,
+    below=1.0cm of $(stochastic.south)!0.5!(clean.south)$
+] (selection) {
+    \textbf{Parent--Child Comparison and Context Update} \\[3pt]
+    \scriptsize
+    Compares candidate performance with the incumbent,
+    updates the retained solution, and constructs feedback
+    for the next generation
+};
+
+%----------------------------------------------------------------------
+% Termination
+%----------------------------------------------------------------------
+
+\node[
+    decision,
+    below=1.0cm of selection
+] (termination) {
+    \textbf{Synthesis Terminated?}
+};
+
+%----------------------------------------------------------------------
+% Output
+%----------------------------------------------------------------------
+
+\node[
+    outNode,
+    below=1.0cm of termination
+] (output) {
+    \textbf{Final Output: Synthesized Optimization Heuristic}
+    \\[3pt]
+    \scriptsize
+    Retained incumbent algorithm and associated synthesis information
+};
+
+%----------------------------------------------------------------------
+% Loop boundary
+%----------------------------------------------------------------------
+
+\begin{scope}[on background layer]
+    \node[
+        draw=gray!50,
+        dashed,
+        fill=gray!3,
+        rounded corners=8pt,
+        inner sep=12pt,
+        fit=(context) (generation) (validation) (execution)
+             (stochastic) (clean) (selection),
+        label={[
+            font=\bfseries\scriptsize,
+            gray!70!black
+        ]above:Iterative LLaMEA Synthesis Loop}
+    ] (loopGroup) {};
+\end{scope}
+
+%----------------------------------------------------------------------
+% Forward arrows
+%----------------------------------------------------------------------
+
+\draw[arrow]
+    (inputs.south)
+    -- (context.north);
+
+\draw[arrow]
+    (context.south)
+    -- (generation.north);
+
+\draw[arrow]
+    (generation.south)
+    -- node[elblB, right=2pt]
+    {Candidate program}
+    (validation.north);
+
+\draw[arrow]
+    (validation.south)
+    -- (execution.north);
+
+%----------------------------------------------------------------------
+% Evaluation arrows
+%----------------------------------------------------------------------
+
+\draw[arrow]
+    (execution.south)
+    -- ++(0,-0.35)
+    -| (stochastic.north);
+
+\draw[arrow]
+    (execution.south)
+    -- ++(0,-0.35)
+    -| (clean.north);
+
+\draw[arrow]
+    (stochastic.south)
+    -- ++(0,-0.45)
+    -| (selection.west);
+
+\draw[arrow]
+    (clean.south)
+    -- ++(0,-0.45)
+    -| (selection.east);
+
+%----------------------------------------------------------------------
+% Termination
+%----------------------------------------------------------------------
+
+\draw[arrow]
+    (selection.south)
+    -- (termination.north);
+
+\draw[arrow]
+    (termination.south)
+    -- node[elblB, right=2pt]
+    {Yes}
+    (output.north);
+
+%----------------------------------------------------------------------
+% Next-generation feedback
+%----------------------------------------------------------------------
+
+\draw[fbArrow]
+    (termination.west)
+    -- ++(-2.8,0)
+    node[
+        elblB,
+        pos=0.5,
+        above,
+        text=purple!80!black
+    ] {No: next generation}
+    |- ($(context.west)+(-0.6,0)$);
 
 \end{tikzpicture}
