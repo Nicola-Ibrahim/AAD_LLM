@@ -1,379 +1,960 @@
-%-------------------------------------------------------------------------------
-% Chapter 4: Methodology
-%-------------------------------------------------------------------------------
+%------------------------------------------------------------------------------
+% Chapter 3: Methodology
+%------------------------------------------------------------------------------
 
-\chapter{Methodology}\label{chap:methodology}
+\chapter{Methodology}\label{chap}
 
-Stochastic fitness evaluations distort evolutionary selection. When objective returns carry variance, candidate optimizers exploit lucky sample evaluations, stalling outer-loop code generation. Resolving this pathology requires an architecture that isolates stochastic noise during candidate search while preserving clean metrics for meta-selection.
+This chapter describes the implementation used to study automated algorithm
+design under stochastic fitness evaluation. The method builds on the Large
+Language Model Evolutionary Algorithm (LLaMEA), in which a language model
+generates executable optimization algorithms and iteratively modifies them
+using information obtained from their evaluation \cite{LLaMEA2024}. In this
+thesis, the LLaMEA process is combined with a controlled stochastic
+evaluation environment and locally executed large language models (LLMs).
 
-This chapter details the mathematical specifications, execution sandboxing, and statistical benchmarking protocols of the automated synthesis pipeline. We define the optimality-gap heteroscedastic noise model and trace its interaction with continuous benchmark topographies. Next, we specify the evaluation decoupling layer that isolates candidate search logic from diagnostic telemetry, alongside Abstract Syntax Tree (AST) validation rules, execution timeouts, and traceback recovery pipelines. Subsequent sections detail the $(1+1)$ evolutionary selection operators, the stochastic parent resampling policy ($K=3$), and the prompt scaffolding configurations. We conclude by outlining the pipeline execution lifecycle and the non-parametric statistical hypothesis testing protocol used for empirical verification.
+The central methodological principle is to separate the optimization
+environment experienced by a generated algorithm from the information used
+by the synthesis framework to assess that algorithm. An LLM receives the
+optimization task, the current synthesis context, and the selected prompt
+configuration. It generates a Python implementation of an optimization
+heuristic. The generated algorithm is then extracted, checked, and executed in
+an isolated environment. During this execution, the optimizer interacts with
+the objective only through the provided evaluation interface. Under
+stochastic conditions, this interface returns noisy objective values, while
+the clean objective remains available inside the evaluation framework for
+diagnostic assessment.
 
+The synthesis process is therefore not a direct search over numerical
+solutions. Instead, the evolutionary search operates over executable
+optimization algorithms. The language model acts as the semantic variation
+operator, while the surrounding framework is responsible for generating,
+executing, evaluating, and selecting these algorithms. The information
+obtained from each candidate is subsequently used to update the synthesis
+state and construct the context for later generations.
 
-%-------------------------------------------------------------------------------
-\section{Pipeline Orchestration}\label{sec:method_orchestration}
+The complete process can be summarized as
 
-The Automated Algorithm Design (AAD) pipeline couples a generative foundation model with an isolated execution sandbox inside a closed-loop evolutionary system \cite{LLaMEA2024}. The interactions among prompt contexts, AST compilation defenses, the stochastic evaluation wrapper, and the parent resampling policy form the discovery engine shown in Figure~\ref{fig:evolutionary_aad_loop}.
+\begin{equation}
+\begin{aligned}
+\text{Optimization task}
+&\rightarrow
+\text{Synthesis context}
+\rightarrow
+\text{LLM generation}
+\
+&\rightarrow
+\text{Code extraction}
+\rightarrow
+\text{Validation}
+\rightarrow
+\text{Isolated execution}
+\
+&\rightarrow
+\text{Objective evaluation}
+\rightarrow
+\text{Clean diagnostic evaluation}
+\
+&\rightarrow
+\text{Feedback}
+\rightarrow
+\text{Parent comparison}
+\rightarrow
+\text{Updated incumbent}.
+\end{aligned}
+\label{eq}
+\end{equation}
+
+Figure~\ref{fig} provides a corresponding overview
+of the synthesis loop. Starting from the optimization task and synthesis
+configuration, the LLM generates a candidate optimization algorithm. The
+candidate is then extracted, validated, and executed by the evaluation
+framework. Its performance is evaluated through the objective interface,
+while the returned solution is additionally assessed using the clean
+objective for diagnostic purposes. The resulting information is used for
+parent--child comparison and for constructing the synthesis context of the
+next generation. The process continues until the synthesis run terminates.
 
 \begin{figure}[htbp]
-    \centering
-    \resizebox{\linewidth}{!}{%
-        \input{figures/evolutionary_aad_loop}%
-    }
-    \caption{System orchestration of the stochastic Automated Algorithm Discovery framework. Synthesized Python programs are validated via AST security checks and executed within the isolated sandbox. Search heuristics process corrupted evaluations, while the background evaluation harness records clean ground-truth error and coordinates stochastic parent resampling to drive evolutionary selection \cite{LLaMEA2024}.}
-    \label{fig:evolutionary_aad_loop}
+\centering
+\resizebox{\textwidth}{!}{%
+\input{figures/evolutionary_aad_loop}
+}
+\caption{Overview of the LLaMEA-based algorithm synthesis process used in
+this thesis. The model generates candidate optimization heuristics, which
+are evaluated and used to update the synthesis context for subsequent
+generations.}
+\label{fig}
 \end{figure}
 
-The system executes across three operational phases:
-\begin{enumerate}
-    \item \textbf{Initialization:} The pipeline ingests problem parameters, search dimensionality $D$, and prompt scaffolding configurations to construct the initial system specification.
-    \item \textbf{Evolutionary Discovery Loop:} Across the generational horizon $G$, the engine runs four linked stages:
-    \begin{itemize}
-        \item \textit{Code Mutation:} The language model acts as a semantic variation operator, mutating incumbent source code $\mathcal{A}_{\text{parent}}$ to generate offspring algorithm $\mathcal{A}_{\text{child}}$.
-    \item \textit{Sandboxed Execution:} The candidate executes in a detached worker process under memory bounds, a synthesis evaluation budget of $B_{\text{synth}} = 1{,}000{,}000$, and a 30.0-second wall-clock limit, receiving noisy evaluations $f_{\text{noisy}}(x_k)$ while the harness tracks clean spatial gap $\Delta y = |f_{\text{clean}}(\mathbf{x}^*) - f^*|$.
-    
-    \item \textit{Diagnostic Recovery:} Syntax violations, process timeouts, or runtime numerical crashes trigger tiered fitness penalties and feed formatted Python tracebacks into context buffer $\mathcal{T}_{\text{feedback}}$.
-        \item \textit{Resampling and Selection:} The incumbent parent undergoes $K=3$ stochastic re-evaluations to update baseline $\bar{\mathcal{F}}_{\text{parent}}$, after which candidate fitness determines replacement and history archive $\mathcal{H}_{1 \dots g}$ updates.
-    \end{itemize}
-    \item \textbf{Artifact Delivery:} Upon budget exhaustion, the framework exports the champion noise-resilient heuristic alongside relational database records and AST logs for downstream benchmarking.
-\end{enumerate}
+%==============================================================================
+\section{LLM-Based Algorithm Synthesis}
+\label{sec:llm_algorithm_synthesis}
+%==============================================================================
 
-%-------------------------------------------------------------------------------
-\section{Noise Modeling}\label{sec:noise_modeling}
+Each synthesis run starts with a continuous black-box optimization task and a
+prompt template defining the programming interface available to the generated
+algorithm. The generated algorithm is represented as a Python class following
+the interface used by LLaMEA. Rather than producing a numerical candidate
+solution directly, the model therefore produces a complete optimization
+procedure. This procedure may contain its own initialization strategy,
+population management, search operators, parameter updates, and stopping
+logic.
 
-Automated synthesis of noise-resilient continuous heuristics requires benchmarking against stochastic fitness surfaces \cite{Jin2005}. We use the continuous Black-Box Optimization Benchmark (BBOB) suite as our base testbed \cite{Hansen2010}. Because standard BBOB functions evaluate deterministically, the execution wrapper must inject controlled variance directly at the interface level.
+The object being evolved is consequently not a solution vector but an
+executable optimization algorithm. The LLM can modify the structure of the
+search procedure itself, allowing changes to affect how candidate solutions
+are generated, how information from previous evaluations is used, and how
+the search is adapted throughout the optimization run.
 
-In experimental optimization and physical engineering domains---such as chemical process control, wind turbine aerodynamics, and physical sensor telemetry---observed measurement uncertainty rarely stems from a single isolated source. Instead, it arises from the continuous aggregation of countless independent micro-disturbances. By the Central Limit Theorem (CLT), the sum of these independent stochastic errors naturally converges to a normal distribution, establishing additive Gaussian noise $\mathcal{N}(0, \sigma^2)$ as the most physically realistic model for continuous search environments \cite{Shir2012, Spall2003}.
-
-Beyond physical realism, zero-mean Gaussian perturbations guarantee an unbiased mathematical expectation ($\mathbb{E}[z] = 0$). Consequently, the expected value of any corrupted observation strictly equals the underlying true objective elevation: $\mathbb{E}[f_{\text{noisy}}(x)] = f_{\text{clean}}(x)$ \cite{Spall2003}. This unbiased property is vital for Automated Algorithm Design: it ensures that if the language model successfully synthesizes noise-mitigation mechanics---such as Monte Carlo sample averaging ($\frac{1}{K} \sum_{i=1}^K f_{\text{noisy}}(x_i)$) or momentum-based filtering---the heuristic will consistently converge toward the true uncorrupted mean without accumulating systematic mathematical bias.
-
-In the optimization literature, Gaussian uncertainty is commonly formulated either as homoscedastic static additive noise \cite{Jin2005}:
-\begin{equation}\label{eq:static_noise_lit}
-    f_{\text{noisy}}(x) = f_{\text{clean}}(x) + \mathcal{N}(0, \sigma^2)
-\end{equation}
-or through point-wise multiplicative variance \cite{Jin2005}:
-\begin{equation}\label{eq:naive_multiplicative_lit}
-    f_{\text{noisy}}(x) = f_{\text{clean}}(x) \cdot \left(1 + \mathcal{N}(0, \text{CV}^2)\right)
-\end{equation}
-where $x \in \mathbb{R}^D$ denotes a $D$-dimensional coordinate vector, $f_{\text{clean}}(x) \in \mathbb{R}$ is the true objective value, $\sigma^2 \in \mathbb{R}^+$ is a fixed variance, $\text{CV} \in \mathbb{R}^+$ is the dimensionless Coefficient of Variation ($\text{CV} = \sigma / \mu$), and $f_{\text{noisy}}(x) \in \mathbb{R}$ represents the corrupted signal returned to the optimizer.
-
-Both formulations break down across heterogeneous benchmark suites \cite{Hansen2010}. Homoscedastic additive noise (Equation~\ref{eq:static_noise_lit}) applies constant variance regardless of objective magnitude. Near the optimum where objective values drop to $10^{-5}$, this constant variance produces an overwhelmingly low Signal-to-Noise Ratio (SNR) that obliterates descent gradients. Conversely, on steep sections where objective values exceed $10^6$, the identical additive variance becomes negligible, allowing optimizers to converge without developing explicit noise-filtering routines \cite{Hansen2010}.
-
-Multiplicative noise (Equation~\ref{eq:naive_multiplicative_lit}) introduces a different artifact by scaling variance directly against raw elevation $f_{\text{clean}}(x)$. This formulation includes any vertical translation $f(x^*)$ added to the global minimum. Adding a vertical offset $g(x) = f(x) + 10\,000$ scales the variance by orders of magnitude, corrupting the local basin structure without altering the underlying spatial topography.
-
-BBOB function $f_{21}$ (Gallagher's Gaussian 101 Peaks) highlights the ranking vulnerability of naive multiplicative and homoscedastic models. The global minimum sits at an analytical offset of $f(x^*) \approx 40.78$, across a total dynamic range of roughly 50 units. Under naive multiplicative noise with $\text{CV} = 0.05$, a coordinate evaluated near the global optimum at $f_{\text{clean}}(x) = 41.0$ yields a standard deviation of:
-\begin{equation}\label{eq:f21_naive_std}
-    \sigma = 0.05 \cdot 41.0 = 2.05
-\end{equation}
-This deviation spans $4\%$ of the total function range. Because peak elevation gaps in $f_{21}$ span only $2$ to $5$ units, this variance erases local basin boundaries. Evaluating adjacent coordinates $x_a$ ($f_{\text{clean}} = 41.5$) and $x_b$ ($f_{\text{clean}} = 42.0$) produces heavily overlapping distributions: $f_{\text{noisy}}(x_a) \sim \mathcal{N}(41.5, 2.075^2)$ and $f_{\text{noisy}}(x_b) \sim \mathcal{N}(42.0, 2.1^2)$. Stochastic draws frequently invert the true ranking ($f_{\text{noisy}}(x_a) > f_{\text{noisy}}(x_b)$), depriving search routines of usable directional signals.
-
-We resolve these discrepancies using a Heteroscedastic Optimality-Gap Noise Model. Rather than scaling variance against arbitrary raw function values, variance is tied directly to the distance from the global minimum. For any coordinate $x_k \in \mathbb{R}^D$ queried at step $k$, the local standard deviation $\sigma_{\text{dynamic}}(x_k)$ scales strictly with the absolute optimality gap:
-\begin{equation}\label{eq:proportional_dynamic_std}
-    \sigma_{\text{dynamic}}(x_k) = \text{CV} \cdot \left| f_{\text{clean}}(x_k) - f^* \right|
-\end{equation}
-where $\text{CV} \ge 0$ parameterizes the noise severity (corresponding to the standard deviation scale in the execution wrapper), and $\left| f_{\text{clean}}(x_k) - f^* \right|$ is the true spatial error.
+This differs from conventional evolutionary optimization, where variation is
+usually applied to numerical parameters or solution vectors. In the present
+setting, the language model performs the variation at the program level. The
+surrounding synthesis framework then determines whether the generated
+program is valid and whether the resulting optimization behavior is
+sufficiently effective for the candidate to be retained.
 
 
-The benchmark harness preserves the true minimum $f(x^*)$ internally while hiding it from the generated Python script. At evaluation step $k$, the candidate receives a corrupted scalar observation:
-\begin{equation}\label{eq:proportional_gaussian_noise}
-    f_{\text{noisy}}(x_k) = f_{\text{clean}}(x_k) + z_k, \quad z_k \sim \mathcal{N}\left(0, \sigma_{\text{dynamic}}^2(x_k)\right)
-\end{equation}
-where $z_k \in \mathbb{R}$ is an independent Gaussian perturbation sampled with density:
-\begin{equation}\label{eq:gaussian_pdf_dynamic}
-    p(z_k) = \frac{1}{\sqrt{2\pi \sigma_{\text{dynamic}}^2(x_k)}} \exp\left( -\frac{z_k^2}{2\sigma_{\text{dynamic}}^2(x_k)} \right)
-\end{equation}
-Because $p(z_k)$ is symmetric with zero expectation ($\mathbb{E}[z_k] = 0$), the noisy evaluation acts as an unbiased estimator of true fitness:
-\begin{equation}\label{eq:unbiased_expectation}
-    \mathbb{E}[f_{\text{noisy}}(x_k)] = f_{\text{clean}}(x_k)
+%------------------------------------------------------------------------------
+\subsection{Synthesis Context and Candidate Generation}
+\label{subsec:synthesis_context}
+%------------------------------------------------------------------------------
+
+The synthesis context contains the information required by the model to
+generate or modify an algorithm. In the elitist $(1+1)$ setting, the context
+can include the task description, information about previously generated
+algorithms, the current incumbent, and feedback obtained from earlier
+evaluations \cite{LLaMEA2024}. The context can be represented conceptually
+as
+
+\begin{equation}
+\mathcal{C}_g =
+\left\{
+\mathcal{P}_{\mathrm{task}},
+\mathcal{H}_{1:g-1},
+\mathcal{A}_{\mathrm{inc}},
+\mathcal{F}_{\mathrm{prompt}}
+\right\},
+\label{eq:synthesis_context}
 \end{equation}
 
-To maintain a strict black-box operational contract, the analytical minimum $f(x^*)$ and the runtime calculation of $\sigma_{\text{dynamic}}(x_k)$ remain strictly encapsulated within the execution wrapper. The candidate heuristic receives only the scalar float $f_{\text{noisy}}(x_k)$, preventing generated algorithms from introspecting the noise envelope or directly reverse-engineering the target coordinate. Furthermore, each query issued to the interface triggers an independent and identically distributed (i.i.d.) stochastic sample $z_k$. Re-evaluating the identical coordinate $x_k$ across $K$ consecutive queries yields uncorrelated realizations, allowing candidate heuristics that implement Monte Carlo resampling to suppress effective noise variance proportionally to $1/\sqrt{K}$.
+where $\mathcal{P}_{\mathrm{task}}$ describes the optimization problem,
+$\mathcal{H}_{1:g-1}$ contains relevant information from previous
+generations, $\mathcal{A}_{\mathrm{inc}}$ denotes the current incumbent
+algorithm, and $\mathcal{F}_{\mathrm{prompt}}$ represents the additional
+instructions defined by the selected prompt configuration.
 
-Scaling variance heteroscedastically with the optimality gap provides two core properties for Automated Algorithm Design:
-\begin{enumerate}
-    \item \textbf{Scale Invariance:} The Signal-to-Noise Ratio remains bounded by $1/\text{CV}$ across varying benchmark ranges, from $f_8$ ($\sim 10^3$) to $f_{21}$ ($\sim 50$), removing the need to calibrate noise hyperparameters per function.
-    \item \textbf{Structured Search Difficulty:} Regions far from the target exhibit high variance, while points close to the optimum narrow their variance profiles, matching empirical systems where measurement noise scales with distance from target equilibrium.
-\end{enumerate}
+The synthesis history can contain information about previous candidate
+algorithms, their observed performance, and execution failures. This
+information gives the model a basis for modifying previously generated
+approaches rather than generating every candidate independently. The
+incumbent provides the current reference algorithm, while the previous
+evaluation history provides additional information about approaches that have
+already been explored.
 
-Applying this model to $f_{21}$ ($\text{CV} = 0.05$), test coordinates $x_a$ ($f_{\text{clean}} = 41.5$) and $x_b$ ($f_{\text{clean}} = 42.0$) yield standard deviations of:
-\begin{equation}\label{eq:f21_gap_std_a}
-    \sigma_{\text{dynamic}}(x_a) = 0.05 \cdot |41.5 - 40.78| \approx 0.036
+The LLM uses this context to generate a new candidate. The model can modify
+an existing algorithm or produce a substantially different search procedure.
+Changes can therefore affect the complete search strategy rather than only
+individual parameter values. For example, a candidate can introduce a
+different population update mechanism, alter the balance between exploration
+and exploitation, adapt its parameters during the run, or change the way
+candidate solutions are generated.
+
+The generated response may contain explanatory text in addition to Python
+source code. The implementation consequently extracts the candidate source
+before execution. The resulting program is then passed to the validation
+stage rather than being executed directly from the raw model response.
+
+
+%------------------------------------------------------------------------------
+\subsection{Code Extraction and Validation}
+\label{subsec:code_validation}
+%------------------------------------------------------------------------------
+
+The code extraction stage identifies the Python source contained in the
+generated response and prepares it for execution. Since language model
+responses can contain explanations, Markdown formatting, or other text in
+addition to the requested program, the extraction step provides a clear
+boundary between the generation process and the executable candidate.
+
+The resulting program is checked structurally using Abstract Syntax Tree
+(AST) analysis. This validation stage detects malformed or disallowed code
+before it reaches the execution environment. The implementation permits the
+numerical functionality required for the optimization task while preventing
+generated code from delegating the search to external optimization routines
+or interacting directly with the surrounding operating system.
+
+The purpose of this stage is not to constrain the model to one particular
+optimization strategy. Instead, it ensures that different generated
+algorithms can be evaluated under the same interface and within the same
+execution constraints. Candidates that fail the required structural checks
+are rejected before they can affect the synthesis state.
+
+After validation, the candidate is compiled and executed in an isolated
+worker process. Isolation prevents variables or state created by one
+candidate from affecting the surrounding synthesis process. It also allows
+the execution of a generated algorithm to be terminated independently if it
+does not complete within the permitted execution time.
+
+The execution environment additionally checks the numerical validity of the
+returned solution. Invalid returned solutions, including non-finite
+coordinates or coordinates outside the allowed search domain, are rejected
+rather than being treated as successful optimization results.
+
+Runtime failures are handled within the same evaluation stage. A generated
+algorithm may fail because of numerical operations, incorrect array
+dimensions, invalid use of the objective interface, or other implementation
+errors. Such failures are recorded rather than terminating the complete
+synthesis process. Where appropriate, the corresponding error information
+can be included in the context supplied to later generations. This allows
+the model to use execution feedback when modifying a previously generated
+program, consistent with the feedback-driven design of LLaMEA
+\cite{LLaMEA2024}.
+
+
+%------------------------------------------------------------------------------
+\subsection{Isolated Candidate Execution}
+\label{subsec:isolated_execution}
+%------------------------------------------------------------------------------
+
+After passing validation, the candidate is executed independently from the
+synthesis controller. The generated optimizer interacts with the optimization
+problem through the objective-function interface provided to it. The
+optimizer does not directly access the analytical benchmark function or the
+known optimum.
+
+This maintains the black-box setting of the optimization problem. From the
+perspective of the generated algorithm, the objective is an externally
+provided function that can be queried at candidate points. The optimizer
+must therefore construct its search strategy from the observations returned
+by these queries.
+
+The isolated worker process also provides a boundary between candidate
+execution and the rest of the synthesis framework. A candidate that enters
+an infinite loop, exceeds the permitted runtime, or encounters a runtime
+failure can be terminated without stopping the complete synthesis process.
+The execution result can consequently be classified as either a valid
+optimization result or a failure with corresponding diagnostic information.
+
+For a successful candidate, the framework obtains the solution returned by
+the optimizer together with the information required to assess its quality.
+For an unsuccessful candidate, the framework records the type of failure and
+the available diagnostic information. In both cases, the result becomes
+part of the evolutionary feedback process.
+
+This execution procedure also ensures that all candidates are evaluated
+under the same basic computational constraints. Differences in performance
+therefore arise from the generated optimization procedure and its interaction
+with the evaluation environment rather than from different execution
+interfaces.
+
+
+%==============================================================================
+\section{Stochastic Fitness Evaluation}
+\label{sec:stochastic_evaluation}
+%==============================================================================
+
+The main adaptation introduced in this thesis is the stochastic objective
+evaluation used during candidate execution. The generated optimizer does not
+receive direct access to the analytical form of the benchmark function or to
+its optimum. Instead, it interacts with an objective interface that returns
+one scalar value for each queried point.
+
+The objective interface can operate in either deterministic or stochastic
+mode. In deterministic mode, the value returned to the optimizer corresponds
+directly to the underlying clean objective. In stochastic mode, an
+independent random perturbation is added to each objective query.
+
+This design allows the same underlying optimization problem to be evaluated
+under different fitness conditions without changing the benchmark function
+itself. The stochasticity is introduced at the interface between the
+generated optimizer and the objective rather than by modifying the
+optimization algorithm directly.
+
+
+%------------------------------------------------------------------------------
+\subsection{Deterministic and Stochastic Evaluation}
+\label{subsec:deterministic_stochastic}
+%------------------------------------------------------------------------------
+
+Let $f_{\mathrm{clean}}(x)$ denote the underlying benchmark objective
+function for a candidate solution $x \in \mathbb{R}^{D}$. Let $x^*$ denote a
+global optimum in the search space, and let
+
+\begin{equation}
+f^*
+=
+f_{\mathrm{clean}}(x^*)
 \end{equation}
-\begin{equation}\label{eq:f21_gap_std_b}
-    \sigma_{\text{dynamic}}(x_b) = 0.05 \cdot |42.0 - 40.78| \approx 0.061
+
+denote the corresponding optimal objective value. For deterministic
+evaluation, the interface returns the clean objective value,
+
+\begin{equation}
+f_{\mathrm{noise}}(x)
+=
+f_{\mathrm{clean}}(x),
 \end{equation}
-The resulting distributions, $f_{\text{noisy}}(x_a) \sim \mathcal{N}(41.5, 0.036^2)$ and $f_{\text{noisy}}(x_b) \sim \mathcal{N}(42.0, 0.061^2)$, preserve ranking order between both points and maintain usable descent vectors. 
 
-As illustrated in Figure~\ref{fig:f21_noise_distortion}, homoscedastic additive noise (Panel B) corrupts the local landscape evenly across coordinates, blurring adjacent peaks. In contrast, the heteroscedastic optimality-gap formulation (Panel C) naturally tightens its variance envelope as coordinates approach the global minimizer $x^*$, preserving basin boundaries and retaining an actionable descent signal toward the global basin.
+which corresponds to the standard noiseless BBOB setting.
 
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{images/f21/figure_1d_noise_cross_section.png}
-    \vspace{0.4cm}
-    \includegraphics[width=\textwidth]{images/f21/figure_2d_noise_topology.png}
-    \caption{Topological distortion of BBOB $f_{21}$ (Gallagher 101 Peaks). The 1D cross-section (Top) and 2D rank-normalized contours (Bottom) show that homoscedastic additive noise (B) overwhelms local basin boundaries. The heteroscedastic optimality-gap model (C) pinches variance near the global optimum ($x^*$), preserving the macro-structure and actionable descent vectors.}
-    \label{fig:f21_noise_distortion}
-\end{figure}
+For stochastic evaluation, the returned value is instead given by
 
-To evaluate behavior on large-scale, ill-conditioned geometries, consider BBOB function $f_8$ (Rosenbrock). Benchmark instances apply spatial translations $x^* \in \mathbb{R}^D$ and orthogonal rotation matrices $R \in \mathbb{R}^{D \times D}$ to eliminate coordinate alignment \cite{Hansen2010}:
-\begin{equation}\label{eq:bbob_f8_formula}
-    f_8(x) = \sum_{i=1}^{D-1} \left[ 100 \cdot \left( y_{i+1} - y_i^2 \right)^2 + (1 - y_i)^2 \right] + f^*
+\begin{equation}
+f_{\mathrm{noise}}(x)
+=
+f_{\mathrm{clean}}(x) + z,
+\label{eq:stochastic_objective}
 \end{equation}
-where $y = \max\left(1, \frac{\sqrt{D}}{8}\right) R (x - x^*) + \mathbf{1}$, $\mathbf{1} \in \mathbb{R}^D$ is a vector of ones, and $f^* \in \mathbb{R}$ is the target minimum value.
 
-The term $100 \cdot (y_{i+1} - y_i^2)^2$ forms a steep parabolic valley, pushing boundary deviations $f_{\text{clean}}(x_k) - f_{\text{opt}}$ up to $10^3$. Setting $\text{CV} = 0.1$, exploration along domain boundaries where $f_{\text{clean}}(x_k) - f_{\text{opt}} \approx 10^3$ sets the standard deviation to:
-\begin{equation}\label{eq:f8_dynamic_std_boundary}
-    \sigma_{\text{dynamic}}(x_k) = 0.1 \cdot 10^3 = 10^2
-\end{equation}
-As search vectors enter the valley floor where $f_{\text{clean}}(x_k) - f_{\text{opt}} \approx 10^1$, the standard deviation drops proportionally:
-\begin{equation}\label{eq:f8_dynamic_std_valley}
-    \sigma_{\text{dynamic}}(x_k) = 0.1 \cdot 10^1 = 10^0
-\end{equation}
-By comparison, evaluating the isotropic sphere function $f_1(x) = \|R(x - x^*)\|^2 + f_{\text{opt}}$ near domain boundaries produces objective differences of $f_{\text{clean}}(x_k) - f_{\text{opt}} \approx 10^1$, yielding $\sigma_{\text{dynamic}} \approx 10^0$. Sampling noise through Equation~\ref{eq:proportional_gaussian_noise} yields perturbations $z_k \sim \mathcal{N}(0, \sigma_{\text{dynamic}}^2(x_k))$ that maintain equivalent relative SNR across diverse topographies.
+where the perturbation is sampled independently for each objective query.
+The standard deviation of the perturbation is scaled by the clean
+optimality gap,
 
-Figure~\ref{fig:f8_noise_distortion} confirms this scaling behavior. On steep outer boundaries ($f(x) \approx 10^5$), homoscedastic noise (Panel B) represents a negligible perturbation relative to functional magnitude, while dominating and obscuring the flat valley floor near the minimum. The heteroscedastic optimality-gap formulation (Panel C) scales variance proportionally with objective magnitude across the entire coordinate range, maintaining balanced search difficulty from initial exploration down to local convergence.
+\begin{equation}
+z
+\sim
+\mathcal{N}
+\left(
+0,
+\left(
+\sigma
+\left|
+f_{\mathrm{clean}}(x)-f^*
+\right|
+\right)^2
+\right).
+\label{eq:proportional_gaussian_noise}
+\end{equation}
+
+Equivalently, the dynamic standard deviation at a queried point is
+
+\begin{equation}
+\sigma_{\mathrm{dynamic}}(x)
+=
+\sigma
+\left|
+f_{\mathrm{clean}}(x)-f^*
+\right|.
+\label{eq:dynamic_noise_std}
+\end{equation}
+
+For $\sigma=0$, the stochastic term vanishes and the interface becomes
+deterministic. For positive values of $\sigma$, the magnitude of the
+perturbation changes with the current objective gap. The optimum and clean
+objective are used internally by the evaluation wrapper to construct this
+noise, but they are not exposed to the generated optimizer.
+
+The use of the optimality gap rather than the raw objective value is
+important because the same optimization problem can be shifted vertically
+without changing its optimization structure. If noise were scaled directly
+by the raw objective value, such a shift could change the magnitude of the
+noise without changing the underlying optimization problem. Scaling by
+$|f_{\mathrm{clean}}(x)-f^*|$ instead relates the stochastic perturbation to
+the remaining optimization error.
+
+The noise model used in this thesis therefore produces a heteroscedastic
+objective: the magnitude of the perturbation depends on the objective gap.
+This property is useful for studying optimization behavior because the
+relative uncertainty changes as the optimizer approaches the optimum. An
+algorithm can consequently experience different levels of stochastic
+variation during different stages of its search.
+
+For illustration, consider a point with an objective gap of approximately
+$10^3$ and an illustrative noise parameter of $\sigma=0.1$. The dynamic
+standard deviation is then
+
+\begin{equation}
+\sigma_{\mathrm{dynamic}}
+=
+0.1\cdot10^3
+=
+10^2.
+\label{eq:f8_dynamic_std_boundary}
+\end{equation}
+
+If another point has an objective gap of approximately $10^1$, the
+corresponding standard deviation becomes
+
+\begin{equation}
+\sigma_{\mathrm{dynamic}}
+=
+0.1\cdot10^1
+=
+10^0.
+\label{eq:f8_dynamic_std_valley}
+\end{equation}
+
+These values are used only to illustrate the scaling behavior of the noise
+model. The experimental noise settings are defined separately in
+Chapter~\ref{chap:experiments}.
+
+%------------------------------------------------------------------------------
+\subsection{Illustration of the Noise Model}
+\label{subsec:noise_model_illustration}
+%------------------------------------------------------------------------------
+
+The behavior of the noise scaling is illustrated using two BBOB functions
+with different landscape structures. The first example is the Rosenbrock
+function $f_8$, which contains a narrow curved valley. This structure makes
+it useful for illustrating how the magnitude of the stochastic perturbation
+changes between regions with different objective gaps
+\cite{Hansen2010}.
+
+The equations above show that a point with a larger objective gap receives a
+larger perturbation, while a point with a smaller objective gap receives a
+smaller perturbation. The scaling therefore depends on the objective gap and
+not directly on the Euclidean distance of a point from the optimum.
 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{images/f8/figure_1d_noise_cross_section.png}
+
     \vspace{0.4cm}
+
     \includegraphics[width=\textwidth]{images/f8/figure_2d_noise_topology.png}
-    \caption{Scale-invariance on BBOB $f_8$ (Rosenbrock). The 1D cross-section (Top) and 2D contours (Bottom) show that homoscedastic noise (B) becomes negligible on steep boundary walls ($10^5$) while obscuring the flat valley floor. The heteroscedastic optimality-gap model (C) dynamically scales variance proportional to the objective magnitude, maintaining consistent search difficulty across the domain.}
+
+    \caption{Illustration of stochastic distortion on BBOB $f_8$
+    (Rosenbrock). The one-dimensional cross-section (top) and two-dimensional
+    contours (bottom) compare the clean objective with noisy evaluations.
+    The optimality-gap model changes the noise magnitude according to the
+    objective gap, resulting in smaller perturbations as the search approaches
+    the optimum.}
     \label{fig:f8_noise_distortion}
 \end{figure}
 
-%===============================================================================
-% Section 4.2: Evaluator Architecture
-%===============================================================================
+A second example is provided by BBOB $f_{21}$, the Gallagher 101-peaks
+function. Unlike the narrow-valley structure of $f_8$, this function contains
+many peaks and a highly irregular multimodal structure. It therefore provides
+a different setting in which stochastic fitness can influence the ranking of
+candidate points and consequently affect search decisions.
 
-\section{Evaluator Architecture}\label{sec:evaluator_architecture}
-
-The evaluation harness manages execution containment, runtime exception logging, and ground-truth fitness assignment for candidate optimization routines \cite{LLaMEA2024}. Operating as an isolated wrapper around the objective problem, it executes synthesized heuristics, catches fatal runtime faults, and computes clean spatial convergence to steer the $(1+1)$ evolutionary search \cite{Arnold2003, Jin2005}.
-
-Every heuristic emitted by the language model must implement a standard functional entry point:
-\begin{equation}\label{eq:candidate_interface_call}
-    \mathbf{x}^*, y_{\text{raw}} = \operatorname{solve}(f, D, B_{\text{synth}}, \mathbf{lb}, \mathbf{ub})
-\end{equation}
-where $f$ denotes the continuous objective wrapper, $D \in \{2, 3, 5\}$ specifies coordinate dimensionality, $B_{\text{synth}} = 1{,}000{,}000$ sets the function evaluation budget for synthesis, and $\mathbf{lb}, \mathbf{ub} \in \mathbb{R}^D$ set the hypercube domain bounds ($[-5.0, 5.0]^D$) \cite{Hansen2010, LLaMEA2024}.
-
-During synthesis, the candidate executes strictly against corrupted evaluations $f_{\text{noisy}}(x_k)$ generated through the scale-invariant optimality-gap noise model (Equation~\ref{eq:proportional_gaussian_noise}):
-\begin{equation}\label{eq:noisy_evaluation_call}
-    f_{\text{noisy}}(x_k) = f_{\text{clean}}(x_k) + \mathcal{N}\left(0, \left(\text{CV} \cdot |f_{\text{clean}}(x_k) - f^*|\right)^2\right)
-\end{equation}
-The parameter $\text{CV} \in \{0.0, 0.05\}$ scales the perturbation variance relative to the distance from the global minimizer $f^*$ \cite{Jin2005}. Candidate routines receive no analytical gradients, uncorrupted objective values $f_{\text{clean}}(x_k)$, or prior knowledge of $f^*$ \cite{Hansen2010}.
-
-Upon exhausting budget $B_{\text{synth}} = 1{,}000{,}000$, the algorithm returns its spatial coordinate estimate $\mathbf{x}^* \in \mathbb{R}^D$ and self-reported objective scalar $y_{\text{raw}} \in \mathbb{R}$ \cite{LLaMEA2024}. The harness discards $y_{\text{raw}}$ unconditionally \cite{LLaMEA2024}. Extreme negative stochastic perturbations ($z_k \ll 0$) produce spurious objective drops. Accepting self-reported values allows unconverged candidate solutions with fortunate noise draws to anchor the parent baseline, inducing false elitism that stalls search progress across subsequent generations \cite{Jin2005, Qian2020}.
-
-To calculate an uncorrupted selection signal, the harness captures candidate coordinate $\mathbf{x}^*$, verifies domain feasibility ($\mathbf{x}^* \in [\mathbf{lb}, \mathbf{ub}]^D$), and screens for non-finite entries ($\texttt{NaN}$, $\texttt{Inf}$). It queries the uncorrupted analytical oracle directly at coordinate $\mathbf{x}^*$ \cite{LLaMEA2024}:
-\begin{equation}\label{eq:clean_oracle_query}
-    y_{\text{clean}} = f_{\text{clean}}(\mathbf{x}^*)
-\end{equation}
-The underlying distance to the known analytical minimum is quantified via the absolute spatial optimality gap:
-\begin{equation}\label{eq:clean_spatial_gap}
-    \Delta y = |y_{\text{clean}} - f^*|
-\end{equation}
-The single-problem stochastic discovery engine scores individual candidates via the negated gap:
-\begin{equation}\label{eq:fitness_assignment}
-    \mathcal{F} = -\Delta y = -|y_{\text{clean}} - f^*|
-\end{equation}
-The $(1+1)$ selection rule updates the incumbent according to $\mathcal{A}_{\text{parent}}^{(g+1)} \gets \mathcal{A}_{\text{child}}^{(g)}$ if and only if $\mathcal{F}(\mathcal{A}_{\text{child}}) \ge \mathcal{F}(\mathcal{A}_{\text{parent}})$. Restricting search routines to corrupted inputs while computing meta-selection over uncorrupted outputs separates spatial descent from stochastic noise fluctuations, removing false elitism at the selection boundary \cite{Jin2005, Qian2020, LLaMEA2024}. Successful executions reset the consecutive failure tracker ($C_{\text{failures}} \gets 0$) \cite{LLaMEA2024}.
+The noise model does not change the underlying clean function. Instead, each
+query produces a noisy fitness value with a perturbation whose standard
+deviation depends on the clean objective gap. Consequently, regions with
+larger objective gaps can exhibit larger variation in their noisy fitness
+values, while the magnitude of the perturbation decreases as the search
+approaches the global optimum.
 
 \begin{figure}[htbp]
     \centering
-    \resizebox{\linewidth}{!}{%
-        \input{figures/evaluator}%
-    }
-    \caption{Execution lifecycle of candidate algorithms within the evaluation harness, tracking validation pathways, failure classifications, stagnation detection, and persistence \cite{LLaMEA2024}.}
-    \label{fig:evaluator_lifecycle_flow}
+    \includegraphics[width=\textwidth]{images/f21/figure_1d_noise_cross_section.png}
+
+    \vspace{0.4cm}
+
+    \includegraphics[width=\textwidth]{images/f21/figure_2d_noise_topology.png}
+
+    \caption{Illustration of stochastic distortion on BBOB $f_{21}$
+    (Gallagher 101-peaks). The one-dimensional cross-section (top) and
+    two-dimensional representation (bottom) illustrate the effect of
+    stochastic objective evaluations on the multimodal function. The
+    optimality-gap formulation changes the perturbation magnitude according
+    to the clean objective gap while leaving the underlying benchmark
+    function unchanged.}
+    \label{fig:f21_noise_distortion}
 \end{figure}
 
-The evaluation harness integrates an evolutionary stagnation monitor to prevent the single-parent search from stalling on unviable algorithmic branches \cite{LLaMEA2024}. Because $(1+1)$ evolution strategies lack population diversity, the generative model occasionally loops over minor syntactic variations of an incumbent architecture that repeatedly crash or fail to advance.
+The use of two functions with different structures is intended to illustrate
+that the stochastic evaluation mechanism is not tied to one particular
+landscape shape. The noise is applied through the same objective wrapper,
+while the resulting noisy fitness values depend on the clean objective
+values of the function being evaluated.
 
-The evaluator tracks this behavior via consecutive failure counter $C_{\text{failures}}$:
-\begin{itemize}
-    \item \textbf{Valid Execution and Counter Reset:} When an offspring executes within domain and budget limits, the evaluator assigns clean oracle fitness and resets the tracker ($C_{\text{failures}} \gets 0$).
-    \item \textbf{Failure Interception and Counter Increment:} If a candidate fails AST parsing, triggers an unhandled runtime error, or exceeds execution deadlines, the sandbox assigns a tiered failure penalty and increments the counter ($C_{\text{failures}} \gets C_{\text{failures}} + 1$).
-\end{itemize}
+%------------------------------------------------------------------------------
+\subsection{Independent Objective Realizations}
+\label{subsec:independent_noise_realizations}
+%------------------------------------------------------------------------------
 
-When the counter reaches $C_{\text{failures}} \ge 3$, the system identifies a search stall and injects an explicit $[\textsc{Meta-Feedback}]$ directive into context buffer $\mathcal{T}_{\text{feedback}}$ \cite{LLaMEA2024}:
-\begin{quote}
-    \footnotesize\ttfamily
-    $[\textsc{Meta-Feedback}]$: The last 3 generations failed due to repeated execution errors or lack of progress. Abandon the current step-adaptation logic. Pivot immediately to a robust population-based heuristic: implement a vectorized Particle Swarm Optimization (PSO) or a covariance-matrix inspired Gaussian mutation strategy with explicit boundary clamping and numerical stability guards ($\epsilon = 10^{-8}$) \cite{Kennedy1995, Hansen2001}.
-\end{quote}
-This intervention redirects the prompt context, prompting the foundation model to discard failing mutation logic and adopt alternative continuous metaheuristic structures \cite{Kennedy1995, Hansen2001, LLaMEA2024}.
+Every objective query receives a new stochastic realization. The same
+stochastic objective model is therefore used for all queries, while the
+random perturbation $z$ is independently sampled for each query. For the
+same coordinate $x$, two evaluations can consequently return different
+noisy fitness values,
 
-Evaluated routines are committed to dual-layer storage with complete execution telemetry \cite{LLaMEA2024}. Python source code is stored in the content-addressed source registry, while uncorrupted error gaps, wall-clock runtimes, exception logs, and stagnation flags populate the relational database \cite{LLaMEA2024}. Storing these records allows post-hoc benchmarking, AST complexity analysis, and statistical hypothesis testing without re-executing the generative synthesis loop \cite{LLaMEA2024, deNobel2024}.
-
-%===============================================================================
-% Section 4.3: Execution Sandbox and Code Compilation Engine
-%===============================================================================
-
-\section{Execution Engine}\label{sec:execution_engine}
-
-Dynamic synthesis of unverified Python code introduces practical risks of process hangs, worker memory exhaustion, and unauthorized operating system calls \cite{LLaMEA2024}. The compilation engine handles these conditions through static AST filtering, isolated namespace execution, and hard wall-clock timeouts \cite{LLaMEA2024}.
-
-Prior to byte compilation, raw candidate source strings pass through an Abstract Syntax Tree (AST) visitor alongside problem dimension $D$ and execution settings \cite{LLaMEA2024}. The visitor screens code structure, rejecting empty method definitions, malformed blocks, or missing \texttt{pass} statements. Standard numerical dependencies (\texttt{numpy}, \texttt{math}, \texttt{random}) are whitelisted, whereas black-box solvers---specifically subpackages within \texttt{scipy.optimize}---are explicitly blocked to prevent candidate routines from delegating search logic to pre-existing numerical libraries. Operating system modules (\texttt{os}, \texttt{sys}, \texttt{subprocess}, \texttt{shutil}, \texttt{socket}, \texttt{importlib}) and dynamic execution primitives (\texttt{eval}, \texttt{exec}, \texttt{open}, \texttt{compile}, \texttt{\_\_import\_\_}) trigger immediate AST rejection. Validated code compiles into an isolated dictionary namespace, preventing variable leakage into the host environment.
-
-Candidate routines execute inside a detached worker process bound by a 30.0-second limit ($T_{\text{max}} = 30.0\,\text{s}$) to intercept non-terminating loops and divergent matrix factorizations \cite{LLaMEA2024}. Exceeding this window triggers a process termination signal and logs an \texttt{AlgorithmTimeoutException} \cite{LLaMEA2024}. Runtime error hooks capture floating-point warnings (underflows, invalid square roots, zero divisions), preserving diagnostic logs while avoiding terminal pollution \cite{LLaMEA2024}.
-
-After execution, the harness unpacks coordinate $\mathbf{x}^*$ and scalar $y_{\text{raw}}$, casting $\mathbf{x}^*$ into a 1D NumPy array ($\mathbf{x}^* \in \mathbb{R}^D$) \cite{LLaMEA2024}. The coordinate vector is screened for domain compliance $[\mathbf{lb}, \mathbf{ub}]^D$ and checked for non-finite values ($\texttt{NaN}$, $\texttt{Inf}$) \cite{LLaMEA2024}. Cumulative function evaluations $k$ are checked against an overrun threshold:
-\begin{equation}\label{eq:budget_overrun_check}
-    k \le \lambda_{\text{tol}} \cdot B_{\text{synth}}
+\begin{equation}
+f_{\mathrm{noise}}^{(1)}(x)
+=
+f_{\mathrm{clean}}(x) + z_1,
+\qquad
+f_{\mathrm{noise}}^{(2)}(x)
+=
+f_{\mathrm{clean}}(x) + z_2,
+\qquad
+z_1 \neq z_2,
 \end{equation}
-where $\lambda_{\text{tol}} = 1.10$ permits a 10\% margin over synthesis budget $B_{\text{synth}} = 1{,}000{,}000$. Candidates exceeding this bound are disqualified to maintain consistent sample budgets across runs.
 
-Candidates failing AST parsing, exceeding execution deadlines, or raising runtime exceptions receive tiered penalty scores \cite{LLaMEA2024}:
-\begin{equation}\label{eq:failure_penalties}
-\mathcal{F}_{\text{failure}} =
+even though both evaluations use the same underlying clean objective and the
+same stochastic objective model.
+
+The generated optimizer therefore has to operate on repeated noisy fitness
+values rather than on a deterministic function with a modified scale. This
+can affect algorithms that rely strongly on direct fitness comparisons,
+ranking, selection, or changes in the returned objective values.
+
+For example, if two candidate points have similar clean objective values, a
+stochastic realization can temporarily reverse their ranking. A generated
+optimizer that reacts immediately to such rankings may therefore make a
+different search decision than it would under deterministic evaluation.
+Repeated fitness values can similarly affect algorithms that estimate
+progress from differences between successive objective values.
+
+The stochastic environment thus changes the information available to the
+optimizer without changing the underlying optimization problem. This
+distinction is important for the experimental analysis because the objective
+function itself remains fixed while the fitness values available during
+search vary between objective queries.
+
+%------------------------------------------------------------------------------
+\subsection{Clean Diagnostic Evaluation}
+\label{subsec:clean_diagnostic}
+%------------------------------------------------------------------------------
+
+The evaluation framework nevertheless retains the clean objective
+internally. After a candidate has completed its search, the returned
+solution is evaluated using the clean objective rather than the particular
+noisy fitness value returned during the final stochastic query.
+
+For a returned solution $x_{\mathrm{best}}$, the clean optimality gap is
+defined as
+
+\begin{equation}
+\Delta f(x_{\mathrm{best}})
+=
+f_{\mathrm{clean}}(x_{\mathrm{best}})
+-
+f^*.
+\label{eq:clean_optimality_gap}
+\end{equation}
+
+This value provides a direct measure of the actual quality of the solution
+returned by the generated optimizer. It is not exposed to the optimizer
+during its execution.
+
+The separation between the noisy fitness used during optimization and the
+clean diagnostic objective is central to the methodology. The generated
+algorithm has to make its search decisions using only the information
+available through the stochastic objective interface. The synthesis
+framework can then determine how good the resulting solution actually is
+using the underlying clean objective.
+
+This separation also prevents a favorable random fitness realization from
+being interpreted as direct evidence that a candidate algorithm has produced
+a better solution. The returned point is instead assessed according to its
+clean objective value after the optimization run has finished.
+
+
+%==============================================================================
+\section{Candidate Selection and Evolutionary Update}
+\label{sec:candidate_selection}
+%==============================================================================
+
+Once a generated candidate has been executed and evaluated, its result is
+returned to the evolutionary controller. The controller uses the clean
+diagnostic quality of the returned solution to compare the candidate with
+the current incumbent. This is an important distinction from the objective
+observations used internally by the generated optimizer: the candidate
+searches using the configured objective interface, whereas the synthesis
+framework compares the resulting algorithms using the clean optimality gap
+of their returned solutions.
+
+For a parent algorithm $\mathcal{A}*{\mathrm{parent}}$ and a child algorithm
+$\mathcal{A}*{\mathrm{child}}$, let
+
+\begin{equation}
+\Delta f_{\mathrm{parent}}
+=
+\Delta f
+\left(
+x_{\mathrm{parent}}
+\right)
+\end{equation}
+
+and
+
+\begin{equation}
+\Delta f_{\mathrm{child}}
+=
+\Delta f
+\left(
+x_{\mathrm{child}}
+\right)
+\end{equation}
+
+denote their respective clean optimality gaps before parent resampling is
+taken into account.
+
+Since the optimization problem is formulated as minimization, a child with a
+smaller clean optimality gap represents an improvement over the parent. The
+parent is therefore retained only when the child does not provide an
+improvement according to the selection criterion.
+
+%------------------------------------------------------------------------------
+\subsection{Parent--Child Comparison}
+\label{subsec:parent_child_comparison}
+%------------------------------------------------------------------------------
+
+The parent--child comparison represents the evolutionary update of the
+synthesis process. The parent corresponds to the currently retained
+algorithm, while the child is the newly generated algorithm produced from
+the current synthesis context.
+
+Under deterministic evaluation, the clean optimality gap of the parent can
+be used directly as the reference value. Under stochastic evaluation,
+however, the solution produced by the parent can depend on the particular
+stochastic trajectory encountered during its execution. For this reason, the
+implementation re-evaluates the parent using multiple independent stochastic
+passes before the comparison is made.
+
+Let
+
+\begin{equation}
+\Delta f_{\mathrm{parent}}^{(k)}
+=
+\Delta f
+\left(
+x_{\mathrm{parent}}^{(k)}
+\right)
+\end{equation}
+
+denote the clean optimality gap obtained from the $k$-th independent
+evaluation of the parent. The average parent reference is then
+
+\begin{equation}
+\overline{\Delta f}*{\mathrm{parent}}
+=
+\frac{1}{K}
+\sum*{k=1}^{K}
+\Delta f_{\mathrm{parent}}^{(k)},
+\qquad
+K=3.
+\label{eq:parent_resampled_gap}
+\end{equation}
+
+The child is evaluated through its current synthesis execution, producing
+the clean gap $\Delta f_{\mathrm{child}}$. The evolutionary update can then
+be expressed as
+
+\begin{equation}
+\mathcal{A}_{\mathrm{inc}}^{(g+1)}
+==================================
+
 \begin{cases}
--5.0 \times 10^8, & \text{if Execution Timeout } (t_{\text{wall}} > T_{\text{max}} = 30.0\,\text{s}) \\
--7.0 \times 10^8, & \text{if Runtime Numerical or Dimensional Exception} \\
--1.0 \times 10^9, & \text{if AST Validation, Prohibited Library Import, or Syntax Failure}
+\mathcal{A}*{\mathrm{child}}^{(g)}
+&
+\text{if }
+\Delta f*{\mathrm{child}}
+\leq
+\overline{\Delta f}*{\mathrm{parent}},
+[4pt]
+\mathcal{A}*{\mathrm{parent}}^{(g)}
+&
+\text{otherwise}.
 \end{cases}
+\label{eq:clean_parent_child_selection}
 \end{equation}
-This tiered assignment maintains selection pressure across generations \cite{LLaMEA2024}. Valid but slow routines outrank crashing code, which in turn outranks unparseable syntax \cite{LLaMEA2024}.
 
-When runtime errors occur, the parser extracts the failure line and exception message (e.g., \texttt{LinAlgError: Matrix is singular at line 48}) \cite{LLaMEA2024}. This diagnostic trace is appended to context buffer $\mathcal{T}_{\text{feedback}}$, enabling closed-loop semantic self-repair in subsequent evolutionary generations \cite{Chen2023, LLaMEA2024}.
+This means that the parent reference is based on the mean clean diagnostic
+quality of three independent parent executions, while the child is judged
+from the result of its current synthesis execution. The purpose is to make
+the incumbent reference less dependent on one stochastic trajectory rather
+than to remove all stochasticity from the synthesis process.
 
-%===============================================================================
-% Section 4.4: Evolutionary Code Discovery and Parent Resampling
-%===============================================================================
+%------------------------------------------------------------------------------
+\subsection{Parent Resampling}
+\label{subsec:parent_resampling}
+%------------------------------------------------------------------------------
 
-\section{Evolutionary Code Discovery and Stochastic Selection}\label{sec:method_llamea}
+Parent resampling is performed using $K=3$ independent stochastic passes.
+Each pass exposes the parent algorithm to a new sequence of objective
+realizations. Although the same program is executed in each pass, the
+stochastic fitness observations can differ, potentially leading to different
+search trajectories and different returned solutions.
 
-The meta-optimization search over program space adapts the Large Language Model Evolutionary Algorithm (LLaMEA) paradigm \cite{LLaMEA2024}, employing the generative model as a semantic variation operator. In contrast to classical numeric perturbation operators, the language model refactors continuous heuristic logic, modifies internal state representations, and adjusts search dynamics based on reflective execution feedback \cite{Romera2023, ReflectiveSurvey2025}.
+The resulting clean optimality gaps are averaged to obtain a more stable
+reference for the current incumbent:
 
-\subsection{The Operational $(1+1)$ Evolutionary Loop}
-To prevent token-context saturation and avoid the prohibitive computational latency of evaluating large code populations $(\mu, \lambda)$ \cite{Lange2024}, the synthesis engine executes a single-offspring $(1+1)$ Evolution Strategy across $G = 10$ generations \cite{LLaMEA2024}. 
-
-In each generation $g \in \{1 \dots G\}$, the generative model synthesizes a single offspring algorithm $\mathcal{A}_{\text{child}}$ derived from incumbent parent $\mathcal{A}_{\text{parent}}$ conditioned on a structured prompt context $\mathcal{C}_g$:
-\begin{equation}\label{eq:context_assembly}
-    \mathcal{C}_g = \left\{ \mathcal{P}_{\text{system}}, \mathcal{H}_{1 \dots g-1}, \mathcal{T}_{\text{feedback}}, \mathcal{I}_{\text{directive}} \right\}
+\begin{equation}
+\overline{\Delta f}*{\mathrm{parent}}
+=
+\frac{1}{K}
+\sum*{k=1}^{K}
+\Delta f_{\mathrm{parent}}^{(k)},
+\qquad
+K=3.
 \end{equation}
-The prompt context integrates four informational streams:
-\begin{enumerate}
-    \item \textbf{System Specification ($\mathcal{P}_{\text{system}}$):} Enforces the black-box interface contract (Equation~\ref{eq:candidate_interface_call}), setting dimensional boundaries ($[-5.0, 5.0]^D$) and the synthesis evaluation ceiling ($B_{\text{synth}} = 1{,}000{,}000$) \cite{Hansen2010, LLaMEA2024}.
-    \item \textbf{Historical Archive ($\mathcal{H}_{1 \dots g-1}$):} An indexed registry recording previously generated algorithm identifiers and their uncorrupted error scores, acting as short-term tabu memory to prevent redundant code synthesis \cite{LLaMEA2024}.
-    \item \textbf{Incumbent State ($\mathcal{T}_{\text{feedback}}$):} Contains the complete Python source code of active parent $\mathcal{A}_{\text{parent}}$, its uncorrupted oracle error $\Delta y_{\text{clean}}$, and diagnostic traceback frames from prior runtime faults \cite{Chen2023, LLaMEA2024}.
-    \item \textbf{Evolutionary Directive ($\mathcal{I}_{\text{directive}}$):} Scaffolding instructions (ablated according to the \textsc{Baseline}, \textsc{Guided}, \textsc{Thinking}, or \textsc{Vectorization} strategy) prompting the model to diagnose failure modes and synthesize algorithmic revisions \cite{LLaMEA2024}.
-\end{enumerate}
 
-\subsection{False Elitism and the $K$-Pass Stochastic Resampling Policy}
-Under deterministic evaluations ($\sigma = 0.0$), selection follows a standard elitist replacement rule: $\mathcal{A}_{\text{parent}}^{(g+1)} \gets \mathcal{A}_{\text{child}}^{(g)}$ if and only if $\mathcal{F}(\mathcal{A}_{\text{child}}) > \mathcal{F}(\mathcal{A}_{\text{parent}})$ \cite{LLaMEA2024}. However, when optimizing on stochastic landscapes ($\sigma > 0.0$), unmitigated greedy selection is vulnerable to false elitism \cite{Jin2005, Qian2020}. 
+Parent resampling does not expose the clean objective to the optimizer.
+During every pass, the parent still receives only the fitness values returned
+by the configured objective interface. The clean objective is used only
+after the optimization run has finished to assess the solution produced by
+that run.
 
-If an inferior child heuristic evaluates coordinates that receive an extreme negative perturbation ($z_k \ll 0$), it yields an artificially superior fitness score \cite{Jin2005}. Under standard elitism, this over-evaluated child replaces the parent and creates an unachievable fitness ceiling \cite{Qian2020}. Subsequent offspring with genuinely superior search mechanisms are consistently rejected because realistic evaluation passes cannot match the outlier score of the parent, causing premature evolutionary stagnation \cite{Jin2005, Qian2020}.
+The procedure therefore separates two forms of evaluation. The generated
+algorithm is subjected to stochastic fitness during its search, while the
+solution produced by each execution is assessed using the clean objective.
+The three clean diagnostic values are then combined to obtain the parent
+reference used by the outer synthesis controller.
 
-To resolve this vulnerability, the synthesis loop implements a **Stochastic Parent Resampling Policy** \cite{Jin2005, Qian2020}. At the conclusion of generation $g$, incumbent parent $\mathcal{A}_{\text{parent}}$ is re-evaluated across $K = 3$ independent stochastic passes using fresh random seeds \cite{Jin2005}. The parent selection threshold is updated to its empirical sample mean:
-\begin{equation}\label{eq:parent_resampling}
-    \bar{\mathcal{F}}_{\text{parent}} = \frac{1}{K} \sum_{k=1}^{K} \mathcal{F}^{(k)}\left(\mathcal{A}_{\text{parent}}\right)
+It is important to note that parent resampling does not make the parent and
+child evaluations identical in terms of the number of stochastic executions.
+The parent is evaluated three times to obtain a more stable reference,
+whereas the newly generated child is evaluated through its current synthesis
+execution. The procedure is therefore not intended to produce a fully
+symmetric estimate of the expected performance of the two algorithms. Instead,
+it reduces the dependence of the incumbent reference on a single stochastic
+trajectory while retaining the $(1+1)$ evolutionary structure.
+
+%------------------------------------------------------------------------------
+\subsection{Feedback and Evolutionary Context Update}
+\label{subsec:feedback_update}
+%------------------------------------------------------------------------------
+
+After the parent--child comparison, the result is incorporated into the
+synthesis context for the next generation. If the child is selected, its
+program becomes the new incumbent and its evaluation information can be used
+as a basis for subsequent modifications. If the parent is retained, the
+current incumbent remains unchanged while the information from the attempted
+child is still available as part of the synthesis history.
+
+Successful candidates can therefore provide both executable source code and
+performance information for subsequent generation steps. Failed candidates
+can provide runtime or validation information that helps the model identify
+problems in a generated implementation. This feedback mechanism follows the
+general structure of LLaMEA, where evaluation information and execution
+errors are incorporated into later generations \cite{LLaMEA2024}.
+
+The feedback process is important because the synthesis does not consist of a
+sequence of independent model generations. Each generation can be influenced
+by the outcome of earlier generations. A candidate that performs well can
+serve as a basis for further modification, while a candidate that fails can
+provide information about an unsuccessful implementation.
+
+The resulting synthesis history is therefore part of the context represented
+by $\mathcal{H}_{1:g-1}$ in Equation~\ref{eq:synthesis_context}. The context
+grows with the evolution of the synthesis process and provides information
+that can be used when constructing the prompt for the next candidate.
+
+%------------------------------------------------------------------------------
+\subsection{Prompt Configurations}
+\label{subsec:prompt_configurations}
+%------------------------------------------------------------------------------
+
+The synthesis process is evaluated with several prompt configurations. The
+configurations use the same generation, validation, execution, and selection
+pipeline but provide different instructions to the LLM. This allows the
+effect of prompt structure to be studied without changing the remaining
+components of the synthesis framework.
+
+The four configurations are defined as follows:
+
+\begin{description}
+
+```
+\item[\textsc{Baseline}:]
+The baseline configuration provides the basic optimization task and the
+required optimizer interface. It gives the LLM comparatively little
+additional guidance about how the optimization algorithm should be
+constructed. This configuration serves as a reference for evaluating
+whether more structured prompting provides an advantage.
+
+\item[\textsc{Guided}:]
+The guided configuration adds domain-specific optimization information
+and suggestions related to stochastic fitness. The intention is to
+provide the model with useful considerations for continuous black-box
+optimization while still leaving the concrete algorithmic design to the
+model.
+
+\item[\textsc{Thinking}:]
+The thinking configuration requests a structured analysis before
+source-code generation. The model is encouraged to consider previous
+candidate performance, exploration and exploitation, parameter
+adaptation, and the effects of noisy fitness before producing the
+implementation. The purpose is to examine whether an explicit analysis
+stage leads to more effective generated algorithms.
+
+\item[\textsc{Vectorization}:]
+The vectorization configuration provides additional implementation
+guidance concerning the use of array-based representations and NumPy
+operations. In particular, candidate populations can be represented as
+matrices such as
+\[
+    X \in \mathbb{R}^{N\times D},
+\]
+allowing operations such as slicing and broadcasting to be used for
+population-level computations. This configuration is intended to
+encourage implementations that can perform repeated candidate
+evaluations efficiently within the available execution budget.
+```
+
+\end{description}
+
+All prompt configurations use the same downstream execution and evaluation
+mechanism. Therefore, differences between configurations can be attributed
+primarily to the instructions supplied during algorithm generation rather
+than to differences in the validation or selection procedure.
+
+The \textsc{Baseline} configuration provides the common information needed
+to generate a continuous optimization algorithm but does not provide
+additional domain-specific recommendations. It therefore serves as the
+reference prompt against which the other configurations can be compared.
+
+The \textsc{Guided} configuration provides explicit optimization knowledge.
+The guidance can include established search mechanisms and suggestions for
+dealing with stochastic fitness, such as repeated observations or
+aggregation of fitness values. These mechanisms are suggested to the model
+rather than being directly inserted into the generated algorithm. The
+resulting algorithm remains the output of the language model.
+
+The \textsc{Thinking} configuration adds a structured analysis stage before
+source-code generation. The model is asked to consider weaknesses of the
+current algorithm, the balance between exploration and exploitation,
+parameter adaptation, and possible ways of processing stochastic fitness
+observations. The purpose is to provide additional structure to the
+generation process before the model produces the implementation.
+
+The \textsc{Vectorization} configuration introduces an implementation-level
+bias toward array-oriented computation. For a population of $N$ candidate
+solutions in $D$ dimensions, the preferred representation is
+
+\begin{equation}
+X \in \mathbb{R}^{N\times D}.
 \end{equation}
-where $\mathcal{F}^{(k)}(\mathcal{A}_{\text{parent}})$ represents the scalar fitness computed via Equation~\ref{eq:fitness_assignment} on stochastic evaluation pass $k$. Averaging over $K=3$ independent passes causes transient noise spikes to decay, ensuring that selection pressure favors heuristics with structural variance tolerance over temporary stochastic anomalies \cite{Arnold2003, Jin2005}.
 
-%===============================================================================
-% Section 4.5: Prompt Scaffolding Archetypes
-%===============================================================================
+The model is encouraged to use NumPy array operations, slicing, and
+broadcasting for population-based computations. This configuration changes
+the implementation guidance supplied to the model without prescribing a
+particular optimization algorithm.
 
-\section{Prompt Scaffolding Archetypes}\label{sec:method_prompts}
+The synthesis process is applied to multiple locally executed model variants.
+The surrounding framework remains unchanged across these variants: generated
+algorithms use the same interface, validation procedure, execution environment,
+objective wrapper, clean diagnostic evaluation, and evolutionary selection
+mechanism. Consequently, model variant and prompt configuration can be
+treated as components of the synthesis setup rather than as changes to the
+underlying evaluation procedure. The exact model configurations and
+inference parameters are specified in Chapter~\ref{chap:experiments}.
 
-In Large Language Model Evolutionary Algorithms, prompt scaffolding defines the primary semantic interface governing how the foundation model explores algorithmic space \cite{LLaMEA2024}. To isolate how cognitive constraints, explicit domain knowledge, and structural code formatting influence the synthesis of continuous black-box optimizers, the framework establishes four distinct prompt scaffolding archetypes serving as independent experimental treatments (summarized in Table~\ref{tab:prompt_scaffoldings}).
+%------------------------------------------------------------------------------
+\subsection{Relation to the Ghost Parent Concept}
+\label{subsec:ghost_parent}
+%------------------------------------------------------------------------------
 
-\begin{table}[htbp]
-\centering
-\small
-\caption{Prompt Scaffolding Archetypes, Injected Inductive Biases, and Experimental Roles.}
-\label{tab:prompt_scaffoldings}
-\begin{tabularx}{\textwidth}{l p{3.8cm} X}
-\toprule
-\textbf{Archetype} & \textbf{Core Scaffolding Mechanism} & \textbf{Injected Inductive Bias \& Template Elements} \\
-\midrule
-\textsc{Baseline} & Minimalist Experimental Control & Invariant black-box interface contract ($D$, $[-5.0, 5.0]^D$, budget $B_{\text{synth}}$); zero topological hints or noise notifications. \\
-\addlinespace
-\textsc{Guided} & Domain-Specific Expert Priors & Regime-aware code recipes: DE mutation templates and covariance updates under clean regimes; budgeted $k$-sample re-evaluation ($\le 20\%$ budget) under noise. \\
-\addlinespace
-\textsc{Thinking} & Socratic Chain-of-Thought (CoT) & Mandatory pre-code deliberation analyzing exploration-exploitation schedules, step-size decay, and robust statistical estimators (mean vs. median). \\
-\addlinespace
-\textsc{Vectorization} & Syntactic Array-Broadcasting Prior & Strict NumPy 2D array representation ($\text{shape} = (N, D)$); penalizes scalar Python loops over populations to maximize computational throughput. \\
-\bottomrule
-\end{tabularx}
-\end{table}
+The distinction between the stochastic fitness used by the generated
+optimizer and the clean diagnostic evaluation used by the synthesis
+controller also clarifies the role of the Ghost Parent concept discussed in
+Chapter~\ref{chap:background}.
 
-\begin{enumerate}
-    \item \textbf{\textsc{Baseline} (\texttt{baseline.j2}):} Operates as the unconstrained experimental control. The prompt supplies strictly the software interface signature, problem dimensionality $D$, spatial domain bounds ($[-5.0, 5.0]^D$), and evaluation budget $B_{\text{synth}} = 1{,}000$. It contains no domain-specific guidance regarding landscape conditioning, multimodality, or evaluation noise. This configuration isolates the LLM's raw internal prior to discover continuous optimization heuristics driven purely by evolutionary selection pressure.
-    
-    \item \textbf{\textsc{Guided} (\texttt{guided.j2}):} Injects explicit, domain-expert mathematical priors tailored to the evaluation regime. On deterministic surfaces, the template recommends foundational metaheuristics—including Differential Evolution mutation mechanisms ($\mathbf{v}_i = \mathbf{x}_{r_1} + F \cdot (\mathbf{x}_{r_2} - \mathbf{x}_{r_3})$) and covariance matrix adaptation principles. On stochastic surfaces, it explicitly warns of heteroscedastic noise and suggests implementing an internal re-evaluation helper ($\texttt{\_robust\_eval}$) with a $k$-sample mean estimator constrained to consume $\le 20\%$ of the total evaluation budget. This archetype measures the maximum generative ceiling when the model functions as a co-pilot initialized with expert human priors.
-    
-    \item \textbf{\textsc{Thinking} (\texttt{thinking.j2}):} Enforces structured Socratic Chain-of-Thought deliberation prior to source code emission. Before outputting Python blocks, the model must populate a mandatory Markdown analysis section addressing key conceptual questions: (i) diagnosing previous iteration bottlenecks, (ii) balancing exploration against exploitation through adaptive step-size decay, and (iii) identifying which statistical metric (mean vs. median) provides reliable candidate ranking without exhausting the evaluation budget. This tests whether latent cognitive planning improves algorithmic correctness over immediate code synthesis.
-    
-    \item \textbf{\textsc{Vectorization} (\texttt{vectorization.j2}):} Imposes an architectural array-oriented programming constraint. The template mandates representing candidate populations as 2D NumPy arrays of shape $(N, D)$ and prohibits slow scalar Python iteration loops across population members. Mutation, recombination, and boundary clipping must be executed via vectorized array slicing and matrix broadcasting. This configuration evaluates whether enforcing computational execution efficiency assists or constrains the mathematical creativity of the synthesized heuristics.
-\end{enumerate}
+In a generic elitist $(1+1)$ evolutionary process, using a noisy fitness value
+directly for parent--child selection can result in an incorrect ranking. A
+child may appear better than its parent because of a favorable stochastic
+realization even though its underlying solution quality is worse. Once such a
+child is selected, it becomes the basis for subsequent generations. This
+creates the possibility that stochastic evaluation affects the evolutionary
+trajectory of the synthesis process itself.
 
-%-------------------------------------------------------------------------------
-\section{Experimental Gauntlet}\label{sec:method_gauntlet}
+The Ghost Parent concept describes this type of noise-induced selection
+problem. It provides a useful conceptual motivation for distinguishing
+between the stochastic search environment and the outer selection mechanism.
 
-The experimental protocol divides into two phases: prompt ablation and comparative baseline validation.
+In the present implementation, however, noisy fitness is not used as the
+final outer selection criterion. Instead, the solution returned by each
+candidate is evaluated using the clean objective, and the parent reference
+is obtained through clean diagnostic evaluation of independent stochastic
+executions. The Ghost Parent is therefore not an additional algorithmic
+component implemented in the synthesis loop. It is a conceptual mechanism
+used to explain why stochastic fitness could otherwise lead to incorrect
+parent--child decisions.
 
-\textbf{Phase 1: Intra-Framework Prompt Ablation.}
-Phase 1 tests the four prompt configurations (BASELINE, THINKING, VECTORIZATION, GUIDED) across five BBOB objective functions spanning distinct topological properties:
-\begin{itemize}
-\item \textbf{$f_1$ (Sphere):} Unimodal separable surface for measuring convergence rate and gradient alignment.
-\item \textbf{$f_8$ (Rosenbrock):} Non-separable surface with a curved parabolic valley, testing search through low-to-moderate conditioning.
-\item \textbf{$f_{10}$ (Ellipsoidal):} Ill-conditioned unimodal surface with an extreme condition number ($10^6$), assessing anisotropic coordinate scaling.
-\item \textbf{$f_{15}$ (Rastrigin):} Multimodal surface with a sinusoidal grid overlaying a global quadratic basin, testing local optima escape.
-\item \textbf{$f_{21}$ (Gallagher 101 Peaks):} Asymmetric multimodal surface containing 101 randomly distributed Gaussian peaks, evaluating basin hopping without global gradient structure.
-\end{itemize}
-Runs execute under heteroscedastic noise regimes ($\text{CV} \in \{0.05, 0.10\}$) in dimension $D = 5$ to produce candidate optimizers for downstream testing.
+This distinction is important for interpreting the experimental results. The
+method investigates how generated optimization heuristics behave when the
+fitness information available during their own search is stochastic, while
+the outer synthesis controller retains a clean diagnostic measure for
+comparing the resulting solutions.
 
-\textbf{Phase 2: Comparative Benchmarking and Dimensional Transfer.}
-Phase 2 benchmarks the top-performing synthesized algorithms against three established numerical optimizers: Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001}, Differential Evolution (DE) \cite{Storn1997}, and Particle Swarm Optimization (PSO) \cite{Kennedy1995}.
+%==============================================================================
+\section{Independent Benchmark Evaluation}
+\label{sec:independent_benchmark}
+%==============================================================================
 
-The post-hoc benchmark evaluates two settings:
-\begin{enumerate}
-\item \textbf{Deterministic Baseline Validation ($\text{CV} = 0.0$):} Checks whether heuristics evolved under noise maintain convergence rates on clean objective landscapes.
-\item \textbf{Stochastic Robustness Validation ($\text{CV} > 0.0$):} Measures the performance degradation of standard baseline optimizers against synthesized heuristics as noise variance increases.
-\end{enumerate}
-To test structural generalizability, algorithms evolved in dimension $D = 5$ are evaluated directly on higher dimensions ($D \in \{10, 20\}$) without code modifications or parameter retraining.
+The synthesis procedure and the subsequent benchmark evaluation have
+different roles and are therefore treated separately.
 
-%-------------------------------------------------------------------------------
-\section{Evaluation Metrics}\label{sec:method_stats}
+During synthesis, the objective is to generate and refine executable
+optimization algorithms. The evolutionary process uses evaluation results to
+determine whether a newly generated candidate should become the current
+incumbent. The synthesis environment is consequently part of the
+algorithm-generation process itself.
 
-Benchmarking runs across $N_{\text{trials}} = 30$ independent random seeds for each problem instance, noise level, and search dimension. Performance is assessed using anytime convergence curves, Empirical Cumulative Distribution Functions (ECDFs), and non-parametric hypothesis testing.
+Once the synthesis process has produced the retained algorithms, they are
+evaluated independently using a common benchmark protocol. The independent
+benchmark stage does not continue the evolutionary modification of the
+program. Instead, it measures the behavior of the synthesized algorithms
+under predefined problem, dimensionality, evaluation-budget, and stochastic
+conditions.
 
-\textbf{Anytime Convergence Trajectory Analysis.}
-Optimization dynamics are logged by tracking the uncorrupted optimality gap at each evaluation step $k \in \{1 \dots B\}$:
-\begin{equation}\label{eq:clean_delta_step}
-\Delta f(x_k) = \left| f_{\text{clean}}(x_k) - f(x^*) \right|
-\end{equation}
-The anytime performance metric records the best uncorrupted error found up to step $k$:
-\begin{equation}\label{eq:best_so_far_trajectory_eval}
-\Delta f_{\text{best}}(k) = \min_{j \in \{1 \dots k\}} \left| f_{\text{clean}}(x_j) - f(x^*) \right|
-\end{equation}
-Across $N_{\text{trials}} = 30$ runs, performance is plotted as geometric mean trajectories with shaded standard error bands on logarithmic axes:
-\begin{itemize}
-\item \textbf{Horizontal Axis ($k$):} Total function evaluations on a logarithmic scale from $1$ to $10^5$.
-\item \textbf{Vertical Axis ($\Delta f_{\text{best}}(k)$):} Uncorrupted optimality gap plotted across eight orders of magnitude from $10^2$ down to $10^{-8}$.
-\item \textbf{Stagnation Tracking:} Horizontal plateauing marks the budget threshold where heuristics encounter premature convergence or variance collapse.
-\end{itemize}
+This separation makes it possible to compare algorithms that were generated
+under different synthesis conditions. For example, algorithms synthesized
+under deterministic fitness can be evaluated under stochastic conditions,
+while algorithms synthesized under stochastic fitness can be evaluated under
+deterministic conditions. Such cross-environment evaluation provides a way
+to investigate whether properties acquired during synthesis remain useful
+when the evaluation environment changes.
 
-\textbf{Empirical Cumulative Distribution Functions (ECDFs).}
-To aggregate performance across different problem topographies without scale distortion, empirical cumulative distribution functions (ECDFs) are constructed over a range of target precision thresholds \cite{Hansen2021COCO}.
+The independent benchmark stage also provides a common basis for comparing
+the synthesized algorithms with established optimization methods. Since the
+benchmark procedure is fixed independently of the synthesis process, the
+resulting performance measurements can be used to analyze convergence,
+solution quality, and robustness across different optimization environments.
 
-Let $\Theta$ define $M = 51$ logarithmically spaced precision thresholds spanning eight orders of magnitude:
-\begin{equation}\label{eq:target_precision_spectrum}
-\Theta = \left\{ 10^{\theta} \mid \theta \in [-8.0, 2.0], \, \Delta \theta = 0.2 \right\}
-\end{equation}
-For $N_{\text{trials}} = 30$ runs across problem instances $I$, the empirical attainment function at threshold $\tau \in \Theta$ and budget step $k$ is given by:
-\begin{equation}\label{eq:ecdf_formula}
-F(k, \tau) = \frac{1}{|I| \cdot N_{\text{trials}}} \sum_{i \in I} \sum_{r=1}^{N_{\text{trials}}} \mathbb{I}\left[ \Delta f_{\text{best}}^{(i, r)}(k) \le \tau \right]
-\end{equation}
-where $\mathbb{I}[\cdot]$ is the indicator function:
-\begin{equation}\label{eq:indicator_function}
-\mathbb{I}\left[ \Delta f_{\text{best}}^{(i, r)}(k) \le \tau \right] =
-\begin{cases}
-1, & \text{if } \Delta f_{\text{best}}^{(i, r)}(k) \le \tau \\
-0, & \text{if } \Delta f_{\text{best}}^{(i, r)}(k) > \tau
-\end{cases}
-\end{equation}
-The Area Under the ECDF Curve ($\text{AUC-ECDF}$) integrates empirical attainment across logarithmic evaluation budgets:
-\begin{equation}\label{eq:auc_ecdf}
-\text{AUC-ECDF} = \frac{1}{|\Theta| \log_{10}(B)} \int_{1}^{B} \sum_{\tau \in \Theta} F(k, \tau) \, d(\log_{10} k)
-\end{equation}
-Higher $\text{AUC-ECDF}$ values denote faster convergence and higher solution rates across precision targets.
+%------------------------------------------------------------------------------
+\subsection{Benchmark Evaluation Protocol}
+\label{subsec:benchmark_protocol}
+%------------------------------------------------------------------------------
+
+The independent benchmark evaluation uses the benchmark functions, problem
+dimensions, noise conditions, evaluation budgets, repetitions, and comparison
+algorithms defined in Chapter~\ref{chap:experiments}. The same general
+evaluation procedure is applied to the synthesized algorithms and the
+selected baseline optimizers.
+
+For each benchmark condition, an algorithm is executed independently using
+predefined random seeds. Multiple seeds are used so that performance is not
+determined by a single stochastic search trajectory. The resulting runs
+provide a distribution of performance values that can subsequently be used
+for graphical and statistical analysis.
+
+The evaluation budget is defined in terms of objective-function evaluations.
+This provides a common basis for comparing algorithms with different
+internal computational structures because the primary resource being
+measured is the number of objective queries available to the optimizer.
+
+The benchmark evaluation records the objective performance over the course
+of each run. These measurements can then be used to construct convergence
+curves and empirical cumulative distribution representations. Final solution
+quality is assessed using the clean objective and corresponding objective
+gaps, while stochastic evaluation conditions are applied only through the
+objective interface available to the optimizer.
+
+The independent evaluation also provides the basis for comparing algorithms
+across clean and noisy environments. In particular, an algorithm synthesized
+under one evaluation condition can be tested under another condition without
+allowing the benchmark result to modify the algorithm. This makes it
+possible to distinguish performance during synthesis from the robustness and
+transferability of the resulting algorithm.
+
+The detailed experimental configuration is specified in the next chapter.
+This includes the selected BBOB functions and dimensions, stochastic noise
+levels, model variants and inference settings, synthesis and benchmarking
+budgets, independent repetitions, baseline optimization algorithms,
+evaluation targets, and statistical analysis. Keeping these parameters
+separate from the implementation described here makes it possible to
+distinguish how the synthesis system operates from the particular
+experimental conditions under which it is evaluated.
+
+Overall, the methodology establishes a controlled pipeline in which the LLM
+generates executable optimization procedures, the generated procedures
+operate under a defined fitness environment, and the resulting algorithms
+are evaluated independently after synthesis. The separation between
+generation, stochastic optimization, clean diagnostic assessment, candidate
+selection, and final benchmarking provides the basis for analyzing whether
+LLM-generated heuristics can remain effective when the fitness information
+available during optimization is subject to stochastic noise.

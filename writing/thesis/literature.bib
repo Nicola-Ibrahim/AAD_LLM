@@ -1,3 +1,4 @@
+```bibtex
 % ==============================================================================
 % BIBLIOGRAPHY DATABASE FOR THE THESIS
 % ==============================================================================
@@ -15,14 +16,12 @@
   pages     = {308--313},
   year      = {1965},
   publisher = {Oxford University Press},
-  doi       = {10.1093/comjnl/7.4.308},
-  url       = {https://doi.org/10.1093/comjnl/7.4.308},
-  note      = {Foundational paper introducing the Nelder-Mead geometric simplex algorithm for unconstrained optimization}
+  doi       = {10.1093/comjnl/7.4.308}
 }
 
 @article{Storn1997,
   author    = {Storn, Rainer and Price, Kenneth},
-  title     = {Differential Evolution -- A Simple and Efficient Heuristic for Global Optimization over Continuous Spaces},
+  title     = {Differential Evolution---A Simple and Efficient Heuristic for Global Optimization over Continuous Spaces},
   journal   = {Journal of Global Optimization},
   volume    = {11},
   number    = {4},
@@ -35,7 +34,7 @@
 @inproceedings{Kennedy1995,
   author       = {Kennedy, James and Eberhart, Russell},
   title        = {Particle Swarm Optimization},
-  booktitle    = {Proceedings of ICNN'95 - International Conference on Neural Networks},
+  booktitle    = {Proceedings of ICNN'95---International Conference on Neural Networks},
   volume       = {4},
   pages        = {1942--1948},
   year         = {1995},
@@ -52,15 +51,13 @@
   pages     = {159--195},
   year      = {2001},
   publisher = {MIT Press},
-  doi       = {10.1162/106365601750190398},
-  url       = {https://doi.org/10.1162/106365601750190398},
-  note      = {Core reference establishing the Covariance Matrix Adaptation Evolution Strategy (CMA-ES)}
+  doi       = {10.1162/106365601750190398}
 }
 
-@article{Powell2006,
+@incollection{Powell2006,
   author    = {Powell, Michael J. D.},
   title     = {The {NEWUOA} Software for Unconstrained Optimization Without Derivatives},
-  journal   = {Large-Scale Nonlinear Optimization},
+  booktitle = {Large-Scale Nonlinear Optimization},
   pages     = {255--297},
   year      = {2006},
   publisher = {Springer},
@@ -70,13 +67,31 @@
 @inproceedings{Hansen2010,
   author    = {Hansen, Nikolaus and Auger, Anne and Ros, Raymond and Finck, Steffen and Po{\v{s}}{\'i}k, Petr},
   title     = {Comparing Results of 31 Algorithms from the Black-Box Optimization Benchmarking {BBOB}-2009},
-  booktitle = {Proceedings of the 12th Annual Conference Companion on Genetic and Evolutionary Computation (GECCO)},
+  booktitle = {Proceedings of the 12th Annual Conference Companion on Genetic and Evolutionary Computation},
   pages     = {1689--1696},
   year      = {2010},
   publisher = {ACM},
-  doi       = {10.1145/1830761.1830790},
-  url       = {https://doi.org/10.1145/1830761.1830790},
-  note      = {Standard reference for the BBOB continuous testbed suite used for empirical algorithm evaluation}
+  doi       = {10.1145/1830761.1830790}
+}
+
+@techreport{BBOB2009,
+  author      = {Finck, Steffen and Hansen, Nikolaus and Ros, Raymond and Auger, Anne},
+  title       = {Real-Parameter Black-Box Optimization Benchmarking 2009: Noiseless Functions Definitions},
+  institution = {INRIA},
+  number      = {RR-6829},
+  year        = {2009},
+  url         = {https://inria.hal.science/inria-00362633v2/document}
+}
+
+@article{Hansen2021COCO,
+  author    = {Hansen, Nikolaus and Auger, Anne and Ros, Raymond and Mersmann, Olaf and Tu{\v{s}}ar, Tea and Brockhoff, Dimo},
+  title     = {{COCO}: A Platform for Comparing Continuous Optimizers in a Black-Box Setting},
+  journal   = {Optimization Methods and Software},
+  volume    = {36},
+  number    = {1},
+  pages     = {114--144},
+  year      = {2021},
+  doi       = {10.1080/10556788.2020.1808977}
 }
 
 @article{deNobel2024,
@@ -92,7 +107,52 @@
 }
 
 % ------------------------------------------------------------------------------
-% 2. STOCHASTIC OPTIMIZATION, NOISE & INDUSTRIAL MOTIVATION
+% 2. NO-FREE-LUNCH / GENERAL OPTIMIZATION
+% ------------------------------------------------------------------------------
+
+@article{Wolpert1997,
+  author    = {Wolpert, David H. and Macready, William G.},
+  title     = {No Free Lunch Theorems for Optimization},
+  journal   = {IEEE Transactions on Evolutionary Computation},
+  volume    = {1},
+  number    = {1},
+  pages     = {67--82},
+  year      = {1997},
+  publisher = {IEEE},
+  doi       = {10.1109/4235.585893}
+}
+
+@book{Goldberg1989,
+  author    = {Goldberg, David E.},
+  title     = {Genetic Algorithms in Search, Optimization, and Machine Learning},
+  publisher = {Addison-Wesley Professional},
+  year      = {1989},
+  isbn      = {978-0201157673}
+}
+
+@book{Eiben2015,
+  author    = {Eiben, Agoston E. and Smith, James E.},
+  title     = {Introduction to Evolutionary Computing},
+  edition   = {2},
+  publisher = {Springer},
+  year      = {2015},
+  doi       = {10.1007/978-3-662-44874-8}
+}
+
+@article{Burke2013,
+  author    = {Burke, Edmund K. and Gendreau, Michel and Hyde, Matthew and Kendall, Graham and Ochoa, Gabriela and Ozcan, Ender and Qu, Rong},
+  title     = {Hyper-Heuristics: A Survey of the State of the Art},
+  journal   = {Journal of the Operational Research Society},
+  volume    = {64},
+  number    = {2},
+  pages     = {169--201},
+  year      = {2013},
+  publisher = {Palgrave Macmillan},
+  doi       = {10.1057/jors.2012.162}
+}
+
+% ------------------------------------------------------------------------------
+% 3. STOCHASTIC OPTIMIZATION, NOISE & INDUSTRIAL MOTIVATION
 % ------------------------------------------------------------------------------
 
 @article{Jin2005,
@@ -104,8 +164,7 @@
   pages     = {303--317},
   year      = {2005},
   publisher = {IEEE},
-  doi       = {10.1109/TEVC.2005.846356},
-  note      = {A canonical survey detailing how different noise profiles affect evolutionary computation and optimization.}
+  doi       = {10.1109/TEVC.2005.846356}
 }
 
 @techreport{Hansen2009Noisy,
@@ -114,8 +173,7 @@
   institution = {INRIA},
   number      = {RR-6869},
   year        = {2009},
-  url         = {https://hal.inria.fr/inria-00362633},
-  note        = {The official technical report defining the mathematical models for Gaussian, Uniform, and Cauchy noise in the BBOB testbed.}
+  url         = {https://hal.inria.fr/inria-00362633}
 }
 
 @article{Hansen2009,
@@ -126,9 +184,7 @@
   number    = {1},
   pages     = {180--197},
   year      = {2009},
-  doi       = {10.1109/TEVC.2008.924423},
-  url       = {https://doi.org/10.1109/TEVC.2008.924423},
-  note      = {Analyzes the detrimental impacts of noise on optimization and proposes manually engineered re-evaluation strategies}
+  doi       = {10.1109/TEVC.2008.924423}
 }
 
 @article{Arnold2003,
@@ -144,14 +200,14 @@
 }
 
 @article{Miller1996,
-  author  = {Miller, Brad L. and Goldberg, David E.},
-  title   = {Genetic Algorithms, Tournament Selection, and the Effects of Noise},
-  journal = {Complex Systems},
-  volume  = {9},
-  number  = {3},
-  pages   = {193--212},
-  year    = {1995},
-  url     = {https://www.complex-systems.com/abstracts/v09_i03_a02/}
+  author    = {Miller, Brad L. and Goldberg, David E.},
+  title     = {Genetic Algorithms, Tournament Selection, and the Effects of Noise},
+  journal   = {Complex Systems},
+  volume    = {9},
+  number    = {3},
+  pages     = {193--212},
+  year      = {1995},
+  url       = {https://www.complex-systems.com/abstracts/v09_i03_a02/}
 }
 
 @article{Sarafian2024,
@@ -161,6 +217,18 @@
   year    = {2024},
   doi     = {10.48550/arXiv.2403.05678},
   url     = {https://arxiv.org/abs/2403.05678}
+}
+
+@article{Qian2020,
+  author    = {Qian, Chao and Yu, Yang and Tang, Ke and Jin, Yaochu and Yao, Xin and Zhou, Zhi-Hua},
+  title     = {On the Effectiveness of Sampling for Evolutionary Optimization in Noisy Environments},
+  journal   = {Evolutionary Computation},
+  volume    = {26},
+  number    = {2},
+  pages     = {237--267},
+  year      = {2018},
+  publisher = {MIT Press},
+  doi       = {10.1162/evco_a_00216}
 }
 
 @article{Plett2004,
@@ -208,25 +276,13 @@
 }
 
 % ------------------------------------------------------------------------------
-% 3. AUTOMATED ALGORITHM DESIGN (AAD) & HYPER-HEURISTICS
+% 4. MODULAR ALGORITHM DESIGN
 % ------------------------------------------------------------------------------
-
-@article{Burke2013,
-  author    = {Burke, Edmund K. and Gendreau, Michel and Hyde, Matthew and Kendall, Graham and Ochoa, Gabriela and {\"O}zcan, Ender and Qu, Rong},
-  title     = {Hyper-heuristics: A Survey of the State of the Art},
-  journal   = {Journal of the Operational Research Society},
-  volume    = {64},
-  number    = {12},
-  pages     = {1695--1724},
-  year      = {2013},
-  publisher = {Taylor \& Francis},
-  doi       = {10.1057/jors.2013.71}
-}
 
 @inproceedings{vanRijn2016,
   author    = {van Rijn, Sander and Post, Bas and Veenhuis, Jorn and B{\"a}ck, Thomas},
   title     = {Evolving the Structure of Evolution Strategies},
-  booktitle = {Proceedings of the 2016 Genetic and Evolutionary Computation Conference (GECCO)},
+  booktitle = {Proceedings of the 2016 Genetic and Evolutionary Computation Conference},
   pages     = {837--844},
   year      = {2016},
   doi       = {10.1145/2908812.2908873}
@@ -235,7 +291,7 @@
 @inproceedings{deNobel2021,
   author    = {de Nobel, Jacob and Vermetten, Diederick and Wang, Hao and Doerr, Carola and B{\"a}ck, Thomas},
   title     = {Tuning as a Means of Assessing the Benefits of New Ideas in Interplay with Existing Algorithmic Modules},
-  booktitle = {Proceedings of the Genetic and Evolutionary Computation Conference Companion (GECCO)},
+  booktitle = {Proceedings of the Genetic and Evolutionary Computation Conference Companion},
   pages     = {1375--1384},
   year      = {2021},
   publisher = {ACM},
@@ -243,7 +299,7 @@
 }
 
 % ------------------------------------------------------------------------------
-% 4. LLM FOR PROMPT, FUNCTION, & ALGORITHM EVOLUTION
+% 5. LLM-BASED ALGORITHM & PROGRAM EVOLUTION
 % ------------------------------------------------------------------------------
 
 @article{Romera2023,
@@ -254,76 +310,43 @@
   number    = {7995},
   pages     = {468--475},
   year      = {2024},
-  doi       = {10.1038/s41586-023-06924-6},
-  url       = {https://doi.org/10.1038/s41586-023-06924-6},
-  note      = {Demonstrates LLMs acting as mutation operators to autonomously discover novel mathematical and algorithmic solutions}
+  doi       = {10.1038/s41586-023-06924-6}
 }
 
 @article{LLaMEA2024,
-  author  = {van Stein, Niki and Vermetten, Diederick and Kononova, Anna V. and B{\"a}ck, Thomas},
-  title   = {{LLaMEA}: A Large Language Model Evolutionary Algorithm Framework},
-  journal = {IEEE Transactions on Evolutionary Computation},
-  volume  = {29},
-  number  = {2},
-  pages   = {331--345},
-  year    = {2025},
-  doi     = {10.1109/TEVC.2024.3497793},
-  note    = {Published Online / In Press}
+  author    = {van Stein, Niki and Vermetten, Diederick and Kononova, Anna V. and B{\"a}ck, Thomas},
+  title     = {{LLaMEA}: A Large Language Model Evolutionary Algorithm Framework},
+  journal   = {IEEE Transactions on Evolutionary Computation},
+  volume    = {29},
+  number    = {2},
+  pages     = {331--345},
+  year      = {2025},
+  doi       = {10.1109/TEVC.2024.3497793}
 }
 
 @article{LLaMEABO2025,
-  author  = {van Stein, Niki and Vermetten, Diederick and Kononova, Anna V. and B{\"a}ck, Thomas},
-  title   = {{LLaMEA-BO}: Extending Large Language Model Evolutionary Algorithms to Bayesian Optimization and Expensive Black-Box Search},
-  journal = {IEEE Transactions on Evolutionary Computation},
-  volume  = {29},
-  number  = {5},
-  pages   = {612--625},
-  year    = {2025},
-  doi     = {10.1109/TEVC.2025.3512345}
+  author    = {van Stein, Niki and Vermetten, Diederick and Kononova, Anna V. and B{\"a}ck, Thomas},
+  title     = {{LLaMEA-BO}: Extending Large Language Model Evolutionary Algorithms to Bayesian Optimization and Expensive Black-Box Search},
+  journal   = {IEEE Transactions on Evolutionary Computation},
+  volume    = {29},
+  number    = {5},
+  pages     = {612--625},
+  year      = {2025}
 }
 
 @article{LLaMEASAGE2026,
-  author  = {van Stein, Niki and Kononova, Anna V. and Kotthoff, Lars and B{\"a}ck, Thomas},
-  title   = {{LLaMEA-SAGE}: Guiding Automated Algorithm Design with Structural Feedback from Explainable {AI}},
-  journal = {arXiv preprint arXiv:2601.21511},
-  year    = {2026},
-  doi     = {10.48550/arXiv.2601.21511},
-  url     = {https://arxiv.org/abs/2601.21511}
-}
-
-@article{ReflectiveSurvey2025,
-  author    = {Zhang, Chen and Wang, Hao and B{\"a}ck, Thomas and Jin, Yaochu},
-  title     = {Exploring Automated Algorithm Design: Synergizing Large Language Models and Evolutionary Algorithms},
-  journal   = {MIT Evolutionary Computation},
-  volume    = {33},
-  number    = {4},
-  pages     = {401--435},
-  year      = {2025},
-  publisher = {MIT Press},
-  doi       = {10.1162/evco_a_00388}
-}
-
-@inproceedings{AutoEP2025,
-  author    = {Liu, Haoran and Ye, Furong and Doerr, Carola},
-  title     = {{AutoEP}: Zero-Shot Exploratory Landscape Analysis for {LLM}-Driven Heuristic Evolution},
-  booktitle = {International Conference on Learning Representations (ICLR)},
+  author    = {van Stein, Niki and Kononova, Anna V. and Kotthoff, Lars and B{\"a}ck, Thomas},
+  title     = {{LLaMEA-SAGE}: Guiding Automated Algorithm Design with Structural Feedback from Explainable {AI}},
+  journal   = {arXiv preprint arXiv:2601.21511},
   year      = {2026},
-  url       = {https://openreview.net/forum?id=AutoEP2025}
-}
-
-@article{Lange2024,
-  author  = {Lange, Robert Tjarko and Tian, Yingtao and Tang, Yujin},
-  title   = {Large Language Models as Evolution Strategies},
-  journal = {arXiv preprint arXiv:2402.18381},
-  year    = {2024},
-  doi     = {10.48550/arXiv.2402.18381},
-  url     = {https://arxiv.org/abs/2402.18381}
+  doi       = {10.48550/arXiv.2601.21511},
+  url       = {https://arxiv.org/abs/2601.21511}
 }
 
 @inproceedings{Liu2024,
   author    = {Liu, Fei and Tong, Xialiang and Yuan, Mingxuan and Lin, Xi and Luo, Fu and Wang, Zhenkun and Lu, Zhichao and Zhang, Qingfu},
   title     = {Evolution of Heuristics: Towards Efficient Automatic Algorithm Design Using Large Language Model},
-  booktitle = {Proceedings of the 41st International Conference on Machine Learning (ICML)},
+  booktitle = {Proceedings of the 41st International Conference on Machine Learning},
   series    = {Proceedings of Machine Learning Research},
   volume    = {235},
   pages     = {32201--32223},
@@ -333,96 +356,127 @@
 }
 
 @article{AEL2024,
-  author  = {Liu, Fei and Tong, Xialiang and Yuan, Mingxuan and Zhang, Qingfu},
-  title   = {Algorithm Evolution Using Large Language Model},
-  journal = {arXiv preprint arXiv:2311.15249},
-  year    = {2023},
-  doi     = {10.48550/arXiv.2311.15249},
-  url     = {https://arxiv.org/abs/2311.15249}
+  author    = {Liu, Fei and Tong, Xialiang and Yuan, Mingxuan and Zhang, Qingfu},
+  title     = {Algorithm Evolution Using Large Language Model},
+  journal   = {arXiv preprint arXiv:2311.15249},
+  year      = {2023},
+  doi       = {10.48550/arXiv.2311.15249},
+  url       = {https://arxiv.org/abs/2311.15249}
 }
 
 @inproceedings{ReEvo2024,
   author    = {Ye, Haoran and Wang, Jiarui and Cao, Zhiguang and Berto, Federico and Hua, Chuanbo and Kim, Haeyeon and Park, Jinkyoo and Song, Guojie},
   title     = {{ReEvo}: Large Language Models as Hyper-Heuristics with Reflective Evolution},
-  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  booktitle = {Advances in Neural Information Processing Systems},
   volume    = {37},
   pages     = {43571--43608},
   year      = {2024},
-  doi       = {10.52202/079017-1381},
-  url       = {https://doi.org/10.52202/079017-1381}
+  doi       = {10.52202/079017-1381}
 }
+
+@article{Lange2024,
+  author    = {Lange, Robert Tjarko and Tian, Yingtao and Tang, Yujin},
+  title     = {Large Language Models as Evolution Strategies},
+  journal   = {arXiv preprint arXiv:2402.18381},
+  year      = {2024},
+  doi       = {10.48550/arXiv.2402.18381},
+  url       = {https://arxiv.org/abs/2402.18381}
+}
+
+% ------------------------------------------------------------------------------
+% 6. LLM PROMPT OPTIMIZATION, REFLECTION & SELF-DEBUGGING
+% ------------------------------------------------------------------------------
 
 @inproceedings{Guo2023,
   author    = {Guo, Qingyan and Wang, Rui and Guo, Junliang and Li, Bei and Song, Kaitao and Tan, Xu and Liu, Guoqing and Bian, Jiang and Yang, Yujiu},
   title     = {Connecting Large Language Models with Evolutionary Algorithms Yields Powerful Prompt Optimizers},
-  booktitle = {Proceedings of the 12th International Conference on Learning Representations (ICLR)},
+  booktitle = {International Conference on Learning Representations},
   year      = {2024},
-  doi       = {10.48550/arXiv.2309.08532},
-  url       = {https://openreview.net/forum?id=9A2I33K29s}
+  doi       = {10.48550/arXiv.2309.08532}
 }
 
 @article{Zelikman2024,
-  author  = {Zelikman, Eric and Lorch, Eliana and Mackey, Lester and Kalai, Adam Tauman},
-  title   = {Self-Taught Optimizer ({STOP}): Recursively Self-Improving Code Generation},
-  journal = {arXiv preprint arXiv:2310.02304},
-  year    = {2024},
-  doi     = {10.48550/arXiv.2310.02304},
-  url     = {https://arxiv.org/abs/2310.02304}
+  author    = {Zelikman, Eric and Lorch, Eliana and Mackey, Lester and Kalai, Adam Tauman},
+  title     = {Self-Taught Optimizer ({STOP}): Recursively Self-Improving Code Generation},
+  journal   = {arXiv preprint arXiv:2310.02304},
+  year      = {2024},
+  doi       = {10.48550/arXiv.2310.02304}
 }
-
-% ------------------------------------------------------------------------------
-% 5. MULTI-AGENT REFLEXION & SELF-DEBUGGING
-% ------------------------------------------------------------------------------
 
 @inproceedings{Shinn2023,
   author    = {Shinn, Noah and Cassano, Federico and Berman, Edward and Gopinath, Ashwin and Narasimhan, Karthik and Yao, Shunyu},
   title     = {Reflexion: Language Agents with Verbal Reinforcement Learning},
-  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  booktitle = {Advances in Neural Information Processing Systems},
   volume    = {36},
   pages     = {8634--8652},
   year      = {2023},
-  doi       = {10.52202/075280-0377},
-  url       = {https://doi.org/10.52202/075280-0377}
+  doi       = {10.52202/075280-0377}
 }
 
 @inproceedings{Chen2023,
   author    = {Chen, Xinyun and Lin, Maxwell and Sch{\"a}rli, Nathanael and Zhou, Denny},
   title     = {Teaching Large Language Models to Self-Debug},
-  booktitle = {International Conference on Learning Representations (ICLR)},
+  booktitle = {International Conference on Learning Representations},
   year      = {2024},
-  doi       = {10.48550/arXiv.2304.05128},
-  url       = {https://openreview.net/forum?id=KuPixIqPiq}
+  doi       = {10.48550/arXiv.2304.05128}
+}
+
+@article{Murthy2025,
+  author    = {Murthy, Rithesh and Zhu, Ming and Yang, Liangwei and Qiu, Jielin and Tan, Juntao and Heinecke, Shelby and Xiong, Caiming and Savarese, Silvio and Wang, Huan},
+  title     = {{Promptomatix}: An Automatic Prompt Optimization Framework for Large Language Models},
+  journal   = {arXiv preprint arXiv:2507.14241},
+  year      = {2025},
+  doi       = {10.48550/arXiv.2507.14241}
+}
+
+% ------------------------------------------------------------------------------
+% 7. EXPLAINABLE / STRUCTURAL AAD
+% ------------------------------------------------------------------------------
+
+@article{ReflectiveSurvey2025,
+  author    = {Zhang, Chen and Wang, Hao and B{\"a}ck, Thomas and Jin, Yaochu},
+  title     = {Exploring Automated Algorithm Design: Synergizing Large Language Models and Evolutionary Algorithms},
+  journal   = {Evolutionary Computation},
+  volume    = {33},
+  number    = {4},
+  pages     = {401--435},
+  year      = {2025},
+  publisher = {MIT Press},
+  doi       = {10.1162/evco_a_00388}
+}
+
+@article{vanStein2025,
+  author    = {van Stein, Niki and Kononova, Anna V. and B{\"a}ck, Thomas},
+  title     = {From Performance to Understanding: A Vision for Explainable Automated Algorithm Design},
+  journal   = {arXiv preprint arXiv:2511.16201},
+  year      = {2025},
+  doi       = {10.48550/arXiv.2511.16201}
+}
+
+% ------------------------------------------------------------------------------
+% 8. AUTOEP
+% ------------------------------------------------------------------------------
+
+@inproceedings{AutoEP2025,
+  author    = {Liu, Haoran and Ye, Furong and Doerr, Carola},
+  title     = {{AutoEP}: Zero-Shot Exploratory Landscape Analysis for {LLM}-Driven Heuristic Evolution},
+  booktitle = {International Conference on Learning Representations},
+  year      = {2026},
+  url       = {https://openreview.net/forum?id=AutoEP2025}
 }
 
 @article{AutoEP2026,
-  author  = {Xu, Zhenxing and Zhang, Yizhe and Bao, Weidong and Wang, Hao and Chen, Ming and Ye, Haoran and Jiang, Wenzheng and Yan, Hui and Wang, Ji},
-  title   = {{AutoEP}: {LLMs}-Driven Automation of Hyperparameter Evolution for Metaheuristic Algorithms},
-  journal = {arXiv preprint arXiv:2509.23189},
-  year    = {2025},
-  doi     = {10.48550/arXiv.2509.23189},
-  url     = {https://arxiv.org/abs/2509.23189}
+  author    = {Xu, Zhenxing and Zhang, Yizhe and Bao, Weidong and Wang, Hao and Chen, Ming and Ye, Haoran and Jiang, Wenzheng and Yan, Hui and Wang, Ji},
+  title     = {{AutoEP}: {LLMs}-Driven Automation of Hyperparameter Evolution for Metaheuristic Algorithms},
+  journal   = {arXiv preprint arXiv:2509.23189},
+  year      = {2025},
+  doi       = {10.48550/arXiv.2509.23189},
+  url       = {https://arxiv.org/abs/2509.23189}
 }
 
-@article{ZhangSurvey2025,
-  author  = {Zhang, Yisong and Cheng, Ran and Yi, Guoxing and Tan, Kay Chen},
-  title   = {A Systematic Survey on Large Language Models for Evolutionary Optimization: From Modeling to Solving},
-  journal = {arXiv preprint arXiv:2509.08269},
-  year    = {2025},
-  doi     = {10.48550/arXiv.2509.08269},
-  url     = {https://arxiv.org/abs/2509.08269}
-}
-
-
-@article{Hansen2021COCO,
-  author    = {Hansen, Nikolaus and Auger, Anne and Ros, Raymond and Mersmann, Olaf and Tu{\v{s}}ar, Tea and Brockhoff, Dimo},
-  title     = {{COCO}: A Platform for Comparing Continuous Optimizers in a Black-Box Setting},
-  journal   = {Optimization Methods and Software},
-  volume    = {36},
-  number    = {1},
-  pages     = {114--144},
-  year      = {2021},
-  doi       = {10.1080/10556788.2020.1808977}
-}
+% ------------------------------------------------------------------------------
+% 9. STATISTICAL ANALYSIS
+% ------------------------------------------------------------------------------
 
 @article{MannWhitney1947,
   author    = {Mann, Henry B. and Whitney, Donald R.},
@@ -446,25 +500,9 @@
   doi       = {10.3102/10769986025002101}
 }
 
-
-@book{Goldberg1989,
-  author    = {Goldberg, David E.},
-  title     = {Genetic Algorithms in Search, Optimization, and Machine Learning},
-  publisher = {Addison-Wesley Professional},
-  year      = {1989},
-  isbn      = {978-0201157673}
-}
-
-@book{Eiben2015,
-  author    = {Eiben, Agoston E. and Smith, James E.},
-  title     = {Introduction to Evolutionary Computing},
-  series    = {Natural Computing Series},
-  edition   = {2nd},
-  publisher = {Springer},
-  address   = {Berlin, Germany},
-  year      = {2015},
-  doi       = {10.1007/978-3-662-44874-8}
-}
+% ------------------------------------------------------------------------------
+% 10. OTHER REFERENCES RETAINED FROM THE THESIS DATABASE
+% ------------------------------------------------------------------------------
 
 @book{Spall2003,
   author    = {Spall, James C.},
@@ -486,31 +524,4 @@
   publisher = {Springer},
   doi       = {10.1007/s10710-012-9164-7}
 }
-
-@article{Murthy2025,
-  author  = {Murthy, Rithesh and Zhu, Ming and Yang, Liangwei and Qiu, Jielin and Tan, Juntao and Heinecke, Shelby and Xiong, Caiming and Savarese, Silvio and Wang, Huan},
-  title   = {{Promptomatix}: An Automatic Prompt Optimization Framework for Large Language Models},
-  journal = {arXiv preprint arXiv:2507.14241},
-  year    = {2025},
-  doi     = {10.48550/arXiv.2507.14241}
-}
-
-@article{vanStein2025,
-  author  = {van Stein, Niki and Kononova, Anna V. and B{\"a}ck, Thomas},
-  title   = {From Performance to Understanding: A Vision for Explainable Automated Algorithm Design},
-  journal = {arXiv preprint arXiv:2511.16201},
-  year    = {2025},
-  doi     = {10.48550/arXiv.2511.16201}
-}
-
-@article{Qian2020,
-  author    = {Qian, Chao and Yu, Yang and Tang, Ke and Jin, Yaochu and Yao, Xin and Zhou, Zhi-Hua},
-  title     = {On the Effectiveness of Sampling for Evolutionary Optimization in Noisy Environments},
-  journal   = {Evolutionary Computation},
-  volume    = {26},
-  number    = {2},
-  pages     = {237--267},
-  year      = {2018},
-  publisher = {MIT Press},
-  doi       = {10.1162/evco_a_00216}
-}
+```
