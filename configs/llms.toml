@@ -91,16 +91,32 @@ description = "Llama Models"
 
 [[Llama.llms]]
 name = "Meta-Llama-3.1-8B-Instruct"
-tag = "Llama-8B"
-description = "4.9 GB, Medium Alternative"
-repo = "QuantFactory/Meta-Llama-3.1-8B-Instruct-GGUF"
-file = "Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf"
-model = "Meta-Llama-3.1-8B-Instruct.Q4_K_M"
+tag = "Llama-3.1-8B"
+description = "4.9 GB (Q4_K_M), Fast baseline, leaves plenty of headroom"
+repo = "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF"
+file = "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+model = "Meta-Llama-3.1-8B-Instruct-Q4_K_M"
 
 [[Llama.llms]]
-name = "Meta-Llama-3-70B-Instruct"
-tag = "Llama-70B"
-description = "70B Alternative"
-repo = "QuantFactory/Meta-Llama-3-70B-Instruct-GGUF"
-file = "Meta-Llama-3-70B-Instruct.Q4_K_M.gguf"
-model = "Meta-Llama-3-70B-Instruct.Q4_K_M"
+name = "Meta-Llama-3.1-8B-Instruct-HighPrec"
+tag = "Llama-3.1-8B-Q8"
+description = "8.5 GB (Q8_0), Near-lossless precision for robust AST compliance"
+repo = "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF"
+file = "Meta-Llama-3.1-8B-Instruct-Q8_0.gguf"
+model = "Meta-Llama-3.1-8B-Instruct-Q8_0"
+
+[[Llama.llms]]
+name = "CodeLlama-13B-Instruct"
+tag = "CodeLlama-13B"
+description = "7.9 GB (Q4_K_M), Dedicated coding architecture; strong OOP compliance under 15GB"
+repo = "TheBloke/CodeLlama-13B-Instruct-GGUF"
+file = "codellama-13b-instruct.Q4_K_M.gguf"
+model = "codellama-13b-instruct.Q4_K_M"
+
+[[Llama.llms]]
+name = "CodeLlama-13B-Instruct-HighPrec"
+tag = "CodeLlama-13B-Q6"
+description = "10.4 GB (Q6_K), High precision dedicated coding model fitting safely within 15GB VRAM"
+repo = "TheBloke/CodeLlama-13B-Instruct-GGUF"
+file = "codellama-13b-instruct.Q6_K.gguf"
+model = "codellama-13b-instruct.Q6_K"
