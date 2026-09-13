@@ -10,8 +10,6 @@ import tomllib
 
 from shared.config import CONFIGS_DIR
 
-from benchmarking.application.evaluation_config import EvaluationConfig
-
 
 class EvaluationConfigRepository:
     """Infrastructure repository for reading and parsing benchmark.toml and baselines.toml."""
@@ -35,8 +33,10 @@ class EvaluationConfigRepository:
         with open(self.baselines_path, "rb") as f:
             return tomllib.load(f).get("baselines", {})
 
-    def load_config(self) -> EvaluationConfig:
+    def load_config(self) -> Any:
         """Loads and parses the benchmark.toml configuration into an EvaluationConfig model."""
+        from benchmarking.application.evaluation_config import EvaluationConfig
+
         cfg: dict[str, Any] = {}
         if self.config_path.exists():
             with open(self.config_path, "rb") as f:

@@ -12,7 +12,8 @@ from benchmarking.application.audit_service import (
     AuditMatrixData,
     EvaluationAuditService,
 )
-from benchmarking.application.evaluation_service import EvaluationConfig, EvaluationService
+from benchmarking.application.evaluation_config import EvaluationConfig
+from benchmarking.application.evaluation_service import EvaluationService
 from benchmarking.application.selection_service import ChampionSelectionService
 from benchmarking.application.statistical_service import (
     StatisticalEvaluationService,

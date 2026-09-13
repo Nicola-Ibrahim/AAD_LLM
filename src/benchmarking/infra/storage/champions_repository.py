@@ -87,27 +87,33 @@ class ChampionsReadRepository:
                     "llm_name": str(llm_name),
                 }
 
-            # 2. Noisy Champion (noise_std > 0.0)
+            # 2. Noisy Champions (noise_std > 0.0)
             noisy_grp = group[group["noise_std"] > 0.0]
             if not noisy_grp.empty:
-                best_noisy = noisy_grp.iloc[0]
-                k_noisy = f"f{p_id}_{dim}D_noisy_{strat}"
-                champions[llm_name][k_noisy] = {
-                    "problem_id": int(p_id),
-                    "dim": int(dim),
-                    "mode": "noisy",
-                    "noise_std": float(best_noisy["noise_std"]),
-                    "prompt_strategy": str(strat),
-                    "experiment_id": int(best_noisy["experiment_id"]),
-                    "iteration_id": int(best_noisy["iteration_id"]),
-                    "algorithm_name": str(best_noisy["algorithm_name"]),
-                    "final_error": float(best_noisy["final_error"]),
-                    "evaluations_used": int(best_noisy["evaluations_used"])
-                    if pd.notnull(best_noisy["evaluations_used"])
-                    else None,
-                    "code_path": str(best_noisy["code_path"]),
-                    "llm_name": str(llm_name),
-                }
+                for n_std, sub_noisy in noisy_grp.groupby("noise_std"):
+                    best_noisy = sub_noisy.iloc[0]
+                    n_float = float(n_std)
+                    k_noisy = (
+                        f"f{p_id}_{dim}D_noisy_{strat}"
+                        if n_float == 0.05
+                        else f"f{p_id}_{dim}D_std{n_float}_{strat}"
+                    )
+                    champions[llm_name][k_noisy] = {
+                        "problem_id": int(p_id),
+                        "dim": int(dim),
+                        "mode": "noisy",
+                        "noise_std": n_float,
+                        "prompt_strategy": str(strat),
+                        "experiment_id": int(best_noisy["experiment_id"]),
+                        "iteration_id": int(best_noisy["iteration_id"]),
+                        "algorithm_name": str(best_noisy["algorithm_name"]),
+                        "final_error": float(best_noisy["final_error"]),
+                        "evaluations_used": int(best_noisy["evaluations_used"])
+                        if pd.notnull(best_noisy["evaluations_used"])
+                        else None,
+                        "code_path": str(best_noisy["code_path"]),
+                        "llm_name": str(llm_name),
+                    }
 
         return champions
 

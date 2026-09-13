@@ -125,8 +125,17 @@ class EvaluationAuditService:
                     total_cells += 1
                     col_name = f"{m_label} / {strat}"
                     folder_name = f"{m_slug}_{strat}"
-                    s_dir = self.trace_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder_name
+                    cond_dir = self.trace_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}"
+                    s_dir = cond_dir / folder_name
                     runs = self.trace_repo.get_run_count(s_dir) if s_dir.exists() else 0
+                    if runs < self.target_runs:
+                        s_noisy = cond_dir / f"{m_slug}_{strat}_noisy"
+                        if s_noisy.exists():
+                            runs = max(runs, self.trace_repo.get_run_count(s_noisy))
+                    if runs < self.target_runs:
+                        s_impl = cond_dir / f"{m_slug}_{strat}_implicit"
+                        if s_impl.exists():
+                            runs = max(runs, self.trace_repo.get_run_count(s_impl))
 
                     if runs >= self.target_runs:
                         row[col_name] = f"✅ {runs}/{self.target_runs}"

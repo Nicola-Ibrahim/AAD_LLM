@@ -8,17 +8,17 @@
 
 ## 2. Omnibus Kruskal-Wallis Significance Summary
 - **Total Experimental Conditions Evaluated**: 80
-- **Statistically Significant omnibus Differences ($p < 0.05$)**: 72 / 80 (90.0%)
+- **Statistically Significant omnibus Differences ($p < 0.05$)**: 80 / 80 (100.0%)
 
 ### Omnibus Differences by Problem Dimension
-- **2D**: 18 / 20 conditions reject null hypothesis
-- **3D**: 19 / 20 conditions reject null hypothesis
-- **5D**: 18 / 20 conditions reject null hypothesis
-- **10D**: 17 / 20 conditions reject null hypothesis
+- **2D**: 20 / 20 conditions reject null hypothesis
+- **3D**: 20 / 20 conditions reject null hypothesis
+- **5D**: 20 / 20 conditions reject null hypothesis
+- **10D**: 20 / 20 conditions reject null hypothesis
 
 ## 3. Pairwise Comparisons & FDR Correction
-- **Total Pairwise Hypothesis Tests**: 8152
-- **Significant Differences after FDR Correction ($\alpha=0.05$)**: 6525 / 8152 (80.0%)
+- **Total Pairwise Hypothesis Tests**: 13232
+- **Significant Differences after FDR Correction ($\alpha=0.05$)**: 10553 / 13232 (79.8%)
 
 ### Comparison Tier Breakdown
-- **Tier 3 (Classical vs. Classical)**: 6525 / 8152 pairs significant
+- **Tier 3 (Classical vs. Classical)**: 10553 / 13232 pairs significant

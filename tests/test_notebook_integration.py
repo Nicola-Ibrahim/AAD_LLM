@@ -135,6 +135,34 @@ def test_nb03_evaluation_pipeline():
     print("✅ NB03 benchmark evaluation pipeline verified.")
 
 
+def test_nb03_import_order_isolation():
+    """Verify Notebook 03 imports succeed in a clean subprocess where infra is loaded before application."""
+    import subprocess
+    import sys
+
+    cmd = [
+        sys.executable,
+        "-c",
+        "import sys\n"
+        "sys.path.insert(0, 'src')\n"
+        "from benchmarking.infra.io.trace_repository import EvaluationStateRepository, IOHTraceReader\n"
+        "from benchmarking.infra.storage import (\n"
+        "    EvaluationConfigRepository,\n"
+        "    ChampionsReadRepository,\n"
+        "    SQLiteSynthesisReadRepository,\n"
+        ")\n"
+        "from benchmarking.application.selection_service import ChampionSelectionService\n"
+        "from benchmarking.application.evaluation_service import EvaluationService\n"
+        "from benchmarking.infra.logging import EvaluationLogger\n"
+        "repo = EvaluationConfigRepository()\n"
+        "cfg = repo.load_config()\n"
+        "assert cfg.target_eval_runs > 0\n"
+        "print('NB03 import order verified.')\n",
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    assert "NB03 import order verified." in result.stdout
+
+
 def test_nb04_audit_pipeline():
     """Verify Notebook 04 (04_audit.ipynb: Experimental Matrix Audit)."""
     print("\nTesting NB04 logic with EvaluationAuditService...")
