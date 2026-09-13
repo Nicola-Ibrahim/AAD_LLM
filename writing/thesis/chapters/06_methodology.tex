@@ -2,7 +2,7 @@
 % Chapter 3: Methodology
 %------------------------------------------------------------------------------
 
-\chapter{Methodology}\label{chap}
+\chapter{Methodology}\label{chap:methodology}
 
 This chapter describes the implementation used to study automated algorithm
 design under stochastic fitness evaluation. The method builds on the Large
@@ -17,9 +17,9 @@ environment experienced by a generated algorithm from the information used
 by the synthesis framework to assess that algorithm. An LLM receives the
 optimization task, the current synthesis context, and the selected prompt
 configuration. It generates a Python implementation of an optimization
-heuristic. The generated algorithm is then extracted, checked, and executed in
-an isolated environment. During this execution, the optimizer interacts with
-the objective only through the provided evaluation interface. Under
+heuristic. The generated algorithm is then extracted, checked, and executed
+in an isolated environment. During this execution, the optimizer interacts
+with the objective only through the provided evaluation interface. Under
 stochastic conditions, this interface returns noisy objective values, while
 the clean objective remains available inside the evaluation framework for
 diagnostic assessment.
@@ -41,19 +41,19 @@ The complete process can be summarized as
 \text{Synthesis context}
 \rightarrow
 \text{LLM generation}
-\
+\\
 &\rightarrow
 \text{Code extraction}
 \rightarrow
 \text{Validation}
 \rightarrow
 \text{Isolated execution}
-\
+\\
 &\rightarrow
 \text{Objective evaluation}
 \rightarrow
 \text{Clean diagnostic evaluation}
-\
+\\
 &\rightarrow
 \text{Feedback}
 \rightarrow
@@ -61,10 +61,10 @@ The complete process can be summarized as
 \rightarrow
 \text{Updated incumbent}.
 \end{aligned}
-\label{eq}
+\label{eq:method_overview}
 \end{equation}
 
-Figure~\ref{fig} provides a corresponding overview
+Figure~\ref{fig:llamea_synthesis_overview} provides a corresponding overview
 of the synthesis loop. Starting from the optimization task and synthesis
 configuration, the LLM generates a candidate optimization algorithm. The
 candidate is then extracted, validated, and executed by the evaluation
@@ -83,7 +83,7 @@ next generation. The process continues until the synthesis run terminates.
 this thesis. The model generates candidate optimization heuristics, which
 are evaluated and used to update the synthesis context for subsequent
 generations.}
-\label{fig}
+\label{fig:llamea_synthesis_overview}
 \end{figure}
 
 %==============================================================================
@@ -225,8 +225,8 @@ known optimum.
 This maintains the black-box setting of the optimization problem. From the
 perspective of the generated algorithm, the objective is an externally
 provided function that can be queried at candidate points. The optimizer
-must therefore construct its search strategy from the observations returned
-by these queries.
+must therefore construct its search strategy from the fitness values
+returned by these queries.
 
 The isolated worker process also provides a boundary between candidate
 execution and the rest of the synthesis framework. A candidate that enters
@@ -471,19 +471,27 @@ same coordinate $x$, two evaluations can consequently return different
 noisy fitness values,
 
 \begin{equation}
-f_{\mathrm{noise}}^{(1)}(x)
+f_{\mathrm{noise}}^{(i)}(x)
 =
-f_{\mathrm{clean}}(x) + z_1,
+f_{\mathrm{clean}}(x) + z_i,
 \qquad
-f_{\mathrm{noise}}^{(2)}(x)
-=
-f_{\mathrm{clean}}(x) + z_2,
-\qquad
-z_1 \neq z_2,
+z_i \overset{\mathrm{i.i.d.}}{\sim}
+\mathcal{N}
+\left(
+0,
+\left(
+\sigma
+\left|
+f_{\mathrm{clean}}(x)-f^*
+\right|
+\right)^2
+\right).
+\label{eq:independent_noise_realizations}
 \end{equation}
 
-even though both evaluations use the same underlying clean objective and the
-same stochastic objective model.
+Thus, repeated queries at the same point can return different noisy fitness
+values, even though the underlying clean objective and the stochastic
+objective model remain unchanged.
 
 The generated optimizer therefore has to operate on repeated noisy fitness
 values rather than on a deterministic function with a modified scale. This
@@ -509,7 +517,7 @@ search vary between objective queries.
 %------------------------------------------------------------------------------
 
 The evaluation framework nevertheless retains the clean objective
-internally. After a candidate has completed its search, the returned
+internally. After an algorithm has completed its search, the returned
 solution is evaluated using the clean objective rather than the particular
 noisy fitness value returned during the final stochastic query.
 
@@ -519,9 +527,11 @@ defined as
 \begin{equation}
 \Delta f(x_{\mathrm{best}})
 =
+\left|
 f_{\mathrm{clean}}(x_{\mathrm{best}})
 -
-f^*.
+f^*
+\right|.
 \label{eq:clean_optimality_gap}
 \end{equation}
 
@@ -550,14 +560,15 @@ clean objective value after the optimization run has finished.
 Once a generated candidate has been executed and evaluated, its result is
 returned to the evolutionary controller. The controller uses the clean
 diagnostic quality of the returned solution to compare the candidate with
-the current incumbent. This is an important distinction from the objective
-observations used internally by the generated optimizer: the candidate
-searches using the configured objective interface, whereas the synthesis
-framework compares the resulting algorithms using the clean optimality gap
-of their returned solutions.
+the current incumbent. This is an important distinction from the fitness
+values used internally by the generated optimizer: the candidate searches
+using the configured objective interface, whereas the synthesis framework
+compares the resulting algorithms using the clean optimality gap of their
+returned solutions.
 
-For a parent algorithm $\mathcal{A}*{\mathrm{parent}}$ and a child algorithm
-$\mathcal{A}*{\mathrm{child}}$, let
+For a parent algorithm
+$\mathcal{A}_{\mathrm{parent}}$ and a child algorithm
+$\mathcal{A}_{\mathrm{child}}$, let
 
 \begin{equation}
 \Delta f_{\mathrm{parent}}
@@ -579,8 +590,7 @@ x_{\mathrm{child}}
 \right)
 \end{equation}
 
-denote their respective clean optimality gaps before parent resampling is
-taken into account.
+denote their respective clean optimality gaps.
 
 Since the optimization problem is formulated as minimization, a child with a
 smaller clean optimality gap represents an improvement over the parent. The
@@ -595,113 +605,86 @@ improvement according to the selection criterion.
 The parent--child comparison represents the evolutionary update of the
 synthesis process. The parent corresponds to the currently retained
 algorithm, while the child is the newly generated algorithm produced from
-the current synthesis context.
+the current synthesis context. The synthesis process uses one parent and one
+offspring with elitist selection, corresponding to a $(1+1)$ evolutionary
+structure.
 
-Under deterministic evaluation, the clean optimality gap of the parent can
-be used directly as the reference value. Under stochastic evaluation,
-however, the solution produced by the parent can depend on the particular
-stochastic trajectory encountered during its execution. For this reason, the
-implementation re-evaluates the parent using multiple independent stochastic
-passes before the comparison is made.
+Each generated child is executed once by the evaluation framework. During
+this execution, the optimizer interacts with the configured objective
+interface and receives the corresponding fitness values. Under stochastic
+conditions, these values are subject to the configured noise model.
 
-Let
-
-\begin{equation}
-\Delta f_{\mathrm{parent}}^{(k)}
-=
-\Delta f
-\left(
-x_{\mathrm{parent}}^{(k)}
-\right)
-\end{equation}
-
-denote the clean optimality gap obtained from the $k$-th independent
-evaluation of the parent. The average parent reference is then
+After the execution has finished, the returned solution is evaluated using
+the clean objective. For a returned solution $x_{\mathrm{best}}$, the clean
+optimality gap is defined as
 
 \begin{equation}
-\overline{\Delta f}*{\mathrm{parent}}
+\Delta f(x_{\mathrm{best}})
 =
-\frac{1}{K}
-\sum*{k=1}^{K}
-\Delta f_{\mathrm{parent}}^{(k)},
-\qquad
-K=3.
-\label{eq:parent_resampled_gap}
+\left|
+f_{\mathrm{clean}}(x_{\mathrm{best}})
+-
+f^*
+\right|.
+\label{eq:clean_optimality_gap_selection}
 \end{equation}
 
-The child is evaluated through its current synthesis execution, producing
-the clean gap $\Delta f_{\mathrm{child}}$. The evolutionary update can then
-be expressed as
+The resulting error is converted into the fitness score used by LLaMEA,
+
+\begin{equation}
+S
+=
+-\Delta f,
+\label{eq:synthesis_fitness_score}
+\end{equation}
+
+so that smaller clean optimality gaps correspond to higher fitness scores.
+A successful candidate with an optimality gap of zero therefore receives the
+maximum possible fitness score of zero.
+
+The scored candidate is then passed to the LLaMEA synthesis engine. With one
+parent, one offspring, and elitism enabled, the evolutionary update retains
+the candidate with the better fitness score. Equivalently, in terms of the
+clean optimality gap, the child replaces the incumbent only when its clean
+error is strictly smaller than that of the currently retained parent:
 
 \begin{equation}
 \mathcal{A}_{\mathrm{inc}}^{(g+1)}
-==================================
-
+=
 \begin{cases}
-\mathcal{A}*{\mathrm{child}}^{(g)}
+\mathcal{A}_{\mathrm{child}}^{(g)}
 &
 \text{if }
-\Delta f*{\mathrm{child}}
-\leq
-\overline{\Delta f}*{\mathrm{parent}},
-[4pt]
-\mathcal{A}*{\mathrm{parent}}^{(g)}
+\Delta f_{\mathrm{child}}^{(g)}
+<
+\Delta f_{\mathrm{parent}}^{(g)},
+\\[4pt]
+\mathcal{A}_{\mathrm{parent}}^{(g)}
 &
 \text{otherwise}.
 \end{cases}
 \label{eq:clean_parent_child_selection}
 \end{equation}
 
-This means that the parent reference is based on the mean clean diagnostic
-quality of three independent parent executions, while the child is judged
-from the result of its current synthesis execution. The purpose is to make
-the incumbent reference less dependent on one stochastic trajectory rather
-than to remove all stochasticity from the synthesis process.
+The parent is not re-executed before this comparison. Its previously
+recorded clean diagnostic fitness remains the reference for elitist
+selection. Consequently, the current implementation does not use parent
+resampling or an averaged parent score.
 
-%------------------------------------------------------------------------------
-\subsection{Parent Resampling}
-\label{subsec:parent_resampling}
-%------------------------------------------------------------------------------
+This selection mechanism separates the stochastic search experienced by the
+generated optimizer from the criterion used by the outer synthesis process.
+The optimizer makes its search decisions using the fitness values returned
+by the configured objective interface, whereas the resulting candidate
+quality is assessed after execution using the clean objective. The clean
+diagnostic result is then converted into the fitness score used by the
+synthesis engine.
 
-Parent resampling is performed using $K=3$ independent stochastic passes.
-Each pass exposes the parent algorithm to a new sequence of objective
-realizations. Although the same program is executed in each pass, the
-stochastic fitness observations can differ, potentially leading to different
-search trajectories and different returned solutions.
-
-The resulting clean optimality gaps are averaged to obtain a more stable
-reference for the current incumbent:
-
-\begin{equation}
-\overline{\Delta f}*{\mathrm{parent}}
-=
-\frac{1}{K}
-\sum*{k=1}^{K}
-\Delta f_{\mathrm{parent}}^{(k)},
-\qquad
-K=3.
-\end{equation}
-
-Parent resampling does not expose the clean objective to the optimizer.
-During every pass, the parent still receives only the fitness values returned
-by the configured objective interface. The clean objective is used only
-after the optimization run has finished to assess the solution produced by
-that run.
-
-The procedure therefore separates two forms of evaluation. The generated
-algorithm is subjected to stochastic fitness during its search, while the
-solution produced by each execution is assessed using the clean objective.
-The three clean diagnostic values are then combined to obtain the parent
-reference used by the outer synthesis controller.
-
-It is important to note that parent resampling does not make the parent and
-child evaluations identical in terms of the number of stochastic executions.
-The parent is evaluated three times to obtain a more stable reference,
-whereas the newly generated child is evaluated through its current synthesis
-execution. The procedure is therefore not intended to produce a fully
-symmetric estimate of the expected performance of the two algorithms. Instead,
-it reduces the dependence of the incumbent reference on a single stochastic
-trajectory while retaining the $(1+1)$ evolutionary structure.
+Although the clean objective is not available to the generated optimizer
+during its execution, the resulting clean performance is included in the
+feedback provided to the synthesis process. Thus, the stochastic objective
+affects the candidate's search trajectory, while the clean diagnostic score
+provides the performance signal used for evolutionary selection and
+subsequent synthesis feedback.
 
 %------------------------------------------------------------------------------
 \subsection{Feedback and Evolutionary Context Update}
@@ -738,100 +721,188 @@ that can be used when constructing the prompt for the next candidate.
 \label{subsec:prompt_configurations}
 %------------------------------------------------------------------------------
 
-The synthesis process is evaluated with several prompt configurations. The
-configurations use the same generation, validation, execution, and selection
-pipeline but provide different instructions to the LLM. This allows the
-effect of prompt structure to be studied without changing the remaining
-components of the synthesis framework.
+The LLM receives a structured prompt assembled from several common and
+configuration-specific components. The prompt consists of an output-format
+specification, a code skeleton, and a task description. The output-format
+specification and code skeleton are shared across configurations, while the
+task description is varied to provide different levels of optimization and
+implementation guidance.
 
-The four configurations are defined as follows:
+\paragraph{Output Format.}
+All generated algorithms must follow the same output format. The relevant
+prompt component is:
+
+\begin{quote}
+\small
+\texttt{Feedback: <reasoning and description of the algorithm>}\\
+\texttt{Code:}\\
+\texttt{<exactly one Python code block containing the complete optimizer>}
+\end{quote}
+
+The format specification further requires a single optimizer class with an
+empty-argument \texttt{\_\_init\_\_}, a
+\texttt{\_\_call\_\_(self, problem, budget)} method, and a return value of
+\texttt{(best\_x, float(best\_y))}. It also prohibits pre-built
+\texttt{scipy.optimize} solvers, requires all variables to be defined before
+use, and requires every objective evaluation to be counted against the
+available budget. This common component ensures that all generated candidates
+can be validated and executed using the same interface.
+
+\paragraph{Code Skeleton.}
+A common code example is provided to show the expected optimizer structure:
+
+\begin{verbatim}
+import numpy as np
+
+class AlgorithmName:
+
+    def __init__(self):
+        pass
+
+    def __call__(self, problem, budget):
+
+        lb = np.asarray(
+            getattr(problem, 'lower_bound', -5.0), dtype=float
+        )
+        ub = np.asarray(
+            getattr(problem, 'upper_bound', 5.0), dtype=float
+        )
+        dim = int(
+            getattr(
+                problem,
+                'dim',
+                len(lb) if hasattr(lb, '__len__') else 3
+            )
+        )
+
+        best_x = np.random.uniform(lb, ub, size=dim)
+        best_y = float(problem(best_x))
+        evaluations = 1
+
+        # --- YOUR ALGORITHM LOGIC BELOW ---
+        # Track every call to problem(x).
+        # Stop when evaluations >= budget.
+        # Use NumPy operations for population-based computation
+        # where appropriate.
+        # --- YOUR ALGORITHM LOGIC ABOVE ---
+
+        return best_x, float(best_y)
+\end{verbatim}
+
+The complete skeleton additionally explains the evaluation-budget
+requirements and provides an example of population-based NumPy operations.
+The skeleton therefore fixes the interface and execution assumptions while
+leaving the actual optimization strategy to the LLM.
+
+\paragraph{Task Prompt.}
+The task component provides the optimization problem and its characteristics.
+The common task description asks the LLM to design a continuous black-box
+optimization algorithm for a specified BBOB problem, together with the search
+dimension, bounds, and evaluation budget. In the noisy setting, the common
+description also states that repeated calls to the objective may return
+different fitness values at the same point.
+
+The main task variations differ only in the additional guidance appended to
+this common description:
 
 \begin{description}
 
-```
-\item[\textsc{Baseline}:]
-The baseline configuration provides the basic optimization task and the
-required optimizer interface. It gives the LLM comparatively little
-additional guidance about how the optimization algorithm should be
-constructed. This configuration serves as a reference for evaluating
-whether more structured prompting provides an advantage.
+\item[\textsc{Clean}:]
+The task describes a deterministic, noise-free objective. It therefore
+allows the LLM to assume consistent fitness evaluations and encourages
+exploitation of the target landscape.
 
-\item[\textsc{Guided}:]
-The guided configuration adds domain-specific optimization information
-and suggestions related to stochastic fitness. The intention is to
-provide the model with useful considerations for continuous black-box
-optimization while still leaving the concrete algorithmic design to the
-model.
+\begin{quote}
+\small
+\textit{The objective function is entirely deterministic (noise-free). You
+can rely on precise evaluations and aggressive local search exploitation.}
+\end{quote}
 
-\item[\textsc{Thinking}:]
-The thinking configuration requests a structured analysis before
-source-code generation. The model is encouraged to consider previous
-candidate performance, exploration and exploitation, parameter
-adaptation, and the effects of noisy fitness before producing the
-implementation. The purpose is to examine whether an explicit analysis
-stage leads to more effective generated algorithms.
+This configuration provides the clean reference condition without
+noise-specific guidance.
+
+\item[\textsc{Implicit}:]
+The task does not explicitly identify the objective as deterministic or
+stochastic. Instead, it describes the problem as an unknown black-box
+function and asks for a robust general-purpose optimizer.
+
+\begin{quote}
+\small
+\textit{This is an unknown real-world black-box objective function. You have
+no prior knowledge of its internal structure, smoothness, or evaluation
+consistency.}
+\end{quote}
+
+This configuration tests whether the model develops robustness without
+being explicitly told that the objective is noisy.
+
+\item[\textsc{Noisy Baseline}:]
+The noisy task explicitly states that every objective call may return a
+different value and warns that single-shot comparisons can be unreliable.
+
+\begin{quote}
+\small
+\textit{The objective function is stochastic --- every call to
+\texttt{problem(x)} returns a different value even at the same point x, due
+to random noise injected into the true objective value.}
+\end{quote}
+
+It additionally instructs the model to design a noise-resilient strategy,
+but does not provide a specific implementation mechanism.
 
 \item[\textsc{Vectorization}:]
-The vectorization configuration provides additional implementation
-guidance concerning the use of array-based representations and NumPy
-operations. In particular, candidate populations can be represented as
-matrices such as
+The noisy baseline task is extended with explicit guidance to maintain a
+population and use array-based computation. The prompt recommends a
+population representation of the form
 \[
     X \in \mathbb{R}^{N\times D},
 \]
-allowing operations such as slicing and broadcasting to be used for
-population-level computations. This configuration is intended to
-encourage implementations that can perform repeated candidate
-evaluations efficiently within the available execution budget.
-```
+and encourages NumPy matrix operations, slicing, and broadcasting for
+candidate generation and updates.
+
+This variation therefore adds an implementation-level bias toward
+vectorized population-based algorithms.
+
+\item[\textsc{Guided}:]
+The noisy baseline task is extended with domain-specific suggestions for
+handling stochastic fitness. In particular, the prompt recommends repeated
+evaluations and aggregation when comparing candidates and mentions several
+optimization families that can be suitable for noisy optimization, including
+population-based methods, simulated annealing, and covariance-adaptation
+variants.
+
+The suggestions provide additional optimization knowledge to the LLM without
+fixing which mechanism must appear in the generated algorithm.
+
+\item[\textsc{Thinking}:]
+The noisy baseline task is extended with an explicit reasoning stage before
+code generation. The model is asked to consider three questions concerning
+repeated evaluations, robust statistical summaries, and budget-aware
+selection:
+
+\begin{quote}
+\small
+\textit{If a single evaluation at point x is unreliable, what property of a
+set of evaluations at x would be reliable?}
+
+\textit{If you cannot trust a single comparison, what statistical summary
+would let you make a robust ordering decision between two candidates?}
+
+\textit{How would you design your selection step to use that summary without
+exhausting your budget?}
+\end{quote}
+
+The generated implementation is then required to reflect the conclusions
+of this reasoning stage.
 
 \end{description}
 
-All prompt configurations use the same downstream execution and evaluation
-mechanism. Therefore, differences between configurations can be attributed
-primarily to the instructions supplied during algorithm generation rather
-than to differences in the validation or selection procedure.
+The four noisy strategies therefore differ in the additional guidance
+provided to the LLM, while the output format, code interface, validation,
+execution, and evaluation procedures remain unchanged. The exact model
+variants and inference parameters used with these prompt configurations are
+specified in Chapter~\ref{chap:experiments}.
 
-The \textsc{Baseline} configuration provides the common information needed
-to generate a continuous optimization algorithm but does not provide
-additional domain-specific recommendations. It therefore serves as the
-reference prompt against which the other configurations can be compared.
-
-The \textsc{Guided} configuration provides explicit optimization knowledge.
-The guidance can include established search mechanisms and suggestions for
-dealing with stochastic fitness, such as repeated observations or
-aggregation of fitness values. These mechanisms are suggested to the model
-rather than being directly inserted into the generated algorithm. The
-resulting algorithm remains the output of the language model.
-
-The \textsc{Thinking} configuration adds a structured analysis stage before
-source-code generation. The model is asked to consider weaknesses of the
-current algorithm, the balance between exploration and exploitation,
-parameter adaptation, and possible ways of processing stochastic fitness
-observations. The purpose is to provide additional structure to the
-generation process before the model produces the implementation.
-
-The \textsc{Vectorization} configuration introduces an implementation-level
-bias toward array-oriented computation. For a population of $N$ candidate
-solutions in $D$ dimensions, the preferred representation is
-
-\begin{equation}
-X \in \mathbb{R}^{N\times D}.
-\end{equation}
-
-The model is encouraged to use NumPy array operations, slicing, and
-broadcasting for population-based computations. This configuration changes
-the implementation guidance supplied to the model without prescribing a
-particular optimization algorithm.
-
-The synthesis process is applied to multiple locally executed model variants.
-The surrounding framework remains unchanged across these variants: generated
-algorithms use the same interface, validation procedure, execution environment,
-objective wrapper, clean diagnostic evaluation, and evolutionary selection
-mechanism. Consequently, model variant and prompt configuration can be
-treated as components of the synthesis setup rather than as changes to the
-underlying evaluation procedure. The exact model configurations and
-inference parameters are specified in Chapter~\ref{chap:experiments}.
 
 %------------------------------------------------------------------------------
 \subsection{Relation to the Ghost Parent Concept}
@@ -846,8 +917,8 @@ Chapter~\ref{chap:background}.
 In a generic elitist $(1+1)$ evolutionary process, using a noisy fitness value
 directly for parent--child selection can result in an incorrect ranking. A
 child may appear better than its parent because of a favorable stochastic
-realization even though its underlying solution quality is worse. Once such a
-child is selected, it becomes the basis for subsequent generations. This
+realization even though its underlying solution quality is worse. Once such
+a child is selected, it becomes the basis for subsequent generations. This
 creates the possibility that stochastic evaluation affects the evolutionary
 trajectory of the synthesis process itself.
 
@@ -857,12 +928,12 @@ between the stochastic search environment and the outer selection mechanism.
 
 In the present implementation, however, noisy fitness is not used as the
 final outer selection criterion. Instead, the solution returned by each
-candidate is evaluated using the clean objective, and the parent reference
-is obtained through clean diagnostic evaluation of independent stochastic
-executions. The Ghost Parent is therefore not an additional algorithmic
-component implemented in the synthesis loop. It is a conceptual mechanism
-used to explain why stochastic fitness could otherwise lead to incorrect
-parent--child decisions.
+candidate is evaluated using the clean objective, and the previously recorded
+clean diagnostic score of the parent is used as the reference for
+parent--child selection. The Ghost Parent is therefore not an additional
+algorithmic component implemented in the synthesis loop. It is a conceptual
+mechanism used to explain why stochastic fitness could otherwise lead to
+incorrect parent--child decisions.
 
 This distinction is important for interpreting the experimental results. The
 method investigates how generated optimization heuristics behave when the
