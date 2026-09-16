@@ -190,7 +190,7 @@ def test_nb04_audit_pipeline():
     print("✅ NB04 experimental matrix audit pipeline verified.")
 
 
-def test_nb05_analysis_pipeline():
+def test_nb05_analysis_pipeline(tmp_path):
     """Verify Notebook 05 (05_analysis.ipynb: Statistical Hypothesis Testing, Reports & Figures)."""
     print("\nTesting NB05 logic with StatisticalEvaluationService...")
     from benchmarking.infra.io.trace_repository import IOHTraceReader
@@ -229,7 +229,7 @@ def test_nb05_analysis_pipeline():
     valid_s, c_rates, n_rates, deltas = service.compute_robustness_profile(all_benchmark_data, dim, solvers, p_ids)
     assert len(valid_s) == len(c_rates) == len(n_rates) == len(deltas)
 
-    report_path = RESULTS_DIR / "reports" / "comprehensive_master_report.md"
+    report_path = tmp_path / "comprehensive_master_report.md"
     service.generate_markdown_report(df_omnibus, df_pairwise, report_path)
     assert report_path.exists()
     print(f"  • Master report generated: {report_path}")

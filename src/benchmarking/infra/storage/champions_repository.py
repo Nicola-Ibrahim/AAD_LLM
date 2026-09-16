@@ -27,6 +27,7 @@ class ChampionsReadRepository:
                 ExperimentORM.llm_name,
                 ExperimentORM.problem_id,
                 ExperimentORM.dim,
+                ExperimentORM.mode,
                 ExperimentORM.noise_std,
                 ExperimentORM.prompt_strategy,
                 ExperimentORM.id.label("experiment_id"),
@@ -46,6 +47,7 @@ class ChampionsReadRepository:
                 ExperimentORM.problem_id,
                 ExperimentORM.dim,
                 ExperimentORM.prompt_strategy,
+                ExperimentORM.mode,
                 ExperimentORM.noise_std,
                 IterationORM.final_error.asc(),
                 IterationORM.evaluations_used.asc(),
@@ -65,8 +67,8 @@ class ChampionsReadRepository:
             if llm_name not in champions:
                 champions[llm_name] = {}
 
-            # 1. Clean Champion (noise_std == 0.0)
-            clean_grp = group[group["noise_std"] == 0.0]
+            # 1. Clean Champion (mode == 'clean', noise_std == 0.0)
+            clean_grp = group[(group["mode"] == "clean") & (group["noise_std"] == 0.0)]
             if not clean_grp.empty:
                 best_clean = clean_grp.iloc[0]
                 k_clean = f"f{p_id}_{dim}D_clean_{strat}"
@@ -87,8 +89,8 @@ class ChampionsReadRepository:
                     "llm_name": str(llm_name),
                 }
 
-            # 2. Noisy Champions (noise_std > 0.0)
-            noisy_grp = group[group["noise_std"] > 0.0]
+            # 2. Noisy Champions (mode == 'noisy', noise_std > 0.0)
+            noisy_grp = group[(group["mode"] == "noisy") & (group["noise_std"] > 0.0)]
             if not noisy_grp.empty:
                 for n_std, sub_noisy in noisy_grp.groupby("noise_std"):
                     best_noisy = sub_noisy.iloc[0]
@@ -112,6 +114,34 @@ class ChampionsReadRepository:
                         if pd.notnull(best_noisy["evaluations_used"])
                         else None,
                         "code_path": str(best_noisy["code_path"]),
+                        "llm_name": str(llm_name),
+                    }
+
+            # 3. Implicit Champions (mode == 'implicit', noise_std > 0.0)
+            implicit_grp = group[(group["mode"] == "implicit") & (group["noise_std"] > 0.0)]
+            if not implicit_grp.empty:
+                for n_std, sub_impl in implicit_grp.groupby("noise_std"):
+                    best_impl = sub_impl.iloc[0]
+                    n_float = float(n_std)
+                    k_impl = (
+                        f"f{p_id}_{dim}D_implicit_{strat}"
+                        if n_float == 0.05
+                        else f"f{p_id}_{dim}D_std{n_float}_implicit_{strat}"
+                    )
+                    champions[llm_name][k_impl] = {
+                        "problem_id": int(p_id),
+                        "dim": int(dim),
+                        "mode": "implicit",
+                        "noise_std": n_float,
+                        "prompt_strategy": str(strat),
+                        "experiment_id": int(best_impl["experiment_id"]),
+                        "iteration_id": int(best_impl["iteration_id"]),
+                        "algorithm_name": str(best_impl["algorithm_name"]),
+                        "final_error": float(best_impl["final_error"]),
+                        "evaluations_used": int(best_impl["evaluations_used"])
+                        if pd.notnull(best_impl["evaluations_used"])
+                        else None,
+                        "code_path": str(best_impl["code_path"]),
                         "llm_name": str(llm_name),
                     }
 

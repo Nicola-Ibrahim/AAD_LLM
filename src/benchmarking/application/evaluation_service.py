@@ -230,7 +230,7 @@ class EvaluationService:
             "problem_id": p_id,
             "dim": dim,
             "noise_std": eval_noise,
-            "mode": SynthesisMode.CLEAN if eval_noise == 0.0 else SynthesisMode.NOISY,
+            "mode": mode_enum if not is_cross_eval else (SynthesisMode.CLEAN if eval_noise == 0.0 else SynthesisMode.NOISY),
             "target_runs": self.n_runs,
             "runs_found": runs_found,
             "status": status,

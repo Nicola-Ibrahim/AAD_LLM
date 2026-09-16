@@ -869,7 +869,8 @@ class ZeroDivOpt:
     scored = evaluator(sol)
     assert Evaluator.is_failure(scored.fitness)
     assert scored.fitness == Evaluator.RUNTIME_FAILURE_FITNESS
-    assert "[MATH ERROR]" in scored.feedback
+    assert "[RUNTIME ERROR]" in scored.feedback
+    assert "ZeroDivisionError" in scored.feedback
 
     # Test Non-Finite return from algorithm
     nan_return_code = """
@@ -922,7 +923,7 @@ class BadMatrixOpt:
     assert Evaluator.is_failure(scored.fitness)
     assert scored.fitness == Evaluator.RUNTIME_FAILURE_FITNESS
     # Option A check: relevant code line extracted
-    assert "Relevant code lines from your algorithm:" in scored.feedback
+    assert "Relevant code:" in scored.feedback
     assert "line   8:" in scored.feedback
 
     # Option B check: problem context footer

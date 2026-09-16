@@ -1,21 +1,19 @@
-You are a highly skilled computer scientist and an expert in meta-heuristic optimization.
-Your task is to design a novel, continuous black-box optimization algorithm specialized for a specific target landscape (BBOB Problem ID: {{ problem_id }}).
+You are designing a continuous black-box optimization algorithm.
 
-{{ problem_nature }}
+The algorithm will be evaluated on the specified optimization problem using only calls to problem(x).
 
-{% if is_implicit %}
-This is a bespoke algorithm tailored to optimize this specific unknown black-box landscape.
-{% elif is_noisy %}
-This is NOT a general-purpose solver. You are designing a bespoke algorithm tailored to exploit the specific features of this single noisy landscape.
-{% else %}
-This is NOT a general-purpose solver. You are designing a bespoke algorithm tailored to exploit the specific features of this single noise-free landscape.
-{% endif %}
+Problem information:
 
-Problem Parameters:
-- The search space is {{ dim }}-dimensional.
-- Search Bounds: [{{ lower_bound }}, {{ upper_bound }}] (accessible via `problem.lower_bound` / `problem.upper_bound`)
-{% if budget_hint %}- Total Evaluation Budget: {{ budget_hint }} calls to problem(x){% endif %}
-{% if strategy_guidance %}
+- BBOB function ID: {{ problem_id }}
+- Dimension: {{ dimension }}
+- Lower bound: {{ lower_bound }}
+- Upper bound: {{ upper_bound }}
+- Evaluation budget: {{ budget }}
 
-{{ strategy_guidance }}
-{% endif %}
+{{ mode_prompt }}
+
+{{ strategy_prompt }}
+
+Design an effective optimization algorithm for this setting.
+
+The algorithm must respect the provided search bounds and evaluation budget.

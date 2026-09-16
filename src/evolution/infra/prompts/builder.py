@@ -26,25 +26,23 @@ def build_task_prompt(
     budget_hint: int | None = None,
 ) -> str:
     """Constructs the structured task prompt based on explicit problem parameters, SynthesisMode enum, and prompt strategy."""
-    problem_nature = _jinja_env.get_template(f"modes/{mode}.j2").render()
+    mode_prompt = _jinja_env.get_template(f"modes/{mode}.j2").render().strip()
 
-    strat_template = f"strategies/{mode}/{strategy}.j2"
-    strategy_guidance = (
-        _jinja_env.get_template(strat_template).render()
+    strat_template = f"strategies/{strategy}.j2"
+    strategy_prompt = (
+        _jinja_env.get_template(strat_template).render().strip()
         if (_TEMPLATES_DIR / strat_template).exists()
         else ""
     )
 
     return _jinja_env.get_template("layout.j2").render(
         problem_id=problem_id,
-        dim=dim,
+        dimension=dim,
         lower_bound=lower_bound.tolist(),
         upper_bound=upper_bound.tolist(),
-        budget_hint=budget_hint,
-        problem_nature=problem_nature.strip(),
-        strategy_guidance=strategy_guidance.strip(),
-        is_noisy=(mode == SynthesisMode.NOISY),
-        is_implicit=(mode == SynthesisMode.IMPLICIT),
+        budget=budget_hint,
+        mode_prompt=mode_prompt,
+        strategy_prompt=strategy_prompt,
     )
 
 
@@ -58,4 +56,3 @@ def build_example_prompt() -> str:
 def build_format_prompt() -> str:
     """Renders the strict output format and rule checking prompt."""
     return _jinja_env.get_template("shared/format.j2").render()
-

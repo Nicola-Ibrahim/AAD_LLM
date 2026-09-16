@@ -58,8 +58,8 @@ class TestDomainResolvers:
         assert get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m") == "Qwen2.5-Coder-14B"
         assert get_clean_model_label("qwen2.5-coder-7b-instruct-q4_k_m.gguf") == "Qwen2.5-Coder-7B"
         assert get_clean_model_label("deepseek-r1-distill-qwen-70b.gguf") == "DeepSeek-70B"
-        assert get_clean_model_label("meta-llama-3-8b-instruct") == "Llama-8B"
-        assert get_clean_model_label("Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf") == "Llama-8B"
+        assert get_clean_model_label("meta-llama-3-8b-instruct") == "Llama-3.1-8B"
+        assert get_clean_model_label("Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf") == "Llama-3.1-8B"
         # Dynamic fallback for unregistered models without hardcoding
         assert get_clean_model_label("mistral-7b-instruct") == "Mistral-7B"
 

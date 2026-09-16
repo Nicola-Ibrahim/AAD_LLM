@@ -1,0 +1,13 @@
+Strategy guidance:
+
+Design the search around a clear balance between exploration and exploitation.
+
+Use information from previously evaluated candidate solutions to guide subsequent search steps.
+
+Consider maintaining and updating multiple candidate solutions when this supports the search strategy.
+
+Adapt the search behavior as the optimization progresses rather than using a fixed search step throughout the entire budget.
+
+Use the available evaluation budget deliberately, allocating evaluations between discovering promising regions and refining promising solutions.
+
+The algorithm should use objective evaluations as the primary source of information and should not assume access to gradients or internal properties of the objective function.

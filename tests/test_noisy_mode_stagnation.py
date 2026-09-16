@@ -76,7 +76,7 @@ class FailingOpt:
     scored3 = evaluator(sol3)
     assert Evaluator.is_failure(scored3.fitness)
     assert "[META-FEEDBACK]" in scored3.feedback
-    assert "You MUST try a completely different algorithm family" in scored3.feedback
+    assert "Try a substantially different search mechanism" in scored3.feedback
 
 
 def test_evaluator_noisy_feedback_no_noise_std_leak(db_session_factory, tmp_path):
@@ -120,7 +120,8 @@ class DummyOpt:
     # Ensure noise std numeric value 0.75 is NOT leaked in feedback
     assert "noise std: 0.75" not in scored.feedback
     assert "noise std:" not in scored.feedback
-    assert "[NOISY PROBLEM]" in scored.feedback
+    assert "[RESULT]" in scored.feedback
+    assert "stochastic objective" in scored.feedback
 
 
 def test_compiler_budget_leak_warning():
