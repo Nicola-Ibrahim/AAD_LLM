@@ -17,7 +17,7 @@ from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces import BaseProblem
 from evolution.domain.vos.problem_profile import ProblemProfile
-from evolution.application.interfaces import BaseLogger
+from evolution.application.interfaces import BaseLogger, SynthesisEngine
 from evolution.application.synthesis_service import SessionConfig, SessionResult
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
@@ -27,7 +27,9 @@ from evolution.infra.engines.llamea.prompts import (
 )
 from evolution.infra.storage.base import SynthesisRepository
 from evolution.infra.storage.code.repository import CodeRepository
+from evolution.domain.services.algorithm_evaluator import AlgorithmEvaluator
 from evolution.infra.engines.llamea.evaluator import Evaluator
+from shared.execution import AlgorithmExecutor
 
 # Suppress joblib warning when LLaMEA passes timeout to SequentialBackend
 warnings.filterwarnings(
@@ -139,7 +141,7 @@ class LLaMEASession:
         if (
             fitness_score is not None
             and math.isfinite(fitness_score)
-            and not Evaluator.is_failure(fitness_score)
+            and not AlgorithmEvaluator.is_failure(fitness_score)
         ):
             best_error = -fitness_score
             raw_fitness = self._db_repo.get_best_raw_fitness(self._experiment_id)
@@ -236,12 +238,21 @@ class LLaMEASession:
 
     def _setup_evaluator(self) -> Evaluator:
         """Initializes the problem evaluator with experiment metadata and budget limits."""
+        algorithm_evaluator = AlgorithmEvaluator(
+            problem=self._problem,
+            budget=self._config.budget,
+            timeout_seconds=self._config.timeout_seconds,
+            stagnation_threshold=self._config.stagnation_threshold,
+            convergence_threshold=self._config.convergence_threshold,
+            executor=AlgorithmExecutor(timeout_seconds=self._config.timeout_seconds),
+        )
         evaluator = Evaluator(
             problem=self._problem,
             db_repo=self._db_repo,
             code_repo=self._code_repo,
             experiment_id=self._experiment_id,
             config=self._config,
+            algorithm_evaluator=algorithm_evaluator,
             initial_iteration=self._initial_iteration,
         )
         evaluator.experiment = self._experiment
@@ -269,7 +280,7 @@ class LLaMEASession:
             shutil.rmtree(self._archive_dir, ignore_errors=True)
 
 
-class LLaMEAEngine:
+class LLaMEAEngine(SynthesisEngine):
     """Infrastructure synthesis engine using LLaMEASession."""
 
     def run(

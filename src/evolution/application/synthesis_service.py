@@ -27,8 +27,7 @@ from evolution.infra.storage.synthesis_config import (
     SynthesisModeConfig,
 )
 from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
-from evolution.application.audit_service import SynthesisAuditService
-from evolution.application.interfaces import BaseLogger
+from evolution.application.interfaces.logger import BaseLogger
 
 
 class SessionConfig(BaseModel):
@@ -182,6 +181,9 @@ class SynthesisService:
         self.config_repo = config_repo
         self.llm_client = llm_client
         self.logger = logger
+
+        from evolution.application.audit_service import SynthesisAuditService
+
         self.audit_service = SynthesisAuditService(
             sqlite_repo=sqlite_repo,
             config_repo=config_repo,

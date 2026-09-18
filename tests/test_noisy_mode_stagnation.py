@@ -4,6 +4,7 @@ from evolution.domain.enums import NoiseModelEnum, SynthesisMode
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy
 from evolution.domain.vos import ProblemProfile
 from evolution.application import SessionConfig
+from evolution.domain.services.algorithm_evaluator import AlgorithmEvaluator
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
@@ -12,17 +13,17 @@ from shared.execution import AlgorithmExecutor, CodeCompiler
 
 
 def test_failure_tiers_and_is_failure():
-    assert Evaluator.is_failure(Evaluator.FAILURE_FITNESS) is True
-    assert Evaluator.is_failure(Evaluator.RUNTIME_FAILURE_FITNESS) is True
-    assert Evaluator.is_failure(Evaluator.TIMEOUT_FAILURE_FITNESS) is True
-    assert Evaluator.is_failure(float("-inf")) is True
-    assert Evaluator.is_failure(float("nan")) is True
+    assert AlgorithmEvaluator.is_failure(AlgorithmEvaluator.FAILURE_FITNESS) is True
+    assert AlgorithmEvaluator.is_failure(AlgorithmEvaluator.RUNTIME_FAILURE_FITNESS) is True
+    assert AlgorithmEvaluator.is_failure(AlgorithmEvaluator.TIMEOUT_FAILURE_FITNESS) is True
+    assert AlgorithmEvaluator.is_failure(float("-inf")) is True
+    assert AlgorithmEvaluator.is_failure(float("nan")) is True
 
     # Real scores (e.g. -0.05, -100.0, 0.0) should NOT be failures
-    assert Evaluator.is_failure(0.0) is False
-    assert Evaluator.is_failure(-0.05) is False
-    assert Evaluator.is_failure(-1000.0) is False
-    assert Evaluator.is_failure(-1e6) is False
+    assert AlgorithmEvaluator.is_failure(0.0) is False
+    assert AlgorithmEvaluator.is_failure(-0.05) is False
+    assert AlgorithmEvaluator.is_failure(-1000.0) is False
+    assert AlgorithmEvaluator.is_failure(-1e6) is False
 
 
 def test_stagnation_diversity_injection(db_session_factory, tmp_path):
@@ -45,12 +46,18 @@ def test_stagnation_diversity_injection(db_session_factory, tmp_path):
         llm_name="test-llm",
     )
 
+    algorithm_evaluator = AlgorithmEvaluator(
+        problem=problem,
+        budget=100,
+        stagnation_threshold=3,
+    )
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(budget=100, stagnation_threshold=3),
+        algorithm_evaluator=algorithm_evaluator,
     )
 
     failing_code = """
@@ -62,19 +69,19 @@ class FailingOpt:
     # 1st failure
     sol1 = Solution(code=failing_code, name="FailingOpt1")
     scored1 = evaluator(sol1)
-    assert Evaluator.is_failure(scored1.fitness)
+    assert AlgorithmEvaluator.is_failure(scored1.fitness)
     assert "[META-FEEDBACK]" not in scored1.feedback
 
     # 2nd failure
     sol2 = Solution(code=failing_code, name="FailingOpt2")
     scored2 = evaluator(sol2)
-    assert Evaluator.is_failure(scored2.fitness)
+    assert AlgorithmEvaluator.is_failure(scored2.fitness)
     assert "[META-FEEDBACK]" not in scored2.feedback
 
     # 3rd failure -> triggers stagnation diversity injection!
     sol3 = Solution(code=failing_code, name="FailingOpt3")
     scored3 = evaluator(sol3)
-    assert Evaluator.is_failure(scored3.fitness)
+    assert AlgorithmEvaluator.is_failure(scored3.fitness)
     assert "[META-FEEDBACK]" in scored3.feedback
     assert "Try a substantially different search mechanism" in scored3.feedback
 
@@ -99,12 +106,17 @@ def test_evaluator_noisy_feedback_no_noise_std_leak(db_session_factory, tmp_path
         llm_name="test-llm",
     )
 
+    algorithm_evaluator = AlgorithmEvaluator(
+        problem=problem,
+        budget=100,
+    )
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(budget=100),
+        algorithm_evaluator=algorithm_evaluator,
     )
 
     success_code = """
@@ -116,7 +128,7 @@ class DummyOpt:
 """
     sol = Solution(code=success_code, name="DummyOpt")
     scored = evaluator(sol)
-    assert not Evaluator.is_failure(scored.fitness)
+    assert not AlgorithmEvaluator.is_failure(scored.fitness)
     # Ensure noise std numeric value 0.75 is NOT leaked in feedback
     assert "noise std: 0.75" not in scored.feedback
     assert "noise std:" not in scored.feedback

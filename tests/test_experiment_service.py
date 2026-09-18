@@ -19,6 +19,7 @@ from evolution.domain.vos import (
 )
 from evolution.application import EvolutionTask, SessionConfig
 from evolution.domain.enums import NoiseModelEnum, SynthesisMode, PromptStrategy
+from evolution.domain.services.algorithm_evaluator import AlgorithmEvaluator
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy, NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.code.repository import CodeRepository
@@ -218,12 +219,14 @@ def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
         llm_name="dummy-llm",
     )
 
+    algorithm_evaluator = AlgorithmEvaluator(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(budget=10),
+        algorithm_evaluator=algorithm_evaluator,
     )
 
     # Run evaluation
@@ -260,12 +263,14 @@ def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory
         llm_name="dummy-llm",
     )
 
+    algorithm_evaluator = AlgorithmEvaluator(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(budget=10),
+        algorithm_evaluator=algorithm_evaluator,
     )
 
     # Invalid syntax code to trigger compiler failure
@@ -610,12 +615,14 @@ def test_evaluator_current_iteration_resumes_from_db(temp_dir, db_session_factor
     assert status == "running"
     assert max_iter == 0
 
+    algorithm_evaluator1 = AlgorithmEvaluator(problem=problem)
     evaluator1 = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(),
+        algorithm_evaluator=algorithm_evaluator1,
     )
     assert evaluator1._current_iteration == 0
 
@@ -643,12 +650,14 @@ def test_evaluator_current_iteration_resumes_from_db(temp_dir, db_session_factor
     assert max_iter == 3
 
     # New Evaluator created for the same experiment_id (e.g. during warm start)
+    algorithm_evaluator2 = AlgorithmEvaluator(problem=problem)
     evaluator2 = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(),
+        algorithm_evaluator=algorithm_evaluator2,
         initial_iteration=max_iter,
     )
     assert evaluator2._current_iteration == 3
@@ -763,12 +772,14 @@ def test_evaluator_clean_reevaluation_with_tuple_return(db_session_factory, tmp_
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
     )
+    algorithm_evaluator = AlgorithmEvaluator(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(budget=10),
+        algorithm_evaluator=algorithm_evaluator,
     )
 
     good_code = """
@@ -800,12 +811,14 @@ def test_evaluator_out_of_bounds_best_x_rejected(db_session_factory, tmp_path):
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
     )
+    algorithm_evaluator = AlgorithmEvaluator(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(budget=10),
+        algorithm_evaluator=algorithm_evaluator,
     )
 
     out_of_bounds_code = """
@@ -817,8 +830,8 @@ class BadOpt:
 """
     sol = Solution(code=out_of_bounds_code, name="BadOpt", description="Out of bounds solution")
     scored_sol = evaluator(sol)
-    assert Evaluator.is_failure(scored_sol.fitness)
-    assert scored_sol.fitness == Evaluator.RUNTIME_FAILURE_FITNESS
+    assert AlgorithmEvaluator.is_failure(scored_sol.fitness)
+    assert scored_sol.fitness == AlgorithmEvaluator.RUNTIME_FAILURE_FITNESS
     assert "outside search space bounds" in scored_sol.feedback
 
 
@@ -848,12 +861,14 @@ def test_evaluator_failure_fitness_and_categorized_feedback(db_session_factory, 
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
     )
+    algorithm_evaluator = AlgorithmEvaluator(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(budget=10),
+        algorithm_evaluator=algorithm_evaluator,
     )
 
     # Test Runtime Error (ZeroDivisionError / Math Error)
@@ -865,8 +880,8 @@ class ZeroDivOpt:
 """
     sol = Solution(code=zero_div_code, name="ZeroDivOpt", description="Zero div solution")
     scored = evaluator(sol)
-    assert Evaluator.is_failure(scored.fitness)
-    assert scored.fitness == Evaluator.RUNTIME_FAILURE_FITNESS
+    assert AlgorithmEvaluator.is_failure(scored.fitness)
+    assert scored.fitness == AlgorithmEvaluator.RUNTIME_FAILURE_FITNESS
     assert "[RUNTIME ERROR]" in scored.feedback
     assert "ZeroDivisionError" in scored.feedback
 
@@ -879,8 +894,8 @@ class NanOpt:
 """
     sol_nan = Solution(code=nan_return_code, name="NanOpt", description="Nan return solution")
     scored_nan = evaluator(sol_nan)
-    assert Evaluator.is_failure(scored_nan.fitness)
-    assert scored_nan.fitness == Evaluator.RUNTIME_FAILURE_FITNESS
+    assert AlgorithmEvaluator.is_failure(scored_nan.fitness)
+    assert scored_nan.fitness == AlgorithmEvaluator.RUNTIME_FAILURE_FITNESS
     assert "[INVALID RETURN]" in scored_nan.feedback
 
 
@@ -896,12 +911,14 @@ def test_evaluator_enriched_feedback_and_warnings(db_session_factory, tmp_path):
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
     )
+    algorithm_evaluator = AlgorithmEvaluator(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(budget=10),
+        algorithm_evaluator=algorithm_evaluator,
     )
 
     # Candidate code with runtime error and numpy warning
@@ -918,8 +935,8 @@ class BadMatrixOpt:
     sol = Solution(code=runtime_err_code, name="BadMatrixOpt", description="Bad matrix option")
     scored = evaluator(sol)
 
-    assert Evaluator.is_failure(scored.fitness)
-    assert scored.fitness == Evaluator.RUNTIME_FAILURE_FITNESS
+    assert AlgorithmEvaluator.is_failure(scored.fitness)
+    assert scored.fitness == AlgorithmEvaluator.RUNTIME_FAILURE_FITNESS
     # Option A check: relevant code line extracted
     assert "Relevant code:" in scored.feedback
     assert "line   8:" in scored.feedback

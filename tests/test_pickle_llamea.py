@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 from evolution.application import SessionConfig
 from evolution.infra.engines.llamea import Evaluator, LLaMEASession
+from evolution.domain.services.algorithm_evaluator import AlgorithmEvaluator
 from evolution.domain.services.noise_strategy import NoNoiseStrategy
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.llm.client import LLMClient, Provider
@@ -46,12 +47,14 @@ def test_pickle_llamea(tmp_path, test_repos):
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
     llm = LLMClient(Provider.LOCAL)
 
+    algorithm_evaluator = AlgorithmEvaluator(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=db_repo,
         code_repo=code_repo,
         experiment_id=1,
         config=SessionConfig(budget=10),
+        algorithm_evaluator=algorithm_evaluator,
     )
     opt = LLaMEA(f=evaluator, llm=llm, log=False)
 
