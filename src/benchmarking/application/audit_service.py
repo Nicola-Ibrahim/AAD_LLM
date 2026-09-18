@@ -68,7 +68,7 @@ class EvaluationAuditService:
         """Generate the complete 30-condition audit matrix across discovered models and baselines."""
         df_db = self.sqlite_repo.get_completed_experiments_matrix()
         if df_db.empty:
-            return pd.DataFrame(), {}
+            return pd.DataFrame(), AuditCoverageSummary().model_dump()
 
         unique_dims = sorted(list({int(d) for d in df_db["dim"].dropna()}))
         unique_noises = sorted(list({float(n) for n in df_db["noise_std"].dropna()}))

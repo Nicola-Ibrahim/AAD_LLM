@@ -8,6 +8,7 @@ from sqlalchemy import engine_from_config, pool
 # Add src to python path to import storage models
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from shared.config import DATABASE_URL
 from shared.database.tables import Base
 
 # this is the Alembic Config object, which provides
@@ -56,7 +57,7 @@ def run_migrations_offline() -> None:
     """
     import os
 
-    url = os.environ.get("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
+    url = os.environ.get("DATABASE_URL") or DATABASE_URL or config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -80,7 +81,7 @@ def run_migrations_online() -> None:
     import os
 
     settings = config.get_section(config.config_ini_section, {})
-    db_url = os.environ.get("DATABASE_URL")
+    db_url = os.environ.get("DATABASE_URL") or DATABASE_URL
     if db_url:
         settings["sqlalchemy.url"] = db_url
 

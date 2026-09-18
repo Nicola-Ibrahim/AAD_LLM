@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
-from shared.config import DATABASE_URL
+from shared.config import DATABASE_URL, PROJECT_ROOT
 
 
 def ensure_wal_mode(db_path: Path) -> None:
@@ -37,20 +37,31 @@ def ensure_wal_mode(db_path: Path) -> None:
         conn.close()
 
 
-def build_engine(*, echo: bool = False) -> Engine:
+def build_engine(db_url: str | None = None, *, echo: bool = False) -> Engine:
     """Creates and configures a SQLAlchemy engine using the global DATABASE_URL."""
-    db_url = os.getenv("DATABASE_URL", DATABASE_URL)
+    if db_url is None:
+        env_url = os.getenv("DATABASE_URL")
+        if env_url and env_url != "sqlite:///data/db.sqlite3":
+            db_url = env_url
+        else:
+            db_url = DATABASE_URL
     url_obj = make_url(db_url)
     is_sqlite = url_obj.drivername.startswith("sqlite")
 
     connect_args = {}
     if is_sqlite:
+        if url_obj.database and url_obj.database != ":memory:":
+            db_path = Path(url_obj.database)
+            if not db_path.is_absolute():
+                abs_db_path = (PROJECT_ROOT / db_path).resolve()
+                db_url = f"sqlite:///{abs_db_path}"
+                url_obj = make_url(db_url)
+            ensure_wal_mode(Path(url_obj.database))
+
         connect_args = {
             "check_same_thread": False,
             "timeout": 60.0,
         }
-        if url_obj.database and url_obj.database != ":memory:":
-            ensure_wal_mode(Path(url_obj.database))
 
     engine = create_engine(
         db_url,

@@ -17,7 +17,17 @@ SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 SRC_DIR = PROJECT_ROOT / "src"
 RESULTS_DIR = PROJECT_ROOT / "results"
 
-# Database connection string
-DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR / 'db.sqlite3'}")
+def _get_database_url() -> str:
+    env_url = os.getenv("DATABASE_URL")
+    if not env_url or env_url == "sqlite:///data/db.sqlite3":
+        return f"sqlite:///{DATA_DIR / 'db.sqlite3'}"
+    if env_url.startswith("sqlite:///"):
+        path_part = env_url[len("sqlite:///"):]
+        if path_part != ":memory:" and not path_part.startswith("/"):
+            return f"sqlite:///{(PROJECT_ROOT / path_part).resolve()}"
+    return env_url
+
+
+DATABASE_URL: str = _get_database_url()
 
 
