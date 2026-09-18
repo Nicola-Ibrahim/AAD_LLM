@@ -78,6 +78,14 @@ file = "DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf"
 model = "DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M"
 
 [[DeepSeek.llms]]
+name = "DeepSeek-Coder-33B-Instruct"
+tag = "DeepSeek-33B"
+description = "19.9 GB (Q4_K_M), Flagship dense coder. Ideal for 24GB+ VRAM allocations"
+repo = "TheBloke/deepseek-coder-33B-instruct-GGUF"
+file = "deepseek-coder-33b-instruct.Q4_K_M.gguf"
+model = "deepseek-coder-33b-instruct.Q4_K_M"
+
+[[DeepSeek.llms]]
 name = "DeepSeek-R1-Distill-Qwen-70B"
 tag = "DeepSeek-70B"
 description = "70B Reasoning Model"
