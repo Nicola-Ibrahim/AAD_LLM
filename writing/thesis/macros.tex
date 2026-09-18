@@ -43,3 +43,29 @@
 \definecolor{accent}{RGB}{59,130,246} % blue
 \definecolor{paper}{RGB}{250,251,255}
 \definecolor{note}{RGB}{99,102,114}   % muted text
+
+%-------------------------------------------------------------------------------
+% Enhanced Verbatim Layout (Centered with Left & Right Padding)
+%-------------------------------------------------------------------------------
+\makeatletter
+% Pad verbatim blocks symmetrically on the left and right to center and distinguish them from body text
+\patchcmd{\@verbatim}%
+  {\leftskip\@totalleftmargin \rightskip\z@skip}%
+  {\leftskip\dimexpr\@totalleftmargin + 1.2cm\relax \rightskip 1.2cm\relax}%
+  {}%
+  {%
+    % Fallback if @verbatim was customized earlier
+    \g@addto@macro\@verbatim{%
+      \advance\leftskip by 1.2cm\relax
+      \advance\rightskip by 1.2cm\relax
+    }%
+  }
+% Slightly more compact monospaced font for clean code and prompt presentation
+\patchcmd{\verbatim@font}%
+  {\normalfont}%
+  {\normalfont\small}%
+  {}{}
+% Ensure clear vertical breathing room above and below verbatim blocks
+\g@addto@macro\@verbatim{\topsep=8pt plus 2pt minus 2pt\relax}
+\makeatother
+
