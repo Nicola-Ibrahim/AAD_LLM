@@ -16,9 +16,13 @@ from shared.config import DATA_DIR
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces import BaseProblem
-from evolution.domain.vos.problem_profile import ProblemProfile
-from evolution.application.interfaces import BaseLogger, SynthesisEngine
-from evolution.application.synthesis_service import SessionConfig, SessionResult
+from evolution.domain.vos import ProblemProfile
+from evolution.application.interfaces import (
+    BaseLogger,
+    SessionConfig,
+    SessionResult,
+    SynthesisEngine,
+)
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
 from evolution.infra.engines.llamea.prompts import (
@@ -283,28 +287,56 @@ class LLaMEASession:
 class LLaMEAEngine(SynthesisEngine):
     """Infrastructure synthesis engine using LLaMEASession."""
 
+    def __init__(
+        self,
+        llm_client: LLMClient,
+        code_repo: CodeRepository | None = None,
+        config: SessionConfig | None = None,
+        db_repo: SynthesisRepository | None = None,
+        prompt_strategy: PromptStrategy = PromptStrategy.BASELINE,
+        synthesis_mode: SynthesisMode = SynthesisMode.EXPLICIT,
+    ) -> None:
+        super().__init__(
+            config=config,
+            db_repo=db_repo,
+            prompt_strategy=prompt_strategy,
+            synthesis_mode=synthesis_mode,
+        )
+        self.llm_client = llm_client
+        self.code_repo = code_repo or CodeRepository()
+
     def run(
         self,
         problem: BaseProblem,
         experiment_id: int,
-        prompt_strategy: PromptStrategy,
-        llm_client: LLMClient,
-        db_repo: SynthesisRepository,
-        code_repo: CodeRepository,
-        config: SessionConfig,
+        config: SessionConfig | None = None,
+        db_repo: SynthesisRepository | None = None,
+        prompt_strategy: PromptStrategy | None = None,
+        synthesis_mode: SynthesisMode | None = None,
         initial_iteration: int = 0,
-        synthesis_mode: SynthesisMode = SynthesisMode.EXPLICIT,
     ) -> SessionResult:
         """Executes a single algorithm synthesis run using LLaMEASession."""
+        resolved_config = config or self.config
+        if resolved_config is None:
+            raise ValueError("SessionConfig must be provided either in __init__ or in run().")
+
+        resolved_db_repo = db_repo or self.db_repo
+        if resolved_db_repo is None:
+            raise ValueError("SynthesisRepository must be provided either in __init__ or in run().")
+
+        resolved_strategy = prompt_strategy if prompt_strategy is not None else self.prompt_strategy
+        resolved_mode = synthesis_mode if synthesis_mode is not None else self.synthesis_mode
+
         session = LLaMEASession(
             problem=problem,
             experiment_id=experiment_id,
-            prompt_strategy=prompt_strategy,
-            llm_client=llm_client,
-            db_repo=db_repo,
-            code_repo=code_repo,
-            config=config,
+            prompt_strategy=resolved_strategy,
+            llm_client=self.llm_client,
+            db_repo=resolved_db_repo,
+            code_repo=self.code_repo,
+            config=resolved_config,
             initial_iteration=initial_iteration,
-            synthesis_mode=synthesis_mode,
+            synthesis_mode=resolved_mode,
         )
         return session.run()
+

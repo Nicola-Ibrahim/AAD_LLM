@@ -26,9 +26,8 @@ graph TB
         direction TB
         
         subgraph EvoApp ["Application Layer"]
-            SynthesisService["⚡ SynthesisService<br/>(Campaign & Execution Facade)"]:::app
-            TaskOrchestrator["🔄 TaskOrchestrator<br/>(ProcessPoolExecutor)"]:::app
-            EvolutionTask["📦 EvolutionTask<br/>(Work Unit)"]:::app
+            SynthesisCampaignUseCase["⚡ SynthesisCampaignUseCase<br/>(Campaign Multiprocessing Use Case)"]:::app
+            SingleSynthesisUseCase["🎯 SingleSynthesisUseCase<br/>(Single-Run Use Case)"]:::app
         end
 
         subgraph EvoDomain ["Domain Layer"]
@@ -71,14 +70,12 @@ graph TB
     %% STRUCTURAL DEPENDENCIES
     %% --------------------------------------------------------
     User --> Client
-    Client -->|Invokes| SynthesisService
+    Client -->|Invokes| SynthesisCampaignUseCase
     Client -->|Invokes| EvalService
 
     %% Evolution Flow
-    SynthesisService -->|Builds| EvolutionTask
-    SynthesisService -->|Dispatches via| TaskOrchestrator
-    TaskOrchestrator -->|Runs in workers| EvolutionTask
-    EvolutionTask -->|Instantiates and runs| LLaMEAEngine
+    SynthesisCampaignUseCase -->|Multiprocessing (ProcessPoolRunner)| SingleSynthesisUseCase
+    SingleSynthesisUseCase -->|Executes strategy| LLaMEAEngine
 
     LLaMEAEngine -->|Coordinates| LLaMEASession
     LLaMEASession -->|Instantiates| Evaluator
@@ -109,11 +106,11 @@ graph TB
 
 ### A. Evolution Bounded Context (`src/evolution/`)
 - **Application Layer (`src/evolution/application/`)**:
-  - `SynthesisService`: Primary application facade for auditing database experiments, filtering completed vs incomplete runs, generating task matrices, and triggering execution (`run_task` or `run_campaign`).
-  - `TaskOrchestrator`: Multi-process execution pool using Python's `ProcessPoolExecutor`. Ensures database WAL mode and busy timeout handling.
-  - `EvolutionTask`: Self-contained, picklable unit of work isolating database connections and executing `LLaMEAEngine` directly per worker process.
-  - `BaseLogger`: Abstract Base Class (ABC) defining logger port interface with default domain telemetry routing.
-  - `SessionResult`: Strongly-typed DTO carrying execution outcomes.
+  - `SingleSynthesisUseCase`: Isolated application use case for executing a single evolutionary algorithm synthesis run in-process without multiprocessing.
+  - `SynthesisCampaignUseCase`: Application use case managing matrix auditing, database status reconciliation, task planning, and parallel multi-process dispatching via `ProcessPoolRunner`.
+  - `BaseLogger`: Abstract Base Class (ABC) in `interfaces/logger.py` defining logger port interface with default domain telemetry routing.
+  - `SynthesisEngine`: Strategy port interface in `interfaces/engine.py` implemented by engines like `LLaMEAEngine`.
+  - `SessionConfig` & `SessionResult`: Strongly-typed configuration and execution outcome contracts in `interfaces/engine.py`.
 - **Domain Layer (`src/evolution/domain/`)**:
   - `BaseProblem`: Abstract problem contract.
   - `ExperimentSummary`: Aggregate root capturing the lifecycle, metadata, and status of an evolutionary experiment.

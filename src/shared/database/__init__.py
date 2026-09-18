@@ -1,11 +1,10 @@
 """Shared database infrastructure, connection pooling, and schema definitions."""
 
+from shared.config import DATABASE_URL
 from shared.database.engine import (
     build_engine,
-    build_session_factory,
     create_db_session_factory,
     ensure_wal_mode,
-    get_db_connection,
     initialize_sqlite_storage,
 )
 from shared.database.tables import (
@@ -16,12 +15,11 @@ from shared.database.tables import (
 )
 
 __all__ = [
-    # Engine & Session Primitives
+    # Global Config & Primitives
+    "DATABASE_URL",
     "build_engine",
-    "build_session_factory",
     "create_db_session_factory",
     "ensure_wal_mode",
-    "get_db_connection",
     "initialize_sqlite_storage",
     # Declarative Schema Tables
     "Base",
@@ -29,3 +27,6 @@ __all__ = [
     "ExperimentORM",
     "IterationORM",
 ]
+
+
+

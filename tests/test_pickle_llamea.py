@@ -32,14 +32,16 @@ class MockLogger:
 
 
 @pytest.fixture
-def test_repos(tmp_path):
+def test_repos(tmp_path, monkeypatch):
     db_path = tmp_path / "test.db"
-    engine = build_engine(db_path)
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    engine = build_engine()
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine)
     db_repo = SQLiteSynthesisRepository(session_factory)
     code_repo = CodeRepository(base_dir=tmp_path / "code")
     return db_repo, code_repo
+
 
 
 def test_pickle_llamea(tmp_path, test_repos):

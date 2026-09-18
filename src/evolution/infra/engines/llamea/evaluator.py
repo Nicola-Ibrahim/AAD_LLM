@@ -12,8 +12,7 @@ from typing import Any
 
 from llamea import Solution
 
-from evolution.application.interfaces import BaseLogger
-from evolution.application.synthesis_service import SessionConfig
+from evolution.application.interfaces import BaseLogger, SessionConfig
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.interfaces import BaseProblem
 from evolution.domain.services.algorithm_evaluator import AlgorithmEvaluator
@@ -23,6 +22,7 @@ from evolution.infra.logging import SynthesisLogger
 from evolution.infra.storage.base import SynthesisRepository
 from evolution.infra.storage.code.repository import CodeRepository
 from shared.execution import AlgorithmExecutor
+
 
 
 class Evaluator:

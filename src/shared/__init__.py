@@ -3,6 +3,7 @@
 from shared.config import (
     CONFIGS_DIR,
     DATA_DIR,
+    DATABASE_URL,
     NOTEBOOKS_DIR,
     PROJECT_ROOT,
     RESULTS_DIR,
@@ -11,10 +12,8 @@ from shared.config import (
 )
 from shared.database.engine import (
     build_engine,
-    build_session_factory,
     create_db_session_factory,
     ensure_wal_mode,
-    get_db_connection,
     initialize_sqlite_storage,
 )
 from shared.database.tables import (
@@ -31,7 +30,8 @@ from shared.execution import (
 )
 
 __all__ = [
-    # Directories
+    # Global Config & Directories
+    "DATABASE_URL",
     "PROJECT_ROOT",
     "SRC_DIR",
     "DATA_DIR",
@@ -40,12 +40,10 @@ __all__ = [
     "SCRIPTS_DIR",
     "CONFIGS_DIR",
     # Database primitives
-    "get_db_connection",
     "create_db_session_factory",
     "initialize_sqlite_storage",
     "ensure_wal_mode",
     "build_engine",
-    "build_session_factory",
     # Schema Tables
     "Base",
     "ExperimentORM",

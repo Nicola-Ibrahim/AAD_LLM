@@ -189,7 +189,7 @@ class MatrixCondition(BaseModel):
 
     @property
     def synthesis_mode(self) -> SynthesisMode:
-        """SynthesisMode passed to EvolutionTask session."""
+        """SynthesisMode passed to synthesis session."""
         return self.mode
 
     def __getitem__(self, key: str) -> Any:
@@ -272,6 +272,14 @@ class SynthesisConfig(BaseModel):
     @property
     def max_workers(self) -> int:
         return self.num_processes
+
+    @property
+    def stagnation_threshold(self) -> int:
+        return int(self.evolution.get("stagnation_threshold", 3))
+
+    @property
+    def convergence_threshold(self) -> float:
+        return float(self.evolution.get("convergence_threshold", 1e-6))
 
     def to_session_config_dict(self) -> dict[str, Any]:
         """Derive a dictionary of session execution configuration parameters."""

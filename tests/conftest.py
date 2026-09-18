@@ -49,17 +49,20 @@ def temp_dir():
 
 
 @pytest.fixture
-def db_session_factory(temp_dir):
+def db_session_factory(temp_dir, monkeypatch):
     """File-backed SQLite database session factory for isolated testing."""
     db_path = temp_dir / "test.db"
-    engine = build_engine(db_path)
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    engine = build_engine()
     Base.metadata.create_all(engine)
     return sessionmaker(bind=engine)
 
 
 @pytest.fixture
-def test_db_session_factory():
+def test_db_session_factory(monkeypatch):
     """In-memory SQLite database session factory for fast isolated testing."""
-    engine = build_engine(Path(":memory:"))
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    engine = build_engine()
     Base.metadata.create_all(engine)
     return sessionmaker(bind=engine)
+

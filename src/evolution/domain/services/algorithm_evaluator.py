@@ -212,7 +212,8 @@ class AlgorithmEvaluator:
 
         return clean_y
 
-    def _extract_code_context_from_traceback(self, tb_str: str, candidate_code: str) -> str:
+    @staticmethod
+    def extract_code_context(tb_str: str, candidate_code: str) -> str:
         """Extract lines of generated candidate code referenced in exception tracebacks."""
         if not candidate_code or not tb_str:
             return ""
@@ -326,7 +327,7 @@ class AlgorithmEvaluator:
             internal_score = self.FAILURE_FITNESS
 
         tb_str = "" if is_timeout else traceback.format_exc()
-        code_context = self._extract_code_context_from_traceback(tb_str, ctx.candidate_code)
+        code_context = self.extract_code_context(tb_str, ctx.candidate_code)
 
         metadata = self._build_failure_metadata(
             ctx=ctx,

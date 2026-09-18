@@ -17,18 +17,17 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
-from evolution.application import EvolutionTask, SessionConfig
 from evolution.domain.enums import NoiseModelEnum, SynthesisMode, PromptStrategy
 from evolution.domain.services.algorithm_evaluator import AlgorithmEvaluator
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy, NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
+from evolution.application import SessionConfig, SingleSynthesisUseCase, SynthesisCampaignUseCase, SynthesisEngine
+from evolution.infra.concurrency.runner import ProcessPoolRunner
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from shared.database.engine import build_engine
 from shared.database.tables import Base, ExperimentORM
-from evolution.infra.engines.llamea import Evaluator, LLaMEASession
-from evolution.application.orchestrator import TaskOrchestrator
-from evolution.application.worker import run_evolution_worker
+from evolution.infra.engines.llamea import Evaluator, LLaMEAEngine, LLaMEASession
 from evolution.domain.exceptions import OrchestrationError
 
 
@@ -65,7 +64,6 @@ class FailingProblem(BBOBProblem):
 
 
 def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
-    db_path = temp_dir / "test.db"
     repo = SQLiteSynthesisRepository(db_session_factory)
     llm = DummyLLM()
 
@@ -93,27 +91,35 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
         max_iterations=2,
     )
 
+    engine = LLaMEAEngine(
+        llm_client=llm,
+        code_repo=CodeRepository(base_dir=temp_dir),
+    )
     tasks = [
-        EvolutionTask(
-            key="clean",
-            problem=problem_clean,
-            llm_client=llm,
-            experiment_id=exp_id_clean,
-            config=SessionConfig(iterations=2),
-            db_path=db_path,
-        ),
-        EvolutionTask(
-            key="noisy",
-            problem=problem_noisy,
-            llm_client=llm,
-            experiment_id=exp_id_noisy,
-            config=SessionConfig(iterations=2),
-            db_path=db_path,
-        ),
+        {
+            "key": "clean",
+            "problem": problem_clean,
+            "experiment_id": exp_id_clean,
+            "config": SessionConfig(iterations=2),
+            "engine": engine,
+            "prompt_strategy": PromptStrategy.BASELINE,
+            "synthesis_mode": SynthesisMode.EXPLICIT,
+            "initial_iteration": 0,
+        },
+        {
+            "key": "noisy",
+            "problem": problem_noisy,
+            "experiment_id": exp_id_noisy,
+            "config": SessionConfig(iterations=2),
+            "engine": engine,
+            "prompt_strategy": PromptStrategy.BASELINE,
+            "synthesis_mode": SynthesisMode.EXPLICIT,
+            "initial_iteration": 0,
+        },
     ]
 
-    orchestrator = TaskOrchestrator(max_workers=2)
-    results = orchestrator.run(tasks)
+    runner = ProcessPoolRunner(max_workers=2)
+    results = runner.run(fn=SynthesisCampaignUseCase.run_worker, items=tasks, key_fn=lambda t: t["key"])
 
     assert "clean" in results
     assert "noisy" in results
@@ -128,7 +134,6 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
 
 
 def test_dispatch_partial_failure(temp_dir, db_session_factory):
-    db_path = temp_dir / "test.db"
     repo = SQLiteSynthesisRepository(db_session_factory)
     problem_fail = FailingProblem(
         problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1
@@ -158,27 +163,35 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
         max_iterations=1,
     )
 
+    engine = LLaMEAEngine(
+        llm_client=DummyLLM(),
+        code_repo=CodeRepository(base_dir=temp_dir),
+    )
     tasks = [
-        EvolutionTask(
-            key="failing",
-            problem=problem_fail,
-            llm_client=DummyLLM(),
-            experiment_id=exp_id_fail,
-            config=SessionConfig(budget=1000, iterations=1),
-            db_path=db_path,
-        ),
-        EvolutionTask(
-            key="success",
-            problem=problem_succ,
-            llm_client=DummyLLM(),
-            experiment_id=exp_id_succ,
-            config=SessionConfig(budget=1000, iterations=1),
-            db_path=db_path,
-        ),
+        {
+            "key": "failing",
+            "problem": problem_fail,
+            "experiment_id": exp_id_fail,
+            "config": SessionConfig(budget=1000, iterations=1),
+            "engine": engine,
+            "prompt_strategy": PromptStrategy.BASELINE,
+            "synthesis_mode": SynthesisMode.EXPLICIT,
+            "initial_iteration": 0,
+        },
+        {
+            "key": "success",
+            "problem": problem_succ,
+            "experiment_id": exp_id_succ,
+            "config": SessionConfig(budget=1000, iterations=1),
+            "engine": engine,
+            "prompt_strategy": PromptStrategy.BASELINE,
+            "synthesis_mode": SynthesisMode.EXPLICIT,
+            "initial_iteration": 0,
+        },
     ]
 
     with pytest.raises(OrchestrationError) as exc_info:
-        TaskOrchestrator().run(tasks)
+        ProcessPoolRunner().run(fn=SynthesisCampaignUseCase.run_worker, items=tasks, key_fn=lambda t: t["key"])
 
     errors = exc_info.value.errors
     assert "failing" in errors
@@ -198,9 +211,10 @@ def temp_dir():
 
 
 @pytest.fixture
-def db_session_factory(temp_dir):
+def db_session_factory(temp_dir, monkeypatch):
     db_path = temp_dir / "test.db"
-    engine = build_engine(db_path)
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    engine = build_engine()
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     return Session
@@ -563,20 +577,17 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
         budget=2500,
     )
 
-    task = EvolutionTask(
-        key="test_task_1",
-        problem=problem,
+    engine = LLaMEAEngine(
         llm_client=llm,
-        experiment_id=exp_id,
-        initial_iteration=0,
-        config=SessionConfig(budget=2500, iterations=2),
-        db_path=temp_dir / "test.db",
+        code_repo=CodeRepository(base_dir=temp_dir),
     )
-    assert task.experiment_id == exp_id
-    assert task.problem.problem_id == 1
-    assert task.problem.dim == 2
-    assert task.config.budget == 2500
-    res = run_evolution_worker(task)
+    usecase = SingleSynthesisUseCase(engine=engine, sqlite_repo=repo)
+    res = usecase.execute(
+        problem=problem,
+        experiment_id=exp_id,
+        config=SessionConfig(budget=2500, iterations=2),
+        key="test_task_1",
+    )
     assert res is not None
     assert res.experiment_id == exp_id
 
@@ -1043,3 +1054,117 @@ def test_experiment_summary_domain_aggregate(db_session_factory):
     assert loaded.best_algorithm == "Algo2"
     assert loaded.best_iteration == 2
     assert loaded.finished_at == exp.finished_at
+
+
+def test_synthesis_engine_lsp_contract():
+    """Verify that any SynthesisEngine conforms to run(task, db_repo) returning SessionResult."""
+    from typing import Any
+    from evolution.application.interfaces.engine import SynthesisEngine
+    from evolution.application.campaign_usecase import SessionResult
+    from evolution.domain.enums import SynthesisMode
+
+    class CustomEngine(SynthesisEngine):
+        def __init__(self, tag: str, score: float):
+            super().__init__(config=SessionConfig(iterations=1), db_repo=None)
+            self.tag = tag
+            self.score = score
+
+        def run(
+            self,
+            problem: Any,
+            experiment_id: int,
+            config: SessionConfig | None = None,
+            db_repo: Any | None = None,
+            prompt_strategy: PromptStrategy | None = None,
+            synthesis_mode: SynthesisMode | None = None,
+            initial_iteration: int = 0,
+        ) -> SessionResult:
+            return SessionResult(
+                problem_id=1,
+                dim=2,
+                mode=synthesis_mode or self.synthesis_mode,
+                noise_std=0.0,
+                experiment_id=experiment_id,
+                best_error=self.score,
+                experiment_name=self.tag,
+            )
+
+    engine = CustomEngine(tag="test_engine", score=0.05)
+    assert isinstance(engine, SynthesisEngine)
+    # Test run() with overrides
+    res = engine.run(
+        problem=None,
+        experiment_id=10,
+        config=SessionConfig(iterations=2),
+        db_repo=None,
+    )
+    assert res.experiment_name == "test_engine"
+    assert res.best_error == 0.05
+
+    # Test run() relying on defaults from __init__
+    res_default = engine.run(problem=None, experiment_id=11)
+    assert res_default.experiment_id == 11
+    assert res_default.experiment_name == "test_engine"
+
+
+def test_llamea_engine_init_and_run(temp_dir, db_session_factory):
+    """Verify LLaMEAEngine accepts collaborators in __init__ and executes via run()."""
+    from evolution.domain.enums import PromptStrategy, SynthesisMode
+    from evolution.infra.problems.bbob import BBOBProblem
+    from evolution.domain.services.noise_strategy import NoNoiseStrategy
+    from evolution.infra.storage.code.repository import CodeRepository
+    from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
+    from evolution.infra.engines.llamea import LLaMEAEngine
+
+    repo = SQLiteSynthesisRepository(db_session_factory)
+    code_repo = CodeRepository(base_dir=temp_dir)
+    llm = DummyLLM()
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
+    exp_id = repo.create_experiment(
+        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        mode=SynthesisMode.EXPLICIT,
+        llm_name="dummy",
+        budget=1000,
+        max_iterations=1,
+    )
+
+    engine = LLaMEAEngine(
+        llm_client=llm,
+        code_repo=code_repo,
+    )
+    assert isinstance(engine, SynthesisEngine)
+    res = engine.run(
+        problem=problem,
+        experiment_id=exp_id,
+        config=SessionConfig(budget=1000, iterations=1),
+        db_repo=repo,
+        initial_iteration=0,
+        prompt_strategy=PromptStrategy.BASELINE,
+        synthesis_mode=SynthesisMode.EXPLICIT,
+    )
+    assert res.experiment_id == exp_id
+
+
+def test_campaign_item_and_engine_pickling(temp_dir):
+    """Verify campaign work item with LLaMEAEngine pickles and unpickles without error."""
+    import pickle
+    from evolution.infra.engines.llamea import LLaMEAEngine
+    from evolution.infra.problems.bbob import BBOBProblem
+    from evolution.domain.services.noise_strategy import NoNoiseStrategy
+
+    llm = DummyLLM()
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
+    engine = LLaMEAEngine(llm_client=llm)
+    item = {
+        "key": "pickle_task",
+        "problem": problem,
+        "experiment_id": 42,
+        "config": SessionConfig(iterations=1),
+        "engine": engine,
+    }
+    data = pickle.dumps(item)
+    restored_item = pickle.loads(data)
+    assert restored_item["key"] == "pickle_task"
+    assert restored_item["experiment_id"] == 42
+    assert isinstance(restored_item["engine"], LLaMEAEngine)
+

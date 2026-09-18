@@ -11,11 +11,12 @@ The application layer defines the use cases, task orchestrations, and abstract p
 ```mermaid
 graph TD
     subgraph AppLayer ["Application Layer (evolution.application)"]
-        SS["SynthesisService<br/>(Campaign & Execution Facade)"]
-        ET["EvolutionTask<br/>(Picklable Worker Unit)"]
-        TO["TaskOrchestrator<br/>(ProcessPoolExecutor)"]
+        SCU["SynthesisCampaignUseCase<br/>(Campaign Multiprocessing)"]
+        SSU["SingleSynthesisUseCase<br/>(Single-Run Execution)"]
         BL["&laquo;ABC Interface&raquo;<br/>BaseLogger<br/>(Port in interfaces/logger.py)"]
+        SE["&laquo;ABC Interface&raquo;<br/>SynthesisEngine<br/>(Port in interfaces/engine.py)"]
         SR["SessionResult<br/>(Data Transfer Object)"]
+        SC["SessionConfig<br/>(Configuration Model)"]
     end
 
     subgraph DomainLayer ["Domain Layer (evolution.domain)"]
@@ -62,9 +63,9 @@ graph TD
 
 | Layer | Component | Architectural Role | Responsibilities |
 | :--- | :--- | :--- | :--- |
-| **Application** | `SynthesisService` | Application Service | Audits experiment matrix against SQLite DB, reconciles completed vs failed/interrupted runs, constructs `EvolutionTask` units, and provides `run_task` (single-run) and `run_campaign` (multi-process). |
-| **Application** | `EvolutionTask` | Work Unit DTO | Self-contained picklable work unit executed inside worker processes. Initializes process-isolated DB connections and executes `LLaMEAEngine`. |
-| **Application** | `TaskOrchestrator` | Concurrency Manager | Manages a `ProcessPoolExecutor`, sets up SQLite WAL journal mode, monitors task completion, and aggregates `SessionResult` DTOs. |
+| **Application** | `SynthesisCampaignUseCase` | Application Use Case | Audits experiment matrix against SQLite DB, reconciles completed vs failed/interrupted runs, plans tasks, and orchestrates parallel multi-process dispatching via `ProcessPoolRunner`. |
+| **Application** | `SingleSynthesisUseCase` | Application Use Case | Executes an isolated single synthesis experiment in-process without multiprocessing overhead. |
+| **Application** | `SynthesisEngine` | Abstract Port (ABC) | Strategy interface defining `run(...)` contract implemented by concrete engines in `evolution.infra.engines`. |
 | **Application** | `BaseLogger` | Abstract Port (ABC) | Defines base class contract for synthesis telemetry, progress reporting, and metric summaries. Located in `evolution.application.interfaces`. |
 | **Application** | `SessionResult` | Response DTO | Immutable contract encapsulating the outcome of an evolutionary synthesis run (best error, run history, champion solution, problem profile). |
 | **Infrastructure** | `LLaMEAEngine` | Concrete Synthesis Engine | Instantiates and coordinates `LLaMEASession` for a single run. |
@@ -102,8 +103,19 @@ classDiagram
         +summary(...)
     }
 
+    class SynthesisEngine {
+        <<ABC>>
+        +SessionConfig config
+        +Any db_repo
+        +PromptStrategy prompt_strategy
+        +SynthesisMode synthesis_mode
+        +run(problem, experiment_id, config?, db_repo?, prompt_strategy?, synthesis_mode?, initial_iteration) SessionResult*
+    }
+
     class LLaMEAEngine {
-        +run(problem, experiment_id, prompt_strategy, llm_client, db_repo, code_repo, config, ...) SessionResult
+        +LLMClient llm_client
+        +CodeRepository code_repo
+        +run(problem, experiment_id, config?, db_repo?, prompt_strategy?, synthesis_mode?, initial_iteration) SessionResult
     }
 
     class LLaMEASession {
@@ -120,24 +132,22 @@ classDiagram
         +is_failure(score) bool
     }
 
-    class SynthesisService {
+    class SynthesisCampaignUseCase {
         -SQLiteSynthesisRepository sqlite_repo
         -SynthesisConfigRepository config_repo
         -LLMClient llm_client
         -BaseLogger logger
         +audit_matrix() tuple
-        +build_tasks() list~EvolutionTask~
-        +run_task(task, verbose) SessionResult
-        +run_campaign(verbose) dict~str, SessionResult~
+        +build_tasks() list~dict~
+        +run_worker(item) SessionResult
+        +run_campaign(verbose) CampaignResults
     }
 
-    class EvolutionTask {
-        +str key
-        +BaseProblem problem
-        +LLMClient llm_client
-        +int experiment_id
-        +SessionConfig config
-        +__call__() SessionResult
+    class SingleSynthesisUseCase {
+        -SynthesisEngine engine
+        -SynthesisRepository sqlite_repo
+        -BaseLogger logger
+        +execute(...) SessionResult
     }
 
     class SessionResult {
@@ -155,11 +165,12 @@ classDiagram
     }
 
     BaseLogger <|-- SynthesisLogger : inherits and implements
+    SynthesisEngine <|-- LLaMEAEngine : inherits and implements
     LLaMEAEngine --> LLaMEASession : delegates to
     LLaMEASession --> Evaluator : instantiates
-    SynthesisService --> EvolutionTask : builds
-    EvolutionTask --> LLaMEAEngine : instantiates and runs
-    SynthesisService --> BaseLogger : logs via
+    SynthesisCampaignUseCase --> SingleSynthesisUseCase : delegates single runs & workers
+    SingleSynthesisUseCase --> SynthesisEngine : executes
+    SynthesisCampaignUseCase --> BaseLogger : logs via
     LLaMEASession --> SessionResult : returns
 ```
 
@@ -171,26 +182,23 @@ classDiagram
 sequenceDiagram
     autonumber
     actor User as Researcher / Notebook
-    participant Service as SynthesisService (App)
-    participant Orch as TaskOrchestrator (App)
-    participant Worker as Worker Process (ProcessPool)
-    participant Task as EvolutionTask (App)
+    participant Service as SynthesisCampaignUseCase (App)
+    participant Runner as ProcessPoolRunner (Infra)
+    participant Single as SingleSynthesisUseCase (App)
     participant Engine as LLaMEAEngine (Infra)
     participant Session as LLaMEASession (Infra)
     participant LLaMEA as LLaMEA Optimizer (External)
     participant Eval as Evaluator (Infra)
     participant DB as SQLite DB (Infra)
 
-    User->>Service: run_campaign() (or run_task())
+    User->>Service: run_campaign() (or SingleSynthesisUseCase.execute())
     Service->>Service: build_tasks() (audit DB, partition matrix)
-    Service->>Orch: run(tasks)
-    Orch->>DB: setup_storage_environment() (WAL mode)
+    Service->>Runner: run(tasks)
     
     par Across Worker Processes
-        Orch->>Worker: _execute_task(task)
-        Worker->>Task: task()
-        Task->>DB: initialize_sqlite_storage()
-        Task->>Engine: new LLaMEAEngine() & engine.run(...)
+        Runner->>Single: SynthesisCampaignUseCase.run_worker(item)
+        Single->>DB: initialize_sqlite_storage()
+        Single->>Engine: engine.run(...)
         Engine->>Session: new LLaMEASession(...) & session.run()
         
         Session->>DB: save_experiment_summary(RUNNING)
@@ -209,12 +217,11 @@ sequenceDiagram
         Session->>DB: save_experiment_summary(COMPLETED)
         Session->>Session: cleanup_archive_dir()
         Session-->>Engine: SessionResult
-        Engine-->>Task: SessionResult
-        Task-->>Worker: SessionResult
-        Worker-->>Orch: SessionResult
+        Engine-->>Single: SessionResult
+        Single-->>Runner: SessionResult
     end
 
-    Orch-->>Service: dict[str, SessionResult]
+    Runner-->>Service: dict[str, SessionResult]
     Service->>Service: log_summary()
     Service-->>User: dict[str, SessionResult]
 ```
@@ -224,10 +231,10 @@ sequenceDiagram
 ## 5. Key Architectural Guarantees
 
 1. **Clean Service & Task Separation**:
-   `SynthesisService` acts as the single entry point for planning and execution (`audit_matrix`, `build_tasks`, `run_task`, `run_campaign`), while `EvolutionTask` encapsulates self-contained execution inside worker processes by directly instantiating `LLaMEAEngine`.
+   `SynthesisCampaignUseCase` acts as the planning and multiprocessing orchestrator (`audit_matrix`, `build_tasks`, `run_campaign`), while `SingleSynthesisUseCase` encapsulates clean in-process execution of a single run.
 2. **Process Isolation & Thread-Safety**:
-   Each `EvolutionTask` runs in a separate process with its own SQLite connection operating under `journal_mode=WAL` and `busy_timeout=60000`, preventing lock contention and database corruption.
+   Each worker process runs with its own isolated SQLite connection operating under `journal_mode=WAL` and `busy_timeout=60000`, preventing lock contention and database corruption.
 3. **Robust Warm-Start & Checkpointing**:
    State is pickled to `evolution_state/` each generation. If interrupted, `LLaMEASession` warm-starts from `llamea_config.pkl` and seamlessly resumes generation counts without duplicated iterations.
 4. **No Legacy Aliases / Clean Canonical Contracts**:
-   Zero backwards-compatibility shims or class aliases are maintained. All callers interact directly with canonical services (`SynthesisService`, `BaseLogger`, `LLaMEAEngine`, `SynthesisLogger`).
+   Zero backwards-compatibility shims or class aliases are maintained. All callers interact directly with canonical services (`SingleSynthesisUseCase`, `SynthesisCampaignUseCase`, `BaseLogger`, `LLaMEAEngine`, `SynthesisLogger`).

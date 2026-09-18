@@ -3,8 +3,8 @@
 > **Project:** Automated Algorithm Design under Stochastic Fitness (AAD-LLM)  
 > **Framework:** Large Language Model Evolutionary Algorithm (LLaMEA)  
 > **Storage File:** `results/prompts/all_prompts.md`  
-> **Source Directory:** `src/evolution/infra/prompts/templates/`  
-> **Engine Evaluator:** `src/evolution/infra/engines/llamea/evaluator.py`  
+> **Source Directory:** `src/evolution/infra/engines/llamea/prompts/templates/`  
+> **Feedback Renderer:** `src/evolution/infra/engines/llamea/prompts/feedback.py` (`FeedbackRenderer`)  
 
 ---
 
@@ -112,7 +112,7 @@ STRICT Rules — violating any rule will cause execution failure:
 
 ### 2.2 Algorithm Code Skeleton & API Contract (`shared/example.j2`)
 
-Provides the common API contract, bounds extraction, initial evaluation, and evaluation counting skeleton.
+Provides the candidate algorithm skeleton showing bounds extraction, random initialization, problem invocation, and return value contract.
 
 ```jinja2
 Your algorithm will be instantiated and called as follows:
@@ -157,7 +157,7 @@ Do NOT change the class structure, method signatures, or return statement:
 
 ## 3. Universal Task Layout Template (`layout.j2`)
 
-Assembles problem metadata, environmental prior, strategy guidance, and universal goal:
+Base layout template for all task prompts. Injects problem information, environment mode, and strategy guidance in fixed order.
 
 ```jinja2
 You are designing a continuous black-box optimization algorithm.
@@ -225,7 +225,9 @@ Design the algorithm so that its optimization decisions account for this stochas
 
 ### 5.1 Baseline Strategy (`strategies/baseline.j2`)
 
-*Empty template* — provides zero additional algorithmic bias, testing the model's unprompted prior under the environmental condition.
+```jinja2
+
+```
 
 ### 5.2 Vectorization Strategy (`strategies/vectorization.j2`)
 
@@ -273,7 +275,7 @@ Keep the reasoning focused on decisions that affect the algorithm rather than ex
 
 ## 6. Evolutionary Feedback Taxonomy (Sections 10–14)
 
-All feedback messages in `src/evolution/infra/engines/llamea/evaluator.py` adhere strictly to the neutral feedback specification.
+All feedback messages in `src/evolution/infra/engines/llamea/prompts/feedback.py` (rendered by `FeedbackRenderer`) adhere strictly to the neutral feedback specification.
 
 ### 6.1 Successful Candidate Feedback (`[RESULT]`)
 
@@ -307,8 +309,6 @@ Use the observed result and previous algorithm history to improve the next candi
 
 ### 6.2 Runtime Error Diagnostic Feedback (`[RUNTIME ERROR]`)
 
-#### Section 11 Specification:
-
 ```text
 [RUNTIME ERROR]
 
@@ -329,11 +329,21 @@ Ensure that:
 - the search stays within the provided bounds;
 - every objective evaluation is counted;
 - the total number of objective evaluations does not exceed the budget.
+
+Problem context: BBOB-1, dim=3, bounds=[-5.0, 5.0].
+
+[NOISY PROBLEM CONTEXT]
+
+The objective function is stochastic.
+
+Ensure that optimization decisions are not based on invalid or inconsistently stored objective values.
+
+Keep any internal statistical estimates separate from the objective value required by the optimizer interface.
+
+Ensure that every call to problem(x) is counted against the evaluation budget.
 ```
 
 ### 6.3 Execution Timeout Feedback (`[TIMEOUT]`)
-
-#### Section 12 Specification:
 
 ```text
 [TIMEOUT]
@@ -341,11 +351,21 @@ Ensure that:
 The generated algorithm exceeded the execution time limit.
 
 Reduce unnecessary computation and ensure that the implementation can complete within the available execution time and evaluation budget.
+
+Problem context: BBOB-1, dim=3, bounds=[-5.0, 5.0].
+
+[NOISY PROBLEM CONTEXT]
+
+The objective function is stochastic.
+
+Ensure that optimization decisions are not based on invalid or inconsistently stored objective values.
+
+Keep any internal statistical estimates separate from the objective value required by the optimizer interface.
+
+Ensure that every call to problem(x) is counted against the evaluation budget.
 ```
 
 ### 6.4 Stochastic Failure Context (`[NOISY PROBLEM CONTEXT]`)
-
-#### Section 13 Specification:
 
 ```text
 [NOISY PROBLEM CONTEXT]
@@ -360,8 +380,6 @@ Ensure that every call to problem(x) is counted against the evaluation budget.
 ```
 
 ### 6.5 Stagnation Meta-Feedback (`[META-FEEDBACK]`)
-
-#### Section 14 Specification:
 
 ```text
 [META-FEEDBACK]
@@ -855,21 +873,14 @@ The algorithm must respect the provided search bounds and evaluation budget.
 
 ## 8. Verification & Keyword Absence Audit
 
-All 12 prompt configurations and evolutionary feedback messages are verified to be free of external solver names, parameter recipes, and interface leaks:
+Automated audit verifying complete absence of external baselines and rigid formulas:
 
-| Factorial Condition | Banned Algorithms | Banned Recipes (`k=3`, `_robust_eval`) | Duplicated Interface | Audit Status |
-| :--- | :---: | :---: | :---: | :---: |
-| `clean` × `baseline` | 0 found | 0 found | 0 found | PASSED (0 leaks) |
-| `clean` × `vectorization` | 0 found | 0 found | 0 found | PASSED (0 leaks) |
-| `clean` × `guided` | 0 found | 0 found | 0 found | PASSED (0 leaks) |
-| `clean` × `thinking` | 0 found | 0 found | 0 found | PASSED (0 leaks) |
-| `implicit` × `baseline` | 0 found | 0 found | 0 found | PASSED (0 leaks) |
-| `implicit` × `vectorization` | 0 found | 0 found | 0 found | PASSED (0 leaks) |
-| `implicit` × `guided` | 0 found | 0 found | 0 found | PASSED (0 leaks) |
-| `implicit` × `thinking` | 0 found | 0 found | 0 found | PASSED (0 leaks) |
-| `noisy` × `baseline` | 0 found | 0 found | 0 found | PASSED (0 leaks) |
-| `noisy` × `vectorization` | 0 found | 0 found | 0 found | PASSED (0 leaks) |
-| `noisy` × `guided` | 0 found | 0 found | 0 found | PASSED (0 leaks) |
-| `noisy` × `thinking` | 0 found | 0 found | 0 found | PASSED (0 leaks) |
+- **Absence of `cma-es`:** Verified (0 occurrences)
+- **Absence of `differential evolution`:** Verified (0 occurrences)
+- **Absence of `particle swarm`:** Verified (0 occurrences)
+- **Absence of `simulated annealing`:** Verified (0 occurrences)
+- **Absence of `hill climbing`:** Verified (0 occurrences)
+- **Absence of rigid recipes ($k=3$, 20% budget formulas):** Verified (0 occurrences)
 
-*Audit verified via `tests/test_prompts.py`.*
+---
+*Generated automatically from `notebooks/00_prompts.ipynb`.*

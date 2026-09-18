@@ -5,14 +5,15 @@ candidate evaluation, and experiment tracking for continuous optimization proble
 """
 
 from evolution.application import (
-    EvolutionTask,
-    SynthesisAuditService,
-    SynthesisService,
-    SessionResult,
+    CampaignResults,
+    CampaignTask,
     SessionConfig,
-    TaskOrchestrator,
+    SessionResult,
+    SingleSynthesisUseCase,
+    SynthesisCampaignUseCase,
+    SynthesisEngine,
 )
-from evolution.infra.engines import LLaMEASession
+from evolution.infra.engines import LLaMEAEngine, LLaMEASession
 from evolution.domain import (
     AWGNStrategy,
     AlgorithmTimeoutException,
@@ -69,11 +70,14 @@ __all__ = [
     "Error",
     "Convergence",
     # Application & Task Execution
-    "SynthesisAuditService",
-    "SynthesisService",
-    "TaskOrchestrator",
-    "EvolutionTask",
+    "SingleSynthesisUseCase",
+    "SynthesisCampaignUseCase",
+    "CampaignTask",
+    "SynthesisEngine",
+    "LLaMEAEngine",
     "LLaMEASession",
     "SessionResult",
     "SessionConfig",
+    "CampaignResults",
 ]
+

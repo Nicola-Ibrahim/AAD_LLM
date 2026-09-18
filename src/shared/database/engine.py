@@ -1,26 +1,27 @@
-"""Shared database infrastructure and SQLite connection utilities.
+"""Shared database infrastructure and connection utilities.
 
 Provides thread-safe connection pooling, WAL mode enforcement, and session factories
-shared across bounded contexts without cross-domain dependencies.
+configured globally via shared.config.DATABASE_URL.
 """
 
-from collections.abc import Generator
-from contextlib import contextmanager
+import os
 from pathlib import Path
 import sqlite3
 
 from sqlalchemy import create_engine, event
-from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
-from shared.config import DATA_DIR
+from shared.config import DATABASE_URL
 
 
 def ensure_wal_mode(db_path: Path) -> None:
-    """Ensures WAL journal mode and normal synchronous are set before engines are built.
+    """Ensures WAL journal mode and normal synchronous are set for SQLite databases.
 
     Idempotent and safe to call multiple times across concurrent processes.
     """
+    if str(db_path) == ":memory:":
+        return
     if db_path.parent:
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -36,57 +37,49 @@ def ensure_wal_mode(db_path: Path) -> None:
         conn.close()
 
 
-def build_engine(db_path: Path = DATA_DIR / "db.sqlite3", echo: bool = False) -> Engine:
-    """Creates and configures a SQLite SQLAlchemy engine with WAL mode and concurrency guards."""
-    ensure_wal_mode(db_path)
+def build_engine(*, echo: bool = False) -> Engine:
+    """Creates and configures a SQLAlchemy engine using the global DATABASE_URL."""
+    db_url = os.getenv("DATABASE_URL", DATABASE_URL)
+    url_obj = make_url(db_url)
+    is_sqlite = url_obj.drivername.startswith("sqlite")
 
-    engine = create_engine(
-        f"sqlite:///{db_path}",
-        connect_args={
+    connect_args = {}
+    if is_sqlite:
+        connect_args = {
             "check_same_thread": False,
             "timeout": 60.0,
-        },
+        }
+        if url_obj.database and url_obj.database != ":memory:":
+            ensure_wal_mode(Path(url_obj.database))
+
+    engine = create_engine(
+        db_url,
+        connect_args=connect_args,
         echo=echo,
     )
 
-    @event.listens_for(engine, "connect")
-    def _configure_sqlite(dbapi_conn, _):
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.execute("PRAGMA busy_timeout=60000")
-        cursor.close()
+    if is_sqlite:
+        @event.listens_for(engine, "connect")
+        def _configure_sqlite(dbapi_conn, _):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA busy_timeout=60000")
+            cursor.close()
 
     return engine
 
 
-def build_session_factory(engine: Engine) -> sessionmaker[Session]:
-    """Creates a thread-safe SQLAlchemy sessionmaker bound to the engine."""
+def create_db_session_factory(engine: Engine | None = None) -> sessionmaker[Session]:
+    """Creates a thread-safe sessionmaker bound to an engine (or defaults to build_engine())."""
+    if engine is None:
+        engine = build_engine()
     return sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
-def create_db_session_factory(
-    path: Path = DATA_DIR / "db.sqlite3",
-) -> sessionmaker[Session]:
-    """Creates an engine and returns a thread-safe session factory for the given SQLite path."""
-    engine = build_engine(path)
-    return build_session_factory(engine)
-
-
-@contextmanager
-def get_db_connection(
-    path: Path = DATA_DIR / "db.sqlite3",
-) -> Generator[Connection, None, None]:
-    """Context manager yielding a live database connection for query execution."""
-    engine = build_engine(path)
-    with engine.connect() as conn:
-        yield conn
-
-
-def initialize_sqlite_storage(
-    path: Path = DATA_DIR / "db.sqlite3",
-):
-    """Creates an engine and returns an initialized SQLite synthesis repository."""
+def initialize_sqlite_storage():
+    """Creates an engine using global DATABASE_URL and returns an initialized synthesis repository."""
     from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
 
-    session_factory = create_db_session_factory(path)
-    return SQLiteSynthesisRepository(session_factory=session_factory)
+    return SQLiteSynthesisRepository(session_factory=create_db_session_factory())
+
+

@@ -88,50 +88,11 @@ class FeedbackRenderer:
             str: Actionable diagnostic feedback formatted for the LLM prompt.
         """
         if result.is_failure:
-            feedback = self._render_failure(result, problem)
-        else:
-            feedback = self._render_success(result, problem)
-
-        if result.is_stagnated:
-            feedback += META_FEEDBACK_DIVERSITY_INJECTION
-
-        return feedback
-
-    def _render_success(
-        self,
-        result: AlgorithmEvaluationResult,
-        problem: BaseProblem,
-    ) -> str:
-        final_error = result.final_error if result.final_error is not None else 0.0
-        if abs(final_error) < 1e-4 and final_error != 0.0:
-            err_str = f"{final_error:.6e}"
-        else:
-            err_str = f"{final_error:.4f}"
-
-        if problem.noise_std > 0:
-            msg = SUCCESS_NOISY_FEEDBACK_TEMPLATE.format(err_str=err_str)
-        else:
-            msg = SUCCESS_CLEAN_FEEDBACK_TEMPLATE.format(err_str=err_str)
-
-        if result.captured_warnings:
-            warn_str = "\n".join(f"  - {w}" for w in result.captured_warnings)
-            msg += WARNINGS_FOOTER_TEMPLATE.format(warn_str=warn_str)
-
-        return msg
-
-    def _render_failure(
-        self,
-        result: AlgorithmEvaluationResult,
-        problem: BaseProblem,
-    ) -> str:
-        timed_out = (
-            result.metadata.execution.timed_out
-            if result.metadata and result.metadata.execution
-            else False
-        )
-        if timed_out:
-            msg = TIMEOUT_FEEDBACK_TEMPLATE
-        else:
+            timed_out = (
+                result.metadata.execution.timed_out
+                if result.metadata and result.metadata.execution
+                else False
+            )
             err_type = (
                 result.metadata.error.error_type
                 if result.metadata and result.metadata.error and result.metadata.error.error_type
@@ -142,17 +103,74 @@ class FeedbackRenderer:
                 if result.metadata and result.metadata.error and result.metadata.error.error_message
                 else ""
             )
-            error_str = f"{err_type}: {err_msg}" if err_msg else f"{err_type}"
+            feedback = self.render_failure(
+                error_type=err_type,
+                error_message=err_msg,
+                problem=problem,
+                code_context=result.code_context,
+                warnings=result.captured_warnings,
+                timed_out=timed_out,
+            )
+        else:
+            feedback = self.render_success(
+                final_error=result.final_error,
+                problem=problem,
+                warnings=result.captured_warnings,
+            )
+
+        if result.is_stagnated:
+            feedback += META_FEEDBACK_DIVERSITY_INJECTION
+
+        return feedback
+
+    def render_success(
+        self,
+        final_error: float | None,
+        problem: BaseProblem,
+        warnings: list[str] | None = None,
+    ) -> str:
+        """Render natural language feedback for a successful optimization run."""
+        err_val = final_error if final_error is not None else 0.0
+        if abs(err_val) < 1e-4 and err_val != 0.0:
+            err_str = f"{err_val:.6e}"
+        else:
+            err_str = f"{err_val:.4f}"
+
+        if problem.noise_std > 0:
+            msg = SUCCESS_NOISY_FEEDBACK_TEMPLATE.format(err_str=err_str)
+        else:
+            msg = SUCCESS_CLEAN_FEEDBACK_TEMPLATE.format(err_str=err_str)
+
+        if warnings:
+            warn_str = "\n".join(f"  - {w}" for w in warnings)
+            msg += WARNINGS_FOOTER_TEMPLATE.format(warn_str=warn_str)
+
+        return msg
+
+    def render_failure(
+        self,
+        error_type: str,
+        error_message: str,
+        problem: BaseProblem,
+        code_context: str = "",
+        warnings: list[str] | None = None,
+        timed_out: bool = False,
+    ) -> str:
+        """Render diagnostic feedback for an execution failure or timeout."""
+        if timed_out:
+            msg = TIMEOUT_FEEDBACK_TEMPLATE
+        else:
+            error_str = f"{error_type}: {error_message}" if error_message else f"{error_type}"
             code_section = (
-                f"\n\nRelevant code:\n{result.code_context}" if result.code_context else ""
+                f"\n\nRelevant code:\n{code_context}" if code_context else ""
             )
             msg = RUNTIME_ERROR_FEEDBACK_TEMPLATE.format(
                 error_str=error_str,
                 code_section=code_section,
             )
 
-        if result.captured_warnings:
-            warn_str = "\n".join(f"  - {w}" for w in result.captured_warnings)
+        if warnings:
+            warn_str = "\n".join(f"  - {w}" for w in warnings)
             msg += WARNINGS_FOOTER_TEMPLATE.format(warn_str=warn_str)
 
         lb_val, ub_val = self._extract_bounds(problem)
