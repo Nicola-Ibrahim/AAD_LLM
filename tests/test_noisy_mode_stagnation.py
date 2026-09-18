@@ -41,7 +41,7 @@ def test_stagnation_diversity_injection(db_session_factory, tmp_path):
             noise_model=NoiseModelEnum.HETEROSCEDASTIC,
             true_optimum=problem.true_optimum,
         ),
-        mode=SynthesisMode.NOISY,
+        mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
     )
 
@@ -95,7 +95,7 @@ def test_evaluator_noisy_feedback_no_noise_std_leak(db_session_factory, tmp_path
             noise_model=NoiseModelEnum.HETEROSCEDASTIC,
             true_optimum=problem.true_optimum,
         ),
-        mode=SynthesisMode.NOISY,
+        mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
     )
 

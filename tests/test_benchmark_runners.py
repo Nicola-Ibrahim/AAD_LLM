@@ -472,7 +472,7 @@ target_noise_stds = [0.0, 0.05, 0.1]
                 "f1_2D_clean_baseline": {
                     "problem_id": 1,
                     "dim": 2,
-                    "mode": "clean",
+                    "mode": "explicit",
                     "noise_std": 0.0,
                     "prompt_strategy": "baseline",
                     "llm_name": "qwen_14b",
@@ -547,7 +547,7 @@ classical_baselines = ["cmaes"]
                 "f1_2D_clean_baseline": {
                     "problem_id": 1,
                     "dim": 2,
-                    "mode": "clean",
+                    "mode": "explicit",
                     "noise_std": 0.0,
                     "prompt_strategy": "baseline",
                     "llm_name": "qwen_14b",
@@ -557,7 +557,7 @@ classical_baselines = ["cmaes"]
                 "f1_2D_noisy_baseline": {
                     "problem_id": 1,
                     "dim": 2,
-                    "mode": "noisy",
+                    "mode": "explicit",
                     "noise_std": 0.05,
                     "prompt_strategy": "baseline",
                     "llm_name": "qwen_14b",

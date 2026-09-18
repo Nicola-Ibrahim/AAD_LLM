@@ -25,19 +25,17 @@ problem_targets = [
 # Evaluated Noise Conditions (Pairs of standard deviation and noise model strategy):
 # Supported models: "none", "heteroscedastic", "homoscedastic_additive", "awgn"
 noise_conditions = [
-  { std = 0.0,  model = "none" },
-  { std = 0.05, model = "heteroscedastic" },
-  { std = 0.1,  model = "heteroscedastic" },
-  { std = 0.2,  model = "heteroscedastic" },
+  { std = 0.0,  noise_model = "none" },
+  { std = 0.05, noise_model = "heteroscedastic" },
+  { std = 0.1,  noise_model = "heteroscedastic" },
+  { std = 0.2,  noise_model = "heteroscedastic" },
 ]
 
 # Evaluated Synthesis Modes & Prompt Strategies (List of dictionaries with strategies list):
-#   • "clean"    : Evaluated on deterministic landscapes (std = 0.0) with clean landscape characteristics
-#   • "noisy"    : Evaluated on noisy landscapes (std > 0.0) with explicit stochasticity warnings
-#   • "implicit" : Evaluated on noisy landscapes (std > 0.0) with neutral black-box prompt for autonomous noise discovery
+#   • "explicit" : LLM is told the truth about the environment (clean vs. noisy)
+#   • "implicit" : Evaluated with neutral black-box prompt for autonomous adaptation
 synthesis_modes = [
-  { mode = "clean",    strategies = ["baseline", "thinking", "vectorization", "guided"] },
-  { mode = "noisy",    strategies = ["baseline", "thinking", "vectorization", "guided"] },
+  { mode = "explicit", strategies = ["baseline", "thinking", "vectorization", "guided"] },
   { mode = "implicit", strategies = ["baseline", "thinking", "vectorization", "guided"] },
 ]
 

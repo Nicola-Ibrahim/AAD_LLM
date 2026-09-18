@@ -100,7 +100,7 @@ class EvolutionTask:
     config: SessionConfig
     initial_iteration: int = 0
     prompt_strategy: PromptStrategy = PromptStrategy.BASELINE
-    synthesis_mode: SynthesisMode = SynthesisMode.CLEAN
+    synthesis_mode: SynthesisMode = SynthesisMode.EXPLICIT
     db_path: Path | None = None
 
 
@@ -375,9 +375,10 @@ class SynthesisService:
             if exp.max_iterations:
                 target_cfg = target_cfg.model_copy(update={"iterations": exp.max_iterations})
 
+            mode_label = f"{exp.mode}_std_{noise_std}"
             tasks.append(
                 EvolutionTask(
-                    key=f"f{p_id}_{dim}D_{'clean' if noise_std == 0.0 else f'noisy_std_{noise_std}'}_{exp.prompt_strategy}_target_exp{exp.id}",
+                    key=f"f{p_id}_{dim}D_{mode_label}_{exp.prompt_strategy}_target_exp{exp.id}",
                     problem=problem,
                     llm_client=self.llm_client,
                     experiment_id=exp.id,
@@ -397,7 +398,7 @@ class SynthesisService:
         noise_std: float,
         mode_label: str,
         strat: PromptStrategy,
-        synthesis_mode: SynthesisMode = SynthesisMode.CLEAN,
+        synthesis_mode: SynthesisMode = SynthesisMode.EXPLICIT,
     ) -> EvolutionTask:
         """Constructs a resume EvolutionTask from an active running experiment in the database."""
         noise_strat = NoiseStrategyFactory.create(
@@ -415,7 +416,7 @@ class SynthesisService:
         if exp.max_iterations:
             resume_cfg = resume_cfg.model_copy(update={"iterations": exp.max_iterations})
 
-        resolved_mode = synthesis_mode if synthesis_mode != SynthesisMode.CLEAN else exp.mode
+        resolved_mode = synthesis_mode
         return EvolutionTask(
             key=f"f{p_id}_{dim}D_{mode_label}_{strat}_resume_exp{exp.id}",
             problem=resume_problem,
@@ -437,7 +438,7 @@ class SynthesisService:
         run_idx: int,
         noise_model: NoiseModelEnum = NoiseModelEnum.HETEROSCEDASTIC,
         key_prefix: str = "",
-        synthesis_mode: SynthesisMode = SynthesisMode.CLEAN,
+        synthesis_mode: SynthesisMode = SynthesisMode.EXPLICIT,
     ) -> EvolutionTask:
         """Registers a new experiment record in the database and returns a fresh EvolutionTask."""
         noise_strat = NoiseStrategyFactory.create(
@@ -459,7 +460,7 @@ class SynthesisService:
             instance_id=problem.instance_id,
             true_optimum=problem.true_optimum,
         )
-        exp_mode = synthesis_mode if synthesis_mode != SynthesisMode.CLEAN else problem.mode
+        exp_mode = synthesis_mode
         fresh_cfg = self._build_session_config()
         exp_id = self.sqlite_repo.create_experiment(
             problem=problem_profile,

@@ -1,7 +1,12 @@
 from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
-from evolution.domain.enums import NoiseModelEnum, PromptStrategy, SynthesisMode
+from evolution.domain.enums import (
+    NoiseEnvironment,
+    NoiseModelEnum,
+    PromptStrategy,
+    SynthesisMode,
+)
 
 
 
@@ -75,33 +80,42 @@ class NoiseConditionConfig(BaseModel):
     """Evaluated noise condition (std, noise model strategy, optional mode override, and pre-associated modes)."""
 
     std: float
-    model: NoiseModelEnum
+    model: NoiseModelEnum = NoiseModelEnum.NONE
     mode: str | None = None
     modes: list[SynthesisModeConfig] = Field(default_factory=list)
 
     model_config = ConfigDict(frozen=True)
+
+    @property
+    def noise_model(self) -> NoiseModelEnum:
+        return self.model
 
     def __getitem__(self, idx: int | str) -> Any:
         if isinstance(idx, int):
             return (self.std, self.model, self.mode)[idx]
         if hasattr(self, idx):
             return getattr(self, idx)
+        if idx == "noise_model":
+            return self.model
         raise KeyError(idx)
 
     def get(self, key: str, default: Any = None) -> Any:
+        if key == "noise_model":
+            return self.model
         return getattr(self, key, default)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "std": self.std,
             "model": self.model.value if isinstance(self.model, NoiseModelEnum) else str(self.model),
+            "noise_model": self.model.value if isinstance(self.model, NoiseModelEnum) else str(self.model),
             "mode": self.mode,
             "modes": [m.to_dict() for m in self.modes],
         }
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, dict):
-            model_val = other.get("model")
+            model_val = other.get("noise_model") or other.get("model")
             model_match = (
                 self.model.value == str(model_val).lower()
                 if model_val is not None
@@ -152,22 +166,26 @@ class MatrixCondition(BaseModel):
         )
 
     @property
+    def prompt_template(self) -> str:
+        """Resolve (SynthesisMode + noise_std) → mode template filename. Single decision point."""
+        if self.mode == SynthesisMode.IMPLICIT:
+            return "modes/implicit.j2"
+        env = NoiseEnvironment.from_std(self.noise_std)
+        return f"modes/{env}.j2"
+
+    @property
     def env_label(self) -> str:
         """Display label for environment status in audit table."""
         if self.mode == SynthesisMode.IMPLICIT:
             return f"Implicit ({self.noise_std})"
-        elif self.mode == SynthesisMode.NOISY:
-            return f"Noisy ({self.noise_std})"
-        return f"Clean ({self.noise_std})"
+        return f"Explicit ({self.noise_std})"
 
     @property
     def task_mode_label(self) -> str:
         """Task mode label used for execution logging and task naming."""
         if self.mode == SynthesisMode.IMPLICIT:
             return f"implicit_std_{self.noise_std}"
-        elif self.mode == SynthesisMode.NOISY:
-            return f"noisy_std_{self.noise_std}"
-        return "clean"
+        return f"explicit_std_{self.noise_std}"
 
     @property
     def synthesis_mode(self) -> SynthesisMode:

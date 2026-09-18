@@ -4,8 +4,7 @@ from enum import StrEnum
 
 
 class SynthesisMode(StrEnum):
-    """Governs how an algorithm is synthesized: prompt framing and noise exposure."""
+    """Level 1 — epistemic prior. Stored in DB and config."""
 
-    CLEAN = "clean"
-    NOISY = "noisy"
-    IMPLICIT = "implicit"
+    EXPLICIT = "explicit"  # LLM is told the truth about the environment
+    IMPLICIT = "implicit"  # Neutral black-box framing

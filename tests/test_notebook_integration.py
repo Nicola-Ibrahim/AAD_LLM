@@ -7,7 +7,7 @@ from benchmarking.application.audit_service import EvaluationAuditService
 from benchmarking.application.evaluation_service import EvaluationService
 from benchmarking.application.selection_service import ChampionSelectionService
 from benchmarking.application.statistical_service import StatisticalEvaluationService
-from shared.config import DATA_DIR, RESULTS_DIR
+from shared.config import DATA_DIR
 
 
 def test_nb01_noise_pipeline():
@@ -282,12 +282,13 @@ runs_per_config = 1
     )
 
     tasks = service.build_tasks()
-    # Problem 1 has 2D and 5D (2 tasks), Problem 8 has 3D (1 task) -> total 3 tasks
-    assert len(tasks) == 3
+    # Problem 1 has 2D and 5D (2x2=4 tasks), Problem 8 has 3D (1x2=2 tasks) -> total 6 tasks (both explicit and implicit)
+    assert len(tasks) == 6
     task_keys = [t.key for t in tasks]
-    assert any("f1_2D" in k for k in task_keys)
-    assert any("f1_5D" in k for k in task_keys)
-    assert any("f8_3D" in k for k in task_keys)
+    assert any("f1_2D_explicit" in k for k in task_keys)
+    assert any("f1_2D_implicit" in k for k in task_keys)
+    assert any("f1_5D_explicit" in k for k in task_keys)
+    assert any("f8_3D_explicit" in k for k in task_keys)
     assert not any("f8_2D" in k for k in task_keys)
     assert not any("f8_5D" in k for k in task_keys)
 
@@ -309,7 +310,7 @@ prompt_strategies = ["baseline"]
     assert legacy_cfg["problem_ids"] == [1, 11]
     assert legacy_cfg["dimensions"] == [2, 3]
 
-    # 3. Automatic multi-mode (clean, noisy, implicit)
+    # 3. Multi-mode (explicit, implicit)
     multimode_toml = tmp_path / "multimode.toml"
     multimode_toml.write_text("""
 [matrix]
@@ -317,10 +318,10 @@ problem_targets = [
   { id = 1, dimensions = [2] },
 ]
 noise_conditions = [
-  { std = 0.0, model = "none" },
-  { std = 0.05, model = "heteroscedastic" },
+  { std = 0.0, noise_model = "none" },
+  { std = 0.05, noise_model = "heteroscedastic" },
 ]
-synthesis_modes = ["clean", "noisy", "implicit"]
+synthesis_modes = ["explicit", "implicit"]
 prompt_strategies = ["baseline"]
 
 [evolution]
@@ -330,7 +331,7 @@ runs_per_config = 1
 """)
     mm_repo = SynthesisConfigRepository(config_path=multimode_toml)
     mm_cfg = mm_repo.load_config()
-    assert mm_cfg["synthesis_mode_names"] == ["clean", "noisy", "implicit"]
+    assert mm_cfg["synthesis_mode_names"] == ["explicit", "implicit"]
 
     mm_service = SynthesisService(
         sqlite_repo=mock_sqlite,
@@ -339,11 +340,12 @@ runs_per_config = 1
         logger=mock_logger,
     )
     mm_tasks = mm_service.build_tasks()
-    # 1 problem, 1 dim: clean (std=0.0), noisy (std=0.05), implicit (std=0.05) -> total 3 tasks
-    assert len(mm_tasks) == 3
+    # 1 problem, 1 dim: 2 noise conditions x 2 modes -> total 4 tasks
+    assert len(mm_tasks) == 4
     mm_keys = [t.key for t in mm_tasks]
-    assert any("clean" in k for k in mm_keys)
-    assert any("noisy_std_0.05" in k for k in mm_keys)
+    assert any("explicit_std_0.0" in k for k in mm_keys)
+    assert any("explicit_std_0.05" in k for k in mm_keys)
+    assert any("implicit_std_0.0" in k for k in mm_keys)
     assert any("implicit_std_0.05" in k for k in mm_keys)
 
     # 4. Structured list of dictionaries for synthesis_modes with custom strategies
@@ -354,10 +356,10 @@ problem_targets = [
   { id = 1, dimensions = [2] },
 ]
 noise_conditions = [
-  { std = 0.05, model = "heteroscedastic" },
+  { std = 0.05, noise_model = "heteroscedastic" },
 ]
 synthesis_modes = [
-  { mode = "noisy",    strategies = ["baseline", "thinking"] },
+  { mode = "explicit", strategies = ["baseline", "thinking"] },
   { mode = "implicit", strategies = ["guided"] },
 ]
 
@@ -369,7 +371,7 @@ runs_per_config = 1
     dm_repo = SynthesisConfigRepository(config_path=dict_modes_toml)
     dm_cfg = dm_repo.load_config()
     assert len(dm_cfg["synthesis_modes"]) == 2
-    assert dm_cfg["synthesis_modes"][0] == {"mode": "noisy", "strategies": ["baseline", "thinking"]}
+    assert dm_cfg["synthesis_modes"][0] == {"mode": "explicit", "strategies": ["baseline", "thinking"]}
     assert dm_cfg["synthesis_modes"][1] == {"mode": "implicit", "strategies": ["guided"]}
     assert dm_cfg["prompt_strategies"] == ["baseline", "guided", "thinking"]
 
@@ -381,13 +383,13 @@ runs_per_config = 1
     )
     dm_tasks = dm_service.build_tasks()
     # 1 problem, 1 dim, std=0.05:
-    # noisy has 2 strategies (baseline, thinking) -> 2 tasks
+    # explicit has 2 strategies (baseline, thinking) -> 2 tasks
     # implicit has 1 strategy (guided) -> 1 task
     # total = 3 tasks
     assert len(dm_tasks) == 3
     dm_keys = [t.key for t in dm_tasks]
-    assert any("noisy_std_0.05_baseline" in k for k in dm_keys)
-    assert any("noisy_std_0.05_thinking" in k for k in dm_keys)
+    assert any("explicit_std_0.05_baseline" in k for k in dm_keys)
+    assert any("explicit_std_0.05_thinking" in k for k in dm_keys)
     assert any("implicit_std_0.05_guided" in k for k in dm_keys)
     assert not any("implicit_std_0.05_baseline" in k for k in dm_keys)
 
@@ -471,8 +473,8 @@ def test_synthesis_service_run_task_and_campaign():
         noise_stds=[0.0],
         noise_model=MagicMock(),
         synthesis_modes=[],
-        mode_enums=[SynthesisMode.CLEAN],
-        synthesis_mode=SynthesisMode.CLEAN,
+        mode_enums=[SynthesisMode.EXPLICIT],
+        synthesis_mode=SynthesisMode.EXPLICIT,
         prompt_strategies=[],
         matrix_conditions=[],
     )
@@ -493,7 +495,7 @@ def test_synthesis_service_run_task_and_campaign():
     dummy_result = SessionResult(
         problem_id=1,
         dim=2,
-        mode=SynthesisMode.CLEAN,
+        mode=SynthesisMode.EXPLICIT,
         noise_std=0.0,
         experiment_id=999,
         best_error=0.05,

@@ -81,8 +81,7 @@ class SynthesisConfigRepository:
                 ]
             else:
                 synthesis_modes = [
-                    SynthesisModeConfig(mode=SynthesisMode.CLEAN, strategies=list(default_strategies)),
-                    SynthesisModeConfig(mode=SynthesisMode.NOISY, strategies=list(default_strategies)),
+                    SynthesisModeConfig(mode=SynthesisMode.EXPLICIT, strategies=list(default_strategies)),
                     SynthesisModeConfig(mode=SynthesisMode.IMPLICIT, strategies=list(default_strategies)),
                 ]
 
@@ -96,7 +95,7 @@ class SynthesisConfigRepository:
                 (
                     float(c["std"]),
                     NoiseModelEnum(
-                        str(c.get("model", "none" if float(c["std"]) == 0.0 else default_model_str)).lower()
+                        str(c.get("noise_model") or c.get("model", "none" if float(c["std"]) == 0.0 else default_model_str)).lower()
                     ),
                     str(c["mode"]).lower() if c.get("mode") else None,
                 )
@@ -117,12 +116,8 @@ class SynthesisConfigRepository:
                 if not matching_modes:
                     matching_modes = [SynthesisModeConfig(mode=target_enum, strategies=list(default_strategies))]
                 applicable_modes = matching_modes
-            elif std == 0.0:
-                applicable_modes = [m for m in synthesis_modes if m.mode == SynthesisMode.CLEAN]
             else:
-                applicable_modes = [
-                    m for m in synthesis_modes if m.mode in (SynthesisMode.NOISY, SynthesisMode.IMPLICIT)
-                ]
+                applicable_modes = synthesis_modes
 
             noise_conditions.append(
                 NoiseConditionConfig(

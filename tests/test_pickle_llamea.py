@@ -10,6 +10,7 @@ from evolution.domain.services.noise_strategy import NoNoiseStrategy
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.llm.client import LLMClient, Provider
 from evolution.infra.problems.bbob import BBOBProblem
+from evolution.infra.engines.llamea.prompts import SynthesisPrompts
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from shared.database.engine import build_engine
@@ -117,13 +118,14 @@ def test_warm_start_rehydration(tmp_path, test_repos):
     )
 
     evaluator = session._setup_evaluator()
-    synthesis_engine = session._create_synthesis_engine(evaluator, "task_prompt")
+    prompts = SynthesisPrompts(task="task_prompt", example="example_prompt", format="format_prompt")
+    synthesis_engine = session._create_synthesis_engine(evaluator, prompts)
 
     synthesis_engine.pickle_archive()
     config_file = session._archive_dir / "llamea_config.pkl"
     assert config_file.exists()
 
-    resumed_engine = session._create_synthesis_engine(evaluator, "task_prompt")
+    resumed_engine = session._create_synthesis_engine(evaluator, prompts)
     assert resumed_engine is not None
     assert resumed_engine.generation == synthesis_engine.generation
 

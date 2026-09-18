@@ -21,10 +21,9 @@ from evolution.application.interfaces import BaseLogger
 from evolution.application.synthesis_service import SessionConfig, SessionResult
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
-from evolution.infra.prompts import (
-    build_example_prompt,
-    build_format_prompt,
-    build_task_prompt,
+from evolution.infra.engines.llamea.prompts import (
+    SynthesisPrompts,
+    build_synthesis_prompts,
 )
 from evolution.infra.storage.base import SynthesisRepository
 from evolution.infra.storage.code.repository import CodeRepository
@@ -41,42 +40,9 @@ warnings.filterwarnings(
 class LLaMEASession:
     """Manages the lifecycle and execution of a single LLaMEA synthesis session on an optimization problem.
 
-    Workflow:
-                 Problem, LLMClient, Storage Repositories, SessionConfig
-                                │
-                                ▼
-                 Session Initialization & Domain Setup
-                 • Create ExperimentSummary domain aggregate
-                 • Setup archive directory for state checkpoints
-                                │
-                                ▼
-                 Evaluator & Prompt Construction
-                 • Instantiate Evaluator with session execution knobs
-                 • Build dynamic task, format, and example prompts
-                                │
-                                ▼
-                 LLaMEA Engine Instantiation / Warm-Start
-                 • Try warm start from state checkpoint
-                 • Else instantiate fresh LLaMEA loop
-                                │
-                                ▼
-                 LLaMEA Evolutionary Loop (Generations)
-                 ┌──────────────────────────────────────┐
-                 │ For each iteration:                  │
-                 │ 1. LLM synthesizes new algorithm code│
-                 │ 2. Evaluator validates & runs trial  │
-                 │ 3. Score assigned via error/penalties│
-                 │ 4. Champion updated if score improved│
-                 │ 5. DB updated with iteration log     │
-                 └──────────────────┬───────────────────┘
-                                    │
-               ┌────────────────────┴────────────────────┐
-            Success                                   Failure
-        (Loop completes)                        (Unhandled Exception)
-               │                                         │
-               ▼                                         ▼
-        1. Extract champion solution            1. Mark experiment failed in DB
-        2. Mark experiment completed in DB      2. Re-raise exception
+    Orchestrates the evolutionary loop:
+        1. Pre-warm session from existing snapshots (if available)
+        2. Run LLaMEA synthesis loop
         3. Persist final ExperimentSummary
                │
                ▼
@@ -93,7 +59,7 @@ class LLaMEASession:
         code_repo: CodeRepository,
         config: SessionConfig,
         initial_iteration: int = 0,
-        synthesis_mode: SynthesisMode = SynthesisMode.CLEAN,
+        synthesis_mode: SynthesisMode = SynthesisMode.EXPLICIT,
     ):
         """Initializes the synthesis session with pre-resolved domain objects and execution configuration."""
         self._problem = problem
@@ -104,8 +70,8 @@ class LLaMEASession:
         self._code_repo = code_repo
         self._config = config
         self._initial_iteration = initial_iteration
-        self._logger = SynthesisLogger()
-        self._synthesis_mode = SynthesisMode(synthesis_mode) if synthesis_mode != SynthesisMode.CLEAN else problem.mode
+        self._logger: BaseLogger = SynthesisLogger()
+        self._synthesis_mode = SynthesisMode(synthesis_mode)
 
         problem_profile = ProblemProfile(
             problem_id=self._problem.problem_id,
@@ -202,17 +168,14 @@ class LLaMEASession:
     def _execute_loop(self) -> tuple[LLaMEA, Evaluator]:
         """Executes the LLaMEA evolutionary loop with lifecycle status tracking."""
         try:
-            task_prompt = build_task_prompt(
-                problem_id=self._problem.problem_id,
-                dim=self._problem.dim,
-                lower_bound=self._problem.lower_bound,
-                upper_bound=self._problem.upper_bound,
+            prompts = build_synthesis_prompts(
+                problem=self._problem,
                 mode=self._synthesis_mode,
                 strategy=self._prompt_strategy,
                 budget_hint=self._config.budget,
             )
             evaluator = self._setup_evaluator()
-            synthesis_engine = self._create_synthesis_engine(evaluator, task_prompt)
+            synthesis_engine = self._create_synthesis_engine(evaluator, prompts)
             synthesis_engine.run()
         except Exception as e:
             self._experiment.fail()
@@ -231,9 +194,10 @@ class LLaMEASession:
         self._cleanup_archive_dir()
         return self._process_session_result(synthesis_engine, evaluator)
 
-    def _create_synthesis_engine(self, evaluator: Evaluator, task_prompt: str) -> LLaMEA:
+    def _create_synthesis_engine(
+        self, evaluator: Evaluator, prompts: SynthesisPrompts
+    ) -> LLaMEA:
         """Creates a new LLaMEA synthesis engine or resumes from a warm-start session state if it exists."""
-        synthesis_engine = None
         state_file = self._archive_dir / "llamea_config.pkl"
 
         if state_file.exists():
@@ -247,29 +211,27 @@ class LLaMEASession:
                         synthesis_engine.generation,
                         self._config.iterations,
                     )
+                    synthesis_engine.logger = SimpleNamespace(dirname=str(self._archive_dir))
+                    return synthesis_engine
             except Exception as e:
                 self._logger.warning(f"Warm start failed, starting fresh: {e}")
-                synthesis_engine = None
 
-        if synthesis_engine is None:
-            synthesis_engine = LLaMEA(
-                f=evaluator,
-                llm=self._llm_client,
-                n_parents=1,
-                n_offspring=1,
-                budget=self._config.iterations,
-                task_prompt=task_prompt,
-                example_prompt=build_example_prompt(),
-                output_format_prompt=build_format_prompt(),
-                experiment_name=self._experiment_name,
-                elitism=True,
-                log=False,
-                max_workers=1,
-                parallel_backend="sequential",
-            )
-
+        synthesis_engine = LLaMEA(
+            f=evaluator,
+            llm=self._llm_client,
+            n_parents=1,
+            n_offspring=1,
+            budget=self._config.iterations,
+            task_prompt=prompts.task,
+            example_prompt=prompts.example,
+            output_format_prompt=prompts.format,
+            experiment_name=self._experiment_name,
+            elitism=True,
+            log=False,
+            max_workers=1,
+            parallel_backend="sequential",
+        )
         synthesis_engine.logger = SimpleNamespace(dirname=str(self._archive_dir))
-
         return synthesis_engine
 
     def _setup_evaluator(self) -> Evaluator:
@@ -320,7 +282,7 @@ class LLaMEAEngine:
         code_repo: CodeRepository,
         config: SessionConfig,
         initial_iteration: int = 0,
-        synthesis_mode: SynthesisMode = SynthesisMode.CLEAN,
+        synthesis_mode: SynthesisMode = SynthesisMode.EXPLICIT,
     ) -> SessionResult:
         """Executes a single algorithm synthesis run using LLaMEASession."""
         session = LLaMEASession(

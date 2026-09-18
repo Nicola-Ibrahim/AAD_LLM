@@ -60,6 +60,9 @@ pythonpath = ["src"]
 [tool.pyright]
 extraPaths = ["src"]
 
+[tool.pyrefly]
+search-path = ["src"]
+
 [tool.uv]
 package = false
 

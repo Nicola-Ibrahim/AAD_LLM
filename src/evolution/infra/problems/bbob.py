@@ -84,8 +84,8 @@ class BBOBProblem(BaseProblem):
 
     @property
     def mode(self) -> SynthesisMode:
-        """Return SynthesisMode.NOISY if noise_std > 0 else SynthesisMode.CLEAN."""
-        return SynthesisMode.NOISY if self.noise_std > 0.0 else SynthesisMode.CLEAN
+        """BBOBProblem always runs in explicit environment (noise level known to physics, not to LLM)."""
+        return SynthesisMode.EXPLICIT
 
     def eval_scalar(self, x: np.ndarray) -> float:
         """Evaluate the objective function at point `x` and return a single scalar float."""
