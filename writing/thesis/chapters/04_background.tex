@@ -55,8 +55,8 @@ independently, whereas non-separable functions contain dependencies between
 variables. Ill-conditioned functions have directions with substantially
 different sensitivities, which can make progress difficult for methods that do
 not adapt their search geometry. Multimodal functions contain multiple local
-optima and therefore require the optimizer to balance exploration of the search
-space with exploitation of promising regions.
+optima and therefore require the optimizer to balance exploration of the
+search space with exploitation of promising regions.
 
 Because optimization performance depends on these characteristics,
 standardized benchmark suites are useful for comparing algorithms under
@@ -687,15 +687,14 @@ candidate. Since the selected candidate becomes the incumbent supplied to
 the LLM for subsequent generations, the effect of the incorrect selection
 can extend beyond the evaluation in which the ranking error occurred.
 
-In a program-space search such as LLaMEA, this can influence which algorithmic
-structure is used as the basis for subsequent modifications. If later
-evaluations do not reproduce the same favorable noise realization, the
-selected algorithm may no longer appear as strong as it did when it was
-accepted. The search has nevertheless already moved to a different
-incumbent. We refer to this potential failure mode as the
-\emph{Ghost Parent} effect. This term describes the mechanism considered in
-this thesis and is not a failure mode established by the original LLaMEA
-study.
+In a program-space search such as LLaMEA, an incorrect selection can influence
+which algorithmic structure is used as the basis for subsequent modifications.
+If later evaluations do not reproduce the same favorable stochastic
+realization, the selected algorithm may no longer appear as strong as it did
+when it was accepted. The search has nevertheless already moved to a
+different incumbent. This illustrates how stochastic evaluation can affect
+not only the assessment of an individual algorithm, but also the subsequent
+trajectory of the algorithm-generation process.
 
 The distinction between algorithm evaluation and algorithm synthesis is
 important here. Evaluating an already generated algorithm under noise
@@ -746,11 +745,11 @@ solutions. In an LLM-based AAD system, the same noisy feedback can also affect
 the search over algorithmic programs. An incorrect selection can change the
 parent program and, as a result, influence all subsequent generations.
 
-The Ghost Parent mechanism described above illustrates one possible failure
-mode. A favorable noise realization can cause an inferior generated algorithm
-to become the incumbent. Subsequent generations are then conditioned on this
-algorithm. The resulting behavior cannot be inferred from the deterministic
-performance of the generated heuristics alone.
+A favorable noise realization can cause an inferior generated algorithm to
+become the incumbent. Subsequent generations are then conditioned on this
+algorithm, so the effect of stochastic evaluation can extend beyond the
+assessment of a single candidate. The resulting behavior cannot be inferred
+from the deterministic performance of the generated heuristics alone.
 
 It therefore remains insufficiently characterized whether LLM-generated
 continuous optimization heuristics remain effective under stochastic fitness

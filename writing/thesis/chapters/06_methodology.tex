@@ -32,38 +32,6 @@ executing, evaluating, and selecting these algorithms. The information
 obtained from each candidate is subsequently used to update the synthesis
 state and construct the context for later generations.
 
-The complete process can be summarized as
-
-\begin{equation}
-\begin{aligned}
-\text{Optimization task}
-&\rightarrow
-\text{Synthesis context}
-\rightarrow
-\text{LLM generation}
-\\
-&\rightarrow
-\text{Code extraction}
-\rightarrow
-\text{Validation}
-\rightarrow
-\text{Isolated execution}
-\\
-&\rightarrow
-\text{Objective evaluation}
-\rightarrow
-\text{Clean diagnostic evaluation}
-\\
-&\rightarrow
-\text{Feedback}
-\rightarrow
-\text{Parent comparison}
-\rightarrow
-\text{Updated incumbent}.
-\end{aligned}
-\label{eq:method_overview}
-\end{equation}
-
 Figure~\ref{fig:llamea_synthesis_overview} provides a corresponding overview
 of the synthesis loop. Starting from the optimization task and synthesis
 configuration, the LLM generates a candidate optimization algorithm. The
@@ -86,6 +54,16 @@ generations.}
 \label{fig:llamea_synthesis_overview}
 \end{figure}
 
+For reproducibility, the methodology distinguishes between the logical
+components of the synthesis framework and their experimental configuration.
+The logical components define how candidates are generated, validated,
+executed, evaluated, and selected. Quantities such as the number of
+generations, synthesis budget, model variant, and benchmark configuration
+are experimental parameters and are specified in Chapter~\ref{chap:experiments}.
+This separation allows the same implementation architecture to be reproduced
+under different experimental configurations without changing the underlying
+synthesis procedure.
+
 %==============================================================================
 \section{LLM-Based Algorithm Synthesis}
 \label{sec:llm_algorithm_synthesis}
@@ -103,8 +81,8 @@ logic.
 The object being evolved is consequently not a solution vector but an
 executable optimization algorithm. The LLM can modify the structure of the
 search procedure itself, allowing changes to affect how candidate solutions
-are generated, how information from previous evaluations is used, and how
-the search is adapted throughout the optimization run.
+are generated, how information from previous evaluations is used, and how the
+search is adapted throughout the optimization run.
 
 This differs from conventional evolutionary optimization, where variation is
 usually applied to numerical parameters or solution vectors. In the present
@@ -113,6 +91,37 @@ surrounding synthesis framework then determines whether the generated
 program is valid and whether the resulting optimization behavior is
 sufficiently effective for the candidate to be retained.
 
+At the system level, the synthesis framework can be viewed as a sequence of
+interfaces between the language model, the generated program, and the
+evaluation environment. The LLM is responsible for producing the candidate
+program from the supplied prompt and synthesis context. The framework is
+responsible for turning the model response into executable source code,
+enforcing the program contract, executing the candidate, and converting its
+execution result into evolutionary feedback. The generated optimizer itself
+is treated as a black-box component by the synthesis controller once it has
+passed validation.
+
+A high-level representation of these components is shown in
+Figure~\ref{fig:methodology_architecture}. The architecture separates the
+generation layer from the execution layer and, within the execution layer,
+separates the objective observations available to the generated optimizer
+from the clean diagnostic information available to the synthesis controller.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\input{figures/methodology_architecture}
+}
+\caption{High-level architecture of the implemented synthesis framework. The
+LLM generates an executable optimization algorithm from the task prompt and
+synthesis context. The generated source passes through extraction and
+validation before being executed in an isolated worker. The optimizer
+interacts with the objective only through the objective interface. Under
+stochastic evaluation, noisy observations are provided to the optimizer,
+whereas the clean objective is retained by the evaluation framework for
+diagnostic assessment and parent--child selection.}
+\label{fig:methodology_architecture}
+\end{figure}
 
 %------------------------------------------------------------------------------
 \subsection{Synthesis Context and Candidate Generation}
@@ -164,6 +173,19 @@ source code. The implementation consequently extracts the candidate source
 before execution. The resulting program is then passed to the validation
 stage rather than being executed directly from the raw model response.
 
+The first candidate establishes the initial incumbent of the synthesis run.
+It is generated using the same task, prompt configuration, and program
+interface as subsequent candidates. Once this candidate has been executed,
+its evaluation result establishes the reference against which subsequent
+children are compared. The synthesis controller therefore begins the
+elitist $(1+1)$ process with one valid incumbent rather than comparing a
+child against an uninitialized parent.
+
+The synthesis run terminates according to the configured synthesis stopping
+criteria. These criteria are defined by the synthesis framework and include
+the maximum permitted synthesis generations and/or synthesis evaluation
+budget used by the experimental configuration. The exact values used in the
+experiments are specified in Chapter~\ref{chap:experiments}.
 
 %------------------------------------------------------------------------------
 \subsection{Code Extraction and Validation}
@@ -189,6 +211,48 @@ algorithms can be evaluated under the same interface and within the same
 execution constraints. Candidates that fail the required structural checks
 are rejected before they can affect the synthesis state.
 
+The validation contract is defined by the required optimizer interface and
+the execution restrictions. In particular, a candidate must provide exactly
+one optimizer class with the required constructor and callable interface,
+must return the required solution tuple, and must contain syntactically valid
+Python source. Imports or calls that delegate the optimization task to
+pre-built optimization solvers are prohibited. The validation stage also
+rejects programs that violate the structural requirements specified in the
+common \texttt{FORMAT} prompt.
+
+The main validation requirements are summarized in
+Table~\ref{tab:validation_requirements}.
+
+\begin{table}[htbp]
+\centering
+\caption{Structural and execution requirements imposed on generated
+optimization algorithms.}
+\label{tab:validation_requirements}
+\begin{tabular}{p{0.34\textwidth}p{0.56\textwidth}}
+\hline
+\textbf{Requirement} & \textbf{Validation condition} \\
+\hline
+Python source & The extracted candidate must be syntactically valid Python. \\
+Optimizer class & The candidate must provide the required optimizer class. \\
+Constructor & \texttt{\_\_init\_\_(self)} must not require additional arguments. \\
+Callable interface & The optimizer must provide
+\texttt{\_\_call\_\_(self, problem, budget)}. \\
+Return value & The optimizer must return
+\texttt{(best\_x, float(best\_y))}. \\
+Optimization logic & The search procedure must be implemented directly rather
+than delegated to prohibited external optimization solvers. \\
+Variable validity & Variables must be defined before use. \\
+Execution boundary & The candidate must operate through the supplied objective
+interface and remain within the provided search bounds and evaluation budget. \\
+\hline
+\end{tabular}
+\end{table}
+
+The table specifies the observable contract of the validator rather than its
+source-code implementation. The exact AST rules used to identify prohibited
+imports, calls, and structural violations are part of the implementation and
+are applied consistently to every generated candidate.
+
 After validation, the candidate is compiled and executed in an isolated
 worker process. Isolation prevents variables or state created by one
 candidate from affecting the surrounding synthesis process. It also allows
@@ -209,7 +273,6 @@ can be included in the context supplied to later generations. This allows
 the model to use execution feedback when modifying a previously generated
 program, consistent with the feedback-driven design of LLaMEA
 \cite{LLaMEA2024}.
-
 
 %------------------------------------------------------------------------------
 \subsection{Isolated Candidate Execution}
@@ -235,6 +298,13 @@ failure can be terminated without stopping the complete synthesis process.
 The execution result can consequently be classified as either a valid
 optimization result or a failure with corresponding diagnostic information.
 
+The execution time limit is treated as an implementation constraint rather
+than as an optimization objective. Let $T_{\mathrm{exec}}$ denote the
+maximum permitted execution time for one candidate. If the candidate does
+not terminate within this limit, the worker is terminated and the candidate
+is classified as a timeout. The exact value of $T_{\mathrm{exec}}$ used in
+the experiments is specified in Chapter~\ref{chap:experiments}.
+
 For a successful candidate, the framework obtains the solution returned by
 the optimizer together with the information required to assess its quality.
 For an unsuccessful candidate, the framework records the type of failure and
@@ -247,6 +317,34 @@ therefore arise from the generated optimization procedure and its interaction
 with the evaluation environment rather than from different execution
 interfaces.
 
+The objective evaluation budget is defined in terms of calls to the supplied
+objective interface. Let $B$ denote the budget provided to the generated
+optimizer and let $N_{\mathrm{eval}}$ denote the number of objective calls.
+The execution contract requires
+
+\begin{equation}
+N_{\mathrm{eval}} \leq B.
+\label{eq:evaluation_budget}
+\end{equation}
+
+Every invocation of \texttt{problem(x)} counts as one objective evaluation,
+including repeated evaluations of the same point. The generated optimizer is
+responsible for maintaining its internal evaluation counter and stopping
+objective queries before the configured budget is exceeded.
+
+The initial point shown in the common example also consumes one objective
+evaluation. Consequently, an implementation that begins with an initial
+evaluation must account for this evaluation before performing additional
+search operations.
+
+The returned \texttt{best\_x} is the solution coordinate vector selected by
+the generated optimizer according to its own internal search logic.
+The corresponding \texttt{best\_y} is the scalar objective value maintained
+by that optimizer. Under stochastic evaluation, this value can correspond
+to a noisy observation. The synthesis framework does not use this returned
+noisy value as the final quality criterion; instead, it evaluates the
+returned \texttt{best\_x} independently using the clean objective as
+described in Section~\ref{subsec:clean_diagnostic}.
 
 %==============================================================================
 \section{Stochastic Fitness Evaluation}
@@ -270,6 +368,12 @@ itself. The stochasticity is introduced at the interface between the
 generated optimizer and the objective rather than by modifying the
 optimization algorithm directly.
 
+The objective wrapper therefore has two logically distinct responsibilities.
+First, it evaluates the clean benchmark objective at the requested point.
+Second, when stochastic mode is enabled, it transforms that clean value into
+the fitness observation returned to the generated optimizer. The clean
+objective remains available to the surrounding evaluation framework but is
+not exposed as an additional information channel to the optimizer.
 
 %------------------------------------------------------------------------------
 \subsection{Deterministic and Stochastic Evaluation}
@@ -286,8 +390,12 @@ f^*
 f_{\mathrm{clean}}(x^*)
 \end{equation}
 
-denote the corresponding optimal objective value. For deterministic
-evaluation, the interface returns the clean objective value,
+denote the corresponding optimal objective value. The value $f^*$ is used
+internally by the evaluation wrapper to determine the scale of the
+heteroscedastic noise. It is not exposed to the generated optimizer.
+
+For deterministic evaluation, the interface returns the clean objective
+value,
 
 \begin{equation}
 f_{\mathrm{noise}}(x)
@@ -467,8 +575,8 @@ values of the function being evaluated.
 Every objective query receives a new stochastic realization. The same
 stochastic objective model is therefore used for all queries, while the
 random perturbation $z$ is independently sampled for each query. For the
-same coordinate $x$, two evaluations can consequently return different
-noisy fitness values,
+same coordinate $x$, two evaluations can consequently return different noisy
+fitness values,
 
 \begin{equation}
 f_{\mathrm{noise}}^{(i)}(x)
@@ -492,6 +600,20 @@ f_{\mathrm{clean}}(x)-f^*
 Thus, repeated queries at the same point can return different noisy fitness
 values, even though the underlying clean objective and the stochastic
 objective model remain unchanged.
+
+The random realization is associated with the objective query rather than
+with the candidate coordinate itself. Consequently, the stochastic
+evaluation does not behave as a deterministic transformation of the search
+space in which each coordinate has one permanently assigned noisy value.
+Instead, the same coordinate can produce different observations on
+different calls.
+
+The random-number generation used by the objective wrapper is kept separate
+from the clean objective calculation. Reproducibility of stochastic
+experiments is obtained through the experiment's configured random-seed
+policy. The exact seed values and run-level seed configuration are reported
+in Chapter~\ref{chap:experiments}, while the present chapter defines the
+sampling rule applied to each objective query.
 
 The generated optimizer therefore has to operate on repeated noisy fitness
 values rather than on a deterministic function with a modified scale. This
@@ -551,6 +673,11 @@ being interpreted as direct evidence that a candidate algorithm has produced
 a better solution. The returned point is instead assessed according to its
 clean objective value after the optimization run has finished.
 
+The clean diagnostic evaluation is performed outside the objective
+evaluation budget available to the generated optimizer. In other words, the
+post-execution calculation of $f_{\mathrm{clean}}(x_{\mathrm{best}})$ is a
+diagnostic operation performed by the evaluation framework and is not
+presented to the generated optimizer as an additional objective observation.
 
 %==============================================================================
 \section{Candidate Selection and Evolutionary Update}
@@ -685,7 +812,6 @@ affects the candidate's search trajectory, while the clean diagnostic score
 provides the performance signal used for evolutionary selection and
 subsequent synthesis feedback.
 
-
 %------------------------------------------------------------------------------
 \subsection{Feedback and Evolutionary Context Update}
 \label{subsec:feedback_update}
@@ -702,11 +828,9 @@ be taken into account when generating the next candidate.
 The feedback depends on how the generated algorithm behaved during
 execution. A successfully executed candidate produces a result message,
 whereas a candidate that cannot be executed produces diagnostic information
-about the failure. Repeated execution failures can additionally trigger
-meta-feedback that asks the LLM to change its search direction. For
-stochastic objectives, diagnostic messages can also contain information
-reminding the LLM that objective evaluations are stochastic and that
-objective-call bookkeeping must be handled accordingly.
+about the failure. For stochastic objectives, diagnostic messages can also
+contain information reminding the LLM that objective evaluations are
+stochastic and that objective-call bookkeeping must be handled accordingly.
 
 For a candidate that executes successfully, the evaluator reports its final
 objective error. A typical result message is:
@@ -838,7 +962,9 @@ in the following candidate.
 A separate case occurs when several consecutive candidates fail. Without
 additional intervention, the LLM may continue making small changes to an
 unsuccessful implementation. The current implementation therefore tracks
-repeated failures and can add meta-feedback to the synthesis history:
+consecutive execution failures. Let $K_{\mathrm{fail}}$ denote the configured
+failure threshold. Once the number of consecutive failures reaches this
+threshold, meta-feedback is added to the synthesis history:
 
 \begin{verbatim}
 [META-FEEDBACK]
@@ -852,6 +978,12 @@ Check the previous implementation for the source of the failure and
 ensure that the new algorithm respects the objective interface,
 search bounds, evaluation budget, and numerical constraints.
 \end{verbatim}
+
+After a successful candidate, the consecutive-failure counter is reset.
+This makes the activation of the meta-feedback dependent on the observed
+execution sequence rather than on the candidate's optimization score. The
+exact threshold $K_{\mathrm{fail}}$ used in the experiments is reported in
+Chapter~\ref{chap:experiments}.
 
 The message deliberately does not recommend a particular optimization
 algorithm. This keeps the synthesis process separate from the external
@@ -872,7 +1004,6 @@ therefore connects candidate evaluation with the generation of the next
 candidate, while the parent--child selection rule remains based on the
 underlying scalar objective error.
 
-
 %------------------------------------------------------------------------------
 \subsection{Prompt Configurations}
 \label{subsec:prompt_configurations}
@@ -887,7 +1018,10 @@ structure expected from the model. The \texttt{EXAMPLE} and
 while the \texttt{TASK} component changes according to the experimental
 condition.
 
-The complete prompt can therefore be represented as
+The complete prompt is constructed by concatenating these components in a
+fixed order. The implementation uses the same component ordering for every
+synthesis condition; only the variable environment and strategy components
+are replaced. Conceptually, the prompt can therefore be represented as
 
 \begin{equation}
 \mathrm{Prompt}
@@ -923,14 +1057,25 @@ strategy scaffolds, \textsc{Baseline}, \textsc{Vectorization},
 \textsc{Guided}, and \textsc{Thinking}. Their combination results in twelve
 different prompt conditions.
 
-Figure~\ref{fig:prompt_architecture} provides an overview of this modular prompt architecture, showing how the invariant skeleton (\texttt{FORMAT}, \texttt{EXAMPLE}, and problem \texttt{Layout}) is composed with the two-factor design.
+Figure~\ref{fig:prompt_architecture} provides an overview of this modular
+prompt architecture, showing how the invariant skeleton (\texttt{FORMAT},
+\texttt{EXAMPLE}, and problem \texttt{Layout}) is composed with the two-factor
+design.
 
 \begin{figure}[htbp]
 \centering
 \resizebox{\textwidth}{!}{%
 \input{figures/prompt_architecture}
 }
-\caption{Modular prompt architecture and factorial synthesis design. The structural components (\texttt{FORMAT}, \texttt{EXAMPLE}, and problem \texttt{Layout}) remain fixed across all synthesis runs to guarantee executable syntax and uniform evaluation. The task prompt is varied across two independent factors: three environment information modes (\textsc{Clean}, \textsc{Implicit}, and \textsc{Noisy}) and four search strategy scaffolds (\textsc{Baseline}, \textsc{Vectorization}, \textsc{Guided}, and \textsc{Thinking}), yielding twelve distinct experimental prompt conditions.}
+\caption{Modular prompt architecture and factorial synthesis design. The
+structural components (\texttt{FORMAT}, \texttt{EXAMPLE}, and problem
+\texttt{Layout}) remain fixed across all synthesis runs to guarantee
+executable syntax and uniform evaluation. The task prompt is varied across
+two independent factors: three environment information modes
+(\textsc{Clean}, \textsc{Implicit}, and \textsc{Noisy}) and four search
+strategy scaffolds (\textsc{Baseline}, \textsc{Vectorization},
+\textsc{Guided}, and \textsc{Thinking}), yielding twelve distinct
+experimental prompt conditions.}
 \label{fig:prompt_architecture}
 \end{figure}
 
@@ -979,7 +1124,8 @@ STRICT Rules — violating any rule will cause execution failure:
 \end{verbatim}
 
 The output requirements are common to every generated algorithm. In
-particular, the return value must always contain \texttt{best\_x} and \texttt{best\_y}. These are part of the common optimizer interface and are
+particular, the return value must always contain \texttt{best\_x} and
+\texttt{best\_y}. These are part of the common optimizer interface and are
 therefore not repeated in the environment-specific prompt components. This
 keeps the interface identical across all synthesis conditions.
 
@@ -1058,12 +1204,12 @@ class AlgorithmName:
 
 \end{verbatim}
 
-The example fixes the interface, initialization, access to the problem
-bounds, and the evaluation counter. It also shows how population-based
-operations can be implemented using NumPy. It does not, however, require
-the generated algorithm to use a particular optimization strategy. The
-actual search mechanism is left to the LLM and can therefore differ between
-generated candidates.
+The example fixes the interface, initialization, access to the problem bounds,
+and the evaluation counter. It also shows how population-based operations can
+be implemented using NumPy. It does not, however, require the generated
+algorithm to use a particular optimization strategy. The actual search
+mechanism is left to the LLM and can therefore differ between generated
+candidates.
 
 The variable part of the prompt follows a common task layout:
 
@@ -1286,6 +1432,31 @@ varying the information about the optimization environment and the level of
 additional strategy guidance. The twelve resulting combinations form the
 prompt conditions used by the synthesis procedure.
 
+%------------------------------------------------------------------------------
+\subsection{LLM Inference Configuration}
+\label{subsec:llm_inference_configuration}
+%------------------------------------------------------------------------------
+
+The language model is used as the program-generation component of the
+synthesis framework. The model receives the constructed prompt and produces
+a candidate Python implementation. The model itself is not given direct
+access to the benchmark implementation, the clean objective, the known
+optimum, or the surrounding synthesis controller. Its information is
+restricted to the content provided through the prompt and synthesis context.
+
+The inference configuration is kept fixed within a synthesis condition so
+that differences between prompt configurations are not confounded by
+changes in the model-generation procedure. The model identity, model
+variant, inference backend, temperature, generation settings, and seed
+configuration are treated as experimental parameters and are therefore
+reported explicitly in Chapter~\ref{chap:experiments}.
+
+This separation is important for reproducibility because the prompt alone
+does not completely determine an LLM response. The generated candidate can
+also depend on the model version and inference configuration. Consequently,
+reproducing the synthesis experiments requires both the prompt specification
+described in this chapter and the model configuration reported in the
+experimental chapter.
 
 %------------------------------------------------------------------------------
 \subsection{Separation of Noisy Search and Clean Selection}
@@ -1293,11 +1464,11 @@ prompt conditions used by the synthesis procedure.
 %------------------------------------------------------------------------------
 
 The synthesis process separates the stochastic fitness information available
-to a generated optimizer from the clean objective used by the outer synthesis
-controller. This separation is important because the generated optimizer may
-make search decisions based on noisy fitness values, while the synthesis
-controller must determine whether the resulting candidate should replace the
-current incumbent.
+to a generated optimizer from the clean objective used by the outer
+synthesis controller. This separation is important because the generated
+optimizer may make search decisions based on noisy fitness values, while the
+synthesis controller must determine whether the resulting candidate should
+replace the current incumbent.
 
 During candidate execution, the optimizer interacts only with the objective
 interface provided to it. Under stochastic conditions, repeated evaluations
@@ -1348,6 +1519,24 @@ deterministic fitness. This makes it possible to examine whether properties
 acquired during synthesis remain effective when the evaluation environment
 changes.
 
+The independent evaluation can therefore be viewed as a second stage of the
+overall architecture:
+
+\begin{equation}
+\text{Synthesis condition}
+\rightarrow
+\text{Fixed synthesized algorithm}
+\rightarrow
+\text{Independent evaluation condition}
+\rightarrow
+\text{Performance data}.
+\label{eq:independent_evaluation_pipeline}
+\end{equation}
+
+No information from the independent benchmark evaluation is fed back into
+the completed synthesis run. This prevents the benchmark stage from changing
+the algorithms whose performance is being measured.
+
 %------------------------------------------------------------------------------
 \subsection{Benchmark Evaluation Protocol}
 \label{subsec:benchmark_protocol}
@@ -1356,9 +1545,9 @@ changes.
 The independent benchmark evaluation applies the same general evaluation
 procedure to the synthesized algorithms and the selected baseline
 optimizers. Each algorithm is executed independently for each benchmark
-condition, using predefined random seeds and an objective-function evaluation
-budget. The resulting runs provide performance data that can be used to
-analyze convergence, final solution quality, and robustness.
+condition, using predefined random seeds and an objective-function
+evaluation budget. The resulting runs provide performance data that can be
+used to analyze convergence, final solution quality, and robustness.
 
 The evaluation budget is defined in terms of objective-function evaluations,
 providing a common resource measure for algorithms with different internal
@@ -1367,16 +1556,58 @@ the noisy objective through the same objective interface used during
 synthesis, while final solution quality is assessed using the corresponding
 clean objective.
 
+The benchmark evaluation follows the same separation between optimization
+observations and diagnostic assessment used during synthesis. The algorithm
+receives only the observations permitted by the configured evaluation
+environment. The benchmark framework subsequently evaluates the returned
+solution using the clean objective to obtain the performance measure used in
+the analysis.
+
 Importantly, the benchmark evaluation is independent of the synthesis
 process. The benchmark results do not modify the synthesized algorithms or
 feed back into the evolutionary generation procedure. This allows the
 performance of algorithms produced under different synthesis conditions to
 be compared under the same evaluation protocol.
 
-The specific benchmark functions, dimensions, noise levels, evaluation
-budgets, repetitions, synthesized model variants, baseline algorithms,
-evaluation targets, and statistical procedures are defined in
+For each benchmark run, the relevant configuration can be represented as
+
+\begin{equation}
+\mathcal{E}
+=
+\left\{
+\text{algorithm},
+\text{function},
+D,
+B,
+\text{environment},
+\text{seed}
+\right\},
+\label{eq:benchmark_configuration}
+\end{equation}
+
+where the algorithm is either a fixed synthesized optimizer or a reference
+optimizer, $D$ is the problem dimension, $B$ is the objective evaluation
+budget, and the environment specifies whether the optimizer receives clean
+or stochastic fitness. The seed identifies the configured stochastic
+realization for the corresponding run.
+
+The exact benchmark functions, dimensions, noise levels, evaluation budgets,
+repetitions, synthesized model variants, baseline algorithms, evaluation
+targets, and statistical procedures are defined in
 Chapter~\ref{chap:experiments}. Keeping these experimental parameters
 separate from the methodology makes it possible to distinguish the general
 operation of the synthesis and evaluation framework from the particular
 conditions used in the experiments.
+
+The same implementation contracts described earlier remain active during
+independent evaluation. In particular, a synthesized optimizer is executed
+through the same optimizer interface, objective calls are counted against
+the configured evaluation budget, and the algorithm cannot obtain direct
+access to the clean objective when operating under stochastic evaluation.
+
+The independent evaluation therefore measures the behavior of the fixed
+generated programs rather than the behavior of a new synthesis process.
+This distinction is necessary for interpreting the results: differences
+observed during independent evaluation reflect differences between the
+algorithms produced by the synthesis conditions, rather than continued
+adaptation during the benchmark stage.
