@@ -12,17 +12,17 @@ using information obtained from their evaluation \cite{LLaMEA2024}. In this
 thesis, the LLaMEA process is combined with a controlled stochastic
 evaluation environment and locally executed large language models (LLMs).
 
-The central methodological principle is to separate the optimization
-environment experienced by a generated algorithm from the information used
-by the synthesis framework to assess that algorithm. An LLM receives the
-optimization task, the current synthesis context, and the selected prompt
-configuration. It generates a Python implementation of an optimization
-heuristic. The generated algorithm is then extracted, checked, and executed
-in an isolated environment. During this execution, the optimizer interacts
-with the objective only through the provided evaluation interface. Under
-stochastic conditions, this interface returns noisy objective values, while
-the clean objective remains available inside the evaluation framework for
-diagnostic assessment.
+The central methodological principle is to distinguish between the
+optimization environment experienced by a generated algorithm and the
+information used by the synthesis framework to assess that algorithm. An LLM
+receives the optimization task, the current synthesis context, and the
+selected prompt configuration. It then generates a Python implementation of
+an optimization heuristic. The generated algorithm is extracted, checked,
+and executed in an isolated environment. During execution, the optimizer
+interacts with the objective only through the provided evaluation interface.
+Under stochastic conditions, this interface returns noisy objective values,
+while the clean objective remains available inside the evaluation framework
+for diagnostic assessment.
 
 The synthesis process is therefore not a direct search over numerical
 solutions. Instead, the evolutionary search operates over executable
@@ -32,25 +32,63 @@ executing, evaluating, and selecting these algorithms. The information
 obtained from each candidate is subsequently used to update the synthesis
 state and construct the context for later generations.
 
-Figure~\ref{fig:llamea_synthesis_overview} provides a corresponding overview
-of the synthesis loop. Starting from the optimization task and synthesis
-configuration, the LLM generates a candidate optimization algorithm. The
-candidate is then extracted, validated, and executed by the evaluation
-framework. Its performance is evaluated through the objective interface,
-while the returned solution is additionally assessed using the clean
-objective for diagnostic purposes. The resulting information is used for
-parent--child comparison and for constructing the synthesis context of the
-next generation. The process continues until the synthesis run terminates.
+At a high level, the implemented methodology consists of several connected
+stages. A continuous black-box optimization task is combined with a selected
+prompt configuration and supplied to the LLaMEA synthesis process. The LLM
+then generates executable optimization heuristics, which are extracted,
+validated, and evaluated by the surrounding framework. The resulting
+synthesized algorithms are subsequently retained for independent evaluation
+under the experimental conditions defined for the study. The independent
+evaluation separates clean and stochastic fitness settings so that algorithm
+performance can be assessed both on the underlying objective and under the
+noise conditions considered in the experiments. The resulting measurements
+are then used for statistical analysis and comparison with established
+optimization algorithms.
+
+Figure~\ref{fig:methodology_architecture} summarizes this high-level
+methodology. It should be read as an architectural overview of the complete
+experimental procedure rather than as a representation of the internal
+operations of the LLaMEA loop. In particular, the synthesis stage shown in
+the figure contains the iterative candidate generation and selection process
+described in the following sections.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\input{figures/methodology_architecture}
+}
+\caption{High-level architecture of the methodology used in this thesis. The
+optimization task and prompt configuration define the input to the LLaMEA
+synthesis stage, which produces executable optimization algorithms. The
+synthesized algorithms are then evaluated independently under clean and
+stochastic fitness conditions and compared with established optimization
+baselines. The resulting measurements are used for statistical analysis and
+research-question analysis.}
+\label{fig:methodology_architecture}
+\end{figure}
+
+The high-level architecture is complemented by a more detailed view of the
+synthesis stage. Figure~\ref{fig:llamea_synthesis_overview} describes the
+internal LLaMEA process used to generate and evolve the optimization
+algorithms. Starting from the optimization task and synthesis configuration,
+the LLM generates a candidate optimization algorithm. The candidate is then
+extracted, validated, and executed by the evaluation framework. Its
+performance is evaluated through the objective interface, while the returned
+solution is additionally assessed using the clean objective for diagnostic
+purposes. The resulting information is used for parent--child comparison
+and for constructing the synthesis context of the next generation. The
+process continues until the synthesis run terminates.
 
 \begin{figure}[htbp]
 \centering
 \resizebox{\textwidth}{!}{%
 \input{figures/evolutionary_aad_loop}
 }
-\caption{Overview of the LLaMEA-based algorithm synthesis process used in
-this thesis. The model generates candidate optimization heuristics, which
-are evaluated and used to update the synthesis context for subsequent
-generations.}
+\caption{Detailed view of the LLaMEA-based algorithm synthesis process used
+in this thesis. The LLM generates candidate optimization heuristics, which
+are extracted, validated, executed, evaluated, and compared with the current
+incumbent. The resulting information is used to update the synthesis context
+for subsequent generations.}
 \label{fig:llamea_synthesis_overview}
 \end{figure}
 
@@ -69,14 +107,15 @@ synthesis procedure.
 \label{sec:llm_algorithm_synthesis}
 %==============================================================================
 
-Each synthesis run starts with a continuous black-box optimization task and a
-prompt template defining the programming interface available to the generated
-algorithm. The generated algorithm is represented as a Python class following
-the interface used by LLaMEA. Rather than producing a numerical candidate
-solution directly, the model therefore produces a complete optimization
-procedure. This procedure may contain its own initialization strategy,
-population management, search operators, parameter updates, and stopping
-logic.
+The LLaMEA synthesis stage shown in
+Figure~\ref{fig:methodology_architecture} operates on a continuous
+black-box optimization task and a prompt configuration defining the
+programming interface available to the generated algorithm. The generated
+algorithm is represented as a Python class following the interface used by
+LLaMEA. Rather than producing a numerical candidate solution directly, the
+model therefore produces a complete optimization procedure. This procedure
+may contain its own initialization strategy, population management, search
+operators, parameter updates, and stopping logic.
 
 The object being evolved is consequently not a solution vector but an
 executable optimization algorithm. The LLM can modify the structure of the
@@ -97,31 +136,17 @@ evaluation environment. The LLM is responsible for producing the candidate
 program from the supplied prompt and synthesis context. The framework is
 responsible for turning the model response into executable source code,
 enforcing the program contract, executing the candidate, and converting its
-execution result into evolutionary feedback. The generated optimizer itself
-is treated as a black-box component by the synthesis controller once it has
-passed validation.
+execution result into evolutionary feedback. Once it has passed validation,
+the generated optimizer is treated as a black-box component by the synthesis
+controller.
 
-A high-level representation of these components is shown in
-Figure~\ref{fig:methodology_architecture}. The architecture separates the
-generation layer from the execution layer and, within the execution layer,
-separates the objective observations available to the generated optimizer
-from the clean diagnostic information available to the synthesis controller.
-
-\begin{figure}[htbp]
-\centering
-\resizebox{\textwidth}{!}{%
-\input{figures/methodology_architecture}
-}
-\caption{High-level architecture of the implemented synthesis framework. The
-LLM generates an executable optimization algorithm from the task prompt and
-synthesis context. The generated source passes through extraction and
-validation before being executed in an isolated worker. The optimizer
-interacts with the objective only through the objective interface. Under
-stochastic evaluation, noisy observations are provided to the optimizer,
-whereas the clean objective is retained by the evaluation framework for
-diagnostic assessment and parent--child selection.}
-\label{fig:methodology_architecture}
-\end{figure}
+The internal operation of this process is shown in
+Figure~\ref{fig:llamea_synthesis_overview}. The figure expands the synthesis
+stage of the high-level methodology into the individual operations performed
+for each candidate. Candidate generation is followed by code extraction and
+validation, isolated execution, objective evaluation, and parent--child
+comparison. The resulting information is then either used to terminate the
+synthesis run or to construct the context for the next generation.
 
 %------------------------------------------------------------------------------
 \subsection{Synthesis Context and Candidate Generation}
@@ -153,12 +178,11 @@ algorithm, and $\mathcal{F}_{\mathrm{prompt}}$ represents the additional
 instructions defined by the selected prompt configuration.
 
 The synthesis history can contain information about previous candidate
-algorithms, their observed performance, and execution failures. This
-information gives the model a basis for modifying previously generated
-approaches rather than generating every candidate independently. The
-incumbent provides the current reference algorithm, while the previous
-evaluation history provides additional information about approaches that have
-already been explored.
+algorithms, their observed performance, and execution failures. This gives
+the model a basis for modifying previously generated approaches rather than
+generating every candidate independently. The incumbent provides the current
+reference algorithm, while the previous evaluation history provides
+additional information about approaches that have already been explored.
 
 The LLM uses this context to generate a new candidate. The model can modify
 an existing algorithm or produce a substantially different search procedure.
@@ -338,13 +362,13 @@ evaluation must account for this evaluation before performing additional
 search operations.
 
 The returned \texttt{best\_x} is the solution coordinate vector selected by
-the generated optimizer according to its own internal search logic.
-The corresponding \texttt{best\_y} is the scalar objective value maintained
-by that optimizer. Under stochastic evaluation, this value can correspond
-to a noisy observation. The synthesis framework does not use this returned
-noisy value as the final quality criterion; instead, it evaluates the
-returned \texttt{best\_x} independently using the clean objective as
-described in Section~\ref{subsec:clean_diagnostic}.
+the generated optimizer according to its own internal search logic. The
+corresponding \texttt{best\_y} is the scalar objective value maintained by
+that optimizer. Under stochastic evaluation, this value can correspond to a
+noisy observation. The synthesis framework does not use this returned noisy
+value as the final quality criterion; instead, it evaluates the returned
+\texttt{best\_x} independently using the clean objective as described in
+Section~\ref{subsec:clean_diagnostic}.
 
 %==============================================================================
 \section{Stochastic Fitness Evaluation}
@@ -721,8 +745,8 @@ denote their respective clean optimality gaps.
 
 Since the optimization problem is formulated as minimization, a child with a
 smaller clean optimality gap represents an improvement over the parent. The
-parent is therefore retained only when the child does not provide an
-improvement according to the selection criterion.
+parent is therefore retained when the child does not provide an improvement
+according to the selection criterion.
 
 %------------------------------------------------------------------------------
 \subsection{Parent--Child Comparison}
@@ -1011,7 +1035,7 @@ underlying scalar objective error.
 
 The prompt given to the LLM is assembled from three components:
 \texttt{TASK}, \texttt{EXAMPLE}, and \texttt{FORMAT}. This separation was
-introduced so that the information about the optimization environment can be
+introduced so that information about the optimization environment can be
 changed without changing the required program interface or the general code
 structure expected from the model. The \texttt{EXAMPLE} and
 \texttt{FORMAT} components are kept identical for all synthesis conditions,
@@ -1058,9 +1082,9 @@ strategy scaffolds, \textsc{Baseline}, \textsc{Vectorization},
 different prompt conditions.
 
 Figure~\ref{fig:prompt_architecture} provides an overview of this modular
-prompt architecture, showing how the invariant skeleton (\texttt{FORMAT},
-\texttt{EXAMPLE}, and problem \texttt{Layout}) is composed with the two-factor
-design.
+prompt architecture, showing how the invariant skeleton
+(\texttt{FORMAT}, \texttt{EXAMPLE}, and problem \texttt{Layout}) is composed
+with the two-factor design.
 
 \begin{figure}[htbp]
 \centering
@@ -1121,11 +1145,11 @@ STRICT Rules — violating any rule will cause execution failure:
   **call** directly.
 
 * Do NOT include if **name** == '**main**': blocks.
-\end{verbatim}
+  \end{verbatim}
 
 The output requirements are common to every generated algorithm. In
-particular, the return value must always contain \texttt{best\_x} and
-\texttt{best\_y}. These are part of the common optimizer interface and are
+particular, the return value must always contain \texttt{best_x} and
+\texttt{best_y}. These are part of the common optimizer interface and are
 therefore not repeated in the environment-specific prompt components. This
 keeps the interface identical across all synthesis conditions.
 
@@ -1380,7 +1404,8 @@ conditions:
 3\ \text{environment modes}
 \times
 4\ \text{strategy scaffolds}
-=
+============================
+
 12\ \text{prompt conditions}.
 \label{eq:prompt_factorial_design}
 \end{equation}
@@ -1395,11 +1420,11 @@ Table~\ref{tab:prompt_configuration_matrix}.
 \label{tab:prompt_configuration_matrix}
 \begin{tabular}{lcccc}
 \hline
-Environment & Baseline & Vectorization & Guided & Thinking \\
+Environment & Baseline & Vectorization & Guided & Thinking \
 \hline
-Clean    & \checkmark & \checkmark & \checkmark & \checkmark \\
-Implicit & \checkmark & \checkmark & \checkmark & \checkmark \\
-Noisy    & \checkmark & \checkmark & \checkmark & \checkmark \\
+Clean    & \checkmark & \checkmark & \checkmark & \checkmark \
+Implicit & \checkmark & \checkmark & \checkmark & \checkmark \
+Noisy    & \checkmark & \checkmark & \checkmark & \checkmark \
 \hline
 \end{tabular}
 \end{table}
@@ -1429,8 +1454,8 @@ algorithm.
 The complete prompt design therefore keeps the program interface,
 output requirements, and common code example fixed while systematically
 varying the information about the optimization environment and the level of
-additional strategy guidance. The twelve resulting combinations form the
-prompt conditions used by the synthesis procedure.
+additional strategy guidance. The resulting combinations form the prompt
+conditions used by the synthesis procedure.
 
 %------------------------------------------------------------------------------
 \subsection{LLM Inference Configuration}
@@ -1573,15 +1598,16 @@ For each benchmark run, the relevant configuration can be represented as
 
 \begin{equation}
 \mathcal{E}
-=
-\left\{
+===========
+
+\left{
 \text{algorithm},
 \text{function},
 D,
 B,
 \text{environment},
 \text{seed}
-\right\},
+\right},
 \label{eq:benchmark_configuration}
 \end{equation}
 
@@ -1611,3 +1637,5 @@ This distinction is necessary for interpreting the results: differences
 observed during independent evaluation reflect differences between the
 algorithms produced by the synthesis conditions, rather than continued
 adaptation during the benchmark stage.
+
+One important point before you paste this into the thesis: **I preserved the current three-mode prompt description because that is what the text you supplied currently says.** It does **not** yet reflect the newer hierarchy you described earlier (`Implicit` → 4 strategies, `Explicit` → `Clean/Noisy` → 4 strategies). That is a separate consistency change we should make to the prompt section and `prompt_architecture.tex`; I did not silently change it here because you explicitly asked me not to change the ideas.
