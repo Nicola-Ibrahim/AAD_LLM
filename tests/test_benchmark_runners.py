@@ -602,6 +602,48 @@ classical_baselines = ["cmaes"]
     assert all(df_cross["solver_type"] == "cross_eval")
 
 
+def test_evaluation_service_seeds_trials_independently(tmp_path: Path):
+    """Verify that EvaluationService configures independent noise seeds across trials."""
+    eval_dir = tmp_path / "evaluations"
+    cfg_file = tmp_path / "benchmark.toml"
+    cfg_file.write_text(
+        """
+[benchmarking]
+target_eval_runs = 3
+budget_multiplier = 25
+eval_timeout_seconds = 10.0
+classical_baselines = ["pso"]
+target_problems = [1]
+target_dims = [2]
+target_noise_levels = [0.2]
+""",
+        encoding="utf-8",
+    )
+
+    session_factory = create_db_session_factory()
+    sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
+    champions_repo = ChampionsReadRepository(session_factory)
+    trace_repo = IOHTraceReader(eval_dir=eval_dir)
+    state_repo = EvaluationStateRepository(eval_dir=eval_dir)
+    config_repo = EvaluationConfigRepository(config_path=cfg_file)
+    logger = EvaluationLogger()
+
+    service = EvaluationService(
+        sqlite_repo=sqlite_repo,
+        champions_repo=champions_repo,
+        trace_repo=trace_repo,
+        state_repo=state_repo,
+        config_repo=config_repo,
+        logger=logger,
+    )
+
+    res = service.run_baseline_trials(dim=2, noise_std=0.2, p_id=1, baseline_slug="pso")
+    assert res["status"] == "SUCCESS"
+    assert len(res["clean_errors"]) == 3
+    # With distinct seeds under noisy evaluations, PSO trajectories should vary across runs
+    assert len(set(res["clean_errors"])) > 1
+
+
 
 
 

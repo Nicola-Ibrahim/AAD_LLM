@@ -1168,3 +1168,43 @@ def test_campaign_item_and_engine_pickling(temp_dir):
     assert restored_item["experiment_id"] == 42
     assert isinstance(restored_item["engine"], LLaMEAEngine)
 
+
+def test_campaign_usecase_create_problem_seed():
+    """Verify SynthesisCampaignUseCase._create_problem sets seed and produces distinct noise streams."""
+    import numpy as np
+    from evolution.application.campaign_usecase import SynthesisCampaignUseCase
+    from evolution.domain.enums import NoiseModelEnum
+
+    prob1 = SynthesisCampaignUseCase._create_problem(
+        problem_id=1,
+        dim=2,
+        noise_std=0.2,
+        noise_model=NoiseModelEnum.HETEROSCEDASTIC,
+        instance_id=1,
+        seed=43,
+    )
+    prob2 = SynthesisCampaignUseCase._create_problem(
+        problem_id=1,
+        dim=2,
+        noise_std=0.2,
+        noise_model=NoiseModelEnum.HETEROSCEDASTIC,
+        instance_id=1,
+        seed=43,
+    )
+    prob3 = SynthesisCampaignUseCase._create_problem(
+        problem_id=1,
+        dim=2,
+        noise_std=0.2,
+        noise_model=NoiseModelEnum.HETEROSCEDASTIC,
+        instance_id=1,
+        seed=44,
+    )
+
+    x = np.array([2.0, 2.0])
+    vals1 = [prob1(x) for _ in range(5)]
+    vals2 = [prob2(x) for _ in range(5)]
+    vals3 = [prob3(x) for _ in range(5)]
+
+    assert vals1 == vals2
+    assert vals1 != vals3
+

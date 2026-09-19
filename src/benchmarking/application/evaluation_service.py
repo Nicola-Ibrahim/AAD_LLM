@@ -386,7 +386,6 @@ class EvaluationService:
             is_incremental = True
 
         budget = dim * self.budget_multiplier
-        noise_strat = NoNoiseStrategy() if noise_std == 0.0 else HeteroscedasticNoiseStrategy(noise_std=noise_std)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / target_dir.name if is_incremental else target_dir
@@ -414,11 +413,17 @@ class EvaluationService:
                     )
                     continue
 
+                noise_strat = (
+                    NoNoiseStrategy()
+                    if noise_std == 0.0
+                    else HeteroscedasticNoiseStrategy(noise_std=noise_std)
+                )
                 prob = BBOBProblem(
                     problem_id=p_id,
                     dim=dim,
                     noise_strategy=noise_strat,
-                    instance_id=run_idx,
+                    instance_id=1,
+                    seed=42 + run_idx,
                 )
                 prob.attach_logger(logger_ioh)
                 prob.set_budget(budget)

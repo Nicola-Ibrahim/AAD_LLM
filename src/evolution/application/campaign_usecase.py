@@ -384,6 +384,7 @@ class SynthesisCampaignUseCase:
         noise_std: float,
         noise_model: NoiseModelEnum = NoiseModelEnum.HETEROSCEDASTIC,
         instance_id: int = 1,
+        seed: int = 42,
     ) -> BBOBProblem:
         """Helper to create a configured BBOBProblem with appropriate noise strategy."""
         noise_strat = NoiseStrategyFactory.create(
@@ -395,6 +396,7 @@ class SynthesisCampaignUseCase:
             dim=dim,
             instance_id=instance_id,
             noise_strategy=noise_strat,
+            seed=seed,
         )
 
     def _build_session_config(self, max_iterations: int | None = None) -> SessionConfig:
@@ -420,6 +422,7 @@ class SynthesisCampaignUseCase:
             noise_std=noise_std,
             noise_model=exp.problem.noise_model,
             instance_id=exp.problem.instance_id or 1,
+            seed=42 + (exp.id or 0),
         )
         initial_iter = len(exp.iterations) if exp.iterations else 0
         cfg = self._build_session_config(exp.max_iterations)
@@ -472,6 +475,7 @@ class SynthesisCampaignUseCase:
             noise_std=condition.noise_std,
             noise_model=condition.noise_model,
             instance_id=1,
+            seed=42 + run_idx,
         )
         fresh_cfg = self._build_session_config()
         exp_id = self.sqlite_repo.create_experiment(

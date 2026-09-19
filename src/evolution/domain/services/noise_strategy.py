@@ -13,6 +13,7 @@ class BaseNoiseStrategy(ABC):
 
     def __init__(self, noise_std: float = 0.0):
         self.noise_std = noise_std
+        self._rng: np.random.Generator = np.random.default_rng()
 
     def setup(
         self,
@@ -23,7 +24,7 @@ class BaseNoiseStrategy(ABC):
         seed: int = 42,
     ) -> None:
         """Optional lifecycle hook called during problem initialization for calibration/setup."""
-        pass
+        self._rng = np.random.default_rng(seed)
 
     @abstractmethod
     def add_noise(self, true_value: float) -> float:
@@ -61,13 +62,14 @@ class HeteroscedasticNoiseStrategy(BaseNoiseStrategy):
         seed: int = 42,
     ) -> None:
         """Store the target global optimum to calculate the optimality gap."""
+        super().setup(clean_problem, lb, ub, true_optimum, seed=seed)
         self.true_optimum = true_optimum
 
     def add_noise(self, true_value: float) -> float:
         if self.noise_std <= 0.0:
             return true_value
         dynamic_std = self.noise_std * abs(true_value - self.true_optimum)
-        return np.random.normal(true_value, dynamic_std)
+        return float(self._rng.normal(true_value, dynamic_std))
 
 
 class HomoscedasticAdditiveNoiseStrategy(BaseNoiseStrategy):
@@ -90,9 +92,9 @@ class HomoscedasticAdditiveNoiseStrategy(BaseNoiseStrategy):
         n_samples: int | None = None,
     ) -> None:
         """Calibrate landscape scale by sampling clean points across search space bounds."""
+        super().setup(clean_problem, lb, ub, true_optimum, seed=seed)
         samples_count = n_samples if n_samples is not None else self.n_samples
-        np.random.seed(seed)
-        sample_points = np.random.uniform(lb, ub, (samples_count, len(lb)))
+        sample_points = self._rng.uniform(lb, ub, (samples_count, len(lb)))
         sample_y = [clean_problem(x.tolist()) for x in sample_points]
         self.landscape_scale = float(np.mean([abs(y - true_optimum) for y in sample_y]))
         clean_problem.reset()
@@ -101,7 +103,7 @@ class HomoscedasticAdditiveNoiseStrategy(BaseNoiseStrategy):
         if self.noise_std <= 0.0:
             return true_value
         dynamic_std = self.noise_std * self.landscape_scale
-        return np.random.normal(true_value, dynamic_std)
+        return float(self._rng.normal(true_value, dynamic_std))
 
 
 class AWGNStrategy(BaseNoiseStrategy):
@@ -115,7 +117,7 @@ class AWGNStrategy(BaseNoiseStrategy):
     def add_noise(self, true_value: float) -> float:
         if self.noise_std <= 0.0:
             return true_value
-        return true_value + np.random.normal(0, self.noise_std)
+        return float(true_value + self._rng.normal(0, self.noise_std))
 
 
 class NoiseStrategyFactory:

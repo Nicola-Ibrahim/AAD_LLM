@@ -212,3 +212,73 @@ def test_bbob_function_enum():
     assert len(BBOB_CLASSES_ORDER) == 5
 
 
+def test_noise_strategy_nrg_reproducibility_and_isolation():
+    """Verify that noise strategies using NRG are reproducible, stochastic within runs, and isolated."""
+    # 1. Heteroscedastic reproducibility
+    s1 = HeteroscedasticNoiseStrategy(noise_std=0.2)
+    s1.setup(None, np.array([-5.0]), np.array([5.0]), true_optimum=0.0, seed=123)
+    vals1 = [s1.add_noise(10.0) for _ in range(5)]
+
+    s2 = HeteroscedasticNoiseStrategy(noise_std=0.2)
+    s2.setup(None, np.array([-5.0]), np.array([5.0]), true_optimum=0.0, seed=123)
+    vals2 = [s2.add_noise(10.0) for _ in range(5)]
+
+    assert vals1 == vals2
+    # Stochastic within run: subsequent draws must differ
+    assert len(set(vals1)) == 5
+
+    # 2. Isolation from global numpy random state
+    np.random.seed(999999)
+    _ = np.random.normal(0, 1)  # mutate global state
+    s3 = HeteroscedasticNoiseStrategy(noise_std=0.2)
+    s3.setup(None, np.array([-5.0]), np.array([5.0]), true_optimum=0.0, seed=123)
+    vals3 = [s3.add_noise(10.0) for _ in range(5)]
+    assert vals3 == vals1
+
+    # 3. AWGN reproducibility and isolation
+    awgn1 = AWGNStrategy(noise_std=0.5)
+    awgn1.setup(None, None, None, 0.0, seed=42)
+    awgn_vals1 = [awgn1.add_noise(2.0) for _ in range(5)]
+
+    awgn2 = AWGNStrategy(noise_std=0.5)
+    awgn2.setup(None, None, None, 0.0, seed=42)
+    awgn_vals2 = [awgn2.add_noise(2.0) for _ in range(5)]
+    assert awgn_vals1 == awgn_vals2
+    assert len(set(awgn_vals1)) == 5
+
+    # 4. HomoscedasticAdditive reproducibility
+    class MockProblem:
+        def __call__(self, x):
+            return sum(x)
+
+        def reset(self):
+            pass
+
+    mock_prob = MockProblem()
+    homo1 = HomoscedasticAdditiveNoiseStrategy(noise_std=0.1, n_samples=20)
+    homo1.setup(mock_prob, np.array([-5.0, -5.0]), np.array([5.0, 5.0]), true_optimum=0.0, seed=77)
+    homo_vals1 = [homo1.add_noise(5.0) for _ in range(5)]
+
+    homo2 = HomoscedasticAdditiveNoiseStrategy(noise_std=0.1, n_samples=20)
+    homo2.setup(mock_prob, np.array([-5.0, -5.0]), np.array([5.0, 5.0]), true_optimum=0.0, seed=77)
+    homo_vals2 = [homo2.add_noise(5.0) for _ in range(5)]
+
+    assert homo1.landscape_scale == homo2.landscape_scale
+    assert homo_vals1 == homo_vals2
+
+
+def test_bbob_problem_seed_variation_and_reproducibility():
+    """Verify BBOBProblem seed correctly seeds noise strategy RNG."""
+    x = np.array([1.0, 1.0])
+
+    # Same seed -> identical noise sequence
+    p1 = BBOBProblem(problem_id=1, dim=2, noise_strategy=HeteroscedasticNoiseStrategy(0.2), seed=43)
+    p2 = BBOBProblem(problem_id=1, dim=2, noise_strategy=HeteroscedasticNoiseStrategy(0.2), seed=43)
+    vals1 = [p1(x) for _ in range(5)]
+    vals2 = [p2(x) for _ in range(5)]
+    assert vals1 == vals2
+
+    # Different seed -> different noise sequence
+    p3 = BBOBProblem(problem_id=1, dim=2, noise_strategy=HeteroscedasticNoiseStrategy(0.2), seed=44)
+    vals3 = [p3(x) for _ in range(5)]
+    assert vals1 != vals3
