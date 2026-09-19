@@ -923,6 +923,17 @@ strategy scaffolds, \textsc{Baseline}, \textsc{Vectorization},
 \textsc{Guided}, and \textsc{Thinking}. Their combination results in twelve
 different prompt conditions.
 
+Figure~\ref{fig:prompt_architecture} provides an overview of this modular prompt architecture, showing how the invariant skeleton (\texttt{FORMAT}, \texttt{EXAMPLE}, and problem \texttt{Layout}) is composed with the two-factor design.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\input{figures/prompt_architecture}
+}
+\caption{Modular prompt architecture and factorial synthesis design. The structural components (\texttt{FORMAT}, \texttt{EXAMPLE}, and problem \texttt{Layout}) remain fixed across all synthesis runs to guarantee executable syntax and uniform evaluation. The task prompt is varied across two independent factors: three environment information modes (\textsc{Clean}, \textsc{Implicit}, and \textsc{Noisy}) and four search strategy scaffolds (\textsc{Baseline}, \textsc{Vectorization}, \textsc{Guided}, and \textsc{Thinking}), yielding twelve distinct experimental prompt conditions.}
+\label{fig:prompt_architecture}
+\end{figure}
+
 The common \texttt{FORMAT} component defines how the LLM must return the
 generated algorithm. Its complete content is:
 
@@ -1228,7 +1239,8 @@ conditions:
 \label{eq:prompt_factorial_design}
 \end{equation}
 
-The resulting configuration matrix is shown in
+The resulting configuration matrix is illustrated in
+Figure~\ref{fig:prompt_architecture} and summarized in
 Table~\ref{tab:prompt_configuration_matrix}.
 
 \begin{table}[htbp]

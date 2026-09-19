@@ -1,0 +1,233 @@
+\begin{tikzpicture}[
+    font=\footnotesize,
+    >=Stealth,
+    % -------------------------------------------------------------------------
+    % Node Styling
+    % -------------------------------------------------------------------------
+    base/.style={
+        rectangle, 
+        rounded corners=3pt, 
+        thick, 
+        align=center, 
+        inner sep=3.5pt
+    },
+    root/.style={
+        base,
+        draw=blue!75!black,
+        fill=blue!10,
+        text width=9.8cm,
+        minimum height=0.7cm,
+        font=\small\bfseries
+    },
+    fixedbox/.style={
+        base,
+        draw=blue!75!black,
+        fill=blue!8,
+        text width=3.3cm,
+        minimum height=0.65cm,
+        font=\scriptsize\bfseries
+    },
+    fixeditem/.style={
+        base,
+        rounded corners=2pt,
+        draw=blue!50!black,
+        fill=blue!2,
+        align=left,
+        text width=3.3cm,
+        inner sep=3.5pt,
+        font=\tiny
+    },
+    variablebox/.style={
+        base,
+        draw=orange!75!black,
+        fill=orange!8,
+        text width=3.3cm,
+        minimum height=0.65cm,
+        font=\scriptsize\bfseries
+    },
+    modeparent/.style={
+        base,
+        rounded corners=3pt,
+        text width=2.9cm,
+        minimum height=0.65cm,
+        font=\scriptsize\bfseries
+    },
+    subenv/.style={
+        base,
+        rounded corners=2pt,
+        text width=1.35cm,
+        minimum height=0.55cm,
+        font=\scriptsize
+    },
+    stratbanner/.style={
+        base,
+        draw=purple!65!black,
+        fill=purple!8,
+        text width=7.4cm,
+        minimum height=0.55cm,
+        font=\scriptsize\bfseries
+    },
+    stratbox/.style={
+        base,
+        rounded corners=2pt,
+        draw=purple!60!black,
+        fill=purple!5,
+        text width=1.7cm,
+        minimum height=0.55cm,
+        inner sep=2pt,
+        font=\scriptsize
+    },
+    treearrow/.style={
+        ->,
+        >=Stealth,
+        thick,
+        draw=black!70
+    }
+]
+
+    % =========================================================================
+    % 1. ROOT
+    % =========================================================================
+    \node[root] (root) {
+        Prompt Specification\\[1pt]
+    };
+
+    % =========================================================================
+    % 2. TOP LEVEL (INVARIANT vs. FACTORIAL)
+    % =========================================================================
+    \node[
+        fixedbox, 
+        below=1.1cm of root.south,
+        xshift=-3.9cm
+    ] (fixed) {
+        Invariant Prompts\\[1pt]
+    };
+
+    \node[
+        variablebox, 
+        below=1.1cm of root.south,
+        xshift=1.9cm
+    ] (variable) {
+        Variant Prompts
+    };
+
+    \draw[treearrow] (root.south) -- ++(0,-0.4) -| (fixed.north);
+    \draw[treearrow] (root.south) -- ++(0,-0.4) -| (variable.north);
+
+    % =========================================================================
+    % 3. LEFT COLUMN: BUS-STYLE ROUTED STACK
+    % =========================================================================
+    \node[fixeditem, below=0.85cm of fixed] (layout) {
+        \textbf{Task Layout}\\
+        Target identifier, dimension $D$, bounds $[-5, 5]^D$, evaluation budget $B_{\text{synth}}$, and tags.
+    };
+
+    \node[fixeditem, below=0.85cm of layout] (example) {
+        \textbf{\texttt{EXAMPLE}}\\
+        Common algorithm class, \texttt{\_\_init\_\_}, \texttt{\_\_call\_\_}, bound extraction, budget tracker.
+    };
+
+    \node[fixeditem, below=0.85cm of example] (format) {
+        \textbf{\texttt{FORMAT}}\\
+        Uniform response schema, single block, return tuple $(\mathbf{x}^*, y_{\text{raw}})$, whitelist NumPy.
+    };
+
+    % Clean, dedicated left bus line so arrows don't shoot straight through nodes
+    \draw[treearrow, rounded corners=2pt] (fixed.west) -- ++(-0.35,0) |- (layout.west);
+    \draw[treearrow, rounded corners=2pt] (fixed.west) -- ++(-0.35,0) |- (example.west);
+    \draw[treearrow, rounded corners=2pt] (fixed.west) -- ++(-0.35,0) |- (format.west);
+
+    % =========================================================================
+    % 4. RIGHT COLUMN: IMPLICIT & EXPLICIT (CO-EQUAL LEVEL)
+    % =========================================================================
+    \node[
+        modeparent,
+        draw=yellow!65!black,
+        fill=yellow!12,
+        below=0.8cm of variable.south,
+        xshift=-1.9cm
+    ] (implicit) {
+        \textbf{Implicit Mode}\\[1pt]
+        \tiny Incomplete context; evaluation variability undisclosed
+    };
+
+    \node[
+        modeparent,
+        draw=orange!75!black,
+        fill=orange!12,
+        below=0.8cm of variable.south,
+        xshift=1.9cm
+    ] (explicit) {
+        \textbf{Explicit Mode}\\[1pt]
+        \tiny Evaluation behavior is explicitly characterized
+    };
+
+    \draw[treearrow] (variable.south) -- ++(0,-0.3) -| (implicit.north);
+    \draw[treearrow] (variable.south) -- ++(0,-0.3) -| (explicit.north);
+
+    % =========================================================================
+    % 5. EXPLICIT SUB-BRANCHES: CLEAN & NOISY
+    % =========================================================================
+    \node[
+        subenv,
+        draw=green!60!black,
+        fill=green!8,
+        below=0.75cm of explicit.south,
+        xshift=-0.85cm
+    ] (clean) {
+        \textbf{Clean}
+    };
+
+    \node[
+        subenv,
+        draw=red!60!black,
+        fill=red!8,
+        below=0.75cm of explicit.south,
+        xshift=0.85cm
+    ] (noisy) {
+        \textbf{Noisy}
+    };
+
+    \draw[treearrow] (explicit.south) -- ++(0,-0.25) -| (clean.north);
+    \draw[treearrow] (explicit.south) -- ++(0,-0.25) -| (noisy.north);
+
+    % =========================================================================
+    % 6. STRATEGY SCAFFOLD BANNER (CLEAR VERTICAL GAP BELOW CLEAN/NOISY)
+    % =========================================================================
+    \node[
+        stratbanner,
+        below=0.9cm of clean.south -| variable.south
+    ] (strat_title) {
+        \textbf{Strategy Scaffold}
+    };
+
+    % Direct vertical drops into the banner
+    \draw[treearrow] (implicit.south) -- (implicit.south |- strat_title.north);
+    \draw[treearrow] (clean.south)    -- (clean.south |- strat_title.north);
+    \draw[treearrow] (noisy.south)    -- (noisy.south |- strat_title.north);
+
+    % =========================================================================
+    % 7. FOUR STRATEGY BLOCKS (GENEROUS BOTTOM MARGIN)
+    % =========================================================================
+    \node[stratbox, below=0.6cm of strat_title.south west, anchor=north west, xshift=0.08cm] (s_base) {
+        \textbf{Baseline}
+    };
+
+    \node[stratbox, right=0.18cm of s_base] (s_think) {
+        \textbf{Thinking}
+    };
+
+    \node[stratbox, right=0.18cm of s_think] (s_vec) {
+        \textbf{Vectorization}
+    };
+
+    \node[stratbox, right=0.18cm of s_vec] (s_guided) {
+        \textbf{Guided}
+    };
+
+    \draw[treearrow] (strat_title.south -| s_base.north)   -- (s_base.north);
+    \draw[treearrow] (strat_title.south -| s_think.north)  -- (s_think.north);
+    \draw[treearrow] (strat_title.south -| s_vec.north)    -- (s_vec.north);
+    \draw[treearrow] (strat_title.south -| s_guided.north) -- (s_guided.north);
+
+\end{tikzpicture}
