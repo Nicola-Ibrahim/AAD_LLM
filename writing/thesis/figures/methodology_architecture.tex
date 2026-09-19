@@ -1,0 +1,217 @@
+\begin{tikzpicture}[
+    font=\footnotesize,
+    >=Stealth,
+    % ---------------------------------------------------------------
+    % Global Styling & Dimensions
+    % ---------------------------------------------------------------
+    baseNode/.style={
+        rectangle,
+        draw=black!80,
+        thick,
+        rounded corners=4pt,
+        align=center,
+        inner sep=7pt
+    },
+    wideNode/.style={
+        baseNode,
+        text width=12.2cm
+    },
+    stageNode/.style={
+        baseNode,
+        fill=blue!5,
+        text width=12.2cm,
+        minimum height=1.15cm
+    },
+    evalBranch/.style={
+        baseNode,
+        fill=blue!10,
+        text width=5.6cm,
+        minimum height=1.15cm
+    },
+    arrow/.style={
+        ->,
+        >=Stealth,
+        thick,
+        draw=black!75
+    },
+    branchArrow/.style={
+        ->,
+        >=Stealth,
+        thick,
+        draw=black!65
+    }
+]
+
+    % ==================================================================
+    % 1. EXPERIMENTAL INPUT
+    % ==================================================================
+    \node[wideNode, fill=yellow!15] (problem) {
+        \textbf{Optimization Problem and Experimental Setup} \\[2pt]
+        \scriptsize
+        Continuous black-box optimization \quad $\bullet$ \quad
+        BBOB benchmark functions \quad $\bullet$ \quad
+        Dimension $D$ \quad $\bullet$ \quad
+        Evaluation budget $B$
+    };
+
+    % ==================================================================
+    % 2. UNIFIED PROMPT SCAFFOLDING BLOCK
+    % ==================================================================
+    \node[
+        wideNode,
+        fill=orange!10,
+        draw=orange!80!black,
+        below=0.9cm of problem
+    ] (promptScaffolding) {
+        \textbf{Prompt Scaffolding Framework} \\[2pt]
+        \scriptsize
+        Invariant layout, API templates, and defensive constraints \\
+        coupled with $3 \times 4$ factorial synthesis conditions:
+        information modes ($\textsc{Clean}, \textsc{Implicit}, \textsc{Noisy}$)
+        $\times$ search strategy scaffolds
+    };
+
+    % ==================================================================
+    % 3. LLAMEA SYNTHESIS
+    % ==================================================================
+    \node[
+        stageNode,
+        below=0.9cm of promptScaffolding
+    ] (synthesis) {
+        \textbf{LLaMEA Algorithm Synthesis} \\[2pt]
+        \scriptsize
+        Iterative LLM-driven generation, validation, execution, and semantic selection of candidate heuristics
+    };
+
+    % ==================================================================
+    % 4. SYNTHESIS OUTPUT
+    % ==================================================================
+    \node[
+        stageNode,
+        below=0.85cm of synthesis
+    ] (champions) {
+        \textbf{Synthesized Algorithms} \\[2pt]
+        \scriptsize
+        Retained candidate optimization algorithms and corresponding generational telemetry
+    };
+
+    % ==================================================================
+    % 5. INDEPENDENT EVALUATION HARNESS
+    % ==================================================================
+    \node[
+        stageNode,
+        below=0.85cm of champions
+    ] (evaluation) {
+        \textbf{Independent Algorithm Evaluation} \\[2pt]
+        \scriptsize
+        Systematic validation of synthesized heuristics across target benchmark environments
+    };
+
+    % ==================================================================
+    % 6. DUAL EVALUATION BRANCHES (CLEAN & NOISY)
+    % ==================================================================
+    \node[
+        evalBranch,
+        below left=0.8cm and 0.25cm of evaluation.south,
+        anchor=north east
+    ] (cleanEvaluation) {
+        \textbf{Clean Evaluation} \\[2pt]
+        \scriptsize
+        Performance on underlying deterministic BBOB objectives
+    };
+
+    \node[
+        evalBranch,
+        below right=0.8cm and 0.25cm of evaluation.south,
+        anchor=north west
+    ] (noisyEvaluation) {
+        \textbf{Noisy Evaluation} \\[2pt]
+        \scriptsize
+        Performance under heteroscedastic stochastic observations
+    };
+
+    % ==================================================================
+    % 7. STATISTICAL ANALYSIS
+    % ==================================================================
+    \coordinate (evalMid) at ($(cleanEvaluation.south)!0.5!(noisyEvaluation.south)$);
+
+    \node[
+        wideNode,
+        fill=purple!10,
+        below=0.85cm of evalMid
+    ] (analysis) {
+        \textbf{Statistical Analysis and Comparison} \\[2pt]
+        \scriptsize
+        Target precision trajectories, empirical runtime distributions (ECDF), and reference benchmark comparisons
+    };
+
+    % ==================================================================
+    % 8. FINAL RESULTS
+    % ==================================================================
+    \node[
+        wideNode,
+        fill=green!15,
+        below=0.85cm of analysis
+    ] (results) {
+        \textbf{Experimental Results and Research-Question Analysis} \\[2pt]
+        \scriptsize
+        Comparative assessment against CMA-ES, DE, and PSO to address core research questions
+    };
+
+    % ==================================================================
+    % PIPELINE CONNECTORS
+    % ==================================================================
+    \draw[arrow] (problem) -- (promptScaffolding);
+    \draw[arrow] (promptScaffolding) -- (synthesis);
+    \draw[arrow] (synthesis) -- node[fill=white, inner sep=2pt, font=\scriptsize\bfseries] {Synthesized Candidates} (champions);
+    \draw[arrow] (champions) -- (evaluation);
+
+    % Dual Evaluation Forks
+    \draw[branchArrow] (evaluation.south) -- ++(0,-0.3) -| (cleanEvaluation.north);
+    \draw[branchArrow] (evaluation.south) -- ++(0,-0.3) -| (noisyEvaluation.north);
+
+    % Dual Evaluation Convergence into Analysis
+    \draw[branchArrow] (cleanEvaluation.south) -- ++(0,-0.3) -| ([xshift=-3.0cm]analysis.north);
+    \draw[branchArrow] (noisyEvaluation.south) -- ++(0,-0.3) -| ([xshift=3.0cm]analysis.north);
+
+    \draw[arrow] (analysis) -- (results);
+
+    % ==================================================================
+    % STAGE GROUPING CONTAINERS (BACKGROUND)
+    % ==================================================================
+    \begin{scope}[on background layer]
+        % Synthesis Stage Container
+        \node[
+            draw=blue!50!black,
+            dashed,
+            fill=blue!2,
+            rounded corners=6pt,
+            inner sep=9pt,
+            fit=(synthesis) (champions),
+            label={[font=\scriptsize\bfseries, text=blue!60!black]left:Synthesis}
+        ] (synthesisGroup) {};
+
+        % Independent Evaluation Container
+        \node[
+            draw=blue!50!black,
+            dashed,
+            fill=blue!2,
+            rounded corners=6pt,
+            inner sep=9pt,
+            fit=(evaluation) (cleanEvaluation) (noisyEvaluation),
+            label={[font=\scriptsize\bfseries, text=blue!60!black]left:Evaluation}
+        ] (evaluationGroup) {};
+
+        % Analysis Stage Container
+        \node[
+            draw=purple!60!black,
+            dashed,
+            fill=purple!2,
+            rounded corners=6pt,
+            inner sep=9pt,
+            fit=(analysis) (results),
+            label={[font=\scriptsize\bfseries, text=purple!70!black]left:Analysis}
+        ] (analysisGroup) {};
+    \end{scope}
+
+\end{tikzpicture}

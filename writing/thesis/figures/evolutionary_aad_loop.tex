@@ -5,22 +5,22 @@
         rectangle,
         draw=black!80,
         fill=yellow!15,
-        text width=13cm,
+        text width=12.2cm,
         align=center,
         rounded corners=4pt,
-        inner sep=8pt,
+        inner sep=7pt,
         thick
     },
     processNode/.style={
         rectangle,
         draw=black!80,
         fill=blue!5,
-        text width=5.7cm,
+        text width=5.6cm,
         align=center,
         rounded corners=4pt,
-        inner sep=7pt,
+        inner sep=6pt,
         thick,
-        minimum height=1.45cm
+        minimum height=1.3cm
     },
     evalNode/.style={
         processNode,
@@ -30,32 +30,32 @@
         rectangle,
         draw=black!80,
         fill=purple!10,
-        text width=12.5cm,
+        text width=12.2cm,
         align=center,
         rounded corners=4pt,
-        inner sep=8pt,
+        inner sep=7pt,
         thick,
-        minimum height=1.6cm
+        minimum height=1.35cm
     },
     decision/.style={
         diamond,
         draw=black!80,
         fill=gray!15,
         thick,
-        aspect=3.0,
-        inner sep=4pt,
+        aspect=2.8,
+        inner sep=3pt,
         align=center,
         font=\scriptsize,
-        minimum width=5.8cm
+        minimum width=5.6cm
     },
     outNode/.style={
         rectangle,
         draw=black!80,
         fill=green!15,
-        text width=13cm,
+        text width=12.2cm,
         align=center,
         rounded corners=4pt,
-        inner sep=8pt,
+        inner sep=7pt,
         thick,
         font=\footnotesize\bfseries
     },
@@ -71,246 +71,163 @@
         thick,
         draw=purple!80!black
     },
-    elbl/.style={
-        font=\scriptsize,
+    elblB/.style={
+        font=\scriptsize\bfseries,
         fill=white,
         inner sep=2pt,
         rounded corners=1pt
-    },
-    elblB/.style={
-        elbl,
-        font=\scriptsize\bfseries
     }
 ]
 
-%----------------------------------------------------------------------
-% Input
-%----------------------------------------------------------------------
+    %----------------------------------------------------------------------
+    % 1. Input Interface (Fed directly from Macro Pipeline)
+    %----------------------------------------------------------------------
+    \node[ioNode] (inputs) {
+        \textbf{LLaMEA Synthesis Input}\\[2pt]
+        \scriptsize Target Instance $(f_p, D, \sigma)$ \quad $\bullet$ \quad
+        Active Prompt Scaffold $\mathcal{P}_{i,j}$ \quad $\bullet$ \quad
+        Synthesis Budget $B_{\text{synth}} = 1{,}000$
+    };
 
-\node[ioNode] (inputs) {
-    \textbf{Optimization Task and Synthesis Configuration} \\[3pt]
-    \scriptsize
-    Continuous black-box problem
-    \quad $\bullet$ \quad
-    Prompt configuration
-    \quad $\bullet$ \quad
-    Synthesis budget
-};
-
-%----------------------------------------------------------------------
-% Synthesis context
-%----------------------------------------------------------------------
-
-\node[
-    processNode,
-    below=0.8cm of inputs
-] (context) {
-    \textbf{Synthesis Context} \\[3pt]
-    \scriptsize
-    Optimization task, previous candidate information,
-    incumbent, and prompt configuration
-};
-
-%----------------------------------------------------------------------
-% Generation
-%----------------------------------------------------------------------
-
-\node[
-    processNode,
-    below=0.8cm of context
-] (generation) {
-    \textbf{LLM Candidate Generation} \\[3pt]
-    \scriptsize
-    Generates executable optimization heuristic
-    $\mathcal{A}_{\text{child}}$
-};
-
-%----------------------------------------------------------------------
-% Code extraction and validation
-%----------------------------------------------------------------------
-
-\node[
-    processNode,
-    below=0.8cm of generation
-] (validation) {
-    \textbf{Code Extraction and Validation} \\[3pt]
-    \scriptsize
-    Extracts generated source code and checks
-    syntactic and structural constraints
-};
-
-%----------------------------------------------------------------------
-% Execution
-%----------------------------------------------------------------------
-
-\node[
-    processNode,
-    below=0.8cm of validation
-] (execution) {
-    \textbf{Isolated Candidate Execution} \\[3pt]
-    \scriptsize
-    Runs the candidate under a controlled execution
-    environment and timeout
-};
-
-%----------------------------------------------------------------------
-% Evaluation: two parallel components
-%----------------------------------------------------------------------
-
-\node[
-    evalNode,
-    below left=1.0cm and 0cm of execution.south,
-    anchor=north west
-] (stochastic) {
-    \textbf{Stochastic Objective Evaluation} \\[3pt]
-    \scriptsize
-    Candidate interacts with the objective through
-    noisy fitness observations
-};
-
-\node[
-    evalNode,
-    right=1.0cm of stochastic
-] (clean) {
-    \textbf{Clean Diagnostic Evaluation} \\[3pt]
-    \scriptsize
-    Returned solution is assessed using the
-    underlying clean objective
-};
-
-%----------------------------------------------------------------------
-% Selection and feedback
-%----------------------------------------------------------------------
-
-\node[
-    selectionNode,
-    below=1.0cm of $(stochastic.south)!0.5!(clean.south)$
-] (selection) {
-    \textbf{Parent--Child Comparison and Context Update} \\[3pt]
-    \scriptsize
-    Compares candidate performance with the incumbent,
-    updates the retained solution, and constructs feedback
-    for the next generation
-};
-
-%----------------------------------------------------------------------
-% Termination
-%----------------------------------------------------------------------
-
-\node[
-    decision,
-    below=1.0cm of selection
-] (termination) {
-    \textbf{Synthesis Terminated?}
-};
-
-%----------------------------------------------------------------------
-% Output
-%----------------------------------------------------------------------
-
-\node[
-    outNode,
-    below=1.0cm of termination
-] (output) {
-    \textbf{Final Output: Synthesized Optimization Heuristic}
-    \\[3pt]
-    \scriptsize
-    Retained incumbent algorithm and associated synthesis information
-};
-
-%----------------------------------------------------------------------
-% Loop boundary
-%----------------------------------------------------------------------
-
-\begin{scope}[on background layer]
+    %----------------------------------------------------------------------
+    % 2. Evolutionary Context & Prompt Compilation
+    %----------------------------------------------------------------------
     \node[
-        draw=gray!50,
-        dashed,
-        fill=gray!3,
-        rounded corners=8pt,
-        inner sep=12pt,
-        fit=(context) (generation) (validation) (execution)
-             (stochastic) (clean) (selection),
-        label={[
-            font=\bfseries\scriptsize,
-            gray!70!black
-        ]above:Iterative LLaMEA Synthesis Loop}
-    ] (loopGroup) {};
-\end{scope}
+        processNode,
+        below=0.75cm of inputs
+    ] (context) {
+        \textbf{Reflective Context Assembly}\\[2pt]
+        \scriptsize Compiles $\mathcal{C}_g = \{\mathcal{P}_{i,j}, \mathcal{A}_{\text{parent}}, \mathcal{T}_{\text{feedback}}, \mathcal{I}_{\text{directive}}\}$
+    };
 
-%----------------------------------------------------------------------
-% Forward arrows
-%----------------------------------------------------------------------
+    %----------------------------------------------------------------------
+    % 3. Foundation Model Code Mutation
+    %----------------------------------------------------------------------
+    \node[
+        processNode,
+        below=0.75cm of context
+    ] (generation) {
+        \textbf{LLM Candidate Mutation}\\[2pt]
+        \scriptsize Generates executable optimization heuristic script $\mathcal{A}_{\text{child}}$
+    };
 
-\draw[arrow]
-    (inputs.south)
-    -- (context.north);
+    %----------------------------------------------------------------------
+    % 4. AST Validation and Security Containment
+    %----------------------------------------------------------------------
+    \node[
+        processNode,
+        below=0.75cm of generation
+    ] (validation) {
+        \textbf{AST Verification \& Parsing}\\[2pt]
+        \scriptsize Screens imports, whitelists syntax, and extracts candidate class
+    };
 
-\draw[arrow]
-    (context.south)
-    -- (generation.north);
+    %----------------------------------------------------------------------
+    % 5. Sandboxed Runtime Execution
+    %----------------------------------------------------------------------
+    \node[
+        processNode,
+        below=0.75cm of validation
+    ] (execution) {
+        \textbf{Isolated Sandboxed Execution}\\[2pt]
+        \scriptsize Executes candidate within process isolate ($T_{\text{max}} = 30.0\,\text{s}$)
+    };
 
-\draw[arrow]
-    (generation.south)
-    -- node[elblB, right=2pt]
-    {Candidate program}
-    (validation.north);
+    %----------------------------------------------------------------------
+    % 6. Dual-Decoupled In-Loop Evaluation Channels
+    %----------------------------------------------------------------------
+    \node[
+        evalNode,
+        below left=0.85cm and 0.25cm of execution.south,
+        anchor=north east
+    ] (stochastic) {
+        \textbf{Stochastic Search Execution}\\[2pt]
+        \scriptsize Heuristic searches strictly via noisy evaluations $f_{\text{noisy}}(x_k)$
+    };
 
-\draw[arrow]
-    (validation.south)
-    -- (execution.north);
+    \node[
+        evalNode,
+        below right=0.85cm and 0.25cm of execution.south,
+        anchor=north west
+    ] (clean) {
+        \textbf{Clean Ground-Truth Oracle}\\[2pt]
+        \scriptsize Evaluates terminal coordinate on true objective: $y_{\text{clean}} = f_{\text{clean}}(\mathbf{x}^*)$
+    };
 
-%----------------------------------------------------------------------
-% Evaluation arrows
-%----------------------------------------------------------------------
+    %----------------------------------------------------------------------
+    % 7. Selection, Resampling, and Context Update
+    %----------------------------------------------------------------------
+    \coordinate (evalCenter) at ($(stochastic.south)!0.5!(clean.south)$);
 
-\draw[arrow]
-    (execution.south)
-    -- ++(0,-0.35)
-    -| (stochastic.north);
+    \node[
+        selectionNode,
+        below=0.85cm of evalCenter
+    ] (selection) {
+        \textbf{Parent--Child Comparison \& Incumbent Resampling}\\[2pt]
+        \scriptsize Evaluates selection gradient $\mathcal{F} = -|y_{\text{clean}} - f^*|$, resamples incumbent parent ($K=3$),\\
+        and appends diagnostic feedback buffer $\mathcal{T}_{\text{feedback}}$
+    };
 
-\draw[arrow]
-    (execution.south)
-    -- ++(0,-0.35)
-    -| (clean.north);
+    %----------------------------------------------------------------------
+    % 8. Termination Check
+    %----------------------------------------------------------------------
+    \node[
+        decision,
+        below=0.85cm of selection
+    ] (termination) {
+        \textbf{Generational Budget Reached?} ($g = G$)
+    };
 
-\draw[arrow]
-    (stochastic.south)
-    -- ++(0,-0.45)
-    -| (selection.west);
+    %----------------------------------------------------------------------
+    % 9. Terminal Output
+    %----------------------------------------------------------------------
+    \node[
+        outNode,
+        below=0.85cm of termination
+    ] (output) {
+        \textbf{Synthesized Champion Heuristic ($\mathcal{A}^*$)}\\[2pt]
+        \scriptsize Validated Python optimizer class script and generational synthesis telemetry
+    };
 
-\draw[arrow]
-    (clean.south)
-    -- ++(0,-0.45)
-    -| (selection.east);
+    %----------------------------------------------------------------------
+    % Background Enclosure (Iterative Loop Boundary)
+    %----------------------------------------------------------------------
+    \begin{scope}[on background layer]
+        \node[
+            draw=gray!50,
+            dashed,
+            fill=gray!3,
+            rounded corners=8pt,
+            inner sep=12pt,
+            fit=(context) (generation) (validation) (execution)
+                 (stochastic) (clean) (selection),
+            label={[font=\bfseries\scriptsize, text=gray!70!black]above:Iterative LLaMEA Evolutionary Engine}
+        ] (loopGroup) {};
+    \end{scope}
 
-%----------------------------------------------------------------------
-% Termination
-%----------------------------------------------------------------------
+    %----------------------------------------------------------------------
+    % Forward Connectors
+    %----------------------------------------------------------------------
+    \draw[arrow] (inputs) -- (context);
+    \draw[arrow] (context) -- (generation);
+    \draw[arrow] (generation) -- node[elblB, right=2pt] {$\mathcal{A}_{\text{child}}$ Script} (validation);
+    \draw[arrow] (validation) -- (execution);
 
-\draw[arrow]
-    (selection.south)
-    -- (termination.north);
+    % Dual Evaluation Forks
+    \draw[arrow] (execution.south) -- ++(0,-0.3) -| (stochastic.north);
+    \draw[arrow] (execution.south) -- ++(0,-0.3) -| (clean.north);
 
-\draw[arrow]
-    (termination.south)
-    -- node[elblB, right=2pt]
-    {Yes}
-    (output.north);
+    % Dual Evaluation Convergence
+    \draw[arrow] (stochastic.south) -- ++(0,-0.3) -| ([xshift=-2.8cm]selection.north);
+    \draw[arrow] (clean.south)      -- ++(0,-0.3) -| ([xshift=2.8cm]selection.north);
 
-%----------------------------------------------------------------------
-% Next-generation feedback
-%----------------------------------------------------------------------
+    % Termination Pathways
+    \draw[arrow] (selection) -- (termination);
+    \draw[arrow] (termination) -- node[elblB, right=2pt] {Yes} (output);
 
-\draw[fbArrow]
-    (termination.west)
-    -- ++(-2.8,0)
-    node[
-        elblB,
-        pos=0.5,
-        above,
-        text=purple!80!black
-    ] {No: next generation}
-    |- ($(context.west)+(-0.6,0)$);
+    % Outer Loop Feedback (Routes around the outside left edge)
+    \draw[fbArrow] (termination.west) -- ++(-3.9,0)
+        node[elblB, pos=0.5, above, text=purple!80!black] {No: Next Generation ($g \gets g+1$)}
+        |- (context.west);
 
 \end{tikzpicture}
