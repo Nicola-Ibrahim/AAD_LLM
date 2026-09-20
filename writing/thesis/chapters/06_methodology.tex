@@ -1,8 +1,7 @@
-%------------------------------------------------------------------------------
-% Chapter 3: Methodology
-%------------------------------------------------------------------------------
-
-\chapter{Methodology}\label{chap:methodology}
+%==============================================================================
+\chapter{Methodology}
+\label{chap:methodology}
+%==============================================================================
 
 This chapter describes the implementation used to study automated algorithm
 design under stochastic fitness evaluation. The method builds on the Large
@@ -12,45 +11,37 @@ using information obtained from their evaluation \cite{LLaMEA2024}. In this
 thesis, the LLaMEA process is combined with a controlled stochastic
 evaluation environment and locally executed large language models (LLMs).
 
-The central methodological principle is to distinguish between the
-optimization environment experienced by a generated algorithm and the
-information used by the synthesis framework to assess that algorithm. An LLM
-receives the optimization task, the current synthesis context, and the
-selected prompt configuration. It then generates a Python implementation of
-an optimization heuristic. The generated algorithm is extracted, checked,
-and executed in an isolated environment. During execution, the optimizer
-interacts with the objective only through the provided evaluation interface.
-Under stochastic conditions, this interface returns noisy objective values,
-while the clean objective remains available inside the evaluation framework
-for diagnostic assessment.
+The central methodological principle is to separate the optimization
+environment experienced by a generated algorithm from the information used
+by the synthesis framework to assess that algorithm. An LLM receives the
+optimization task, the current synthesis context, and the selected prompt
+configuration. It generates a Python implementation of an optimization
+heuristic. The generated algorithm is then extracted, checked, and executed
+in an isolated environment. During this execution, the optimizer interacts
+with the objective only through the provided evaluation interface. Under
+stochastic conditions, this interface returns noisy objective values, while
+the clean objective remains available inside the evaluation framework for
+diagnostic assessment.
 
-The synthesis process is therefore not a direct search over numerical
-solutions. Instead, the evolutionary search operates over executable
-optimization algorithms. The language model acts as the semantic variation
-operator, while the surrounding framework is responsible for generating,
-executing, evaluating, and selecting these algorithms. The information
-obtained from each candidate is subsequently used to update the synthesis
-state and construct the context for later generations.
-
-At a high level, the implemented methodology consists of several connected
-stages. A continuous black-box optimization task is combined with a selected
-prompt configuration and supplied to the LLaMEA synthesis process. The LLM
-then generates executable optimization heuristics, which are extracted,
-validated, and evaluated by the surrounding framework. The resulting
-synthesized algorithms are subsequently retained for independent evaluation
-under the experimental conditions defined for the study. The independent
-evaluation separates clean and stochastic fitness settings so that algorithm
-performance can be assessed both on the underlying objective and under the
-noise conditions considered in the experiments. The resulting measurements
-are then used for statistical analysis and comparison with established
+The complete methodology can be viewed as a sequence of connected stages. A
+continuous black-box optimization task is combined with a selected prompt
+configuration and supplied to the LLaMEA synthesis process. The LLM then
+generates executable optimization heuristics, which are extracted, validated,
+and evaluated by the surrounding framework. The resulting synthesized
+algorithms are subsequently retained for independent evaluation under the
+experimental conditions defined for the study. The independent evaluation
+separates clean and stochastic fitness settings so that algorithm performance
+can be assessed both on the underlying objective and under the noise
+conditions considered in the experiments. The resulting measurements are
+then used for statistical analysis and comparison with established
 optimization algorithms.
 
 Figure~\ref{fig:methodology_architecture} summarizes this high-level
 methodology. It should be read as an architectural overview of the complete
-experimental procedure rather than as a representation of the internal
-operations of the LLaMEA loop. In particular, the synthesis stage shown in
-the figure contains the iterative candidate generation and selection process
-described in the following sections.
+experimental procedure rather than as a representation of the individual
+operations inside the LLaMEA synthesis loop. The details of the synthesis
+process are introduced later when the LLaMEA-based algorithm generation is
+described.
 
 \begin{figure}[htbp]
 \centering
@@ -65,31 +56,6 @@ stochastic fitness conditions and compared with established optimization
 baselines. The resulting measurements are used for statistical analysis and
 research-question analysis.}
 \label{fig:methodology_architecture}
-\end{figure}
-
-The high-level architecture is complemented by a more detailed view of the
-synthesis stage. Figure~\ref{fig:llamea_synthesis_overview} describes the
-internal LLaMEA process used to generate and evolve the optimization
-algorithms. Starting from the optimization task and synthesis configuration,
-the LLM generates a candidate optimization algorithm. The candidate is then
-extracted, validated, and executed by the evaluation framework. Its
-performance is evaluated through the objective interface, while the returned
-solution is additionally assessed using the clean objective for diagnostic
-purposes. The resulting information is used for parent--child comparison
-and for constructing the synthesis context of the next generation. The
-process continues until the synthesis run terminates.
-
-\begin{figure}[htbp]
-\centering
-\resizebox{\textwidth}{!}{%
-\input{figures/evolutionary_aad_loop}
-}
-\caption{Detailed view of the LLaMEA-based algorithm synthesis process used
-in this thesis. The LLM generates candidate optimization heuristics, which
-are extracted, validated, executed, evaluated, and compared with the current
-incumbent. The resulting information is used to update the synthesis context
-for subsequent generations.}
-\label{fig:llamea_synthesis_overview}
 \end{figure}
 
 For reproducibility, the methodology distinguishes between the logical
@@ -113,11 +79,11 @@ black-box optimization task and a prompt configuration defining the
 programming interface available to the generated algorithm. The generated
 algorithm is represented as a Python class following the interface used by
 LLaMEA. Rather than producing a numerical candidate solution directly, the
-model therefore produces a complete optimization procedure. This procedure
-may contain its own initialization strategy, population management, search
-operators, parameter updates, and stopping logic.
+model produces a complete optimization procedure. This procedure may contain
+its own initialization strategy, population management, search operators,
+parameter updates, and stopping logic.
 
-The object being evolved is consequently not a solution vector but an
+The object being evolved is therefore not a solution vector but an
 executable optimization algorithm. The LLM can modify the structure of the
 search procedure itself, allowing changes to affect how candidate solutions
 are generated, how information from previous evaluations is used, and how the
@@ -128,7 +94,7 @@ usually applied to numerical parameters or solution vectors. In the present
 setting, the language model performs the variation at the program level. The
 surrounding synthesis framework then determines whether the generated
 program is valid and whether the resulting optimization behavior is
-sufficiently effective for the candidate to be retained.
+effective enough for the candidate to be retained.
 
 At the system level, the synthesis framework can be viewed as a sequence of
 interfaces between the language model, the generated program, and the
@@ -141,12 +107,30 @@ the generated optimizer is treated as a black-box component by the synthesis
 controller.
 
 The internal operation of this process is shown in
-Figure~\ref{fig:llamea_synthesis_overview}. The figure expands the synthesis
-stage of the high-level methodology into the individual operations performed
-for each candidate. Candidate generation is followed by code extraction and
-validation, isolated execution, objective evaluation, and parent--child
-comparison. The resulting information is then either used to terminate the
-synthesis run or to construct the context for the next generation.
+Figure~\ref{fig:llamea_synthesis_overview}. The figure provides a more
+detailed view of the LLaMEA stage introduced in the high-level architecture
+and shows the individual operations performed for each candidate. Starting
+from the optimization task and synthesis configuration, the LLM generates a
+candidate optimization algorithm. The candidate is then extracted, validated,
+and executed by the evaluation framework. Its performance is evaluated
+through the objective interface, while the returned solution is additionally
+assessed using the clean objective for diagnostic purposes. The resulting
+information is used for parent--child comparison and for constructing the
+synthesis context of the next generation. The process continues until the
+synthesis run terminates.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\input{figures/evolutionary_aad_loop}
+}
+\caption{Detailed view of the LLaMEA-based algorithm synthesis process used
+in this thesis. The LLM generates candidate optimization heuristics, which
+are extracted, validated, executed, evaluated, and compared with the current
+incumbent. The resulting information is used to update the synthesis context
+for subsequent generations.}
+\label{fig:llamea_synthesis_overview}
+\end{figure}
 
 %------------------------------------------------------------------------------
 \subsection{Synthesis Context and Candidate Generation}
@@ -176,6 +160,7 @@ $\mathcal{H}_{1:g-1}$ contains relevant information from previous
 generations, $\mathcal{A}_{\mathrm{inc}}$ denotes the current incumbent
 algorithm, and $\mathcal{F}_{\mathrm{prompt}}$ represents the additional
 instructions defined by the selected prompt configuration.
+
 
 The synthesis history can contain information about previous candidate
 algorithms, their observed performance, and execution failures. This gives
@@ -212,15 +197,17 @@ budget used by the experimental configuration. The exact values used in the
 experiments are specified in Chapter~\ref{chap:experiments}.
 
 %------------------------------------------------------------------------------
-\subsection{Code Extraction and Validation}
-\label{subsec:code_validation}
+\subsection{Candidate Validation and Execution}
+\label{subsec:candidate_validation_execution}
 %------------------------------------------------------------------------------
 
-The code extraction stage identifies the Python source contained in the
-generated response and prepares it for execution. Since language model
-responses can contain explanations, Markdown formatting, or other text in
-addition to the requested program, the extraction step provides a clear
-boundary between the generation process and the executable candidate.
+The candidate validation and execution stage provides the boundary between
+the generated program and the evaluation environment. The process first
+identifies the Python source contained in the generated response and prepares
+it for execution. Since language model responses can contain explanations,
+Markdown formatting, or other text in addition to the requested program, the
+extraction step provides a clear boundary between the generation process and
+the executable candidate.
 
 The resulting program is checked structurally using Abstract Syntax Tree
 (AST) analysis. This validation stage detects malformed or disallowed code
@@ -262,7 +249,7 @@ Constructor & \texttt{\_\_init\_\_(self)} must not require additional arguments.
 Callable interface & The optimizer must provide
 \texttt{\_\_call\_\_(self, problem, budget)}. \\
 Return value & The optimizer must return
-\texttt{(best\_x, float(best\_y))}. \\
+\texttt{(best\_x, best\_y)}. \\
 Optimization logic & The search procedure must be implemented directly rather
 than delegated to prohibited external optimization solvers. \\
 Variable validity & Variables must be defined before use. \\
@@ -278,42 +265,18 @@ imports, calls, and structural violations are part of the implementation and
 are applied consistently to every generated candidate.
 
 After validation, the candidate is compiled and executed in an isolated
-worker process. Isolation prevents variables or state created by one
+worker process. The isolation prevents variables or state created by one
 candidate from affecting the surrounding synthesis process. It also allows
 the execution of a generated algorithm to be terminated independently if it
 does not complete within the permitted execution time.
 
-The execution environment additionally checks the numerical validity of the
-returned solution. Invalid returned solutions, including non-finite
-coordinates or coordinates outside the allowed search domain, are rejected
-rather than being treated as successful optimization results.
-
-Runtime failures are handled within the same evaluation stage. A generated
-algorithm may fail because of numerical operations, incorrect array
-dimensions, invalid use of the objective interface, or other implementation
-errors. Such failures are recorded rather than terminating the complete
-synthesis process. Where appropriate, the corresponding error information
-can be included in the context supplied to later generations. This allows
-the model to use execution feedback when modifying a previously generated
-program, consistent with the feedback-driven design of LLaMEA
-\cite{LLaMEA2024}.
-
-%------------------------------------------------------------------------------
-\subsection{Isolated Candidate Execution}
-\label{subsec:isolated_execution}
-%------------------------------------------------------------------------------
-
-After passing validation, the candidate is executed independently from the
-synthesis controller. The generated optimizer interacts with the optimization
-problem through the objective-function interface provided to it. The
-optimizer does not directly access the analytical benchmark function or the
-known optimum.
-
-This maintains the black-box setting of the optimization problem. From the
-perspective of the generated algorithm, the objective is an externally
-provided function that can be queried at candidate points. The optimizer
-must therefore construct its search strategy from the fitness values
-returned by these queries.
+The generated optimizer interacts with the optimization problem only through
+the objective-function interface provided to it. The optimizer does not
+directly access the analytical benchmark function or the known optimum. From
+the perspective of the generated algorithm, the objective is therefore an
+externally provided function that can be queried at candidate points. The
+optimizer must construct its search strategy from the fitness values returned
+by these queries.
 
 The isolated worker process also provides a boundary between candidate
 execution and the rest of the synthesis framework. A candidate that enters
@@ -329,11 +292,20 @@ not terminate within this limit, the worker is terminated and the candidate
 is classified as a timeout. The exact value of $T_{\mathrm{exec}}$ used in
 the experiments is specified in Chapter~\ref{chap:experiments}.
 
-For a successful candidate, the framework obtains the solution returned by
-the optimizer together with the information required to assess its quality.
-For an unsuccessful candidate, the framework records the type of failure and
-the available diagnostic information. In both cases, the result becomes
-part of the evolutionary feedback process.
+Runtime failures are handled within the same evaluation stage. A generated
+algorithm may fail because of numerical operations, incorrect array
+dimensions, invalid use of the objective interface, or other implementation
+errors. Such failures are recorded rather than terminating the complete
+synthesis process. Where appropriate, the corresponding error information
+can be included in the context supplied to later generations. This allows
+the model to use execution feedback when modifying a previously generated
+program, consistent with the feedback-driven design of LLaMEA
+\cite{LLaMEA2024}.
+
+The execution environment additionally checks the numerical validity of the
+returned solution. Invalid returned solutions, including non-finite
+coordinates or coordinates outside the allowed search domain, are rejected
+rather than being treated as successful optimization results.
 
 This execution procedure also ensures that all candidates are evaluated
 under the same basic computational constraints. Differences in performance
@@ -369,6 +341,7 @@ noisy observation. The synthesis framework does not use this returned noisy
 value as the final quality criterion; instead, it evaluates the returned
 \texttt{best\_x} independently using the clean objective as described in
 Section~\ref{subsec:clean_diagnostic}.
+
 
 %==============================================================================
 \section{Stochastic Fitness Evaluation}
@@ -1149,8 +1122,8 @@ STRICT Rules — violating any rule will cause execution failure:
   \end{verbatim}
 
 The output requirements are common to every generated algorithm. In
-particular, the return value must always contain \texttt{best_x} and
-\texttt{best_y}. These are part of the common optimizer interface and are
+particular, the return value must always contain \texttt{best\_x} and
+\texttt{best\_y}. These are part of the common optimizer interface and are
 therefore not repeated in the environment-specific prompt components. This
 keeps the interface identical across all synthesis conditions.
 
