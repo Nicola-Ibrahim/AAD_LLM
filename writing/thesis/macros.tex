@@ -45,27 +45,32 @@
 \definecolor{note}{RGB}{99,102,114}   % muted text
 
 %-------------------------------------------------------------------------------
-% Enhanced Verbatim Layout (Centered with Left & Right Padding)
+% Verbatim Display Block (Framed, Shaded, and Breakable)
 %-------------------------------------------------------------------------------
+\RequirePackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+
 \makeatletter
-% Pad verbatim blocks symmetrically on the left and right to center and distinguish them from body text
-\patchcmd{\@verbatim}%
-  {\leftskip\@totalleftmargin \rightskip\z@skip}%
-  {\leftskip\dimexpr\@totalleftmargin + 1.2cm\relax \rightskip 1.2cm\relax}%
-  {}%
-  {%
-    % Fallback if @verbatim was customized earlier
-    \g@addto@macro\@verbatim{%
-      \advance\leftskip by 1.2cm\relax
-      \advance\rightskip by 1.2cm\relax
-    }%
-  }
-% Slightly more compact monospaced font for clean code and prompt presentation
-\patchcmd{\verbatim@font}%
-  {\normalfont}%
-  {\normalfont\small}%
-  {}{}
-% Ensure clear vertical breathing room above and below verbatim blocks
-\g@addto@macro\@verbatim{\topsep=8pt plus 2pt minus 2pt\relax}
+% Monospaced font for clean code and prompt presentation
+\def\verbatim@font{\normalfont\footnotesize\ttfamily}
+% Clean up trivlist default margins inside boxed verbatim
+\g@addto@macro\@verbatim{\topsep=0pt\partopsep=0pt}
+% Allow line breaks at spaces as an additional safeguard against overflow
+\def\@xobeysp{\leavevmode\penalty\z@\ }
 \makeatother
+
+% Wrap verbatim in a modern shaded block with subtle border and padding
+\tcolorboxenvironment{verbatim}{%
+  breakable,
+  colback=black!2.5,
+  colframe=black!20,
+  arc=3pt,
+  boxrule=0.6pt,
+  left=9pt,
+  right=9pt,
+  top=6pt,
+  bottom=6pt,
+  before skip=8pt plus 2pt minus 2pt,
+  after skip=8pt plus 2pt minus 2pt
+}
 

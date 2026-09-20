@@ -253,9 +253,9 @@ Table~\ref{tab:validation_requirements}.
 optimization algorithms.}
 \label{tab:validation_requirements}
 \begin{tabular}{p{0.34\textwidth}p{0.56\textwidth}}
-\hline
+\toprule
 \textbf{Requirement} & \textbf{Validation condition} \\
-\hline
+\midrule
 Python source & The extracted candidate must be syntactically valid Python. \\
 Optimizer class & The candidate must provide the required optimizer class. \\
 Constructor & \texttt{\_\_init\_\_(self)} must not require additional arguments. \\
@@ -268,7 +268,7 @@ than delegated to prohibited external optimization solvers. \\
 Variable validity & Variables must be defined before use. \\
 Execution boundary & The candidate must operate through the supplied objective
 interface and remain within the provided search bounds and evaluation budget. \\
-\hline
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -1127,7 +1127,8 @@ STRICT Rules — violating any rule will cause execution failure:
 
 * **init**(self) MUST take NO extra arguments beyond self.
 
-* **init**(self) MUST have a non-empty body (use pass if nothing to initialize).
+* **init**(self) MUST have a non-empty body
+  (use pass if nothing to initialize).
 
 * The class MUST have a **call**(self, problem, budget) method.
 
@@ -1184,15 +1185,19 @@ class AlgorithmName:
 
     def __init__(self):
 
-        pass  # Add initialization state here if your algorithm needs it
+        # Add initialization state here if your algorithm needs it
+        pass
 
     def __call__(self, problem, budget):
 
-        lb = np.asarray(getattr(problem, 'lower_bound', -5.0), dtype=float)
+        lb = np.asarray(getattr(problem, 'lower_bound', -5.0),
+                        dtype=float)
 
-        ub = np.asarray(getattr(problem, 'upper_bound', 5.0), dtype=float)
+        ub = np.asarray(getattr(problem, 'upper_bound', 5.0),
+                        dtype=float)
 
-        dim = int(getattr(problem, 'dim', len(lb) if hasattr(lb, '__len__') else 3))
+        dim = int(getattr(problem, 'dim',
+                          len(lb) if hasattr(lb, '__len__') else 3))
 
         # Always start with a random initial point using vectorization
 
@@ -1204,26 +1209,38 @@ class AlgorithmName:
 
         # --- YOUR ALGORITHM LOGIC BELOW ---
 
-        # Use `evaluations` to track calls. Stop when evaluations >= budget.
+        # Use `evaluations` to track calls.
+        # Stop when evaluations >= budget.
 
-        # BUDGET TRACKING: every call to problem(x) counts — including calls inside
-        # min()/max(key=...) lambdas, list comprehensions, and helper functions.
+        # BUDGET TRACKING: every call to problem(x) counts — including
+        # calls inside min()/max(key=...) lambdas, list comprehensions,
+        # and helper functions.
 
-        # Always increment `evaluations` immediately after every problem(x) call.
+        # Always increment `evaluations` immediately after every
+        # problem(x) call.
 
-        # Leverage NumPy matrix vectorization across populations of shape (pop_size, dim).
+        # Leverage NumPy matrix vectorization across populations of
+        # shape (pop_size, dim).
 
-        # Example batch mutation: candidates = np.clip(pop + np.random.normal(0, 0.1, size=(pop_size, dim)), lb, ub)
+        # Example batch mutation:
+        # candidates = np.clip(pop + np.random.normal(0, 0.1,
+        #                      size=(pop_size, dim)), lb, ub)
 
-        # Evaluate each candidate: for x in candidates: y = float(problem(x)); evaluations += 1
+        # Evaluate each candidate:
+        # for x in candidates:
+        #     y = float(problem(x))
+        #     evaluations += 1
 
-        # Compare candidates and update best_x, best_y when improvement found.
+        # Compare candidates and update best_x, best_y
+        # when improvement found.
 
-        # NOTE: For noisy problems, a single raw comparison may be unreliable.
+        # NOTE: For noisy problems, a single raw comparison
+        # may be unreliable.
 
         # --- YOUR ALGORITHM LOGIC ABOVE ---
 
-        return best_x, float(best_y)  # MUST return tuple: (best_x_ndarray, best_y_float)
+        # MUST return tuple: (best_x_ndarray, best_y_float)
+        return best_x, float(best_y)
 ```
 
 \end{verbatim}
@@ -1401,12 +1418,7 @@ The two prompt factors are combined to form the complete set of synthesis
 conditions:
 
 \begin{equation}
-3\ \text{environment modes}
-\times
-4\ \text{strategy scaffolds}
-============================
-
-12\ \text{prompt conditions}.
+3\ \text{environment modes} \times 4\ \text{strategy scaffolds} = 12\ \text{prompt conditions}.
 \label{eq:prompt_factorial_design}
 \end{equation}
 
@@ -1419,13 +1431,13 @@ Table~\ref{tab:prompt_configuration_matrix}.
 \caption{Prompt configuration matrix used for algorithm synthesis.}
 \label{tab:prompt_configuration_matrix}
 \begin{tabular}{lcccc}
-\hline
-Environment & Baseline & Vectorization & Guided & Thinking \
-\hline
-Clean    & \checkmark & \checkmark & \checkmark & \checkmark \
-Implicit & \checkmark & \checkmark & \checkmark & \checkmark \
-Noisy    & \checkmark & \checkmark & \checkmark & \checkmark \
-\hline
+\toprule
+\textbf{Environment} & \textbf{Baseline} & \textbf{Vectorization} & \textbf{Guided} & \textbf{Thinking} \\
+\midrule
+Clean    & \checkmark & \checkmark & \checkmark & \checkmark \\
+Implicit & \checkmark & \checkmark & \checkmark & \checkmark \\
+Noisy    & \checkmark & \checkmark & \checkmark & \checkmark \\
+\bottomrule
 \end{tabular}
 \end{table}
 
@@ -1597,17 +1609,14 @@ be compared under the same evaluation protocol.
 For each benchmark run, the relevant configuration can be represented as
 
 \begin{equation}
-\mathcal{E}
-===========
-
-\left{
-\text{algorithm},
-\text{function},
-D,
-B,
-\text{environment},
+\mathcal{E} = \left\{
+\text{algorithm},\,
+\text{function},\,
+D,\,
+B,\,
+\text{environment},\,
 \text{seed}
-\right},
+\right\},
 \label{eq:benchmark_configuration}
 \end{equation}
 
@@ -1637,5 +1646,3 @@ This distinction is necessary for interpreting the results: differences
 observed during independent evaluation reflect differences between the
 algorithms produced by the synthesis conditions, rather than continued
 adaptation during the benchmark stage.
-
-One important point before you paste this into the thesis: **I preserved the current three-mode prompt description because that is what the text you supplied currently says.** It does **not** yet reflect the newer hierarchy you described earlier (`Implicit` → 4 strategies, `Explicit` → `Clean/Noisy` → 4 strategies). That is a separate consistency change we should make to the prompt section and `prompt_architecture.tex`; I did not silently change it here because you explicitly asked me not to change the ideas.
