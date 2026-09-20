@@ -15,12 +15,12 @@
         rectangle,
         draw=black!80,
         fill=blue!5,
-        text width=5.6cm,
+        text width=7.2cm,
         align=center,
         rounded corners=4pt,
         inner sep=6pt,
         thick,
-        minimum height=1.3cm
+        minimum height=1.2cm
     },
     evalNode/.style={
         processNode,
@@ -35,7 +35,7 @@
         rounded corners=4pt,
         inner sep=7pt,
         thick,
-        minimum height=1.35cm
+        minimum height=1.3cm
     },
     decision/.style={
         diamond,
@@ -80,17 +80,17 @@
 ]
 
     %----------------------------------------------------------------------
-    % 1. Input Interface (Fed directly from Macro Pipeline)
+    % 1. Input Interface
     %----------------------------------------------------------------------
     \node[ioNode] (inputs) {
         \textbf{LLaMEA Synthesis Input}\\[2pt]
-        \scriptsize Target Instance $(f_p, D, \sigma)$ \quad $\bullet$ \quad
+        \scriptsize Target Problem $(f_p, D, \sigma)$ \quad $\bullet$ \quad
         Active Prompt Scaffold $\mathcal{P}_{i,j}$ \quad $\bullet$ \quad
         Synthesis Budget $B_{\text{synth}} = 1{,}000$
     };
 
     %----------------------------------------------------------------------
-    % 2. Evolutionary Context & Prompt Compilation
+    % 2. Reflective Context Assembly
     %----------------------------------------------------------------------
     \node[
         processNode,
@@ -101,70 +101,63 @@
     };
 
     %----------------------------------------------------------------------
-    % 3. Foundation Model Code Mutation
+    % 3. LLM Candidate Mutation
     %----------------------------------------------------------------------
     \node[
         processNode,
-        below=0.75cm of context
+        below=0.7cm of context
     ] (generation) {
         \textbf{LLM Candidate Mutation}\\[2pt]
-        \scriptsize Generates executable optimization heuristic script $\mathcal{A}_{\text{child}}$
+        \scriptsize Synthesizes executable optimization heuristic script $\mathcal{A}_{\text{child}}$
     };
 
     %----------------------------------------------------------------------
-    % 4. AST Validation and Security Containment
+    % 4. AST Validation and Syntax Check
     %----------------------------------------------------------------------
     \node[
         processNode,
-        below=0.75cm of generation
+        below=0.7cm of generation
     ] (validation) {
         \textbf{AST Verification \& Parsing}\\[2pt]
-        \scriptsize Screens imports, whitelists syntax, and extracts candidate class
+        \scriptsize Validates imports, parses syntax tree, and extracts candidate class
     };
 
     %----------------------------------------------------------------------
-    % 5. Sandboxed Runtime Execution
+    % 5. Sandboxed Runtime Execution (Single Execution Run)
     %----------------------------------------------------------------------
     \node[
-        processNode,
-        below=0.75cm of validation
+        evalNode,
+        below=0.7cm of validation
     ] (execution) {
-        \textbf{Isolated Sandboxed Execution}\\[2pt]
-        \scriptsize Executes candidate within process isolate ($T_{\text{max}} = 30.0\,\text{s}$)
+        \textbf{Isolated Sandboxed Execution (Noisy Surface)}\\[2pt]
+        \scriptsize Runs $\mathcal{A}_{\text{child}}$ on corrupted fitness feedback $f_{\text{noisy}}(x_k)$ ($T_{\text{max}} = 30.0\,\text{s}$)\\
+        \scriptsize Returns candidate solution tuple: $(\mathbf{x}^*, y_{\text{raw}})$
     };
 
     %----------------------------------------------------------------------
-    % 6. Dual-Decoupled In-Loop Evaluation Channels
+    % 6. Ground-Truth Oracle Scoring (Evaluation on Clean Function)
     %----------------------------------------------------------------------
     \node[
         evalNode,
-        below left=0.85cm and 0.25cm of execution.south,
-        anchor=north east
-    ] (stochastic) {
-        \textbf{Stochastic Search Execution}\\[2pt]
-        \scriptsize Heuristic searches strictly via noisy evaluations $f_{\text{noisy}}(x_k)$
-    };
-
-    \node[
-        evalNode,
-        below right=0.85cm and 0.25cm of execution.south,
-        anchor=north west
-    ] (clean) {
-        \textbf{Clean Ground-Truth Oracle}\\[2pt]
-        \scriptsize Evaluates terminal coordinate on true objective: $y_{\text{clean}} = f_{\text{clean}}(\mathbf{x}^*)$
+        fill=green!8,
+        draw=green!55!black,
+        below=0.75cm of execution
+    ] (cleanOracle) {
+        \textbf{Clean Ground-Truth Oracle Evaluation}\\[2pt]
+        \scriptsize Discards noisy $y_{\text{raw}}$ and evaluates best coordinate on true objective:\\
+        $y_{\text{clean}} = f_{\text{clean}}(\mathbf{x}^*)$ \quad $\implies$ \quad \\
+        Optimality Gap: $\Delta y = |y_{\text{clean}} - f^*|$
     };
 
     %----------------------------------------------------------------------
     % 7. Selection, Resampling, and Context Update
     %----------------------------------------------------------------------
-    \coordinate (evalCenter) at ($(stochastic.south)!0.5!(clean.south)$);
-
     \node[
         selectionNode,
-        below=0.85cm of evalCenter
+        below=0.75cm of cleanOracle
     ] (selection) {
-        \textbf{Parent--Child Comparison \& Incumbent Resampling}\\[2pt]
-        \scriptsize Evaluates selection gradient $\mathcal{F} = -|y_{\text{clean}} - f^*|$, resamples incumbent parent ($K=3$),\\
+        \textbf{Parent--Child Comparison \& Incumbent Update}\\[2pt]
+        \scriptsize Assigns selection fitness $\mathcal{F}(\mathcal{A}_{\text{child}}) = -\Delta y$, updates parent baseline $\bar{\mathcal{F}}_{\text{parent}}$,\\
         and appends diagnostic feedback buffer $\mathcal{T}_{\text{feedback}}$
     };
 
@@ -173,24 +166,24 @@
     %----------------------------------------------------------------------
     \node[
         decision,
-        below=0.85cm of selection
+        below=0.75cm of selection
     ] (termination) {
         \textbf{Generational Budget Reached?} ($g = G$)
     };
 
     %----------------------------------------------------------------------
-    % 9. Terminal Output
+    % 9. Final Terminal Output
     %----------------------------------------------------------------------
     \node[
         outNode,
-        below=0.85cm of termination
+        below=0.75cm of termination
     ] (output) {
         \textbf{Synthesized Champion Heuristic ($\mathcal{A}^*$)}\\[2pt]
         \scriptsize Validated Python optimizer class script and generational synthesis telemetry
     };
 
     %----------------------------------------------------------------------
-    % Background Enclosure (Iterative Loop Boundary)
+    % Background Container Enclosure
     %----------------------------------------------------------------------
     \begin{scope}[on background layer]
         \node[
@@ -199,34 +192,25 @@
             fill=gray!3,
             rounded corners=8pt,
             inner sep=12pt,
-            fit=(context) (generation) (validation) (execution)
-                 (stochastic) (clean) (selection),
+            fit=(context) (generation) (validation) (execution) (cleanOracle) (selection),
             label={[font=\bfseries\scriptsize, text=gray!70!black]above:Iterative LLaMEA Evolutionary Engine}
         ] (loopGroup) {};
     \end{scope}
 
     %----------------------------------------------------------------------
-    % Forward Connectors
+    % Pipeline Forward Connectors
     %----------------------------------------------------------------------
     \draw[arrow] (inputs) -- (context);
     \draw[arrow] (context) -- (generation);
     \draw[arrow] (generation) -- node[elblB, right=2pt] {$\mathcal{A}_{\text{child}}$ Script} (validation);
     \draw[arrow] (validation) -- (execution);
-
-    % Dual Evaluation Forks
-    \draw[arrow] (execution.south) -- ++(0,-0.3) -| (stochastic.north);
-    \draw[arrow] (execution.south) -- ++(0,-0.3) -| (clean.north);
-
-    % Dual Evaluation Convergence
-    \draw[arrow] (stochastic.south) -- ++(0,-0.3) -| ([xshift=-2.8cm]selection.north);
-    \draw[arrow] (clean.south)      -- ++(0,-0.3) -| ([xshift=2.8cm]selection.north);
-
-    % Termination Pathways
+    \draw[arrow] (execution) -- node[elblB, right=2pt] {Terminal Result $(\mathbf{x}^*, y_{\text{raw}})$} (cleanOracle);
+    \draw[arrow] (cleanOracle) -- node[elblB, right=2pt] {True Error $\Delta y$} (selection);
     \draw[arrow] (selection) -- (termination);
     \draw[arrow] (termination) -- node[elblB, right=2pt] {Yes} (output);
 
-    % Outer Loop Feedback (Routes around the outside left edge)
-    \draw[fbArrow] (termination.west) -- ++(-3.9,0)
+    % Outer Loop Feedback (Routes cleanly on the outside left channel)
+    \draw[fbArrow] (termination.west) -- ++(-3.8,0)
         node[elblB, pos=0.5, above, text=purple!80!black] {No: Next Generation ($g \gets g+1$)}
         |- (context.west);
 
