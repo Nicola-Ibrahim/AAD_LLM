@@ -24,17 +24,18 @@ the clean objective remains available inside the evaluation framework for
 diagnostic assessment.
 
 The complete methodology can be viewed as a sequence of connected stages. A
-continuous black-box optimization task is combined with a selected prompt
-configuration and supplied to the LLaMEA synthesis process. The LLM then
-generates executable optimization heuristics, which are extracted, validated,
-and evaluated by the surrounding framework. The resulting synthesized
-algorithms are subsequently retained for independent evaluation under the
-experimental conditions defined for the study. The independent evaluation
-separates clean and stochastic fitness settings so that algorithm performance
-can be assessed both on the underlying objective and under the noise
-conditions considered in the experiments. The resulting measurements are
-then used for statistical analysis and comparison with established
-optimization algorithms.
+continuous black-box optimization task is first defined together with the
+fitness evaluation setting and the selected prompt configuration. The
+resulting optimization environment is then supplied to the LLaMEA synthesis
+process, in which the LLM generates executable optimization heuristics. These
+candidates are extracted, validated, and evaluated by the surrounding
+framework. The resulting synthesized algorithms are subsequently retained
+for independent evaluation under the experimental conditions defined for the
+study. The independent evaluation separates clean and stochastic fitness
+settings so that algorithm performance can be assessed both on the underlying
+objective and under the noise conditions considered in the experiments. The
+resulting measurements are then used for statistical analysis and comparison
+with established optimization algorithms.
 
 Figure~\ref{fig:methodology_architecture} summarizes this high-level
 methodology. It should be read as an architectural overview of the complete
@@ -67,6 +68,401 @@ are experimental parameters and are specified in Chapter~\ref{chap:experiments}.
 This separation allows the same implementation architecture to be reproduced
 under different experimental configurations without changing the underlying
 synthesis procedure.
+
+
+%==============================================================================
+\section{Problem and Evaluation Setup}
+\label{sec:problem_evaluation_setup}
+%==============================================================================
+
+The generated optimizer interacts with the optimization problem only through
+the objective interface provided by the evaluation framework. This interface
+determines the fitness value observed by the optimizer for each queried
+solution. In the deterministic setting, this value is the clean objective
+value. In the stochastic setting, the returned fitness contains an additional
+random component.
+
+This distinction is important for the experimental setup because the aim is
+to study how generated optimization algorithms behave when the fitness
+information available during search is uncertain, while keeping the
+underlying optimization problem unchanged. The stochasticity is therefore
+introduced at the objective interface rather than by modifying the benchmark
+function or the generated optimization algorithm itself.
+
+The evaluation framework consequently maintains two related quantities. The
+clean objective is used internally to represent the actual optimization
+problem and to assess the solution returned by an algorithm. The fitness
+observation returned during optimization may instead contain stochastic
+perturbations. The generated optimizer has access only to the latter through
+the supplied objective interface and does not receive the analytical form of
+the benchmark function or information about its optimum.
+
+%------------------------------------------------------------------------------
+\subsection{Deterministic and Stochastic Fitness}
+\label{subsec:deterministic_stochastic}
+%------------------------------------------------------------------------------
+
+Let $f_{\mathrm{clean}}(x)$ denote the underlying benchmark objective function
+for a candidate solution $x \in \mathbb{R}^{D}$. Let $x^*$ denote a global
+optimum in the search space, and let
+
+\begin{equation}
+f^*
+=
+f_{\mathrm{clean}}(x^*)
+\label{eq:true_optimum}
+\end{equation}
+
+denote the corresponding optimal objective value. The value $f^*$ is used
+internally by the evaluation framework when the stochastic objective is
+constructed. It is not exposed to the generated optimizer.
+
+For deterministic evaluation, the fitness returned to the optimizer is
+simply the clean objective,
+
+\begin{equation}
+f_{\mathrm{noise}}(x)
+=
+f_{\mathrm{clean}}(x).
+\label{eq:deterministic_objective}
+\end{equation}
+
+This corresponds to the standard noiseless evaluation setting. Under
+stochastic evaluation, the returned fitness is instead obtained by adding a
+random perturbation to the clean objective,
+
+\begin{equation}
+f_{\mathrm{noise}}(x)
+=
+f_{\mathrm{clean}}(x) + z.
+\label{eq:stochastic_objective}
+\end{equation}
+
+The choice of the noise model determines how the perturbation changes across
+the search space. An initial approach considered in the implementation was
+a homoscedastic additive Gaussian model. In this formulation, the standard
+deviation of the noise is fixed for all objective queries after calibrating
+it to the scale of the particular optimization problem. The calibration is
+performed before the optimization run by sampling points uniformly within
+the search bounds and computing their clean objective values. The average
+absolute deviation from the known optimum is then used as a characteristic
+scale of the objective landscape,
+
+\begin{equation}
+s_{\mathrm{landscape}}
+=
+\frac{1}{N}
+\sum_{i=1}^{N}
+\left|
+f_{\mathrm{clean}}(x_i)-f^*
+\right|,
+\qquad
+x_i \sim
+\mathcal{U}(\mathrm{lb},\mathrm{ub}),
+\label{eq:landscape_scale}
+\end{equation}
+
+where $N$ denotes the number of sampled points. The resulting noisy
+observation is generated according to
+
+\begin{equation}
+f_{\mathrm{noise}}(x)
+\sim
+\mathcal{N}
+\left(
+f_{\mathrm{clean}}(x),
+\left(
+\sigma s_{\mathrm{landscape}}
+\right)^2
+\right).
+\label{eq:homoscedastic_noise}
+\end{equation}
+
+The resulting standard deviation,
+
+\begin{equation}
+\sigma_{\mathrm{hom}}
+=
+\sigma s_{\mathrm{landscape}},
+\label{eq:homoscedastic_std}
+\end{equation}
+
+is constant for a given problem and noise parameter. The calibration makes
+the magnitude of the perturbation relative to the scale of the benchmark
+rather than using one absolute noise level for all functions. However, the
+same standard deviation is then applied to every objective query regardless
+of the location of the queried point.
+
+This property becomes problematic when the purpose of the noise model is to
+represent uncertainty that changes with optimization progress. Consider two
+points on the same objective, one far from the optimum and one close to it.
+The homoscedastic formulation assigns both points the same noise standard
+deviation even though their remaining objective gaps can differ by several
+orders of magnitude. Consequently, a point close to the optimum can receive
+a perturbation that is large relative to its remaining optimization error,
+while a point far from the optimum receives the same absolute perturbation.
+
+The limitation is particularly relevant for the benchmark functions used in
+this thesis because their objective values can vary substantially across the
+search domain. A fixed noise scale calibrated from the overall landscape
+therefore does not distinguish between regions where the optimizer is still
+far from the optimum and regions where it is already approaching a good
+solution.
+
+For this reason, the stochastic model used in the final methodology relates
+the noise magnitude directly to the remaining optimality gap. Instead of
+estimating one global scale from the objective landscape, the standard
+deviation is determined separately for each objective query according to
+
+\begin{equation}
+\sigma_{\mathrm{dynamic}}(x)
+=
+\sigma
+\left|
+f_{\mathrm{clean}}(x)-f^*
+\right|.
+\label{eq:dynamic_noise_std}
+\end{equation}
+
+The corresponding perturbation is sampled from
+
+\begin{equation}
+z
+\sim
+\mathcal{N}
+\left(
+0,
+\left(
+\sigma
+\left|
+f_{\mathrm{clean}}(x)-f^*
+\right|
+\right)^2
+\right),
+\label{eq:proportional_gaussian_noise}
+\end{equation}
+
+which gives the stochastic objective
+
+\begin{equation}
+f_{\mathrm{noise}}(x)
+=
+f_{\mathrm{clean}}(x) + z.
+\label{eq:heteroscedastic_objective}
+\end{equation}
+
+This formulation produces a heteroscedastic objective because the variance
+of the observed fitness changes with the queried point. The noise is
+therefore small when the clean objective is close to the optimum and becomes
+larger as the objective gap increases. For $\sigma=0$, the perturbation
+vanishes and the interface becomes deterministic.
+
+The use of the optimality gap rather than the raw objective value also avoids
+making the noise magnitude dependent on an arbitrary vertical shift of the
+objective. If the same optimization problem were shifted by adding a
+constant to all objective values, its optimization structure would remain
+unchanged. Scaling the noise directly by the raw objective value could
+nevertheless change the perturbation magnitude. In contrast, the difference
+$|f_{\mathrm{clean}}(x)-f^*|$ is invariant to such a common shift and directly
+represents the remaining objective error.
+
+The resulting model also changes the uncertainty experienced by the
+optimizer as the search progresses. Early in the search, when candidate
+solutions may have large objective gaps, the fitness observations can contain
+larger perturbations. As the optimizer approaches the optimum, the magnitude
+of the perturbation decreases with the remaining gap. For example, with an
+illustrative value of $\sigma=0.1$, a point with an objective gap of
+approximately $10^3$ has
+
+\begin{equation}
+\sigma_{\mathrm{dynamic}}
+=
+0.1\cdot10^3
+=
+10^2,
+\label{eq:f8_dynamic_std_boundary}
+\end{equation}
+
+whereas a point with an objective gap of approximately $10^1$ has
+
+\begin{equation}
+\sigma_{\mathrm{dynamic}}
+=
+0.1\cdot10^1
+=
+10^0.
+\label{eq:f8_dynamic_std_valley}
+\end{equation}
+
+These values are only used to demonstrate the scaling behavior. The actual
+noise parameters used in the experiments are defined in
+Chapter~\ref{chap:experiments}.
+
+An additional consequence of the stochastic formulation is that the random
+realization is associated with the objective query rather than permanently
+with a coordinate in the search space. Each objective query receives a new
+sample from the specified distribution. For repeated evaluations of the
+same coordinate $x$, the clean objective and noise distribution remain the
+same, but the realized perturbation can differ:
+
+\begin{equation}
+f_{\mathrm{noise}}^{(i)}(x)
+=
+f_{\mathrm{clean}}(x) + z_i,
+\qquad
+z_i \overset{\mathrm{i.i.d.}}{\sim}
+\mathcal{N}
+\left(
+0,
+\left(
+\sigma
+\left|
+f_{\mathrm{clean}}(x)-f^*
+\right|
+\right)^2
+\right).
+\label{eq:independent_noise_realizations}
+\end{equation}
+
+Thus, the same coordinate can produce different fitness observations on
+different calls. The generated optimizer consequently has to make its search
+decisions using stochastic observations rather than a deterministic
+transformation of the search space. This can affect algorithms that rely on
+direct fitness comparisons, ranking, selection, or changes in objective
+values. For example, two points with similar clean objective values can be
+temporarily ranked in the opposite order because of a particular noise
+realization.
+
+The random-number generation used by the objective wrapper is kept separate
+from the clean objective calculation. Reproducibility of stochastic
+experiments is obtained through the configured random-seed policy. The exact
+seed values and run-level seed configuration are reported in
+Chapter~\ref{chap:experiments}, while the present section defines the
+sampling rule applied to each objective query.
+
+The clean objective is nevertheless retained by the evaluation framework.
+After an algorithm has completed its search, the returned solution is
+evaluated using the clean objective rather than the noisy fitness observed
+during the optimization run. For a returned solution
+$x_{\mathrm{best}}$, the clean optimality gap is defined as
+
+\begin{equation}
+\Delta f(x_{\mathrm{best}})
+=
+\left|
+f_{\mathrm{clean}}(x_{\mathrm{best}})
+-
+f^*
+\right|.
+\label{eq:clean_optimality_gap}
+\end{equation}
+
+This value provides a direct measure of the quality of the returned solution
+with respect to the underlying optimization problem. It is not exposed to
+the optimizer during its execution. The clean diagnostic evaluation is
+performed outside the objective evaluation budget available to the generated
+optimizer and therefore does not provide an additional fitness observation
+during the search.
+
+This separation between the fitness used for search and the clean objective
+used for final assessment is important for the experimental design. A
+favorable random fitness realization should not by itself be interpreted as
+evidence that an algorithm has found a better solution. Instead, the returned
+solution is assessed after the search using the underlying clean objective.
+The stochastic environment therefore changes the information available to
+the optimizer while leaving the optimization problem and the final
+assessment criterion unchanged.
+
+%------------------------------------------------------------------------------
+\subsection{Illustration of the Noise Models}
+\label{subsec:noise_model_illustration}
+%------------------------------------------------------------------------------
+
+The difference between the two noise formulations becomes clearer when they
+are considered on benchmark functions with different objective structures.
+The Rosenbrock function $f_8$ contains a narrow curved valley and provides a
+useful example for examining how the noise magnitude changes between
+different regions of the search space \cite{Hansen2010}. Under the
+homoscedastic model, the calibrated landscape scale determines one fixed
+standard deviation for the complete function. A point near the optimum and a
+point far from the optimum therefore receive perturbations with the same
+absolute standard deviation.
+
+The heteroscedastic formulation behaves differently. Its standard deviation
+is determined by the clean objective gap at the queried point. Regions with
+larger objective gaps consequently receive larger perturbations, whereas
+points closer to the optimum receive smaller perturbations. The noise
+magnitude therefore changes with the optimization state rather than remaining
+constant across the function.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{images/f8/figure_1d_noise_cross_section.png}
+
+    \vspace{0.4cm}
+
+    \includegraphics[width=\textwidth]{images/f8/figure_2d_noise_topology.png}
+
+    \caption{Illustration of stochastic distortion on BBOB $f_8$
+    (Rosenbrock). The one-dimensional cross-section (top) and two-dimensional
+    contours (bottom) compare the clean objective with noisy evaluations.
+    The optimality-gap model changes the noise magnitude according to the
+    objective gap, resulting in smaller perturbations as the search
+    approaches the optimum.}
+    \label{fig:f8_noise_distortion}
+\end{figure}
+
+The second example is BBOB $f_{21}$, the Gallagher 101-peaks function. In
+contrast to the narrow valley of $f_8$, this function contains many peaks
+and a highly irregular multimodal structure. It therefore provides a
+different setting in which stochastic fitness can affect the ranking of
+candidate points and consequently influence search decisions.
+
+For the homoscedastic model, the same calibrated standard deviation is again
+used throughout the search space. The perturbation magnitude is therefore
+determined by the overall scale estimated during calibration and does not
+change according to the objective value of an individual peak or valley.
+The heteroscedastic model instead assigns the perturbation according to the
+clean objective gap at each queried point. Consequently, regions with larger
+objective gaps can exhibit greater variation in their observed fitness,
+while the magnitude of the perturbation decreases as the search approaches
+the global optimum.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{images/f21/figure_1d_noise_cross_section.png}
+
+    \vspace{0.4cm}
+
+    \includegraphics[width=\textwidth]{images/f21/figure_2d_noise_topology.png}
+
+    \caption{Illustration of stochastic distortion on BBOB $f_{21}$
+    (Gallagher 101-peaks). The one-dimensional cross-section (top) and
+    two-dimensional representation (bottom) illustrate the effect of
+    stochastic objective evaluations on the multimodal function. The
+    optimality-gap formulation changes the perturbation magnitude according
+    to the clean objective gap while leaving the underlying benchmark
+    function unchanged.}
+    \label{fig:f21_noise_distortion}
+\end{figure}
+
+These examples illustrate the reason for using the heteroscedastic model in
+the final methodology. The homoscedastic formulation provides a noise level
+that is calibrated to the overall scale of each problem, but it does not
+reflect how the remaining optimization error changes across the search.
+The heteroscedastic formulation instead ties the perturbation magnitude
+directly to the clean optimality gap. It therefore preserves the underlying
+benchmark function while allowing the uncertainty observed by the optimizer
+to change with its position relative to the optimum.
+
+The two models consequently represent different assumptions about stochastic
+fitness. The homoscedastic model treats the absolute noise scale as constant
+within a problem, whereas the heteroscedastic model makes the scale depend
+on the current objective gap. The latter formulation is used in the
+experiments because the study is concerned with the behavior of generated
+algorithms when the reliability of fitness information changes during the
+optimization process.
+
 
 %==============================================================================
 \section{LLM-Based Algorithm Synthesis}
@@ -121,7 +517,7 @@ synthesis run terminates.
 
 \begin{figure}[htbp]
 \centering
-\resizebox{\textwidth}{!}{%
+\resizebox{!}{0.9\textheight}{%
 \input{figures/evolutionary_aad_loop}
 }
 \caption{Detailed view of the LLaMEA-based algorithm synthesis process used
@@ -342,339 +738,6 @@ value as the final quality criterion; instead, it evaluates the returned
 \texttt{best\_x} independently using the clean objective as described in
 Section~\ref{subsec:clean_diagnostic}.
 
-
-%==============================================================================
-\section{Stochastic Fitness Evaluation}
-\label{sec:stochastic_evaluation}
-%==============================================================================
-
-The main adaptation introduced in this thesis is the stochastic objective
-evaluation used during candidate execution. The generated optimizer does not
-receive direct access to the analytical form of the benchmark function or to
-its optimum. Instead, it interacts with an objective interface that returns
-one scalar value for each queried point.
-
-The objective interface can operate in either deterministic or stochastic
-mode. In deterministic mode, the value returned to the optimizer corresponds
-directly to the underlying clean objective. In stochastic mode, an
-independent random perturbation is added to each objective query.
-
-This design allows the same underlying optimization problem to be evaluated
-under different fitness conditions without changing the benchmark function
-itself. The stochasticity is introduced at the interface between the
-generated optimizer and the objective rather than by modifying the
-optimization algorithm directly.
-
-The objective wrapper therefore has two logically distinct responsibilities.
-First, it evaluates the clean benchmark objective at the requested point.
-Second, when stochastic mode is enabled, it transforms that clean value into
-the fitness observation returned to the generated optimizer. The clean
-objective remains available to the surrounding evaluation framework but is
-not exposed as an additional information channel to the optimizer.
-
-%------------------------------------------------------------------------------
-\subsection{Deterministic and Stochastic Evaluation}
-\label{subsec:deterministic_stochastic}
-%------------------------------------------------------------------------------
-
-Let $f_{\mathrm{clean}}(x)$ denote the underlying benchmark objective
-function for a candidate solution $x \in \mathbb{R}^{D}$. Let $x^*$ denote a
-global optimum in the search space, and let
-
-\begin{equation}
-f^*
-=
-f_{\mathrm{clean}}(x^*)
-\end{equation}
-
-denote the corresponding optimal objective value. The value $f^*$ is used
-internally by the evaluation wrapper to determine the scale of the
-heteroscedastic noise. It is not exposed to the generated optimizer.
-
-For deterministic evaluation, the interface returns the clean objective
-value,
-
-\begin{equation}
-f_{\mathrm{noise}}(x)
-=
-f_{\mathrm{clean}}(x),
-\end{equation}
-
-which corresponds to the standard noiseless BBOB setting.
-
-For stochastic evaluation, the returned value is instead given by
-
-\begin{equation}
-f_{\mathrm{noise}}(x)
-=
-f_{\mathrm{clean}}(x) + z,
-\label{eq:stochastic_objective}
-\end{equation}
-
-where the perturbation is sampled independently for each objective query.
-The standard deviation of the perturbation is scaled by the clean
-optimality gap,
-
-\begin{equation}
-z
-\sim
-\mathcal{N}
-\left(
-0,
-\left(
-\sigma
-\left|
-f_{\mathrm{clean}}(x)-f^*
-\right|
-\right)^2
-\right).
-\label{eq:proportional_gaussian_noise}
-\end{equation}
-
-Equivalently, the dynamic standard deviation at a queried point is
-
-\begin{equation}
-\sigma_{\mathrm{dynamic}}(x)
-=
-\sigma
-\left|
-f_{\mathrm{clean}}(x)-f^*
-\right|.
-\label{eq:dynamic_noise_std}
-\end{equation}
-
-For $\sigma=0$, the stochastic term vanishes and the interface becomes
-deterministic. For positive values of $\sigma$, the magnitude of the
-perturbation changes with the current objective gap. The optimum and clean
-objective are used internally by the evaluation wrapper to construct this
-noise, but they are not exposed to the generated optimizer.
-
-The use of the optimality gap rather than the raw objective value is
-important because the same optimization problem can be shifted vertically
-without changing its optimization structure. If noise were scaled directly
-by the raw objective value, such a shift could change the magnitude of the
-noise without changing the underlying optimization problem. Scaling by
-$|f_{\mathrm{clean}}(x)-f^*|$ instead relates the stochastic perturbation to
-the remaining optimization error.
-
-The noise model used in this thesis therefore produces a heteroscedastic
-objective: the magnitude of the perturbation depends on the objective gap.
-This property is useful for studying optimization behavior because the
-relative uncertainty changes as the optimizer approaches the optimum. An
-algorithm can consequently experience different levels of stochastic
-variation during different stages of its search.
-
-For illustration, consider a point with an objective gap of approximately
-$10^3$ and an illustrative noise parameter of $\sigma=0.1$. The dynamic
-standard deviation is then
-
-\begin{equation}
-\sigma_{\mathrm{dynamic}}
-=
-0.1\cdot10^3
-=
-10^2.
-\label{eq:f8_dynamic_std_boundary}
-\end{equation}
-
-If another point has an objective gap of approximately $10^1$, the
-corresponding standard deviation becomes
-
-\begin{equation}
-\sigma_{\mathrm{dynamic}}
-=
-0.1\cdot10^1
-=
-10^0.
-\label{eq:f8_dynamic_std_valley}
-\end{equation}
-
-These values are used only to illustrate the scaling behavior of the noise
-model. The experimental noise settings are defined separately in
-Chapter~\ref{chap:experiments}.
-
-%------------------------------------------------------------------------------
-\subsection{Illustration of the Noise Model}
-\label{subsec:noise_model_illustration}
-%------------------------------------------------------------------------------
-
-The behavior of the noise scaling is illustrated using two BBOB functions
-with different landscape structures. The first example is the Rosenbrock
-function $f_8$, which contains a narrow curved valley. This structure makes
-it useful for illustrating how the magnitude of the stochastic perturbation
-changes between regions with different objective gaps
-\cite{Hansen2010}.
-
-The equations above show that a point with a larger objective gap receives a
-larger perturbation, while a point with a smaller objective gap receives a
-smaller perturbation. The scaling therefore depends on the objective gap and
-not directly on the Euclidean distance of a point from the optimum.
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{images/f8/figure_1d_noise_cross_section.png}
-
-    \vspace{0.4cm}
-
-    \includegraphics[width=\textwidth]{images/f8/figure_2d_noise_topology.png}
-
-    \caption{Illustration of stochastic distortion on BBOB $f_8$
-    (Rosenbrock). The one-dimensional cross-section (top) and two-dimensional
-    contours (bottom) compare the clean objective with noisy evaluations.
-    The optimality-gap model changes the noise magnitude according to the
-    objective gap, resulting in smaller perturbations as the search approaches
-    the optimum.}
-    \label{fig:f8_noise_distortion}
-\end{figure}
-
-A second example is provided by BBOB $f_{21}$, the Gallagher 101-peaks
-function. Unlike the narrow-valley structure of $f_8$, this function contains
-many peaks and a highly irregular multimodal structure. It therefore provides
-a different setting in which stochastic fitness can influence the ranking of
-candidate points and consequently affect search decisions.
-
-The noise model does not change the underlying clean function. Instead, each
-query produces a noisy fitness value with a perturbation whose standard
-deviation depends on the clean objective gap. Consequently, regions with
-larger objective gaps can exhibit larger variation in their noisy fitness
-values, while the magnitude of the perturbation decreases as the search
-approaches the global optimum.
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{images/f21/figure_1d_noise_cross_section.png}
-
-    \vspace{0.4cm}
-
-    \includegraphics[width=\textwidth]{images/f21/figure_2d_noise_topology.png}
-
-    \caption{Illustration of stochastic distortion on BBOB $f_{21}$
-    (Gallagher 101-peaks). The one-dimensional cross-section (top) and
-    two-dimensional representation (bottom) illustrate the effect of
-    stochastic objective evaluations on the multimodal function. The
-    optimality-gap formulation changes the perturbation magnitude according
-    to the clean objective gap while leaving the underlying benchmark
-    function unchanged.}
-    \label{fig:f21_noise_distortion}
-\end{figure}
-
-The use of two functions with different structures is intended to illustrate
-that the stochastic evaluation mechanism is not tied to one particular
-landscape shape. The noise is applied through the same objective wrapper,
-while the resulting noisy fitness values depend on the clean objective
-values of the function being evaluated.
-
-%------------------------------------------------------------------------------
-\subsection{Independent Objective Realizations}
-\label{subsec:independent_noise_realizations}
-%------------------------------------------------------------------------------
-
-Every objective query receives a new stochastic realization. The same
-stochastic objective model is therefore used for all queries, while the
-random perturbation $z$ is independently sampled for each query. For the
-same coordinate $x$, two evaluations can consequently return different noisy
-fitness values,
-
-\begin{equation}
-f_{\mathrm{noise}}^{(i)}(x)
-=
-f_{\mathrm{clean}}(x) + z_i,
-\qquad
-z_i \overset{\mathrm{i.i.d.}}{\sim}
-\mathcal{N}
-\left(
-0,
-\left(
-\sigma
-\left|
-f_{\mathrm{clean}}(x)-f^*
-\right|
-\right)^2
-\right).
-\label{eq:independent_noise_realizations}
-\end{equation}
-
-Thus, repeated queries at the same point can return different noisy fitness
-values, even though the underlying clean objective and the stochastic
-objective model remain unchanged.
-
-The random realization is associated with the objective query rather than
-with the candidate coordinate itself. Consequently, the stochastic
-evaluation does not behave as a deterministic transformation of the search
-space in which each coordinate has one permanently assigned noisy value.
-Instead, the same coordinate can produce different observations on
-different calls.
-
-The random-number generation used by the objective wrapper is kept separate
-from the clean objective calculation. Reproducibility of stochastic
-experiments is obtained through the experiment's configured random-seed
-policy. The exact seed values and run-level seed configuration are reported
-in Chapter~\ref{chap:experiments}, while the present chapter defines the
-sampling rule applied to each objective query.
-
-The generated optimizer therefore has to operate on repeated noisy fitness
-values rather than on a deterministic function with a modified scale. This
-can affect algorithms that rely strongly on direct fitness comparisons,
-ranking, selection, or changes in the returned objective values.
-
-For example, if two candidate points have similar clean objective values, a
-stochastic realization can temporarily reverse their ranking. A generated
-optimizer that reacts immediately to such rankings may therefore make a
-different search decision than it would under deterministic evaluation.
-Repeated fitness values can similarly affect algorithms that estimate
-progress from differences between successive objective values.
-
-The stochastic environment thus changes the information available to the
-optimizer without changing the underlying optimization problem. This
-distinction is important for the experimental analysis because the objective
-function itself remains fixed while the fitness values available during
-search vary between objective queries.
-
-%------------------------------------------------------------------------------
-\subsection{Clean Diagnostic Evaluation}
-\label{subsec:clean_diagnostic}
-%------------------------------------------------------------------------------
-
-The evaluation framework nevertheless retains the clean objective
-internally. After an algorithm has completed its search, the returned
-solution is evaluated using the clean objective rather than the particular
-noisy fitness value returned during the final stochastic query.
-
-For a returned solution $x_{\mathrm{best}}$, the clean optimality gap is
-defined as
-
-\begin{equation}
-\Delta f(x_{\mathrm{best}})
-=
-\left|
-f_{\mathrm{clean}}(x_{\mathrm{best}})
--
-f^*
-\right|.
-\label{eq:clean_optimality_gap}
-\end{equation}
-
-This value provides a direct measure of the actual quality of the solution
-returned by the generated optimizer. It is not exposed to the optimizer
-during its execution.
-
-The separation between the noisy fitness used during optimization and the
-clean diagnostic objective is central to the methodology. The generated
-algorithm has to make its search decisions using only the information
-available through the stochastic objective interface. The synthesis
-framework can then determine how good the resulting solution actually is
-using the underlying clean objective.
-
-This separation also prevents a favorable random fitness realization from
-being interpreted as direct evidence that a candidate algorithm has produced
-a better solution. The returned point is instead assessed according to its
-clean objective value after the optimization run has finished.
-
-The clean diagnostic evaluation is performed outside the objective
-evaluation budget available to the generated optimizer. In other words, the
-post-execution calculation of $f_{\mathrm{clean}}(x_{\mathrm{best}})$ is a
-diagnostic operation performed by the evaluation framework and is not
-presented to the generated optimizer as an additional objective observation.
 
 %==============================================================================
 \section{Candidate Selection and Evolutionary Update}
