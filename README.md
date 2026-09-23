@@ -1,127 +1,152 @@
 # LLaMEA Noisy BBOB Optimization Algorithm Evolution
 
-This repository implements a framework to automatically evolve novel, continuous black-box optimization algorithms tailored to handle additive Gaussian noise on BBOB (Black-Box Optimization Benchmarking) landscapes using LLaMEA (Large Language Model Evolutionary Algorithm).
+`aad-llm` is a research framework for automated algorithm discovery. It uses
+[LLaMEA](https://github.com/XuYuey/LLM-Evolutionary-Algorithm) to evolve Python
+implementations of continuous black-box optimizers, evaluates them on BBOB
+(Black-Box Optimization Benchmarking) functions with configurable noise, and
+then independently compares discovered champions with classical optimizers.
 
-The evolution experiments run either locally or on remote HPC cluster environments, using a unified definition of task prompts, noise injection layers, and evaluation routines.
+The project is notebook-first: configure an experimental matrix, synthesize
+candidate algorithms with an LLM, benchmark saved champions, and analyse the
+resulting traces statistically.
 
-## Installation & Setup
+## What happens in an experiment
 
-We support two tracks for environment setup and execution: **Local Development (with `uv`)** and **Jupyter Server / Standard Python (with shell scripts)**.
+```text
+Experiment configuration
+  -> LLM generates or improves an optimizer implementation
+  -> candidate executes in a guarded evaluation harness
+  -> returned solution is validated and scored on the clean BBOB objective
+  -> code and iteration telemetry are persisted
+  -> best champion is independently benchmarked against CMA-ES, DE, and PSO
+  -> ECDF metrics, hypothesis tests, and figures are produced
+```
 
----
+Generated algorithms receive only a black-box objective function, an evaluation
+budget, and the problem dimension. The evaluator validates the returned point's
+shape and bounds, then re-evaluates it on the un-noised objective. This makes
+selection depend on the true quality of the returned solution rather than a
+lucky noisy observation or a self-reported fitness value.
 
-### Track A: Local Development (with `uv`)
-Use this track if you are running locally and have [uv](https://github.com/astral-sh/uv) installed.
+## Quick start
 
-1. **Install Dependencies:**
-   ```bash
-   uv sync --all-extras
-   ```
-2. **Run Jupyter Notebook:**
-   ```bash
-   uv run jupyter notebook
-   ```
-3. **Trigger database migrations (if needed):**
-   ```bash
-   poe migrate
-   ```
+Requirements: Python 3.11–3.13 and either `uv` (recommended) or a standard
+Python environment. A configured LLM provider is also required for synthesis.
 
----
+### Local development with `uv`
 
-### Track B: Jupyter Server / Standard Python (with shell scripts)
-Use this track if you are running on a remote Jupyter Server, custom Conda environment, or don't use `uv`.
-
-1. **Install Dependencies & Configure Environment:**
-   Run the dedicated script which automatically checks/creates your `.env` configuration file, checks/syncs dependencies, and installs all packages using your active environment's `pip` or `uv`:
-   ```bash
-   bash scripts/env.sh
-   ```
-2. **Run Jupyter Notebook:**
-   ```bash
-   jupyter notebook
-   ```
-
----
-
-## Running the Notebooks
-Open your Jupyter interface and navigate to the `notebooks/` directory to run code:
-* [notebooks/01_noise.ipynb](notebooks/01_noise.ipynb) — BBOB problem noise landscape analysis and heteroscedastic noise modeling.
-* [notebooks/02_synthesis.ipynb](notebooks/02_synthesis.ipynb) — Parallel LLaMEA evolutionary synthesis pipeline across problem benchmark matrix.
-* [notebooks/03_evaluation.ipynb](notebooks/03_evaluation.ipynb) — Multi-trial benchmark evaluations for discovered champions and classical baselines.
-* [notebooks/04_audit.ipynb](notebooks/04_audit.ipynb) — Experimental matrix coverage, gap detection, and two-tier audit dashboard.
-* [notebooks/05_analysis.ipynb](notebooks/05_analysis.ipynb) — Non-parametric statistical hypothesis testing and thesis publication figures.
-
-
-## Starting the Local Model Server
-
-To run the optimization pipeline locally without relying on external APIs or tools like LMStudio, this project includes a built-in automated LLM server (powered by `llama.cpp` and `huggingface_hub`).
-
- 1. **Install Dependencies**:
-    ```bash
-      bash scripts/env.sh
-     ```
- 2. **Start the Server**:
-    ```bash
-    bash scripts/llm.sh start
-   ```
-
-**Changing the Model**: By default, the system uses the `qwen2.5-coder-1.5b-instruct-q4_k_m.gguf` model. To use a different model, edit the variables in your `.env` file or use `bash scripts/llm.sh download`. 
-For a complete explanation of configuration variables and ready-to-use presets, refer to [docs/MODEL_CONFIGURATION.md](docs/MODEL_CONFIGURATION.md).
-
-## Running Experiments
-
-### Notebook-Driven Execution
-All experiment execution and analysis are driven interactively from Jupyter Notebooks. The legacy command-line script entrypoint (`src/main.py`) has been removed. 
-
-1. Launch Jupyter Notebook:
-   ```bash
-   uv run jupyter notebook
-   ```
-2. Open and run the evolution notebooks sequentially in `notebooks/`.
-
-## Database Migrations
-We use a relational SQLite database schema with a split-storage strategy (storing lightweight metadata in SQLite and saving heavy Python code files as disk blobs). 
-
-If you make modifications to the data schemas, you can trigger database initialization or schema migrations directly from the command line:
 ```bash
-# Run the interactive database management CLI
-bash scripts/db.sh
+uv sync --all-extras
+uv run jupyter notebook
+```
 
-# Or execute a command directly (e.g. upgrade, status, reset)
+### Standard Python or remote Jupyter server
+
+```bash
+bash scripts/env.sh
+jupyter notebook
+```
+
+Open the notebooks in the order below. The synthesis configuration has a large
+default experiment matrix and a nominal one-million-evaluation candidate budget;
+adjust `configs/synthesis.toml` before running a quick experiment.
+
+## Notebook workflow
+
+1. [01_noise.ipynb](notebooks/01_noise.ipynb) — inspect BBOB landscapes and
+   heteroscedastic noise behaviour.
+2. [02_synthesis.ipynb](notebooks/02_synthesis.ipynb) — run LLaMEA synthesis
+   campaigns across the configured problem matrix.
+3. [03_evaluation.ipynb](notebooks/03_evaluation.ipynb) — independently run
+   champions and classical baselines over repeated trials.
+4. [04_audit.ipynb](notebooks/04_audit.ipynb) — audit matrix coverage, pending
+   work, failures, and resumable runs.
+5. [05_analysis.ipynb](notebooks/05_analysis.ipynb) — perform non-parametric
+   statistical analysis and create thesis/publication figures.
+
+## Configuration
+
+| File | Purpose |
+| --- | --- |
+| `configs/synthesis.toml` | Synthesis matrix, noise conditions, prompt strategies, budgets, retries, and process concurrency. |
+| `configs/benchmark.toml` | Independent trial count, evaluation budget multiplier, timeout, and classical baselines. |
+| `configs/problems.toml` | BBOB problem descriptions and groupings. |
+| `configs/llms.toml` | Available local-model presets. |
+| `.env` | Active LLM provider and local model/server settings. |
+
+The default synthesis matrix covers BBOB functions 1, 8, 11, 15, and 21 across
+2D, 3D, 5D, and 10D; clean and heteroscedastic-noise conditions; explicit and
+implicit prompts; and several prompt strategies.
+
+## LLM providers and local server
+
+The LLM client supports configured providers, including OpenAI-compatible APIs
+and local model servers. To use the bundled `llama.cpp` workflow:
+
+```bash
+bash scripts/env.sh
+bash scripts/llm.sh start
+```
+
+Use `bash scripts/llm.sh` for the available model-server and model-download
+commands. See [model configuration](docs/configuration/model_configuration.md)
+for provider settings and presets.
+
+## Persistence, recovery, and maintenance
+
+- SQLite metadata is stored at `data/db.sqlite3` by default.
+- Generated candidate source files and evolution checkpoint state are stored
+  beneath `data/`.
+- Synthesis checkpoints support warm-starting interrupted experiments; completed
+  sessions clean up their checkpoint archive.
+- Benchmark traces and analysis outputs are written under `results/`.
+
+Manage the database or migration state with:
+
+```bash
+bash scripts/db.sh
 bash scripts/db.sh upgrade
 ```
 
-## Cleaning Artifacts & Logs
-To safely clean generated code artifacts, evolution state archives, or log files:
+Clean generated artifacts and logs with:
+
 ```bash
 bash scripts/clean.sh
 ```
 
-## Project Structure
+## Project layout
 
-- `pyproject.toml` — Dependency and packaging configuration.
-- `.env` — Local environment variables and model configuration.
-- `docs/` — Documentation:
-  - [MODEL_CONFIGURATION.md](docs/MODEL_CONFIGURATION.md) — Guide to configuring custom models and quantizations.
-- `notebooks/` — Jupyter notebooks:
-  - `01_noise.ipynb` — BBOB problem noise landscape analysis and heteroscedastic noise modeling.
-  - `02_synthesis.ipynb` — Parallel LLaMEA evolutionary synthesis pipeline across problem benchmark matrix.
-  - `03_evaluation.ipynb` — Multi-trial benchmark evaluations for discovered champions and classical baselines.
-  - `04_audit.ipynb` — Experimental matrix coverage, gap detection, and two-tier audit dashboard.
-  - `05_analysis.ipynb` — Non-parametric statistical hypothesis testing and thesis publication figures.
-- `scripts/` — Execution and orchestration scripts:
-  - `env.sh` — Initializes environment, checks env vars, and syncs dependencies via uv.
-  - `llm.sh` — Interactive CLI for model serving, downloading, listing, and cache cleanup.
-  - `db.sh` — Interactive CLI to manage database schema migrations, table truncation, and DB status.
-  - `clean.sh` — Interactive CLI to safely clean generated file artifacts and log files.
-- `src/` — Source code library:
-  - `llm/` — LLM provider bindings (`client.py`) and prompt constants (`prompts.py`).
-  - `problems/` — Additive Gaussian noise wrapper around BBOB functions (`bbob.py`).
-  - `core/` — Sandbox execution (`evaluator.py`, `executor.py`) and evolutionary runner (`runner.py`).
-  - `schema/` — Pydantic models and data schemas.
-  - `storage/` — Results summary persistence/loading, SQLite relational mapper, and code blob writer.
-- `data/` — Storage folder for runtime files:
-  - `db.sqlite3` — The relational SQLite database file storing experiment metrics.
-  - `code/` — Evolved python scripts containing the generated optimization algorithms.
-- `logs/` — Execution logs and model server outputs.
+```text
+src/
+  evolution/       LLM-driven algorithm synthesis: domain rules, campaigns,
+                   LLaMEA adapter, BBOB/noise adapter, prompt construction,
+                   and synthesis persistence
+  benchmarking/    champion/baseline evaluation, trace processing, ECDF and
+                   statistical analysis services
+  shared/          configuration, SQLite infrastructure, and guarded dynamic
+                   algorithm execution
+notebooks/         interactive research workflow
+configs/           synthesis, benchmark, problem, and LLM settings
+data/              SQLite database, generated code, and checkpoints
+results/           benchmark traces, tables, and figures
+scripts/           environment, model-server, database, and cleanup helpers
+tests/             unit and integration tests
+docs/              architecture and methodology documentation
+```
 
+## Testing and quality checks
+
+```bash
+uv run pytest
+uv run ruff check .
+```
+
+If Poe the Poet is installed, the equivalent project tasks are `poe test`,
+`poe lint`, and `poe check`.
+
+## Further documentation
+
+- [System architecture](docs/architecture/system_architecture.md)
+- [Execution and recovery flow](docs/architecture/execution_flow.md)
+- [LLaMEA adapter architecture](docs/architecture/llamea_architecture.md)
+- [Evaluator methodology](docs/evaluator_methodology.md)
