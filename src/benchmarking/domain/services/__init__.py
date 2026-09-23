@@ -15,6 +15,7 @@ from benchmarking.domain.services.hypothesis import (
 from benchmarking.domain.services.performance import (
     PerformanceMetricsEngine,
 )
+from benchmarking.domain.services.reliability import ReliabilityEngine
 from benchmarking.domain.services.resolvers import (
     CLASSICAL_SOLVERS_MAP,
     KNOWN_STRATEGIES,
@@ -40,4 +41,5 @@ __all__ = [
     "HypothesisTestingEngine",
     "EcdfConvergenceEngine",
     "PerformanceMetricsEngine",
+    "ReliabilityEngine",
 ]

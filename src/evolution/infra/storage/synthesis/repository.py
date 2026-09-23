@@ -47,6 +47,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
         prompt_strategy: PromptStrategy = PromptStrategy.BASELINE,
         budget: int = 1_000_000,
         max_iterations: int = 10,
+        synthesis_seed: int | None = None,
     ) -> int:
         with self.SessionLocal() as session:
             experiment = ExperimentORM(
@@ -60,6 +61,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
                 noise_model=problem.noise_model,
                 budget=budget,
                 max_iterations=max_iterations,
+                synthesis_seed=synthesis_seed,
                 true_optimum=problem.true_optimum,
                 status="running",
                 started_at=datetime.now(timezone.utc).isoformat(),
@@ -272,6 +274,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
             prompt_strategy=PromptStrategy(exp.prompt_strategy) if exp.prompt_strategy else PromptStrategy.BASELINE,
             budget=exp.budget,
             max_iterations=exp.max_iterations,
+            synthesis_seed=exp.synthesis_seed,
             id=exp.id,
             status=exp.status,
             started_at=exp.started_at,

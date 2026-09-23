@@ -14,6 +14,7 @@ import pandas as pd
 from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
 from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
 from benchmarking.domain.services.performance import PerformanceMetricsEngine
+from benchmarking.domain.services.reliability import ReliabilityEngine
 from benchmarking.domain.services.resolvers import resolve_folder_solver_name
 from benchmarking.domain.vos import EvaluationDataset, RunTrace
 from benchmarking.infra.io.trace_repository import IOHTraceReader
@@ -93,12 +94,14 @@ class StatisticalEvaluationService:
         hypothesis_engine: HypothesisTestingEngine | None = None,
         ecdf_engine: EcdfConvergenceEngine | None = None,
         performance_engine: PerformanceMetricsEngine | None = None,
+        reliability_engine: ReliabilityEngine | None = None,
     ):
         self.sqlite_repo = sqlite_repo
         self.trace_repo = trace_repo or IOHTraceReader()
         self.hypothesis_engine = hypothesis_engine or HypothesisTestingEngine()
         self.ecdf_engine = ecdf_engine or EcdfConvergenceEngine()
         self.performance_engine = performance_engine or PerformanceMetricsEngine()
+        self.reliability_engine = reliability_engine or ReliabilityEngine()
 
     @classmethod
     def create_standard(
@@ -113,6 +116,61 @@ class StatisticalEvaluationService:
             hypothesis_engine=HypothesisTestingEngine(),
             ecdf_engine=EcdfConvergenceEngine(),
             performance_engine=PerformanceMetricsEngine(),
+            reliability_engine=ReliabilityEngine(),
+        )
+
+    def discover_reliability_models(self, benchmark_data: EvaluationDataset) -> list[str]:
+        """Return every LLM represented by the loaded benchmark traces."""
+        return self.reliability_engine.discover_models(benchmark_data)
+
+    def compute_reliability_table(
+        self,
+        benchmark_data: EvaluationDataset,
+        primary_threshold: float = 1e-8,
+        secondary_threshold: float = 1e-2,
+        expected_trials: int = 20,
+    ) -> pd.DataFrame:
+        """Compute fixed-target champion reliability by model and benchmark condition."""
+        return self.reliability_engine.compute_reliability_table(
+            benchmark_data, primary_threshold, secondary_threshold, expected_trials
+        )
+
+    def compute_aggregate_reliability(
+        self,
+        reliability_table: pd.DataFrame,
+        primary_strategy: str = "baseline",
+        bootstrap_samples: int = 1000,
+        bootstrap_seed: int = 20260923,
+    ) -> pd.DataFrame:
+        """Aggregate only complete primary-strategy conditions per model."""
+        return self.reliability_engine.compute_aggregate_reliability(
+            reliability_table, primary_strategy, bootstrap_samples, bootstrap_seed
+        )
+
+    def compute_fixed_target_attainment_band(
+        self,
+        runs: list[RunTrace],
+        eval_grid: np.ndarray,
+        threshold: float = 1e-8,
+        bootstrap_samples: int = 1000,
+        bootstrap_seed: int = 20260923,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute a fixed-target attainment curve with a 95% bootstrap band."""
+        return self.reliability_engine.compute_attainment_band(
+            runs, eval_grid, threshold, bootstrap_samples, bootstrap_seed
+        )
+
+    def compute_reliability_checkpoints(
+        self,
+        benchmark_data: EvaluationDataset,
+        checkpoint_fractions: list[float],
+        budget_multiplier: int,
+        threshold: float = 1e-8,
+        primary_strategy: str = "baseline",
+    ) -> pd.DataFrame:
+        """Compute fixed-target attainment at each configured budget checkpoint."""
+        return self.reliability_engine.compute_checkpoint_table(
+            benchmark_data, checkpoint_fractions, budget_multiplier, threshold, primary_strategy
         )
 
 
@@ -424,4 +482,3 @@ class StatisticalEvaluationService:
             output_path=output_path,
             **kwargs,
         )
-

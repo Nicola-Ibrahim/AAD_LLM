@@ -37,6 +37,10 @@ class ExperimentSummary(DomainEntity):
         description="Maximum synthesis iterations set for the experiment run.",
         examples=[10, 20],
     )
+    synthesis_seed: int | None = Field(
+        default=None,
+        description="Seed assigned to this independent synthesis replicate.",
+    )
     status: str = Field(
         default="running",
         description="Current lifecycle status of the experiment: running, completed, or failed.",
@@ -97,6 +101,7 @@ class ExperimentSummary(DomainEntity):
         prompt_strategy: PromptStrategy = PromptStrategy.BASELINE,
         budget: int | None = None,
         max_iterations: int | None = None,
+        synthesis_seed: int | None = None,
         started_at: str | None = None,
     ) -> "ExperimentSummary":
         """Factory to initialize a new active ExperimentSummary aggregate."""
@@ -107,6 +112,7 @@ class ExperimentSummary(DomainEntity):
             prompt_strategy=prompt_strategy,
             budget=budget,
             max_iterations=max_iterations,
+            synthesis_seed=synthesis_seed,
             status="running",
             started_at=started_at or datetime.now(timezone.utc).isoformat(),
             problem=problem,

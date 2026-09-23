@@ -20,3 +20,20 @@ force_rerun = false
 
 # Classical Baselines evaluated on identical benchmark problems
 classical_baselines = ["cmaes", "de", "pso"]
+
+# ==============================================================================
+# Fixed-target LLM reliability analysis (Notebooks 03 and 05)
+# ==============================================================================
+[benchmarking.reliability]
+# Only this common strategy enters the headline LLM comparison. Other strategies
+# remain available as a separately labelled ablation.
+primary_prompt_strategy = "baseline"
+primary_target = 1e-8
+secondary_target = 1e-2
+bootstrap_samples = 1000
+bootstrap_seed = 20260923
+checkpoint_fractions = [0.01, 0.1, 0.5, 1.0]
+# Models are derived from completed result folders/database records, so future
+# LLMs appear automatically. Missing conditions are never scored as failures.
+discover_models = true
+incomplete_condition_policy = "exclude"

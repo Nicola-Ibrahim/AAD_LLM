@@ -7,6 +7,19 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class ReliabilityConfig(BaseModel):
+    """Fixed, reproducible settings for LLM champion reliability analysis."""
+
+    primary_prompt_strategy: str = "baseline"
+    primary_target: float = Field(default=1e-8, gt=0.0)
+    secondary_target: float = Field(default=1e-2, gt=0.0)
+    bootstrap_samples: int = Field(default=1000, ge=100)
+    bootstrap_seed: int = 20260923
+    checkpoint_fractions: list[float] = Field(default_factory=lambda: [0.01, 0.1, 0.5, 1.0])
+    discover_models: bool = True
+    incomplete_condition_policy: str = "exclude"
+
+
 class EvaluationConfig(BaseModel):
     """Strongly-typed application configuration for multi-trial benchmarking campaigns.
 
@@ -56,6 +69,7 @@ class EvaluationConfig(BaseModel):
         default_factory=dict,
         description="Raw benchmark section dictionary from TOML.",
     )
+    reliability: ReliabilityConfig = Field(default_factory=ReliabilityConfig)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

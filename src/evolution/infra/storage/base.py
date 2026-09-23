@@ -39,6 +39,7 @@ class SynthesisRepository(ABC):
         prompt_strategy: PromptStrategy = PromptStrategy.BASELINE,
         budget: int = 1_000_000,
         max_iterations: int = 10,
+        synthesis_seed: int | None = None,
     ) -> int:
         """Creates the experiment DB row and returns its id."""
         pass

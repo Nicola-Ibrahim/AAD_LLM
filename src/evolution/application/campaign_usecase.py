@@ -485,6 +485,7 @@ class SynthesisCampaignUseCase:
             prompt_strategy=condition.strategy,
             budget=fresh_cfg.budget,
             max_iterations=fresh_cfg.iterations,
+            synthesis_seed=42 + run_idx,
         )
         key = (
             f"{key_prefix}f{condition.problem_id}_{condition.dim}D_{condition.task_mode_label}_{condition.strategy}"

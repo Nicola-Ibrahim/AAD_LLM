@@ -65,5 +65,5 @@ class EvaluationConfigRepository:
             baseline_labels=baseline_labels,
             cross_eval_clean_champions=bool(bench_cfg.get("cross_eval_clean_champions", True)),
             target_noise_stds=target_noise_stds,
+            reliability=bench_cfg.get("reliability", {}),
         )
-

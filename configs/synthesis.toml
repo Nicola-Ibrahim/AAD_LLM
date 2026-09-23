@@ -57,7 +57,9 @@ timeout_seconds = 30.0
 
 # Statistical Replicates: Number of independent repeat runs per unique matrix configuration
 #   • 1   = Single execution per condition (extracting the best champion algorithm)
-runs_per_config = 1
+# Use five independent future synthesis replicates per condition. Existing
+# database records remain untouched and therefore are not synthesis-reliability evidence.
+runs_per_config = 5
 
 # ==============================================================================
 # 3. EXECUTION & RECOVERY (How Tasks Run in Parallel)

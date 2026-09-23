@@ -40,6 +40,8 @@ class ExperimentORM(Base):
     )
     budget = Column(Integer, nullable=True)  # Evaluation budget per iteration
     max_iterations = Column(Integer, nullable=True)  # Max synthesis iterations for the run
+    # Random seed assigned to a fresh synthesis replicate. Historical rows are NULL.
+    synthesis_seed = Column(Integer, nullable=True)
 
     true_optimum = Column(Float)
 
