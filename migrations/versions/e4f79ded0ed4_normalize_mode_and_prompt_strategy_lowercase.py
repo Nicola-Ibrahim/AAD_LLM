@@ -5,14 +5,15 @@ Revises: e4f79ded0ed3
 Create Date: 2026-09-04 18:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'e4f79ded0ed4'
-down_revision: Union[str, Sequence[str], None] = 'e4f79ded0ed3'
+revision: str = "e4f79ded0ed4"
+down_revision: Union[str, Sequence[str], None] = "e4f79ded0ed3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

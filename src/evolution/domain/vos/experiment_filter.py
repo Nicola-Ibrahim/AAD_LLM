@@ -15,5 +15,7 @@ class ExperimentFilter(ValueObject):
     llm_name: str | None = Field(default=None, description="LLM model name filter.")
     dim: int | None = Field(default=None, description="Dimension filter.")
     mode: SynthesisMode | None = Field(default=None, description="Synthesis mode filter.")
-    prompt_strategy: PromptStrategy | None = Field(default=None, description="Prompt strategy filter.")
+    prompt_strategy: PromptStrategy | None = Field(
+        default=None, description="Prompt strategy filter."
+    )
     status: str | None = Field(default=None, description="Experiment lifecycle status filter.")

@@ -5,7 +5,7 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
-from shared.config import DATA_DIR
+from shared.config import RESULTS_DIR
 from shared.database.tables import ExperimentORM, IterationORM
 
 
@@ -15,7 +15,7 @@ class ChampionsReadRepository:
     def __init__(
         self,
         session_factory: sessionmaker,
-        champions_path: Path = DATA_DIR / "champions.json",
+        champions_path: Path = RESULTS_DIR / "benchmark" / "champions.json",
     ):
         self.SessionLocal = session_factory
         self.champions_path = Path(champions_path)
@@ -146,13 +146,9 @@ class ChampionsReadRepository:
     ) -> dict[str, dict[str, Any]]:
         """Flatten model-nested champions dictionary into a single key-value mapping."""
         if champions_dict is None:
-            if self.champions_path.exists():
-                try:
-                    champions_dict = json.loads(self.champions_path.read_text(encoding="utf-8"))
-                except Exception:
-                    champions_dict = self.extract_champions()
-            else:
-                champions_dict = self.extract_champions()
+            # The JSON file is an exported artifact, not a cache. Query the active DB
+            # to avoid evaluating champions from a previous database import.
+            champions_dict = self.extract_champions()
 
         champions_flat: dict[str, dict[str, Any]] = {}
         for k, v in champions_dict.items():
@@ -172,28 +168,30 @@ class ChampionsReadRepository:
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
         champions = self.extract_champions()
+        out_path.write_text(json.dumps(champions, indent=2), encoding="utf-8")
+
         if not champions:
             return {}, pd.DataFrame()
-
-        out_path.write_text(json.dumps(champions, indent=2), encoding="utf-8")
 
         summary_rows = []
         for model_name, conds in champions.items():
             for key, c in conds.items():
-                summary_rows.append({
-                    "model": model_name,
-                    "key": key,
-                    "problem_id": c["problem_id"],
-                    "dim": c["dim"],
-                    "mode": c["mode"],
-                    "noise_std": c["noise_std"],
-                    "prompt_strategy": c["prompt_strategy"],
-                    "algorithm_name": c["algorithm_name"],
-                    "experiment_id": c["experiment_id"],
-                    "iteration_id": c["iteration_id"],
-                    "final_error": c["final_error"],
-                    "evaluations_used": c["evaluations_used"],
-                    "code_path": c["code_path"],
-                })
+                summary_rows.append(
+                    {
+                        "model": model_name,
+                        "key": key,
+                        "problem_id": c["problem_id"],
+                        "dim": c["dim"],
+                        "mode": c["mode"],
+                        "noise_std": c["noise_std"],
+                        "prompt_strategy": c["prompt_strategy"],
+                        "algorithm_name": c["algorithm_name"],
+                        "experiment_id": c["experiment_id"],
+                        "iteration_id": c["iteration_id"],
+                        "final_error": c["final_error"],
+                        "evaluations_used": c["evaluations_used"],
+                        "code_path": c["code_path"],
+                    }
+                )
 
         return champions, pd.DataFrame(summary_rows)

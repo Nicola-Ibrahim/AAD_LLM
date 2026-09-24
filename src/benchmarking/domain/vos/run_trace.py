@@ -11,7 +11,9 @@ class RunTrace(ValueObject):
     """Strongly-typed Value Object representing a single experimental execution run on a BBOB problem."""
 
     evaluations: np.ndarray = Field(description="Array of cumulative function evaluations.")
-    raw_objectives: np.ndarray = Field(description="Array of objective error values at each evaluation checkpoint.")
+    raw_objectives: np.ndarray = Field(
+        description="Array of objective error values at each evaluation checkpoint."
+    )
 
     @model_validator(mode="after")
     def validate_lengths(self) -> Self:
@@ -54,8 +56,12 @@ class RunTrace(ValueObject):
 class SolverRunCollection(ValueObject):
     """Value Object representing the collection of experimental runs for a specific solver under a single condition."""
 
-    solver_name: str = Field(description="Canonical display name of the solver or LLaMEA configuration.")
-    runs: list[RunTrace] = Field(default_factory=list, description="List of individual RunTrace value objects.")
+    solver_name: str = Field(
+        description="Canonical display name of the solver or LLaMEA configuration."
+    )
+    runs: list[RunTrace] = Field(
+        default_factory=list, description="List of individual RunTrace value objects."
+    )
 
     @property
     def terminal_values(self) -> list[float]:

@@ -54,7 +54,9 @@ class TestDomainTaxonomy:
 
 class TestDomainResolvers:
     def test_clean_model_labels_dynamic(self):
-        assert get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m.gguf") == "Qwen2.5-Coder-14B"
+        assert (
+            get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m.gguf") == "Qwen2.5-Coder-14B"
+        )
         assert get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m") == "Qwen2.5-Coder-14B"
         assert get_clean_model_label("qwen2.5-coder-7b-instruct-q4_k_m.gguf") == "Qwen2.5-Coder-7B"
         assert get_clean_model_label("deepseek-r1-distill-qwen-70b.gguf") == "DeepSeek-70B"
@@ -123,9 +125,21 @@ class TestDomainEngines:
         bench_data = EvaluationDataset()
         cond = EvaluationCondition(dim=2, noise_std=0.0, problem_id=1)
         for _ in range(5):
-            bench_data.add_run(cond, "CMA-ES", RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 0.1])))
-            bench_data.add_run(cond, "DE", RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 0.5])))
-            bench_data.add_run(cond, "LLaMEA-14B / baseline", RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 0.01])))
+            bench_data.add_run(
+                cond,
+                "CMA-ES",
+                RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 0.1])),
+            )
+            bench_data.add_run(
+                cond,
+                "DE",
+                RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 0.5])),
+            )
+            bench_data.add_run(
+                cond,
+                "LLaMEA-14B / baseline",
+                RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 0.01])),
+            )
 
         df_omni = hypothesis_engine.run_omnibus_kruskal(bench_data)
         assert not df_omni.empty
@@ -158,10 +172,34 @@ class TestDomainEngines:
         targets = np.logspace(-8, 2, 10)
 
         for _ in range(3):
-            bench_data.add_run(cond1, "CMA-ES", RunTrace(evaluations=np.array([1, 10, 100]), raw_objectives=np.array([10.0, 1.0, 1e-9])))
-            bench_data.add_run(cond1, "LLaMEA-14B / baseline", RunTrace(evaluations=np.array([1, 10, 100]), raw_objectives=np.array([10.0, 2.0, 1e-4])))
-            bench_data.add_run(cond2, "CMA-ES", RunTrace(evaluations=np.array([1, 10, 100]), raw_objectives=np.array([10.0, 5.0, 1.0])))
-            bench_data.add_run(cond2, "LLaMEA-14B / baseline", RunTrace(evaluations=np.array([1, 10, 100]), raw_objectives=np.array([10.0, 8.0, 5.0])))
+            bench_data.add_run(
+                cond1,
+                "CMA-ES",
+                RunTrace(
+                    evaluations=np.array([1, 10, 100]), raw_objectives=np.array([10.0, 1.0, 1e-9])
+                ),
+            )
+            bench_data.add_run(
+                cond1,
+                "LLaMEA-14B / baseline",
+                RunTrace(
+                    evaluations=np.array([1, 10, 100]), raw_objectives=np.array([10.0, 2.0, 1e-4])
+                ),
+            )
+            bench_data.add_run(
+                cond2,
+                "CMA-ES",
+                RunTrace(
+                    evaluations=np.array([1, 10, 100]), raw_objectives=np.array([10.0, 5.0, 1.0])
+                ),
+            )
+            bench_data.add_run(
+                cond2,
+                "LLaMEA-14B / baseline",
+                RunTrace(
+                    evaluations=np.array([1, 10, 100]), raw_objectives=np.array([10.0, 8.0, 5.0])
+                ),
+            )
 
         solvers = ["CMA-ES", "LLaMEA-14B / baseline"]
 
@@ -174,19 +212,25 @@ class TestDomainEngines:
         assert np.all((df_dim["AUC-ECDF (%)"] >= 0.0) & (df_dim["AUC-ECDF (%)"] <= 100.0))
 
         # 2. Group by noise_std
-        df_noise = ecdf_engine.compute_auc_ecdf_matrix(bench_data, solvers, targets, group_by="noise_std")
+        df_noise = ecdf_engine.compute_auc_ecdf_matrix(
+            bench_data, solvers, targets, group_by="noise_std"
+        )
         assert not df_noise.empty
         assert "Clean (σ=0.0)" in df_noise["GroupKey"].values
         assert "Noisy (σ=0.05)" in df_noise["GroupKey"].values
 
         # 3. Problem Grouping
-        df_prob = ecdf_engine.compute_auc_ecdf_matrix(bench_data, solvers, targets, group_by="problem_id")
+        df_prob = ecdf_engine.compute_auc_ecdf_matrix(
+            bench_data, solvers, targets, group_by="problem_id"
+        )
         assert not df_prob.empty
         assert "Sphere (f1)" in df_prob["GroupKey"].values
         assert "Rosenbrock (f8)" in df_prob["GroupKey"].values
 
         # 4. Group by condition (raw)
-        df_cond = ecdf_engine.compute_auc_ecdf_matrix(bench_data, solvers, targets, group_by="condition")
+        df_cond = ecdf_engine.compute_auc_ecdf_matrix(
+            bench_data, solvers, targets, group_by="condition"
+        )
         assert len(df_cond) == 4  # 2 conditions x 2 solvers
 
     def test_compute_performance_metrics(self, performance_engine):
@@ -226,7 +270,11 @@ class TestApplicationServicesIntegration:
             audit_data = service.get_global_audit_matrix()
             assert isinstance(audit_data.df, pd.DataFrame)
             coverage = audit_data.coverage_summary
-            cov_pct = coverage.coverage_pct if isinstance(coverage, AuditCoverageSummary) else coverage["coverage_pct"]
+            cov_pct = (
+                coverage.coverage_pct
+                if isinstance(coverage, AuditCoverageSummary)
+                else coverage["coverage_pct"]
+            )
             assert cov_pct >= 0.0
 
     def test_statistical_service(self):
@@ -275,14 +323,14 @@ class TestMarkdownReporting:
         assert "Overview & Experimental Protocol" in report
 
     def test_generate_markdown_report_with_data(self, tmp_path):
-        df_omnibus = pd.DataFrame([
-            {"Condition": "3D_std0.0_f1", "Significant": "Yes", "p-value": 0.001}
-        ])
-        df_pairwise = pd.DataFrame([
-            {"Comparison": "A vs B", "p-value": 0.01, "A12": 0.85}
-        ])
+        df_omnibus = pd.DataFrame(
+            [{"Condition": "3D_std0.0_f1", "Significant": "Yes", "p-value": 0.001}]
+        )
+        df_pairwise = pd.DataFrame([{"Comparison": "A vs B", "p-value": 0.01, "A12": 0.85}])
         out_file = tmp_path / "test_report.md"
-        report = generate_markdown_report(df_omnibus=df_omnibus, df_pairwise=df_pairwise, output_path=out_file)
+        report = generate_markdown_report(
+            df_omnibus=df_omnibus, df_pairwise=df_pairwise, output_path=out_file
+        )
         assert out_file.exists()
         assert "Comprehensive Empirical Evaluation" in report
 
@@ -297,7 +345,9 @@ class TestConvergenceTiers:
         r_solved = RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([100.0, 1e-9]))
         r_moderate = RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([100.0, 1e-4]))
         r_minor = RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([100.0, 0.5]))
-        r_stagnated = RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([100.0, 50.0]))
+        r_stagnated = RunTrace(
+            evaluations=np.array([1, 10]), raw_objectives=np.array([100.0, 50.0])
+        )
 
         dataset.add_run(cond, "TestSolver", r_solved)
         dataset.add_run(cond, "TestSolver", r_moderate)
@@ -343,7 +393,11 @@ class TestConvergenceTiers:
         for noise in [0.0, 0.05, 0.1, 0.2]:
             cond = EvaluationCondition(dim=2, noise_std=noise, problem_id=1)
             # Solved on clean, degrading with noise
-            err = 1e-9 if noise == 0.0 else (1e-4 if noise == 0.05 else (0.5 if noise == 0.1 else 50.0))
+            err = (
+                1e-9
+                if noise == 0.0
+                else (1e-4 if noise == 0.05 else (0.5 if noise == 0.1 else 50.0))
+            )
             r = RunTrace(evaluations=np.array([1, 100]), raw_objectives=np.array([100.0, err]))
             dataset.add_run(cond, "DynamicSolver", r)
 
@@ -355,4 +409,3 @@ class TestConvergenceTiers:
         assert df_summary.loc[df_summary["Noise Std"] == 0.05, "Fragility Drop"].iloc[0] == 1.0
         assert "Mean Log Error" in df_summary.columns
         assert "Median Error" in df_summary.columns
-

@@ -9,14 +9,17 @@ from benchmarking.application.audit_service import EvaluationAuditService
 from benchmarking.application.evaluation_service import EvaluationService
 from benchmarking.application.selection_service import ChampionSelectionService
 from benchmarking.application.statistical_service import StatisticalEvaluationService
-from shared.config import DATA_DIR
+from shared.config import RESULTS_DIR
 
 
 def test_nb00_prompts_pipeline():
     """Verify Notebook 00 (00_prompts.ipynb: Prompts & Diagnostic Feedback Inspection)."""
     from evolution.domain.enums import PromptStrategy, SynthesisMode
     from evolution.domain.services.algorithm_evaluator import AlgorithmEvaluator
-    from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy, NoNoiseStrategy
+    from evolution.domain.services.noise_strategy import (
+        HeteroscedasticNoiseStrategy,
+        NoNoiseStrategy,
+    )
     from evolution.infra.engines.llamea.prompts import (
         FeedbackRenderer,
         META_FEEDBACK_DIVERSITY_INJECTION,
@@ -30,7 +33,9 @@ def test_nb00_prompts_pipeline():
     prob_clean = BBOBProblem(1, 2, NoNoiseStrategy(), 1)
     prob_noisy = BBOBProblem(1, 2, HeteroscedasticNoiseStrategy(0.05), 1)
 
-    task_p = build_task_prompt(prob_noisy, mode=SynthesisMode.EXPLICIT, strategy=PromptStrategy.GUIDED, budget_hint=2000)
+    task_p = build_task_prompt(
+        prob_noisy, mode=SynthesisMode.EXPLICIT, strategy=PromptStrategy.GUIDED, budget_hint=2000
+    )
     format_p = build_format_prompt()
     example_p = build_example_prompt()
 
@@ -68,6 +73,7 @@ def test_nb01_noise_pipeline():
     """Verify Notebook 01 (01_noise.ipynb: Noise Landscape & Problem Evaluation)."""
     from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy
     from evolution.infra.problems.bbob import BBOBProblem
+
     p = BBOBProblem(problem_id=1, dim=2, noise_strategy=HeteroscedasticNoiseStrategy(0.05))
     val = p([0.0, 0.0])
     assert isinstance(val, float)
@@ -159,11 +165,14 @@ def test_nb03_evaluation_pipeline():
         total_champs = sum(len(v) for v in champions.values())
         print(f"  • Champions discovered: {total_champs} across {len(champions)} models")
     else:
-        print("  • Database in fresh/running state (0 completed experiments). Balance query contract validated.")
+        print(
+            "  • Database in fresh/running state (0 completed experiments). Balance query contract validated."
+        )
 
     from benchmarking.infra.io.trace_repository import EvaluationStateRepository
     from benchmarking.infra.logging import EvaluationLogger
     from benchmarking.infra.storage import EvaluationConfigRepository
+
     state_repo = EvaluationStateRepository()
     config_repo = EvaluationConfigRepository()
     logger = EvaluationLogger()
@@ -176,7 +185,8 @@ def test_nb03_evaluation_pipeline():
         config_repo=config_repo,
         logger=logger,
     )
-    champions_path = DATA_DIR / "champions.json"
+    champions_path = RESULTS_DIR / "benchmark" / "champions.json"
+    champ_service.export_champions(champions_path)
     assert champions_path.exists(), "champions.json does not exist!"
     with open(champions_path, "r", encoding="utf-8") as f:
         champions_raw = json.load(f)
@@ -245,7 +255,9 @@ def test_nb04_audit_pipeline():
         print(f"  • Problem IDs: {audit_data.problem_ids}")
         print(f"  • Solvers: {len(audit_data.all_solvers)}")
     else:
-        print("  • Database in fresh/running state: audit matrix initialized with default empty grid.")
+        print(
+            "  • Database in fresh/running state: audit matrix initialized with default empty grid."
+        )
     print("✅ NB04 experimental matrix audit pipeline verified.")
 
 
@@ -285,7 +297,9 @@ def test_nb05_analysis_pipeline(tmp_path):
     c_meds, n_meds, _ = service.compute_validation_medians(all_benchmark_data, dim, p_ids)
     assert len(c_meds) == len(p_ids)
 
-    valid_s, c_rates, n_rates, deltas = service.compute_robustness_profile(all_benchmark_data, dim, solvers, p_ids)
+    valid_s, c_rates, n_rates, deltas = service.compute_robustness_profile(
+        all_benchmark_data, dim, solvers, p_ids
+    )
     assert len(valid_s) == len(c_rates) == len(n_rates) == len(deltas)
 
     report_path = tmp_path / "comprehensive_master_report.md"
@@ -434,7 +448,10 @@ runs_per_config = 1
     dm_repo = SynthesisConfigRepository(config_path=dict_modes_toml)
     dm_cfg = dm_repo.load_config()
     assert len(dm_cfg["synthesis_modes"]) == 2
-    assert dm_cfg["synthesis_modes"][0] == {"mode": "explicit", "strategies": ["baseline", "thinking"]}
+    assert dm_cfg["synthesis_modes"][0] == {
+        "mode": "explicit",
+        "strategies": ["baseline", "thinking"],
+    }
     assert dm_cfg["synthesis_modes"][1] == {"mode": "implicit", "strategies": ["guided"]}
     assert dm_cfg["prompt_strategies"] == ["baseline", "guided", "thinking"]
 
@@ -490,7 +507,15 @@ def test_custom_minimal_base_logger():
     logger.task_start(1, 10, "test-model", 2, 0.05, 1, "baseline", 101)
     logger.generation(1, 10, "Algo1", error=0.01, fitness=-0.01, evals_used=100, runtime=1.5)
     logger.generation(
-        2, 10, "Algo2", error=None, fitness=None, evals_used=0, runtime=0.5, is_failure=True, failure_reason="SyntaxError"
+        2,
+        10,
+        "Algo2",
+        error=None,
+        fitness=None,
+        evals_used=0,
+        runtime=0.5,
+        is_failure=True,
+        failure_reason="SyntaxError",
     )
     logger.resuming(101, 2, 10)
     logger.cached(101, 10, 0.005)
@@ -587,7 +612,9 @@ def test_campaign_usecase_run_worker_and_campaign():
     mock_engine.run.assert_called_once()
 
     # 2. Test SingleSynthesisUseCase standalone execution
-    single_uc = SingleSynthesisUseCase(engine=mock_engine, sqlite_repo=mock_sqlite, logger=mock_logger)
+    single_uc = SingleSynthesisUseCase(
+        engine=mock_engine, sqlite_repo=mock_sqlite, logger=mock_logger
+    )
     res_single = single_uc.execute(
         problem=mock_problem,
         experiment_id=999,
@@ -669,5 +696,3 @@ if __name__ == "__main__":
     test_custom_minimal_base_logger()
     test_campaign_usecase_run_worker_and_campaign()
     test_campaign_usecase_audit_matrix_standalone()
-
-

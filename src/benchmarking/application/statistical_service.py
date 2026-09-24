@@ -30,8 +30,16 @@ def generate_markdown_report(
     **kwargs: Any,
 ) -> str:
     """Generate scientific Markdown summary report documenting statistical test results."""
-    o_df = df_omnibus if df_omnibus is not None else (omnibus_df if omnibus_df is not None else pd.DataFrame())
-    p_df = df_pairwise if df_pairwise is not None else (pairwise_df if pairwise_df is not None else pd.DataFrame())
+    o_df = (
+        df_omnibus
+        if df_omnibus is not None
+        else (omnibus_df if omnibus_df is not None else pd.DataFrame())
+    )
+    p_df = (
+        df_pairwise
+        if df_pairwise is not None
+        else (pairwise_df if pairwise_df is not None else pd.DataFrame())
+    )
 
     report_lines: list[str] = [
         "# Comprehensive Empirical Evaluation & Statistical Analysis Report",
@@ -46,30 +54,44 @@ def generate_markdown_report(
 
     if not o_df.empty:
         total_tests = len(o_df)
-        sig_tests = int(cast(Any, o_df["Significant"] == "Yes").sum()) if "Significant" in o_df.columns else 0
-        report_lines.extend([
-            "## 2. Omnibus Kruskal-Wallis Significance Summary",
-            f"- **Total Experimental Conditions Evaluated**: {total_tests}",
-            f"- **Statistically Significant omnibus Differences ($p < 0.05$)**: {sig_tests} / {total_tests} ({(sig_tests / max(1, total_tests) * 100):.1f}%)",
-            "",
-            "### Omnibus Differences by Problem Dimension",
-        ])
+        sig_tests = (
+            int(cast(Any, o_df["Significant"] == "Yes").sum())
+            if "Significant" in o_df.columns
+            else 0
+        )
+        report_lines.extend(
+            [
+                "## 2. Omnibus Kruskal-Wallis Significance Summary",
+                f"- **Total Experimental Conditions Evaluated**: {total_tests}",
+                f"- **Statistically Significant omnibus Differences ($p < 0.05$)**: {sig_tests} / {total_tests} ({(sig_tests / max(1, total_tests) * 100):.1f}%)",
+                "",
+                "### Omnibus Differences by Problem Dimension",
+            ]
+        )
         if "Dim" in o_df.columns:
             for dim, group in o_df.groupby("Dim"):
                 d_sig = int(cast(Any, group["Significant"] == "Yes").sum())
-                report_lines.append(f"- **{dim}D**: {d_sig} / {len(group)} conditions reject null hypothesis")
+                report_lines.append(
+                    f"- **{dim}D**: {d_sig} / {len(group)} conditions reject null hypothesis"
+                )
         report_lines.append("")
 
     if not p_df.empty:
         total_pw = len(p_df)
-        sig_pw = int(cast(Any, p_df["Significant (FDR)"]).sum()) if "Significant (FDR)" in p_df.columns else 0
-        report_lines.extend([
-            "## 3. Pairwise Comparisons & FDR Correction",
-            f"- **Total Pairwise Hypothesis Tests**: {total_pw}",
-            f"- **Significant Differences after FDR Correction ($\\alpha=0.05$)**: {sig_pw} / {total_pw} ({(sig_pw / max(1, total_pw) * 100):.1f}%)",
-            "",
-            "### Comparison Tier Breakdown",
-        ])
+        sig_pw = (
+            int(cast(Any, p_df["Significant (FDR)"]).sum())
+            if "Significant (FDR)" in p_df.columns
+            else 0
+        )
+        report_lines.extend(
+            [
+                "## 3. Pairwise Comparisons & FDR Correction",
+                f"- **Total Pairwise Hypothesis Tests**: {total_pw}",
+                f"- **Significant Differences after FDR Correction ($\\alpha=0.05$)**: {sig_pw} / {total_pw} ({(sig_pw / max(1, total_pw) * 100):.1f}%)",
+                "",
+                "### Comparison Tier Breakdown",
+            ]
+        )
         if "Comparison Tier" in p_df.columns:
             for tier, group in p_df.groupby("Comparison Tier"):
                 t_sig = int(cast(Any, group["Significant (FDR)"]).sum())
@@ -173,7 +195,6 @@ class StatisticalEvaluationService:
             benchmark_data, checkpoint_fractions, budget_multiplier, threshold, primary_strategy
         )
 
-
     def get_synthesis_dataframes(self) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Query synthesis database for completed experiment metadata and iteration metrics."""
         return self.sqlite_repo.get_synthesis_dataframes()
@@ -236,7 +257,9 @@ class StatisticalEvaluationService:
         n_points: int = 100,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Compute median, 25th, and 75th percentile convergence curves across runs."""
-        return self.ecdf_engine.compute_convergence_iqr(runs, max_evals=max_evals, n_points=n_points)
+        return self.ecdf_engine.compute_convergence_iqr(
+            runs, max_evals=max_evals, n_points=n_points
+        )
 
     def compute_synthesis_transfer_correlation(
         self,

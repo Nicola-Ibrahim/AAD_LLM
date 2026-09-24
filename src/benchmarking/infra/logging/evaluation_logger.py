@@ -74,9 +74,7 @@ class EvaluationLogger:
         """Logs a prominent visual banner for a benchmark session."""
         sep = f"{Colors.BRIGHT_CYAN}{'=' * width}{Colors.RESET}"
         self.logger.info(f"\n{sep}")
-        self.logger.info(
-            f"{Colors.BOLD}{Colors.BRIGHT_CYAN}🚀 {title.upper()}{Colors.RESET}"
-        )
+        self.logger.info(f"{Colors.BOLD}{Colors.BRIGHT_CYAN}🚀 {title.upper()}{Colors.RESET}")
         if subtitle:
             self.logger.info(f"   {Colors.DIM}{subtitle}{Colors.RESET}")
         self.logger.info(sep)
@@ -116,16 +114,25 @@ class EvaluationLogger:
         best_clean: float,
         runtime: float,
         evals_used: int,
+        best_objective: float | None = None,
+        true_optimum: float | None = None,
     ) -> None:
-        """Logs individual trial execution details with metrics."""
+        """Log the clean objective, known optimum, and objective-gap error for a trial."""
         if best_clean < float("inf"):
-            err_str = f"{Colors.BRIGHT_GREEN}{best_clean:>12.4e}{Colors.RESET}"
+            err_str = f"{Colors.BRIGHT_GREEN}{best_clean:>24,.12f}{Colors.RESET}"
         else:
-            err_str = f"{Colors.BRIGHT_RED}{'FAILED (inf)':>12}{Colors.RESET}"
+            err_str = f"{Colors.BRIGHT_RED}{'FAILED (inf)':>24}{Colors.RESET}"
+
+        score_details = ""
+        if best_objective is not None and true_optimum is not None:
+            score_details = (
+                f"f-opt: {Colors.BRIGHT_MAGENTA}{true_optimum:>24,.12f}{Colors.RESET} | "
+                f"Best f: {Colors.BRIGHT_CYAN}{best_objective:>24,.12f}{Colors.RESET} | "
+            )
 
         self.logger.info(
             f"  {Colors.GRAY}•{Colors.RESET} {Colors.BOLD}⚡ Trial {trial_idx:2d}/{total_trials:2d}{Colors.RESET} | "
-            f"Error: {err_str} | "
+            f"{score_details}Δy Error: {err_str} | "
             f"Evals: {Colors.CYAN}{evals_used:>7,}{Colors.RESET} | "
             f"Time: {Colors.YELLOW}{runtime:>5.2f}s{Colors.RESET}"
         )
@@ -133,13 +140,13 @@ class EvaluationLogger:
     def cached(self, runs_count: int, median_error: float | None) -> None:
         """Logs a cache-hit notice."""
         err_str = (
-            f"{Colors.BRIGHT_GREEN}{median_error:.4e}{Colors.RESET}"
+            f"{Colors.BRIGHT_GREEN}{median_error:,.12f}{Colors.RESET}"
             if median_error is not None
             else "N/A"
         )
         self.logger.info(
             f"  📦 {Colors.DIM}[CACHED]{Colors.RESET} {Colors.GREEN}{runs_count} runs found{Colors.RESET} "
-            f"(Median Error: {err_str}). Skipping."
+            f"(Median Δy Error: {err_str}). Skipping."
         )
 
     def resuming(self, existing_runs: int, target_runs: int) -> None:
@@ -152,13 +159,13 @@ class EvaluationLogger:
     def condition_complete(self, n_runs: int, median_error: float | None) -> None:
         """Logs completion of a condition."""
         err_str = (
-            f"{Colors.BRIGHT_GREEN}{median_error:.4e}{Colors.RESET}"
+            f"{Colors.BRIGHT_GREEN}{median_error:,.12f}{Colors.RESET}"
             if median_error is not None
             else "N/A"
         )
         self.logger.info(
             f"  ✨ {Colors.BOLD}{Colors.BRIGHT_GREEN}[COMPLETED]{Colors.RESET} {n_runs} runs finished | "
-            f"Median Clean Error: {err_str}"
+            f"Median Δy Error: {err_str}"
         )
 
     def missing_code(self, code_path: str) -> None:

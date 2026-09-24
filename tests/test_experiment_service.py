@@ -21,7 +21,12 @@ from evolution.domain.enums import NoiseModelEnum, SynthesisMode, PromptStrategy
 from evolution.domain.services.algorithm_evaluator import AlgorithmEvaluator
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy, NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
-from evolution.application import SessionConfig, SingleSynthesisUseCase, SynthesisCampaignUseCase, SynthesisEngine
+from evolution.application import (
+    SessionConfig,
+    SingleSynthesisUseCase,
+    SynthesisCampaignUseCase,
+    SynthesisEngine,
+)
 from evolution.infra.concurrency.runner import ProcessPoolRunner
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
@@ -71,7 +76,9 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
         problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1
     )
     exp_id_clean = repo.create_experiment(
-        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem_clean.true_optimum),
+        problem=ProblemProfile(
+            problem_id=1, dim=2, noise_std=0.0, true_optimum=problem_clean.true_optimum
+        ),
         mode=SynthesisMode.EXPLICIT,
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
@@ -83,7 +90,9 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
         problem_id=1, dim=2, noise_strategy=HeteroscedasticNoiseStrategy(0.5), instance_id=1
     )
     exp_id_noisy = repo.create_experiment(
-        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.5, true_optimum=problem_noisy.true_optimum),
+        problem=ProblemProfile(
+            problem_id=1, dim=2, noise_std=0.5, true_optimum=problem_noisy.true_optimum
+        ),
         mode=SynthesisMode.EXPLICIT,
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
@@ -119,7 +128,9 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
     ]
 
     runner = ProcessPoolRunner(max_workers=2)
-    results = runner.run(fn=SynthesisCampaignUseCase.run_worker, items=tasks, key_fn=lambda t: t["key"])
+    results = runner.run(
+        fn=SynthesisCampaignUseCase.run_worker, items=tasks, key_fn=lambda t: t["key"]
+    )
 
     assert "clean" in results
     assert "noisy" in results
@@ -138,14 +149,10 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
     problem_fail = FailingProblem(
         problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1
     )
-    problem_succ = BBOBProblem(
-        problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1
-    )
+    problem_succ = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
     exp_id_fail = repo.create_experiment(
-        problem=ProblemProfile(
-            problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0
-        ),
+        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0),
         mode=SynthesisMode.EXPLICIT,
         llm_name="dummy-llm-1.0",
         prompt_strategy=PromptStrategy.BASELINE,
@@ -191,7 +198,9 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
     ]
 
     with pytest.raises(OrchestrationError) as exc_info:
-        ProcessPoolRunner().run(fn=SynthesisCampaignUseCase.run_worker, items=tasks, key_fn=lambda t: t["key"])
+        ProcessPoolRunner().run(
+            fn=SynthesisCampaignUseCase.run_worker, items=tasks, key_fn=lambda t: t["key"]
+        )
 
     errors = exc_info.value.errors
     assert "failing" in errors
@@ -433,7 +442,9 @@ def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
     exp_id = repo.create_experiment(
-        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        problem=ProblemProfile(
+            problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
+        ),
         mode=problem.mode,
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
@@ -470,7 +481,9 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
     exp_id1 = repo.create_experiment(
-        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        problem=ProblemProfile(
+            problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
+        ),
         mode=problem.mode,
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
@@ -490,7 +503,9 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
     res1 = session1.run()
 
     exp_id2 = repo.create_experiment(
-        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        problem=ProblemProfile(
+            problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
+        ),
         mode=problem.mode,
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
@@ -529,7 +544,9 @@ def test_session_mark_failed_on_error(temp_dir, db_session_factory):
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
     exp_id = repo.create_experiment(
-        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        problem=ProblemProfile(
+            problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
+        ),
         mode=problem.mode,
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
@@ -698,7 +715,9 @@ def test_all_executions_failed_session_handling(db_session_factory, tmp_path):
     mock_llm = FailingLLM()
 
     exp_id = repo.create_experiment(
-        problem=ProblemProfile(problem_id=24, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        problem=ProblemProfile(
+            problem_id=24, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
+        ),
         mode=problem.mode,
         llm_name=mock_llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
@@ -984,8 +1003,17 @@ def test_experiment_summary_domain_aggregate(db_session_factory):
     it1 = IterationMetadata(
         iteration=1,
         algorithm_name="Algo1",
-        execution=Execution(timed_out=False, runtime_seconds=0.1, llm_generation_time=0.5, evaluations_used=10, budget_consumed_pct=1.0, evals_per_second=100.0),
-        fitness=Fitness(raw_fitness=10.0, final_error=10.0, relative_error=10.0, error_per_evaluation=1.0),
+        execution=Execution(
+            timed_out=False,
+            runtime_seconds=0.1,
+            llm_generation_time=0.5,
+            evaluations_used=10,
+            budget_consumed_pct=1.0,
+            evals_per_second=100.0,
+        ),
+        fitness=Fitness(
+            raw_fitness=10.0, final_error=10.0, relative_error=10.0, error_per_evaluation=1.0
+        ),
         code=Code(code_lines=5, code_length=100),
         error=Error(error_type=None, error_message=None, error_traceback=None),
         convergence=Convergence(converged=False, convergence_threshold=1e-6),
@@ -999,8 +1027,17 @@ def test_experiment_summary_domain_aggregate(db_session_factory):
     it2 = IterationMetadata(
         iteration=2,
         algorithm_name="Algo2",
-        execution=Execution(timed_out=False, runtime_seconds=0.1, llm_generation_time=0.5, evaluations_used=10, budget_consumed_pct=1.0, evals_per_second=100.0),
-        fitness=Fitness(raw_fitness=2.0, final_error=2.0, relative_error=2.0, error_per_evaluation=0.2),
+        execution=Execution(
+            timed_out=False,
+            runtime_seconds=0.1,
+            llm_generation_time=0.5,
+            evaluations_used=10,
+            budget_consumed_pct=1.0,
+            evals_per_second=100.0,
+        ),
+        fitness=Fitness(
+            raw_fitness=2.0, final_error=2.0, relative_error=2.0, error_per_evaluation=0.2
+        ),
         code=Code(code_lines=5, code_length=100),
         error=Error(error_type=None, error_message=None, error_traceback=None),
         convergence=Convergence(converged=False, convergence_threshold=1e-6),
@@ -1014,8 +1051,17 @@ def test_experiment_summary_domain_aggregate(db_session_factory):
     it3 = IterationMetadata(
         iteration=3,
         algorithm_name="Algo3",
-        execution=Execution(timed_out=False, runtime_seconds=0.1, llm_generation_time=0.5, evaluations_used=10, budget_consumed_pct=1.0, evals_per_second=100.0),
-        fitness=Fitness(raw_fitness=5.0, final_error=5.0, relative_error=5.0, error_per_evaluation=0.5),
+        execution=Execution(
+            timed_out=False,
+            runtime_seconds=0.1,
+            llm_generation_time=0.5,
+            evaluations_used=10,
+            budget_consumed_pct=1.0,
+            evals_per_second=100.0,
+        ),
+        fitness=Fitness(
+            raw_fitness=5.0, final_error=5.0, relative_error=5.0, error_per_evaluation=0.5
+        ),
         code=Code(code_lines=5, code_length=100),
         error=Error(error_type=None, error_message=None, error_traceback=None),
         convergence=Convergence(converged=False, convergence_threshold=1e-6),
@@ -1029,8 +1075,17 @@ def test_experiment_summary_domain_aggregate(db_session_factory):
     it4 = IterationMetadata(
         iteration=4,
         algorithm_name="Algo4",
-        execution=Execution(timed_out=False, runtime_seconds=0.1, llm_generation_time=0.5, evaluations_used=10, budget_consumed_pct=1.0, evals_per_second=100.0),
-        fitness=Fitness(raw_fitness=None, final_error=None, relative_error=None, error_per_evaluation=None),
+        execution=Execution(
+            timed_out=False,
+            runtime_seconds=0.1,
+            llm_generation_time=0.5,
+            evaluations_used=10,
+            budget_consumed_pct=1.0,
+            evals_per_second=100.0,
+        ),
+        fitness=Fitness(
+            raw_fitness=None, final_error=None, relative_error=None, error_per_evaluation=None
+        ),
         code=Code(code_lines=5, code_length=100),
         error=Error(error_type="SyntaxError", error_message="invalid", error_traceback="tb"),
         convergence=Convergence(converged=False, convergence_threshold=1e-6),
@@ -1121,7 +1176,9 @@ def test_llamea_engine_init_and_run(temp_dir, db_session_factory):
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
     exp_id = repo.create_experiment(
-        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum),
+        problem=ProblemProfile(
+            problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
+        ),
         mode=SynthesisMode.EXPLICIT,
         llm_name="dummy",
         budget=1000,
@@ -1207,4 +1264,3 @@ def test_campaign_usecase_create_problem_seed():
 
     assert vals1 == vals2
     assert vals1 != vals3
-

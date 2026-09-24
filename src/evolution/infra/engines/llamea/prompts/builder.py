@@ -60,9 +60,7 @@ def build_task_prompt(
         noise_environment: Optional explicit NoiseEnvironment (Level 2: CLEAN or NOISY).
         budget_hint: Function evaluation budget hint.
     """
-    effective_noise_std = (
-        noise_std if noise_std > 0.0 else problem.noise_std
-    )
+    effective_noise_std = noise_std if noise_std > 0.0 else problem.noise_std
     env = (
         NoiseEnvironment.from_std(effective_noise_std)
         if effective_noise_std > 0.0

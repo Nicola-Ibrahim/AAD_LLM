@@ -213,12 +213,7 @@ def get_model_slug(llm_name: str) -> str:
     if size_m:
         return f"qwen_{size_m.group(1)}"
 
-    return (
-        name_lower.removesuffix(".gguf")
-        .replace("-", "_")
-        .replace(".", "_")
-        .split("/")[-1]
-    )
+    return name_lower.removesuffix(".gguf").replace("-", "_").replace(".", "_").split("/")[-1]
 
 
 def resolve_folder_solver_name(folder_name: str) -> str:

@@ -298,14 +298,18 @@ class IncrementalOptimizer:
     assert len(prov_data["clean_errors"]) == 4
 
     # Step 3: Baseline incremental resumption
-    base_res_1 = service_initial.run_baseline_trials(dim=2, noise_std=0.0, p_id=1, baseline_slug="pso")
+    base_res_1 = service_initial.run_baseline_trials(
+        dim=2, noise_std=0.0, p_id=1, baseline_slug="pso"
+    )
     assert base_res_1["status"] == "SUCCESS"
     assert len(base_res_1["clean_errors"]) == 2
 
     pso_dir = eval_dir / "2D" / "std_0.0" / "f1" / "pso"
     assert trace_repo.get_run_count(pso_dir) == 2
 
-    base_res_2 = service_resumed.run_baseline_trials(dim=2, noise_std=0.0, p_id=1, baseline_slug="pso")
+    base_res_2 = service_resumed.run_baseline_trials(
+        dim=2, noise_std=0.0, p_id=1, baseline_slug="pso"
+    )
     assert base_res_2["status"] == "SUCCESS"
     assert len(base_res_2["clean_errors"]) == 4
     assert trace_repo.get_run_count(pso_dir) == 4
@@ -467,20 +471,22 @@ target_noise_stds = [0.0, 0.05, 0.1]
 
     champions_json = tmp_path / "champions.json"
     champions_json.write_text(
-        json.dumps({
-            "qwen": {
-                "f1_2D_clean_baseline": {
-                    "problem_id": 1,
-                    "dim": 2,
-                    "mode": "explicit",
-                    "noise_std": 0.0,
-                    "prompt_strategy": "baseline",
-                    "llm_name": "qwen_14b",
-                    "algorithm_name": "DummyOpt",
-                    "code_path": "champ.py",
+        json.dumps(
+            {
+                "qwen": {
+                    "f1_2D_clean_baseline": {
+                        "problem_id": 1,
+                        "dim": 2,
+                        "mode": "explicit",
+                        "noise_std": 0.0,
+                        "prompt_strategy": "baseline",
+                        "llm_name": "qwen_14b",
+                        "algorithm_name": "DummyOpt",
+                        "code_path": "champ.py",
+                    }
                 }
             }
-        }),
+        ),
         encoding="utf-8",
     )
 
@@ -542,30 +548,32 @@ classical_baselines = ["cmaes"]
 
     champions_json = tmp_path / "champions.json"
     champions_json.write_text(
-        json.dumps({
-            "qwen": {
-                "f1_2D_clean_baseline": {
-                    "problem_id": 1,
-                    "dim": 2,
-                    "mode": "explicit",
-                    "noise_std": 0.0,
-                    "prompt_strategy": "baseline",
-                    "llm_name": "qwen_14b",
-                    "algorithm_name": "DummyOpt",
-                    "code_path": "champ.py",
-                },
-                "f1_2D_noisy_baseline": {
-                    "problem_id": 1,
-                    "dim": 2,
-                    "mode": "explicit",
-                    "noise_std": 0.05,
-                    "prompt_strategy": "baseline",
-                    "llm_name": "qwen_14b",
-                    "algorithm_name": "DummyOpt",
-                    "code_path": "champ.py",
-                },
+        json.dumps(
+            {
+                "qwen": {
+                    "f1_2D_clean_baseline": {
+                        "problem_id": 1,
+                        "dim": 2,
+                        "mode": "explicit",
+                        "noise_std": 0.0,
+                        "prompt_strategy": "baseline",
+                        "llm_name": "qwen_14b",
+                        "algorithm_name": "DummyOpt",
+                        "code_path": "champ.py",
+                    },
+                    "f1_2D_noisy_baseline": {
+                        "problem_id": 1,
+                        "dim": 2,
+                        "mode": "explicit",
+                        "noise_std": 0.05,
+                        "prompt_strategy": "baseline",
+                        "llm_name": "qwen_14b",
+                        "algorithm_name": "DummyOpt",
+                        "code_path": "champ.py",
+                    },
+                }
             }
-        }),
+        ),
         encoding="utf-8",
     )
 
@@ -592,8 +600,14 @@ classical_baselines = ["cmaes"]
 
     df_native = service.audit_champions_workload()
     assert len(df_native) == 2  # clean champion and noisy champion
-    assert any(row["noise_std"] == 0.0 and row["solver"] == "qwen_14b_baseline" for _, row in df_native.iterrows())
-    assert any(row["noise_std"] == 0.05 and row["solver"] == "qwen_14b_baseline_noisy" for _, row in df_native.iterrows())
+    assert any(
+        row["noise_std"] == 0.0 and row["solver"] == "qwen_14b_baseline"
+        for _, row in df_native.iterrows()
+    )
+    assert any(
+        row["noise_std"] == 0.05 and row["solver"] == "qwen_14b_baseline_noisy"
+        for _, row in df_native.iterrows()
+    )
 
     df_cross = service.audit_cross_eval_workload()
     assert len(df_cross) >= 1
@@ -642,11 +656,3 @@ target_noise_levels = [0.2]
     assert len(res["clean_errors"]) == 3
     # With distinct seeds under noisy evaluations, PSO trajectories should vary across runs
     assert len(set(res["clean_errors"])) > 1
-
-
-
-
-
-
-
-

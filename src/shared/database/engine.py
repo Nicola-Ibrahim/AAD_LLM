@@ -70,6 +70,7 @@ def build_engine(db_url: str | None = None, *, echo: bool = False) -> Engine:
     )
 
     if is_sqlite:
+
         @event.listens_for(engine, "connect")
         def _configure_sqlite(dbapi_conn, _):
             cursor = dbapi_conn.cursor()
@@ -92,5 +93,3 @@ def initialize_sqlite_storage():
     from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
 
     return SQLiteSynthesisRepository(session_factory=create_db_session_factory())
-
-

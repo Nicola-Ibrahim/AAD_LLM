@@ -49,7 +49,9 @@ class HypothesisTestingEngine:
             p_name = BBOBFunction.get_name(cond.problem_id)
             p_class = BBOBFunction.get_class(cond.problem_id)
             residuals = {
-                s: np.array([r.final_value for r in runs if not np.isnan(r.final_value)], dtype=float)
+                s: np.array(
+                    [r.final_value for r in runs if not np.isnan(r.final_value)], dtype=float
+                )
                 for s, runs in s_dict.items()
             }
             valid_solvers = [s for s, vals in residuals.items() if len(vals) >= 2]
@@ -68,17 +70,19 @@ class HypothesisTestingEngine:
                     except Exception:
                         stat, p_val, sig_badge = np.nan, np.nan, "Error"
 
-                master_omnibus.append({
-                    "Dim": cond.dim,
-                    "Noise Std": cond.noise_std,
-                    "Problem ID": cond.problem_id,
-                    "Problem Name": p_name,
-                    "Function Class": p_class,
-                    "H-Statistic": stat,
-                    "p-value": p_val,
-                    "Significant": sig_badge,
-                    "Solvers Count": len(valid_solvers),
-                })
+                master_omnibus.append(
+                    {
+                        "Dim": cond.dim,
+                        "Noise Std": cond.noise_std,
+                        "Problem ID": cond.problem_id,
+                        "Problem Name": p_name,
+                        "Function Class": p_class,
+                        "H-Statistic": stat,
+                        "p-value": p_val,
+                        "Significant": sig_badge,
+                        "Solvers Count": len(valid_solvers),
+                    }
+                )
 
         return pd.DataFrame(master_omnibus)
 
@@ -93,7 +97,9 @@ class HypothesisTestingEngine:
         for cond, s_dict in benchmark_data.items():
             solvers = sorted(s_dict.keys())
             residuals = {
-                s: np.array([r.final_value for r in runs if not np.isnan(r.final_value)], dtype=float)
+                s: np.array(
+                    [r.final_value for r in runs if not np.isnan(r.final_value)], dtype=float
+                )
                 for s, runs in s_dict.items()
             }
 
@@ -129,24 +135,26 @@ class HypothesisTestingEngine:
                                 return "Tier 1 (LLaMEA Intra-Model / Strategies)"
                             return "Tier 3 (Classical vs. Classical)"
 
-                        master_pairwise.append({
-                            "Dim": cond.dim,
-                            "Noise Std": cond.noise_std,
-                            "Problem ID": cond.problem_id,
-                            "Problem Name": p_name,
-                            "Function Class": p_class,
-                            "Solver 1": s1,
-                            "Solver 2": s2,
-                            "Median 1": med1,
-                            "Median 2": med2,
-                            "Solver 1 Med": med1,
-                            "Solver 2 Med": med2,
-                            "U-Stat": u_stat,
-                            "p-value": p_val,
-                            "A12": a12,
-                            "A12 Magnitude": mag,
-                            "Comparison Tier": get_tier(s1, s2),
-                        })
+                        master_pairwise.append(
+                            {
+                                "Dim": cond.dim,
+                                "Noise Std": cond.noise_std,
+                                "Problem ID": cond.problem_id,
+                                "Problem Name": p_name,
+                                "Function Class": p_class,
+                                "Solver 1": s1,
+                                "Solver 2": s2,
+                                "Median 1": med1,
+                                "Median 2": med2,
+                                "Solver 1 Med": med1,
+                                "Solver 2 Med": med2,
+                                "U-Stat": u_stat,
+                                "p-value": p_val,
+                                "A12": a12,
+                                "A12 Magnitude": mag,
+                                "Comparison Tier": get_tier(s1, s2),
+                            }
+                        )
 
         df_pairwise = pd.DataFrame(master_pairwise)
         if df_pairwise.empty:
@@ -213,8 +221,12 @@ class HypothesisTestingEngine:
             for j, s2 in enumerate(solvers):
                 if i == j:
                     continue
-                sub_dir = df_pairwise[(df_pairwise["Solver 1"] == s1) & (df_pairwise["Solver 2"] == s2)]
-                sub_rev = df_pairwise[(df_pairwise["Solver 1"] == s2) & (df_pairwise["Solver 2"] == s1)]
+                sub_dir = df_pairwise[
+                    (df_pairwise["Solver 1"] == s1) & (df_pairwise["Solver 2"] == s2)
+                ]
+                sub_rev = df_pairwise[
+                    (df_pairwise["Solver 1"] == s2) & (df_pairwise["Solver 2"] == s1)
+                ]
                 vals: list[float] = []
                 if not sub_dir.empty:
                     vals.extend(sub_dir["A12"].astype(float).tolist())

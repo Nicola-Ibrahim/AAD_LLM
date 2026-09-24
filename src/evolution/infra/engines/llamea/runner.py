@@ -200,9 +200,7 @@ class LLaMEASession:
         self._cleanup_archive_dir()
         return self._process_session_result(synthesis_engine, evaluator)
 
-    def _create_synthesis_engine(
-        self, evaluator: Evaluator, prompts: SynthesisPrompts
-    ) -> LLaMEA:
+    def _create_synthesis_engine(self, evaluator: Evaluator, prompts: SynthesisPrompts) -> LLaMEA:
         """Creates a new LLaMEA synthesis engine or resumes from a warm-start session state if it exists."""
         state_file = self._archive_dir / "llamea_config.pkl"
 
@@ -339,4 +337,3 @@ class LLaMEAEngine(SynthesisEngine):
             synthesis_mode=resolved_mode,
         )
         return session.run()
-

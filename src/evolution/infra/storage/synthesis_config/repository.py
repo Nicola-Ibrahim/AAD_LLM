@@ -47,8 +47,7 @@ class SynthesisConfigRepository:
         if isinstance(default_strats_raw, str):
             default_strats_raw = [default_strats_raw]
         default_strategies = [
-            PromptStrategy(s.lower()) if isinstance(s, str) else s
-            for s in default_strats_raw
+            PromptStrategy(s.lower()) if isinstance(s, str) else s for s in default_strats_raw
         ]
 
         raw_synthesis_modes = matrix_cfg.get("synthesis_modes")
@@ -71,7 +70,9 @@ class SynthesisConfigRepository:
                     )
             synthesis_modes = parsed_modes
         else:
-            raw_single_mode = matrix_cfg.get("synthesis_mode") or evolution_cfg.get("synthesis_mode")
+            raw_single_mode = matrix_cfg.get("synthesis_mode") or evolution_cfg.get(
+                "synthesis_mode"
+            )
             if raw_single_mode:
                 synthesis_modes = [
                     SynthesisModeConfig(
@@ -81,8 +82,12 @@ class SynthesisConfigRepository:
                 ]
             else:
                 synthesis_modes = [
-                    SynthesisModeConfig(mode=SynthesisMode.EXPLICIT, strategies=list(default_strategies)),
-                    SynthesisModeConfig(mode=SynthesisMode.IMPLICIT, strategies=list(default_strategies)),
+                    SynthesisModeConfig(
+                        mode=SynthesisMode.EXPLICIT, strategies=list(default_strategies)
+                    ),
+                    SynthesisModeConfig(
+                        mode=SynthesisMode.IMPLICIT, strategies=list(default_strategies)
+                    ),
                 ]
 
         # 2. Parse noise conditions and associate applicable modes upfront
@@ -95,7 +100,12 @@ class SynthesisConfigRepository:
                 (
                     float(c["std"]),
                     NoiseModelEnum(
-                        str(c.get("noise_model") or c.get("model", "none" if float(c["std"]) == 0.0 else default_model_str)).lower()
+                        str(
+                            c.get("noise_model")
+                            or c.get(
+                                "model", "none" if float(c["std"]) == 0.0 else default_model_str
+                            )
+                        ).lower()
                     ),
                     str(c["mode"]).lower() if c.get("mode") else None,
                 )
@@ -114,7 +124,9 @@ class SynthesisConfigRepository:
                 target_enum = SynthesisMode(explicit_mode.lower())
                 matching_modes = [m for m in synthesis_modes if m.mode == target_enum]
                 if not matching_modes:
-                    matching_modes = [SynthesisModeConfig(mode=target_enum, strategies=list(default_strategies))]
+                    matching_modes = [
+                        SynthesisModeConfig(mode=target_enum, strategies=list(default_strategies))
+                    ]
                 applicable_modes = matching_modes
             else:
                 applicable_modes = synthesis_modes
@@ -142,8 +154,7 @@ class SynthesisConfigRepository:
             default_p_ids = [int(p) for p in matrix_cfg.get("problem_ids", [1, 8, 11, 15, 21])]
             default_dims = [int(d) for d in matrix_cfg.get("dimensions", [2, 3, 5])]
             problem_targets = [
-                ProblemTarget(id=p, dimensions=list(default_dims))
-                for p in default_p_ids
+                ProblemTarget(id=p, dimensions=list(default_dims)) for p in default_p_ids
             ]
 
         # 4. Pre-compute complete search matrix conditions
@@ -167,7 +178,9 @@ class SynthesisConfigRepository:
         # 5. Assemble SynthesisConfig
         num_workers = int(exec_meta.get("max_workers", 0)) or os.cpu_count() or 8
         target_ids_raw = exec_meta.get("target_experiment_ids")
-        target_ids: list[int] = [int(i) for i in target_ids_raw] if target_ids_raw is not None else []
+        target_ids: list[int] = (
+            [int(i) for i in target_ids_raw] if target_ids_raw is not None else []
+        )
 
         timeout_sec = float(
             evolution_cfg.get(
@@ -197,5 +210,3 @@ class SynthesisConfigRepository:
             evolution=evolution_cfg,
             execution=exec_meta,
         )
-
-

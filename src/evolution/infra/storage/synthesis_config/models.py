@@ -9,7 +9,6 @@ from evolution.domain.enums import (
 )
 
 
-
 class ProblemTarget(BaseModel):
     """Target BBOB problem ID and its evaluated search space dimensions."""
 
@@ -31,7 +30,9 @@ class ProblemTarget(BaseModel):
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, dict):
-            return self.id == other.get("id") and list(self.dimensions) == list(other.get("dimensions", []))
+            return self.id == other.get("id") and list(self.dimensions) == list(
+                other.get("dimensions", [])
+            )
         return super().__eq__(other)
 
 
@@ -55,8 +56,7 @@ class SynthesisModeConfig(BaseModel):
         return {
             "mode": self.mode.value if isinstance(self.mode, SynthesisMode) else str(self.mode),
             "strategies": [
-                s.value if isinstance(s, PromptStrategy) else str(s)
-                for s in self.strategies
+                s.value if isinstance(s, PromptStrategy) else str(s) for s in self.strategies
             ],
         }
 
@@ -71,7 +71,9 @@ class SynthesisModeConfig(BaseModel):
                 s.value if isinstance(s, PromptStrategy) else str(s).lower()
                 for s in other.get("strategies", [])
             ]
-            my_strats = [s.value if isinstance(s, PromptStrategy) else str(s) for s in self.strategies]
+            my_strats = [
+                s.value if isinstance(s, PromptStrategy) else str(s) for s in self.strategies
+            ]
             return mode_match and my_strats == other_strats
         return super().__eq__(other)
 
@@ -107,8 +109,12 @@ class NoiseConditionConfig(BaseModel):
     def to_dict(self) -> dict[str, Any]:
         return {
             "std": self.std,
-            "model": self.model.value if isinstance(self.model, NoiseModelEnum) else str(self.model),
-            "noise_model": self.model.value if isinstance(self.model, NoiseModelEnum) else str(self.model),
+            "model": self.model.value
+            if isinstance(self.model, NoiseModelEnum)
+            else str(self.model),
+            "noise_model": self.model.value
+            if isinstance(self.model, NoiseModelEnum)
+            else str(self.model),
             "mode": self.mode,
             "modes": [m.to_dict() for m in self.modes],
         }
@@ -117,9 +123,7 @@ class NoiseConditionConfig(BaseModel):
         if isinstance(other, dict):
             model_val = other.get("noise_model") or other.get("model")
             model_match = (
-                self.model.value == str(model_val).lower()
-                if model_val is not None
-                else True
+                self.model.value == str(model_val).lower() if model_val is not None else True
             )
             return (
                 abs(self.std - float(other.get("std", 0.0))) < 1e-9
@@ -127,7 +131,7 @@ class NoiseConditionConfig(BaseModel):
                 and self.mode == other.get("mode")
             )
         if isinstance(other, (tuple, list)):
-            return (self.std, self.model, self.mode)[:len(other)] == tuple(other)
+            return (self.std, self.model, self.mode)[: len(other)] == tuple(other)
         return super().__eq__(other)
 
 
@@ -144,14 +148,16 @@ class MatrixCondition(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     def __hash__(self) -> int:
-        return hash((
-            self.problem_id,
-            self.dim,
-            self.mode,
-            round(self.noise_std, 4),
-            self.noise_model,
-            self.strategy,
-        ))
+        return hash(
+            (
+                self.problem_id,
+                self.dim,
+                self.mode,
+                round(self.noise_std, 4),
+                self.noise_model,
+                self.strategy,
+            )
+        )
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, MatrixCondition):

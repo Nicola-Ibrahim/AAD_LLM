@@ -110,4 +110,3 @@ class SQLiteSynthesisReadRepository:
             df_exp = pd.read_sql_table(ExperimentORM.__tablename__, conn)
             df_iter = pd.read_sql_table(IterationORM.__tablename__, conn)
         return df_exp, df_iter
-

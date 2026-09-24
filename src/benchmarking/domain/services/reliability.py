@@ -28,10 +28,14 @@ class ReliabilityEngine:
     @classmethod
     def discover_models(cls, benchmark_data: EvaluationDataset) -> list[str]:
         """Discover LLM labels from loaded traces, including future models automatically."""
-        return sorted({parsed[0] for s in benchmark_data.solvers if (parsed := cls.split_solver_name(s))})
+        return sorted(
+            {parsed[0] for s in benchmark_data.solvers if (parsed := cls.split_solver_name(s))}
+        )
 
     @staticmethod
-    def wilson_interval(successes: int, trials: int, confidence: float = 0.95) -> tuple[float, float]:
+    def wilson_interval(
+        successes: int, trials: int, confidence: float = 0.95
+    ) -> tuple[float, float]:
         """Return a Wilson binomial confidence interval without a SciPy dependency."""
         if trials <= 0:
             return float("nan"), float("nan")
@@ -76,25 +80,35 @@ class ReliabilityEngine:
                 terminal = [r.best_value for r in valid_runs if np.isfinite(r.best_value)]
                 hit_times = [self.evaluations_to_target(r, primary_threshold) for r in valid_runs]
                 hit_times = [v for v in hit_times if np.isfinite(v)]
-                rows.append({
-                    "Model": model,
-                    "Strategy": strategy,
-                    "Solver": str(solver),
-                    "Dim": condition.dim,
-                    "Noise Std": condition.noise_std,
-                    "Problem ID": condition.problem_id,
-                    "Trials": n_trials,
-                    "Expected Trials": expected_trials,
-                    "Complete": n_trials >= expected_trials,
-                    "Primary Successes": primary_hits,
-                    "Primary Success Rate": primary_hits / n_trials if n_trials else float("nan"),
-                    "Primary CI Lower": lower,
-                    "Primary CI Upper": upper,
-                    "Secondary Successes": secondary_hits,
-                    "Secondary Success Rate": secondary_hits / n_trials if n_trials else float("nan"),
-                    "Median Best Error": float(np.median(terminal)) if terminal else float("nan"),
-                    "Median Evals to Primary Target": float(np.median(hit_times)) if hit_times else float("nan"),
-                })
+                rows.append(
+                    {
+                        "Model": model,
+                        "Strategy": strategy,
+                        "Solver": str(solver),
+                        "Dim": condition.dim,
+                        "Noise Std": condition.noise_std,
+                        "Problem ID": condition.problem_id,
+                        "Trials": n_trials,
+                        "Expected Trials": expected_trials,
+                        "Complete": n_trials >= expected_trials,
+                        "Primary Successes": primary_hits,
+                        "Primary Success Rate": primary_hits / n_trials
+                        if n_trials
+                        else float("nan"),
+                        "Primary CI Lower": lower,
+                        "Primary CI Upper": upper,
+                        "Secondary Successes": secondary_hits,
+                        "Secondary Success Rate": secondary_hits / n_trials
+                        if n_trials
+                        else float("nan"),
+                        "Median Best Error": float(np.median(terminal))
+                        if terminal
+                        else float("nan"),
+                        "Median Evals to Primary Target": float(np.median(hit_times))
+                        if hit_times
+                        else float("nan"),
+                    }
+                )
         return pd.DataFrame(rows)
 
     def compute_aggregate_reliability(
@@ -109,24 +123,31 @@ class ReliabilityEngine:
             return pd.DataFrame()
         rows: list[dict[str, object]] = []
         subset = reliability_table[
-            (reliability_table["Strategy"] == primary_strategy)
-            & reliability_table["Complete"]
+            (reliability_table["Strategy"] == primary_strategy) & reliability_table["Complete"]
         ]
         rng = np.random.default_rng(bootstrap_seed)
         for model, group in subset.groupby("Model", sort=True):
             rates = group["Primary Success Rate"].to_numpy(dtype=float)
             if not len(rates):
                 continue
-            samples = np.mean(rng.choice(rates, size=(bootstrap_samples, len(rates)), replace=True), axis=1)
-            rows.append({
-                "Model": model,
-                "Conditions": len(group),
-                "Trials": int(group["Trials"].sum()),
-                "Primary Success Rate": float(np.mean(rates)),
-                "Bootstrap CI Lower": float(np.quantile(samples, 0.025)),
-                "Bootstrap CI Upper": float(np.quantile(samples, 0.975)),
-            })
-        return pd.DataFrame(rows).sort_values("Primary Success Rate", ascending=False) if rows else pd.DataFrame()
+            samples = np.mean(
+                rng.choice(rates, size=(bootstrap_samples, len(rates)), replace=True), axis=1
+            )
+            rows.append(
+                {
+                    "Model": model,
+                    "Conditions": len(group),
+                    "Trials": int(group["Trials"].sum()),
+                    "Primary Success Rate": float(np.mean(rates)),
+                    "Bootstrap CI Lower": float(np.quantile(samples, 0.025)),
+                    "Bootstrap CI Upper": float(np.quantile(samples, 0.975)),
+                }
+            )
+        return (
+            pd.DataFrame(rows).sort_values("Primary Success Rate", ascending=False)
+            if rows
+            else pd.DataFrame()
+        )
 
     def compute_attainment_band(
         self,
@@ -180,10 +201,18 @@ class ReliabilityEngine:
                             continue
                         outcomes.append(float(np.min(run.raw_objectives[: idx + 1]) <= threshold))
                     if outcomes:
-                        rows.append({
-                            "Model": parsed[0], "Strategy": parsed[1], "Solver": str(solver),
-                            "Dim": condition.dim, "Noise Std": condition.noise_std, "Problem ID": condition.problem_id,
-                            "Checkpoint Fraction": fraction, "Checkpoint Evaluations": checkpoint,
-                            "Attainment Rate": float(np.mean(outcomes)), "Trials": len(outcomes),
-                        })
+                        rows.append(
+                            {
+                                "Model": parsed[0],
+                                "Strategy": parsed[1],
+                                "Solver": str(solver),
+                                "Dim": condition.dim,
+                                "Noise Std": condition.noise_std,
+                                "Problem ID": condition.problem_id,
+                                "Checkpoint Fraction": fraction,
+                                "Checkpoint Evaluations": checkpoint,
+                                "Attainment Rate": float(np.mean(outcomes)),
+                                "Trials": len(outcomes),
+                            }
+                        )
         return pd.DataFrame(rows)

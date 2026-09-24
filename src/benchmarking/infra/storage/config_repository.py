@@ -45,8 +45,7 @@ class EvaluationConfigRepository:
         bench_cfg = cfg.get("benchmarking") or cfg.get("evaluation") or {}
         baselines_data = self.load_baselines()
         baseline_labels = {
-            slug: info.get("display_name", slug.upper())
-            for slug, info in baselines_data.items()
+            slug: info.get("display_name", slug.upper()) for slug, info in baselines_data.items()
         }
 
         raw_noises = bench_cfg.get("target_noise_stds")
@@ -55,13 +54,12 @@ class EvaluationConfigRepository:
         return EvaluationConfig(
             benchmarking=bench_cfg,
             target_eval_runs=int(bench_cfg.get("target_eval_runs", 20)),
+            random_seed=int(bench_cfg.get("random_seed", 42)),
             budget_multiplier=int(bench_cfg.get("budget_multiplier", 10000)),
             eval_timeout_seconds=float(bench_cfg.get("eval_timeout_seconds", 30.0)),
             force_rerun=bool(bench_cfg.get("force_rerun", False)),
             fill_missing_only=bool(bench_cfg.get("fill_missing_only", True)),
-            classical_baselines=bench_cfg.get(
-                "classical_baselines", ["cmaes", "de", "pso"]
-            ),
+            classical_baselines=bench_cfg.get("classical_baselines", ["cmaes", "de", "pso"]),
             baseline_labels=baseline_labels,
             cross_eval_clean_champions=bool(bench_cfg.get("cross_eval_clean_champions", True)),
             target_noise_stds=target_noise_stds,

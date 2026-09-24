@@ -12,8 +12,8 @@ from evolution.domain.vos import ProblemProfile
 class BBOBProblem(BaseProblem):
     """BBOB problem wrapper with strategy pattern for noise injection.
 
-    Loads the clean IOH problem instance once, stores the global optimum
-    and problem parameters, and provides clean and noisy evaluation methods.
+    Loads separate instrumented and scoring IOH instances, stores the global
+    optimum and problem parameters, and provides clean and noisy evaluation methods.
 
     Args:
         problem_id: The BBOB function ID (1 to 24).
@@ -35,8 +35,11 @@ class BBOBProblem(BaseProblem):
         self.dim = dim
         self.instance_id = instance_id
 
-        # Load the underlying clean IOH problem once
+        # Keep the instrumented problem separate from clean scoring. Evaluating the
+        # returned solution must not consume the search budget or add a fake final
+        # evaluation to the optimizer's IOH trace.
         self._clean_problem = get_problem(problem_id, instance_id, dim, ProblemClass.BBOB)
+        self._scoring_problem = get_problem(problem_id, instance_id, dim, ProblemClass.BBOB)
         self.true_optimum: float = self._clean_problem.optimum.y
         # Eagerly cache bounds to avoid deadlocks from dynamic imports in concurrent thread pools
         self._lb = np.array(self._clean_problem.bounds.lb, dtype=float)
@@ -161,9 +164,12 @@ class BBOBProblem(BaseProblem):
         return self._clean_problem.state.evaluations
 
     def eval_clean(self, x: np.ndarray) -> float:
-        """Evaluate candidate point x on un-noised ground truth objective."""
+        """Score x on an unlogged, unbudgeted clean problem instance."""
         arr = np.asarray(x, dtype=float)
-        return self._clean_problem(arr.tolist())
+        try:
+            return float(self._scoring_problem(arr.tolist()))
+        finally:
+            self._scoring_problem.reset()
 
     @property
     def clean_problem(self) -> object:
@@ -198,11 +204,15 @@ class BBOBProblem(BaseProblem):
         state = self.__dict__.copy()
         # Exclude C++ unpicklable wrappers
         state["_clean_problem"] = None
+        state["_scoring_problem"] = None
         return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
         # Re-initialize clean IOH problem instance on unpickling
         self._clean_problem = get_problem(
+            self.problem_id, self.instance_id, self.dim, ProblemClass.BBOB
+        )
+        self._scoring_problem = get_problem(
             self.problem_id, self.instance_id, self.dim, ProblemClass.BBOB
         )

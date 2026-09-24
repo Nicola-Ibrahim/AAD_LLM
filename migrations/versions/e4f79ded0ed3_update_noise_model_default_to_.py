@@ -5,6 +5,7 @@ Revises: 0d231c4dae51
 Create Date: 2026-08-29 13:44:30.485922
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -12,8 +13,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'e4f79ded0ed3'
-down_revision: Union[str, Sequence[str], None] = '0d231c4dae51'
+revision: str = "e4f79ded0ed3"
+down_revision: Union[str, Sequence[str], None] = "0d231c4dae51"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -44,4 +45,3 @@ def downgrade() -> None:
     op.execute(
         "UPDATE experiments SET noise_model = 'multiplicative' WHERE noise_model = 'heteroscedastic'"
     )
-

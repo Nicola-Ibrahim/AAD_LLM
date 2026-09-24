@@ -24,7 +24,6 @@ from evolution.infra.storage.code.repository import CodeRepository
 from shared.execution import AlgorithmExecutor
 
 
-
 class Evaluator:
     """LLaMEA-compatible evaluator adapter for optimization problems.
 

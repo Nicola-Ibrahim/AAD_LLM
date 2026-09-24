@@ -76,9 +76,7 @@ class SynthesisLogger(BaseLogger):
         """Logs a prominent visual banner for a synthesis session."""
         sep = f"{Colors.BRIGHT_CYAN}{'=' * width}{Colors.RESET}"
         self.logger.info(f"\n{sep}")
-        self.logger.info(
-            f"{Colors.BOLD}{Colors.BRIGHT_CYAN}🧬 {title.upper()}{Colors.RESET}"
-        )
+        self.logger.info(f"{Colors.BOLD}{Colors.BRIGHT_CYAN}🧬 {title.upper()}{Colors.RESET}")
         if subtitle:
             self.logger.info(f"   {Colors.DIM}{subtitle}{Colors.RESET}")
         self.logger.info(sep)
@@ -128,7 +126,9 @@ class SynthesisLogger(BaseLogger):
         """Logs individual generation candidate evaluation details."""
         if not is_failure and error is not None and error < float("inf"):
             err_str = f"{Colors.BRIGHT_GREEN}{error:>12.4e}{Colors.RESET}"
-            fit_str = f"{Colors.CYAN}{fitness:>12.4e}{Colors.RESET}" if fitness is not None else "N/A"
+            fit_str = (
+                f"{Colors.CYAN}{fitness:>12.4e}{Colors.RESET}" if fitness is not None else "N/A"
+            )
             self.logger.info(
                 f"  {Colors.GRAY}•{Colors.RESET} {Colors.BOLD}⚡ Gen {gen_idx:2d}/{total_gens:2d}{Colors.RESET} | "
                 f"Algo: {Colors.BRIGHT_CYAN}{algo_name:<18}{Colors.RESET} | "
@@ -210,12 +210,22 @@ class SynthesisLogger(BaseLogger):
         progress_pct: float,
     ) -> None:
         """Logs a formatted synthesis search space audit summary."""
-        self.logger.info(f"\n{Colors.BOLD}{Colors.BRIGHT_CYAN}🎯 Synthesis Matrix Audit for '{model_name}':{Colors.RESET}")
-        self.logger.info(f"   • Configured Matrix Size:  {Colors.BOLD}{total_conditions}{Colors.RESET} conditions")
-        self.logger.info(f"   • Completed (Champions):   {Colors.BRIGHT_GREEN}{completed}/{total_conditions}{Colors.RESET} ({progress_pct:.1f}%)")
-        self.logger.info(f"   • Pending Workload:        {Colors.BRIGHT_YELLOW}{pending}{Colors.RESET}")
+        self.logger.info(
+            f"\n{Colors.BOLD}{Colors.BRIGHT_CYAN}🎯 Synthesis Matrix Audit for '{model_name}':{Colors.RESET}"
+        )
+        self.logger.info(
+            f"   • Configured Matrix Size:  {Colors.BOLD}{total_conditions}{Colors.RESET} conditions"
+        )
+        self.logger.info(
+            f"   • Completed (Champions):   {Colors.BRIGHT_GREEN}{completed}/{total_conditions}{Colors.RESET} ({progress_pct:.1f}%)"
+        )
+        self.logger.info(
+            f"   • Pending Workload:        {Colors.BRIGHT_YELLOW}{pending}{Colors.RESET}"
+        )
         if retry > 0:
-            self.logger.info(f"   • Failed Runs (To Retry):  {Colors.BRIGHT_RED}{retry}{Colors.RESET}")
+            self.logger.info(
+                f"   • Failed Runs (To Retry):  {Colors.BRIGHT_RED}{retry}{Colors.RESET}"
+            )
 
     def summary(
         self,

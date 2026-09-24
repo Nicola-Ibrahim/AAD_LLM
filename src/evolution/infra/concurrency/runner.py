@@ -52,9 +52,7 @@ class ProcessPoolRunner:
         workers = self.max_workers if self.max_workers is not None else len(items)
 
         with ProcessPoolExecutor(max_workers=workers) as executor:
-            future_to_key = {
-                executor.submit(fn, item): key_fn(item) for item in items
-            }
+            future_to_key = {executor.submit(fn, item): key_fn(item) for item in items}
 
             for future in as_completed(future_to_key):
                 key = future_to_key[future]

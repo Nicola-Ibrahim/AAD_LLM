@@ -135,7 +135,9 @@ class LLMClient:
                 raise ValueError(
                     "A Gemini API key is required. Set the GOOGLE_API_KEY environment variable."
                 )
-            model = self.kwargs.pop("model", None) or os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+            model = self.kwargs.pop("model", None) or os.environ.get(
+                "GEMINI_MODEL", "gemini-2.0-flash"
+            )
             return Gemini_LLM(api_key=api_key, model=model, **self.kwargs)
 
         if config := _OPENAI_ENDPOINTS.get(self.provider):

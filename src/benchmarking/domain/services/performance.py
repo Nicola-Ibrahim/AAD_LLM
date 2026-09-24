@@ -74,12 +74,14 @@ class PerformanceMetricsEngine:
                     continue
                 runs = solvers[s]
                 succ = self.compute_success_rate(runs, threshold=threshold)
-                prob_records.append({
-                    "Problem": p_name,
-                    "Class": p_class,
-                    "Solver": s,
-                    "Success Rate": succ,
-                })
+                prob_records.append(
+                    {
+                        "Problem": p_name,
+                        "Class": p_class,
+                        "Solver": s,
+                        "Success Rate": succ,
+                    }
+                )
 
         if not prob_records:
             return pd.DataFrame()
@@ -204,7 +206,11 @@ class PerformanceMetricsEngine:
         clean_noise = (
             0.0
             if 0.0 in target_noises
-            else (0.0 if 0.0 in benchmark_data.noise_stds else (target_noises[0] if target_noises else 0.0))
+            else (
+                0.0
+                if 0.0 in benchmark_data.noise_stds
+                else (target_noises[0] if target_noises else 0.0)
+            )
         )
 
         records: list[dict[str, Any]] = []
@@ -240,7 +246,9 @@ class PerformanceMetricsEngine:
 
                     succ_rate = succ_runs / tot_runs
                     med_err = float(np.median(final_values)) if final_values else 1e-16
-                    clamped_errs = np.clip(np.array(final_values) if final_values else np.array([1e-16]), 1e-16, None)
+                    clamped_errs = np.clip(
+                        np.array(final_values) if final_values else np.array([1e-16]), 1e-16, None
+                    )
                     mean_log_err = float(np.mean(np.log10(clamped_errs)))
                     clean_rate = clean_success_rates.get(s, succ_rate)
                     frag_drop = clean_rate - succ_rate
@@ -250,23 +258,34 @@ class PerformanceMetricsEngine:
                         else (0.0 if succ_rate == 0 else -100.0)
                     )
 
-                    records.append({
-                        "Solver": s,
-                        "Dim": dim,
-                        "Noise Std": n_std,
-                        "Total Runs": tot_runs,
-                        "Successes": succ_runs,
-                        "Success Rate": succ_rate,
-                        "Median Error": med_err,
-                        "Mean Log Error": mean_log_err,
-                        "Clean Success Rate": clean_rate,
-                        "Fragility Drop": frag_drop,
-                        "Relative Drop Pct": rel_drop,
-                    })
+                    records.append(
+                        {
+                            "Solver": s,
+                            "Dim": dim,
+                            "Noise Std": n_std,
+                            "Total Runs": tot_runs,
+                            "Successes": succ_runs,
+                            "Success Rate": succ_rate,
+                            "Median Error": med_err,
+                            "Mean Log Error": mean_log_err,
+                            "Clean Success Rate": clean_rate,
+                            "Fragility Drop": frag_drop,
+                            "Relative Drop Pct": rel_drop,
+                        }
+                    )
 
         cols = [
-            "Solver", "Dim", "Noise Std", "Total Runs", "Successes", "Success Rate",
-            "Median Error", "Mean Log Error", "Clean Success Rate", "Fragility Drop", "Relative Drop Pct"
+            "Solver",
+            "Dim",
+            "Noise Std",
+            "Total Runs",
+            "Successes",
+            "Success Rate",
+            "Median Error",
+            "Mean Log Error",
+            "Clean Success Rate",
+            "Fragility Drop",
+            "Relative Drop Pct",
         ]
         if not records:
             return pd.DataFrame(columns=cols)
@@ -335,7 +354,9 @@ class PerformanceMetricsEngine:
         for cond, s_dict in benchmark_data.items():
             if dims is not None and cond.dim not in dims:
                 continue
-            if noise_stds is not None and not any(np.isclose(cond.noise_std, n) for n in noise_stds):
+            if noise_stds is not None and not any(
+                np.isclose(cond.noise_std, n) for n in noise_stds
+            ):
                 continue
             if problem_ids is not None and cond.problem_id not in problem_ids:
                 continue
@@ -364,18 +385,29 @@ class PerformanceMetricsEngine:
                         tier = "Severe Stagnation / Failure (Δy > 1.0)"
                         tier_code = "severe_stagnation"
 
-                    records.append({
-                        "Solver": s_name,
-                        "Dim": cond.dim,
-                        "Noise Std": cond.noise_std,
-                        "Problem ID": cond.problem_id,
-                        "Best Error": err,
-                        "Tier": tier,
-                        "Tier Code": tier_code,
-                    })
+                    records.append(
+                        {
+                            "Solver": s_name,
+                            "Dim": cond.dim,
+                            "Noise Std": cond.noise_std,
+                            "Problem ID": cond.problem_id,
+                            "Best Error": err,
+                            "Tier": tier,
+                            "Tier Code": tier_code,
+                        }
+                    )
 
         if not records:
-            return pd.DataFrame(columns=["Solver", "Dim", "Noise Std", "Problem ID", "Best Error", "Tier", "Tier Code"])
+            return pd.DataFrame(
+                columns=[
+                    "Solver",
+                    "Dim",
+                    "Noise Std",
+                    "Problem ID",
+                    "Best Error",
+                    "Tier",
+                    "Tier Code",
+                ]
+            )
 
         return pd.DataFrame(records)
-

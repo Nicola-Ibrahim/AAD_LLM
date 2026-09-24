@@ -127,9 +127,7 @@ class ExperimentSummary(DomainEntity):
         """Records an iteration result and updates champion metrics if performance improved."""
         self.iterations.append(meta)
         it_idx = (
-            iteration_num
-            if iteration_num is not None
-            else (meta.iteration or len(self.iterations))
+            iteration_num if iteration_num is not None else (meta.iteration or len(self.iterations))
         )
         err = meta.fitness.final_error
         if err is not None and math.isfinite(err):

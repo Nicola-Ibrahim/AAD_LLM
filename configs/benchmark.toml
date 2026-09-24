@@ -7,6 +7,9 @@
 # Target independent benchmark evaluation runs per condition (e.g., 10, 15, 20)
 target_eval_runs = 20
 
+# Trials use paired BBOB instance IDs and optimizer/noise seeds derived from this base.
+random_seed = 42
+
 # Budget multiplier per dimension (Budget = dim * budget_multiplier, e.g. 5D * 10,000 = 50,000 evaluations)
 budget_multiplier = 10000
 

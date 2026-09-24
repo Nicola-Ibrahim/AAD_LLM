@@ -100,9 +100,7 @@ class BaseLogger(ABC):
 
     def resuming(self, exp_id: int, current_iter: int, total_iters: int) -> None:
         """Logs an auto-resumption notice for an existing experiment."""
-        self.info(
-            f"Resuming Exp #{exp_id} from Gen {current_iter + 1}/{total_iters}..."
-        )
+        self.info(f"Resuming Exp #{exp_id} from Gen {current_iter + 1}/{total_iters}...")
 
     def cached(self, exp_id: int, total_iters: int, best_error: float | None) -> None:
         """Logs a skip notice for an already completed experiment."""

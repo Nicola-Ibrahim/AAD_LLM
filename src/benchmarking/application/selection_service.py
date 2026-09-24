@@ -46,5 +46,5 @@ class ChampionSelectionService:
         self,
         output_path: Path | None = None,
     ) -> tuple[dict[str, dict[str, Any]], pd.DataFrame]:
-        """Discover champions from DB, export to champions.json, and return summary DataFrame."""
+        """Discover champions from the current DB, export JSON, and return a summary DataFrame."""
         return self.champions_repo.export_champions_json(output_path)

@@ -79,8 +79,14 @@ def test_build_task_prompt_implicit():
         PromptStrategy.VECTORIZATION,
     ]:
         prompt = build_task_prompt(problem=problem, mode=SynthesisMode.IMPLICIT, strategy=strat)
-        assert "The objective function may return different values when evaluated at the same point" in prompt
-        assert "No further information about the source or magnitude of this variation is available" in prompt
+        assert (
+            "The objective function may return different values when evaluated at the same point"
+            in prompt
+        )
+        assert (
+            "No further information about the source or magnitude of this variation is available"
+            in prompt
+        )
         assert "noisy" not in prompt.lower()
         assert "noise-free" not in prompt.lower()
         assert "deterministic" not in prompt.lower()
@@ -92,7 +98,10 @@ def test_build_task_prompt_scaffolds():
 
     # Baseline: no strategy scaffold text added
     baseline_prompt = build_task_prompt(
-        problem=problem, mode=SynthesisMode.EXPLICIT, noise_environment=NoiseEnvironment.CLEAN, strategy=PromptStrategy.BASELINE
+        problem=problem,
+        mode=SynthesisMode.EXPLICIT,
+        noise_environment=NoiseEnvironment.CLEAN,
+        strategy=PromptStrategy.BASELINE,
     )
     assert "numpy array operations" not in baseline_prompt.lower()
     assert "exploration and exploitation" not in baseline_prompt.lower()
@@ -100,21 +109,30 @@ def test_build_task_prompt_scaffolds():
 
     # Vectorization
     vec_prompt = build_task_prompt(
-        problem=problem, mode=SynthesisMode.EXPLICIT, noise_environment=NoiseEnvironment.CLEAN, strategy=PromptStrategy.VECTORIZATION
+        problem=problem,
+        mode=SynthesisMode.EXPLICIT,
+        noise_environment=NoiseEnvironment.CLEAN,
+        strategy=PromptStrategy.VECTORIZATION,
     )
     assert "population-based representations" in vec_prompt.lower()
     assert "numpy array operations" in vec_prompt.lower()
 
     # Guided
     guided_prompt = build_task_prompt(
-        problem=problem, mode=SynthesisMode.EXPLICIT, noise_environment=NoiseEnvironment.CLEAN, strategy=PromptStrategy.GUIDED
+        problem=problem,
+        mode=SynthesisMode.EXPLICIT,
+        noise_environment=NoiseEnvironment.CLEAN,
+        strategy=PromptStrategy.GUIDED,
     )
     assert "balance between exploration and exploitation" in guided_prompt.lower()
     assert "allocating evaluations between discovering promising regions" in guided_prompt.lower()
 
     # Thinking
     thinking_prompt = build_task_prompt(
-        problem=problem, mode=SynthesisMode.EXPLICIT, noise_environment=NoiseEnvironment.CLEAN, strategy=PromptStrategy.THINKING
+        problem=problem,
+        mode=SynthesisMode.EXPLICIT,
+        noise_environment=NoiseEnvironment.CLEAN,
+        strategy=PromptStrategy.THINKING,
     )
     assert "briefly reason about the main search mechanism" in thinking_prompt.lower()
     assert "directly reflect this reasoning" in thinking_prompt.lower()
@@ -140,11 +158,15 @@ def test_build_task_prompt_scaffolds():
 def test_all_12_factorial_conditions_clean_of_banned_keywords(mode, noise_env, strategy):
     problem = BBOBProblem(problem_id=1, dim=3, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
-    prompt = build_task_prompt(problem=problem, mode=mode, noise_environment=noise_env, strategy=strategy)
+    prompt = build_task_prompt(
+        problem=problem, mode=mode, noise_environment=noise_env, strategy=strategy
+    )
     prompt_lower = prompt.lower()
 
     for banned in BANNED_KEYWORDS:
-        assert banned not in prompt_lower, f"Banned keyword '{banned}' found in {mode} x {noise_env} x {strategy}"
+        assert banned not in prompt_lower, (
+            f"Banned keyword '{banned}' found in {mode} x {noise_env} x {strategy}"
+        )
 
 
 def test_build_task_prompt_from_base_problem():
@@ -186,8 +208,3 @@ def test_assemble_full_prompt():
     assert "CODE SKELETON EXAMPLE" in full
     assert "- Dimension: 2" in full
     assert "class AlgorithmName:" in full
-
-
-
-
-

@@ -12,35 +12,31 @@ from benchmarking.domain.vos import EvaluationDataset, RunTrace
 # ─── Declarative Dispatch Table for AUC-ECDF Grouping Strategies ──────────────
 _AUC_GROUPING_DISPATCH: dict[str, Callable[[pd.DataFrame], pd.DataFrame]] = {
     "condition": lambda df: df,
-    "dim": lambda df: (
-        cast(
-            pd.DataFrame,
-            df.groupby(["Solver", "Dim", "Type"], as_index=False)[["AUC-ECDF (%)"]].mean(),
-        ).assign(GroupKey=lambda d: d["Dim"].astype(str) + "D")
-    ),
-    "noise_std": lambda df: (
-        cast(
-            pd.DataFrame,
-            df.groupby(["Solver", "Noise Std", "Type"], as_index=False)[["AUC-ECDF (%)"]].mean(),
-        ).assign(
-            GroupKey=lambda d: d["Noise Std"].apply(
-                lambda n: "Clean (σ=0.0)" if n == 0.0 else f"Noisy (σ={n})"
-            )
+    "dim": lambda df: cast(
+        pd.DataFrame,
+        df.groupby(["Solver", "Dim", "Type"], as_index=False)[["AUC-ECDF (%)"]].mean(),
+    ).assign(GroupKey=lambda d: d["Dim"].astype(str) + "D"),
+    "noise_std": lambda df: cast(
+        pd.DataFrame,
+        df.groupby(["Solver", "Noise Std", "Type"], as_index=False)[["AUC-ECDF (%)"]].mean(),
+    ).assign(
+        GroupKey=lambda d: d["Noise Std"].apply(
+            lambda n: "Clean (σ=0.0)" if n == 0.0 else f"Noisy (σ={n})"
         )
     ),
-    "problem_id": lambda df: (
-        cast(
-            pd.DataFrame,
-            df.groupby(["Solver", "Problem ID", "Type"], as_index=False)[["AUC-ECDF (%)"]].mean(),
-        ).assign(GroupKey=lambda d: d["Problem ID"].apply(BBOBFunction.get_name))
-    ),
+    "problem_id": lambda df: cast(
+        pd.DataFrame,
+        df.groupby(["Solver", "Problem ID", "Type"], as_index=False)[["AUC-ECDF (%)"]].mean(),
+    ).assign(GroupKey=lambda d: d["Problem ID"].apply(BBOBFunction.get_name)),
     "dim_noise": lambda df: cast(
         pd.DataFrame,
         df.groupby(["Solver", "Dim", "Noise Std", "Type"], as_index=False)[["AUC-ECDF (%)"]].mean(),
     ),
     "problem_noise": lambda df: cast(
         pd.DataFrame,
-        df.groupby(["Solver", "Problem ID", "Noise Std", "Type"], as_index=False)[["AUC-ECDF (%)"]].mean(),
+        df.groupby(["Solver", "Problem ID", "Noise Std", "Type"], as_index=False)[
+            ["AUC-ECDF (%)"]
+        ].mean(),
     ),
 }
 
@@ -178,11 +174,13 @@ class EcdfConvergenceEngine:
         for s in solvers:
             aucs = solver_aucs[s]
             mean_auc = float(np.mean(aucs)) if aucs else 0.0
-            records.append({
-                "Solver": s,
-                "AUC-ECDF": mean_auc,
-                "Type": "Classical Baseline" if " / " not in s else "LLaMEA Evolved",
-            })
+            records.append(
+                {
+                    "Solver": s,
+                    "AUC-ECDF": mean_auc,
+                    "Type": "Classical Baseline" if " / " not in s else "LLaMEA Evolved",
+                }
+            )
 
         df_auc = pd.DataFrame(records).sort_values(by="AUC-ECDF", ascending=True)
         return df_auc
@@ -192,7 +190,9 @@ class EcdfConvergenceEngine:
         benchmark_data: EvaluationDataset,
         solvers: list[str],
         targets: np.ndarray | dict[float, np.ndarray],
-        group_by: Literal["dim", "problem_id", "noise_std", "dim_noise", "problem_noise", "condition"] = "dim",
+        group_by: Literal[
+            "dim", "problem_id", "noise_std", "dim_noise", "problem_noise", "condition"
+        ] = "dim",
         max_evals: int | None = 1_000_000,
         n_grid_points: int = 200,
     ) -> pd.DataFrame:
@@ -226,15 +226,17 @@ class EcdfConvergenceEngine:
                     _, _, _, ecdf = self.compute_trajectory_and_ecdf(runs, c_grid, c_targets)
                     auc_raw = float(np.trapezoid(ecdf, log_x) / x_range)
                     auc_pct = auc_raw * 100.0
-                    rows.append({
-                        "Solver": s,
-                        "Dim": cond.dim,
-                        "Noise Std": cond.noise_std,
-                        "Problem ID": cond.problem_id,
-                        "AUC-ECDF (%)": auc_pct,
-                        "AUC-ECDF": auc_raw,
-                        "Type": "Classical Baseline" if " / " not in s else "LLaMEA Evolved",
-                    })
+                    rows.append(
+                        {
+                            "Solver": s,
+                            "Dim": cond.dim,
+                            "Noise Std": cond.noise_std,
+                            "Problem ID": cond.problem_id,
+                            "AUC-ECDF (%)": auc_pct,
+                            "AUC-ECDF": auc_raw,
+                            "Type": "Classical Baseline" if " / " not in s else "LLaMEA Evolved",
+                        }
+                    )
 
         df_raw = pd.DataFrame(rows)
         if df_raw.empty:

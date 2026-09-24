@@ -161,9 +161,7 @@ class FeedbackRenderer:
             msg = TIMEOUT_FEEDBACK_TEMPLATE
         else:
             error_str = f"{error_type}: {error_message}" if error_message else f"{error_type}"
-            code_section = (
-                f"\n\nRelevant code:\n{code_context}" if code_context else ""
-            )
+            code_section = f"\n\nRelevant code:\n{code_context}" if code_context else ""
             msg = RUNTIME_ERROR_FEEDBACK_TEMPLATE.format(
                 error_str=error_str,
                 code_section=code_section,

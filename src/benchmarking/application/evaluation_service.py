@@ -7,6 +7,7 @@ and classical baselines driven purely by configs/benchmark.toml.
 
 from datetime import datetime, timezone
 from pathlib import Path
+import random
 import shutil
 import tempfile
 import time
@@ -36,6 +37,9 @@ from evolution.domain.services.noise_strategy import (
 from evolution.infra.problems.bbob import BBOBProblem
 from shared.config import PROJECT_ROOT
 from shared.execution import AlgorithmExecutor
+
+EVALUATION_SCHEMA_VERSION = 2
+ERROR_DEFINITION = "max(0, best_clean_objective - true_optimum)"
 
 
 class EvaluationService:
@@ -92,6 +96,7 @@ class EvaluationService:
         self.baseline_labels = self.config.baseline_labels
         self.cross_eval_clean_champions = self.config.cross_eval_clean_champions
         self.target_noise_stds = self.config.target_noise_stds
+        self.random_seed = self.config.random_seed
 
     # ── Condition Discovery Helper ───────────────────────────────────────────────
 
@@ -124,10 +129,7 @@ class EvaluationService:
             target_noises = sorted(list({float(c[1]) for c in raw_conditions} | {0.0}))
 
         expanded = {
-            (d, float(n), p)
-            for d in unique_dims
-            for n in target_noises
-            for p in unique_pids
+            (d, float(n), p) for d in unique_dims for n in target_noises for p in unique_pids
         }
         return sorted(list(expanded))
 
@@ -150,12 +152,18 @@ class EvaluationService:
         if prov is None:
             return "PENDING", 0, None
 
-        if expected_code_hash and prov.get("code_hash") != expected_code_hash:
-            return "NEEDS_RERUN", len(prov.get("clean_errors", [])), prov.get("median_clean_error")
-
-        clean_errs = prov.get("clean_errors", [])
+        clean_errs = prov.get("errors", prov.get("clean_errors", []))
         runs_found = len(clean_errs)
-        med_err = prov.get("median_clean_error")
+        med_err = prov.get("median_error", prov.get("median_clean_error"))
+
+        if (
+            prov.get("evaluation_schema_version") != EVALUATION_SCHEMA_VERSION
+            or prov.get("error_definition") != ERROR_DEFINITION
+        ):
+            return "NEEDS_RERUN", runs_found, None
+
+        if expected_code_hash and prov.get("code_hash") != expected_code_hash:
+            return "NEEDS_RERUN", runs_found, med_err
 
         if runs_found >= self.n_runs:
             return "COMPLETED", runs_found, med_err
@@ -188,7 +196,9 @@ class EvaluationService:
             mode_enum = SynthesisMode.EXPLICIT
 
         code_path_raw = Path(champ["code_path"])
-        code_file = self.project_root / code_path_raw if not code_path_raw.is_absolute() else code_path_raw
+        code_file = (
+            self.project_root / code_path_raw if not code_path_raw.is_absolute() else code_path_raw
+        )
         code_valid = code_file.exists()
         code_hash = compute_code_hash(code_file.read_text(encoding="utf-8")) if code_valid else None
 
@@ -205,11 +215,7 @@ class EvaluationService:
                     display_suffix = " (cross-eval)" if is_cross_eval else " (noise-adapted)"
 
         target_dir = (
-            self.state_repo.eval_dir
-            / f"{dim}D"
-            / f"std_{eval_noise}"
-            / f"f{p_id}"
-            / solver_folder
+            self.state_repo.eval_dir / f"{dim}D" / f"std_{eval_noise}" / f"f{p_id}" / solver_folder
         )
         status, runs_found, med_err = self._inspect_solver_status(
             target_dir, expected_code_hash=code_hash, code_valid=code_valid
@@ -300,23 +306,25 @@ class EvaluationService:
                 status, runs_found, med_err = self._inspect_solver_status(
                     target_dir, expected_code_hash=None, code_valid=True
                 )
-                rows.append({
-                    "key": f"f{p_id}_{dim}D_std{noise_std}_{baseline_slug}",
-                    "solver_type": "baseline",
-                    "solver": baseline_slug,
-                    "display_name": b_name,
-                    "model": baseline_slug,
-                    "strategy": "classical",
-                    "problem_id": p_id,
-                    "dim": dim,
-                    "noise_std": noise_std,
-                    "mode": SynthesisMode.EXPLICIT,
-                    "target_runs": self.n_runs,
-                    "runs_found": runs_found,
-                    "status": status,
-                    "median_error": med_err,
-                    "is_filtered": False,
-                })
+                rows.append(
+                    {
+                        "key": f"f{p_id}_{dim}D_std{noise_std}_{baseline_slug}",
+                        "solver_type": "baseline",
+                        "solver": baseline_slug,
+                        "display_name": b_name,
+                        "model": baseline_slug,
+                        "strategy": "classical",
+                        "problem_id": p_id,
+                        "dim": dim,
+                        "noise_std": noise_std,
+                        "mode": SynthesisMode.EXPLICIT,
+                        "target_runs": self.n_runs,
+                        "runs_found": runs_found,
+                        "status": status,
+                        "median_error": med_err,
+                        "is_filtered": False,
+                    }
+                )
         return pd.DataFrame(rows)
 
     def audit_workload(self, solver_type: str = "all") -> pd.DataFrame:
@@ -351,22 +359,38 @@ class EvaluationService:
         self.logger.verbose = verbose
         existing_runs = 0
         clean_errors: list[float] = []
+        best_objectives: list[float] = []
+        true_optima: list[float] = []
+        instance_ids: list[int] = []
+        trial_seeds: list[int] = []
         runtimes: list[float] = []
         evals_list: list[int] = []
         can_resume = False
 
         if not self.force_rerun and target_dir.exists():
             prov = self.state_repo.read_provenance(target_dir)
-            if prov is not None and (not expected_code_hash or prov.get("code_hash") == expected_code_hash):
+            provenance_is_current = (
+                prov is not None
+                and prov.get("evaluation_schema_version") == EVALUATION_SCHEMA_VERSION
+                and prov.get("error_definition") == ERROR_DEFINITION
+                and (not expected_code_hash or prov.get("code_hash") == expected_code_hash)
+            )
+            if provenance_is_current:
                 clean_errors = prov.get("clean_errors", [])
+                best_objectives = prov.get("best_objectives", [])
+                true_optima = prov.get("true_optima", [])
+                instance_ids = prov.get("instance_ids", [])
+                trial_seeds = prov.get("trial_seeds", [])
                 runtimes = prov.get("runtimes", [])
                 evals_list = prov.get("evaluations_used", [])
                 existing_runs = len(clean_errors)
                 if existing_runs >= self.n_runs:
-                    self.logger.cached(existing_runs, prov.get("median_clean_error"))
+                    self.logger.cached(existing_runs, prov.get("median_error"))
                     return {
                         "status": "CACHED",
-                        "median_clean_error": prov.get("median_clean_error"),
+                        "median_clean_error": prov.get("median_error"),
+                        "best_objectives": prov.get("best_objectives", []),
+                        "true_optima": prov.get("true_optima", []),
                         "clean_errors": clean_errors,
                         "n_runs": existing_runs,
                     }
@@ -376,9 +400,14 @@ class EvaluationService:
 
         if not can_resume:
             if target_dir.exists():
+                # Stale traces cannot safely be resumed under the current
+                # evaluation schema. Remove only this exact condition folder;
+                # the notebook regenerates the champion export from the DB.
                 shutil.rmtree(target_dir)
             target_dir.parent.mkdir(parents=True, exist_ok=True)
-            clean_errors, runtimes, evals_list = [], [], []
+            clean_errors, best_objectives, true_optima = [], [], []
+            instance_ids, trial_seeds = [], []
+            runtimes, evals_list = [], []
             start_run_idx = 1
             is_incremental = False
         else:
@@ -400,18 +429,10 @@ class EvaluationService:
 
             consecutive_failures = 0
             for run_idx in range(start_run_idx, self.n_runs + 1):
-                if consecutive_failures >= 2:
-                    clean_errors.append(float("inf"))
-                    runtimes.append(0.0)
-                    evals_list.append(budget)
-                    self.logger.trial(
-                        trial_idx=run_idx,
-                        total_trials=self.n_runs,
-                        best_clean=float("inf"),
-                        runtime=0.0,
-                        evals_used=budget,
-                    )
-                    continue
+                instance_id = run_idx
+                trial_seed = self.random_seed + run_idx
+                random.seed(trial_seed)
+                np.random.seed(trial_seed)
 
                 noise_strat = (
                     NoNoiseStrategy()
@@ -422,30 +443,62 @@ class EvaluationService:
                     problem_id=p_id,
                     dim=dim,
                     noise_strategy=noise_strat,
-                    instance_id=1,
-                    seed=42 + run_idx,
+                    instance_id=instance_id,
+                    seed=trial_seed,
                 )
+                true_optimum = float(prob.true_optimum)
+                true_optima.append(true_optimum)
+                instance_ids.append(instance_id)
+                trial_seeds.append(trial_seed)
+
+                if consecutive_failures >= 2:
+                    clean_errors.append(float("inf"))
+                    best_objectives.append(float("inf"))
+                    runtimes.append(0.0)
+                    evals_list.append(0)
+                    self.logger.trial(
+                        trial_idx=run_idx,
+                        total_trials=self.n_runs,
+                        best_clean=float("inf"),
+                        runtime=0.0,
+                        evals_used=0,
+                        best_objective=float("inf"),
+                        true_optimum=true_optimum,
+                    )
+                    prob.reset()
+                    continue
+
                 prob.attach_logger(logger_ioh)
                 prob.set_budget(budget)
+                trial_started = time.perf_counter()
                 try:
-                    best_clean, rt, evals_used = runner_fn(prob, budget)
-                    if np.isinf(best_clean):
+                    best_objective, rt, _reported_evals = runner_fn(prob, budget)
+                    best_objective = float(best_objective)
+                    if not np.isfinite(best_objective):
+                        best_objective = float("inf")
+                        best_error = float("inf")
                         consecutive_failures += 1
                     else:
+                        best_error = max(0.0, best_objective - true_optimum)
                         consecutive_failures = 0
                 except Exception:
-                    best_clean, rt, evals_used = float("inf"), 0.0, budget
+                    best_objective, best_error = float("inf"), float("inf")
+                    rt = time.perf_counter() - trial_started
                     consecutive_failures += 1
 
-                clean_errors.append(best_clean)
+                evals_used = int(prob.evaluations)
+                clean_errors.append(best_error)
+                best_objectives.append(best_objective)
                 runtimes.append(rt)
                 evals_list.append(evals_used)
                 self.logger.trial(
                     trial_idx=run_idx,
                     total_trials=self.n_runs,
-                    best_clean=best_clean,
+                    best_clean=best_error,
                     runtime=rt,
                     evals_used=evals_used,
+                    best_objective=best_objective,
+                    true_optimum=true_optimum,
                 )
                 prob.reset()
 
@@ -457,13 +510,33 @@ class EvaluationService:
         self.logger.condition_complete(len(clean_errors), median_err)
         prov_data = {
             **prov_metadata,
+            "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
+            "error_definition": ERROR_DEFINITION,
             "problem_id": p_id,
             "dim": dim,
             "noise_std": noise_std,
             "budget": budget,
+            "instance_ids": instance_ids,
+            "trial_seeds": trial_seeds,
+            "true_optima": true_optima,
+            "best_objectives": best_objectives,
             "n_runs": len(clean_errors),
+            "median_error": median_err,
             "median_clean_error": median_err,
+            "errors": clean_errors,
             "clean_errors": clean_errors,
+            "trial_records": [
+                {
+                    "trial": idx,
+                    "instance_id": instance_ids[idx - 1],
+                    "seed": trial_seeds[idx - 1],
+                    "true_optimum": true_optima[idx - 1],
+                    "best_objective": best_objectives[idx - 1],
+                    "error": clean_errors[idx - 1],
+                    "evaluations_used": evals_list[idx - 1],
+                }
+                for idx in range(1, len(clean_errors) + 1)
+            ],
             "runtimes": runtimes,
             "evaluations_used": evals_list,
             "evaluated_at": datetime.now(timezone.utc).isoformat(),
@@ -472,6 +545,9 @@ class EvaluationService:
         return {
             "status": "SUCCESS",
             "median_clean_error": median_err,
+            "median_error": median_err,
+            "best_objectives": best_objectives,
+            "true_optima": true_optima,
             "clean_errors": clean_errors,
             "n_runs": len(clean_errors),
         }
@@ -489,13 +565,19 @@ class EvaluationService:
         self.logger.verbose = verbose
         p_id = champion_info["problem_id"]
         dim = champion_info["dim"]
-        noise_std = float(target_noise_std) if target_noise_std is not None else float(champion_info.get("noise_std", 0.0))
+        noise_std = (
+            float(target_noise_std)
+            if target_noise_std is not None
+            else float(champion_info.get("noise_std", 0.0))
+        )
         strat = champion_info.get("prompt_strategy", "baseline")
         llm_name = champion_info.get("llm_name", "llamea")
         algo_name = champion_info.get("algorithm_name", "ChampionAlgorithm")
 
         raw_code_path = Path(champion_info["code_path"])
-        code_file = self.project_root / raw_code_path if not raw_code_path.is_absolute() else raw_code_path
+        code_file = (
+            self.project_root / raw_code_path if not raw_code_path.is_absolute() else raw_code_path
+        )
         if not code_file.exists():
             self.logger.missing_code(str(raw_code_path))
             return {"status": "MISSING_CODE", "errors": []}
@@ -518,8 +600,13 @@ class EvaluationService:
                 budget=budget,
             )
             t1 = time.perf_counter()
-            best_clean = prob.eval_clean(best_x) if best_x is not None else float(returned_fitness)
-            return best_clean, (t1 - t0), prob.evaluations
+            if best_x is not None:
+                best_objective = prob.eval_clean(best_x)
+            elif prob.noise_std > 0.0:
+                raise ValueError("Noisy champion must return best_x for clean objective scoring.")
+            else:
+                best_objective = float(returned_fitness)
+            return best_objective, (t1 - t0), prob.evaluations
 
         prov_metadata = {
             "model": llm_name,
@@ -553,7 +640,9 @@ class EvaluationService:
         """Execute empirical trials for a classical baseline algorithm."""
         self.logger.verbose = verbose
         baseline_fn = get_baseline_runner(baseline_slug)
-        target_dir = self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / baseline_slug
+        target_dir = (
+            self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / baseline_slug
+        )
 
         def baseline_runner(prob: BBOBProblem, budget: int) -> tuple[float, float, int]:
             return baseline_fn(prob, budget)
@@ -622,7 +711,11 @@ class EvaluationService:
                 raw_k = row.get("raw_key", row["key"])
                 matching = [v for k, v in champions_flat.items() if k == raw_k or k.endswith(raw_k)]
                 if not matching:
-                    matching = [v for k, v in champions_flat.items() if k == row["key"] or k.endswith(row["key"])]
+                    matching = [
+                        v
+                        for k, v in champions_flat.items()
+                        if k == row["key"] or k.endswith(row["key"])
+                    ]
                 if not matching:
                     continue
                 res = self.run_champion_trials(
@@ -645,16 +738,26 @@ class EvaluationService:
             else:
                 executed_count += 1
 
-            results.append({
-                "solver_type": stype,
-                "solver": row["solver"],
-                "display_name": row["display_name"],
-                "problem_id": p_id,
-                "dim": dim,
-                "noise_std": noise_std,
-                "status": res["status"],
-                "median_error": res.get("median_clean_error"),
-            })
+            results.append(
+                {
+                    "solver_type": stype,
+                    "solver": row["solver"],
+                    "display_name": row["display_name"],
+                    "problem_id": p_id,
+                    "dim": dim,
+                    "noise_std": noise_std,
+                    "status": res["status"],
+                    "median_error": res.get("median_clean_error"),
+                    "median_best_objective": (
+                        float(np.median(res["best_objectives"]))
+                        if res.get("best_objectives") else None
+                    ),
+                    "median_true_optimum": (
+                        float(np.median(res["true_optima"]))
+                        if res.get("true_optima") else None
+                    ),
+                }
+            )
 
         self.logger.summary(
             title=f"Completed {solver_type.title()} Evaluations",

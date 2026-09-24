@@ -31,6 +31,10 @@ class EvaluationConfig(BaseModel):
         ge=1,
         description="Number of evaluation trials per condition.",
     )
+    random_seed: int = Field(
+        default=42,
+        description="Base seed for reproducible optimizer randomness and benchmark noise.",
+    )
     budget_multiplier: int = Field(
         default=10_000,
         ge=1,

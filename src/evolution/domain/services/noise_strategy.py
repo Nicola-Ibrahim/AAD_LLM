@@ -143,5 +143,3 @@ class NoiseStrategyFactory:
 
         strategy_cls = cls._STRATEGIES[noise_model]
         return strategy_cls(noise_std=noise_std, **kwargs)
-
-

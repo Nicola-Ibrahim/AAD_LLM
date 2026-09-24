@@ -43,7 +43,6 @@ def test_repos(tmp_path, monkeypatch):
     return db_repo, code_repo
 
 
-
 def test_pickle_llamea(tmp_path, test_repos):
     db_repo, code_repo = test_repos
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
@@ -149,5 +148,3 @@ def test_llm_client_raises_when_server_not_running(monkeypatch):
     monkeypatch.setenv("LOCAL_LLM_BASE_URL", "http://127.0.0.1:59999/v1")
     with pytest.raises(ConnectionError, match="Could not connect to the local LLM server"):
         LLMClient(Provider.LOCAL)
-
-

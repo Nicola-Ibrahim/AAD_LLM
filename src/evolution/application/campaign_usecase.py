@@ -150,8 +150,8 @@ class SynthesisCampaignUseCase:
 
         for exp in experiments:
             cond = self._condition_from_summary(exp)
-            has_valid_champion = (
-                exp.best_final_error is not None and np.isfinite(exp.best_final_error)
+            has_valid_champion = exp.best_final_error is not None and np.isfinite(
+                exp.best_final_error
             )
             if exp.status == "completed":
                 if has_valid_champion or not retry_failed_synthesis:
@@ -206,15 +206,17 @@ class SynthesisCampaignUseCase:
             else:
                 status_label = "⏳ Pending"
 
-            matrix_rows.append({
-                "Problem": f"f{item.problem_id} ({BBOBFunction.get_short_name(item.problem_id)})",
-                "Dimension": f"{item.dim}D",
-                "Environment": item.env_label,
-                "Strategy": item.strategy.capitalize(),
-                "Target Runs": self.config.runs_per_config,
-                "Completed": n_comp,
-                "Status": status_label,
-            })
+            matrix_rows.append(
+                {
+                    "Problem": f"f{item.problem_id} ({BBOBFunction.get_short_name(item.problem_id)})",
+                    "Dimension": f"{item.dim}D",
+                    "Environment": item.env_label,
+                    "Strategy": item.strategy.capitalize(),
+                    "Target Runs": self.config.runs_per_config,
+                    "Completed": n_comp,
+                    "Status": status_label,
+                }
+            )
 
         if matrix_rows:
             df_matrix = pd.DataFrame(matrix_rows).set_index(
@@ -222,7 +224,15 @@ class SynthesisCampaignUseCase:
             )
         else:
             df_matrix = pd.DataFrame(
-                columns=["Problem", "Dimension", "Environment", "Strategy", "Target Runs", "Completed", "Status"]
+                columns=[
+                    "Problem",
+                    "Dimension",
+                    "Environment",
+                    "Strategy",
+                    "Target Runs",
+                    "Completed",
+                    "Status",
+                ]
             ).set_index(["Problem", "Dimension", "Environment", "Strategy"])
 
         total_cfg = len(df_matrix)
@@ -242,7 +252,9 @@ class SynthesisCampaignUseCase:
             "dimensions": self.config.dimensions,
             "noise_stds": self.config.noise_stds,
             "synthesis_modes": self.config.synthesis_mode_names,
-            "prompt_strategies": [s.value if hasattr(s, "value") else str(s) for s in self.config.prompt_strategies],
+            "prompt_strategies": [
+                s.value if hasattr(s, "value") else str(s) for s in self.config.prompt_strategies
+            ],
             "target_exp_ids": self.config.target_experiment_ids,
         }
 
@@ -255,7 +267,6 @@ class SynthesisCampaignUseCase:
             progress_pct=progress_pct,
         )
         return df_matrix, summary
-
 
     # -------------------------------------------------------------------------
     # Task Building & Planning

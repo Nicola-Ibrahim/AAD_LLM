@@ -75,10 +75,7 @@ class EvaluationAuditService:
         unique_pids = sorted(list({int(p) for p in df_db["problem_id"].dropna()}))
 
         unique_conditions = [
-            (d, n, p)
-            for d in unique_dims
-            for n in unique_noises
-            for p in unique_pids
+            (d, n, p) for d in unique_dims for n in unique_noises for p in unique_pids
         ]
         unique_models = sorted(df_db["llm_name"].dropna().unique())
         strategies = ["baseline", "guided", "thinking", "vectorization"]
@@ -91,7 +88,6 @@ class EvaluationAuditService:
         missing_cells = 0
 
         for dim, noise_std, p_id in unique_conditions:
-
             row: dict[str, Any] = {
                 "Dim": f"{dim}D",
                 "Noise": f"std_{noise_std}",
@@ -125,7 +121,9 @@ class EvaluationAuditService:
                     total_cells += 1
                     col_name = f"{m_label} / {strat}"
                     folder_name = f"{m_slug}_{strat}"
-                    cond_dir = self.trace_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}"
+                    cond_dir = (
+                        self.trace_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}"
+                    )
                     s_dir = cond_dir / folder_name
                     runs = self.trace_repo.get_run_count(s_dir) if s_dir.exists() else 0
                     if runs < self.target_runs:
@@ -182,10 +180,20 @@ class EvaluationAuditService:
                 coverage_summary=summary,
             )
 
-        solver_cols = [c for c in df_matrix.columns if c not in ["Dim", "Noise", "Problem", "Class"]]
+        solver_cols = [
+            c for c in df_matrix.columns if c not in ["Dim", "Noise", "Problem", "Class"]
+        ]
         dims = sorted(list({int(d.replace("D", "")) for d in df_matrix["Dim"]}))
         noise_levels = sorted(list({float(n.replace("std_", "")) for n in df_matrix["Noise"]}))
-        problem_ids = sorted(list({int(re.search(r"f(\d+)", p).group(1)) for p in df_matrix["Problem"] if re.search(r"f(\d+)", p)}))
+        problem_ids = sorted(
+            list(
+                {
+                    int(re.search(r"f(\d+)", p).group(1))
+                    for p in df_matrix["Problem"]
+                    if re.search(r"f(\d+)", p)
+                }
+            )
+        )
 
         eval_counts: dict[Any, Any] = {
             (d, n, p): {s: 0 for s in solver_cols}

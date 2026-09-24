@@ -264,14 +264,15 @@ class SQLiteSynthesisRepository(SynthesisRepository):
         )
 
         iterations = [
-            self._to_iteration_metadata(it, idx)
-            for idx, it in enumerate(exp.iterations, start=1)
+            self._to_iteration_metadata(it, idx) for idx, it in enumerate(exp.iterations, start=1)
         ]
 
         return ExperimentSummary(
             mode=SynthesisMode(exp.mode),
             llm_name=exp.llm_name,
-            prompt_strategy=PromptStrategy(exp.prompt_strategy) if exp.prompt_strategy else PromptStrategy.BASELINE,
+            prompt_strategy=PromptStrategy(exp.prompt_strategy)
+            if exp.prompt_strategy
+            else PromptStrategy.BASELINE,
             budget=exp.budget,
             max_iterations=exp.max_iterations,
             synthesis_seed=exp.synthesis_seed,

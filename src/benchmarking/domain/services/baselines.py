@@ -111,4 +111,6 @@ def get_baseline_runner(baseline_slug: str) -> Callable[[Any, int], tuple[float,
         case "pso":
             return run_pso
         case _:
-            raise ValueError(f"Unknown baseline: '{baseline_slug}'. Supported: 'cmaes', 'de', 'pso'.")
+            raise ValueError(
+                f"Unknown baseline: '{baseline_slug}'. Supported: 'cmaes', 'de', 'pso'."
+            )

@@ -65,4 +65,3 @@ def test_db_session_factory(monkeypatch):
     engine = build_engine()
     Base.metadata.create_all(engine)
     return sessionmaker(bind=engine)
-
