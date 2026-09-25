@@ -5,7 +5,7 @@ import pytest
 
 from evolution.domain.enums import SynthesisMode
 from evolution.domain.interfaces.problem import BaseProblem
-from evolution.application.candidate_evaluation import CandidateEvaluationService
+from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.infra.execution.candidate_executor import create_candidate_executor
 
 

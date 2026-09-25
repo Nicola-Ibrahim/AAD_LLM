@@ -1,10 +1,10 @@
-"""Single Synthesis Application Use Case (Hexagonal Architecture).
+"""Run one synthesis session through the configured engine port.
 
 Coordinates the in-process execution of a single evolutionary algorithm synthesis experiment,
 isolated from multiprocessing orchestration.
 """
 
-from evolution.application.interfaces import (
+from evolution.application.ports import (
     BaseLogger,
     SessionConfig,
     SessionResult,
@@ -12,7 +12,7 @@ from evolution.application.interfaces import (
 )
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces import BaseProblem
-from evolution.application.interfaces.repository import SynthesisRepository
+from evolution.application.ports.repository import SynthesisRepository
 
 
 class SingleSynthesisUseCase:

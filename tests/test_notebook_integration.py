@@ -1,14 +1,15 @@
 """Test execution of consolidated 5-notebook pipeline to ensure zero errors and data integrity."""
 
 import json
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pandas as pd
 
-from benchmarking.application.audit_service import EvaluationAuditService
-from benchmarking.application.evaluation_service import EvaluationService
-from benchmarking.application.selection_service import ChampionSelectionService
-from benchmarking.application.statistical_service import StatisticalEvaluationService
+from benchmarking.application.evaluation.audit import EvaluationAuditService
+from benchmarking.application.evaluation.run import EvaluationService
+from benchmarking.application.select_champions import ChampionSelectionService
+from benchmarking.application.analysis import AnalysisData, generate_markdown_report
 from shared.config import RESULTS_DIR
 from evolution.infra.problems.factory import BBOBProblemFactory
 from evolution.infra.execution.candidate_executor import create_candidate_executor
@@ -16,23 +17,25 @@ from benchmarking.infra.io.code_reader import FilesystemCodeReader
 from benchmarking.infra.solvers.baselines import get_baseline_runner
 from benchmarking.infra.io.markdown_report_writer import MarkdownFileWriter
 from shared.config import PROJECT_ROOT
+from benchmarking.infra.storage.model_registry import configured_model_names
 
 
 def build_evaluation_service(**kwargs):
-    project_root = kwargs.get("project_root", PROJECT_ROOT)
+    project_root = kwargs.pop("project_root", PROJECT_ROOT)
     return EvaluationService(
         **kwargs,
         problem_factory=BBOBProblemFactory(),
         executor_factory=create_candidate_executor,
         baseline_resolver=get_baseline_runner,
         code_reader=FilesystemCodeReader(project_root),
+        model_names=configured_model_names(),
     )
 
 
 def test_nb00_prompts_pipeline():
     """Verify Notebook 00 (00_prompts.ipynb: Prompts & Diagnostic Feedback Inspection)."""
     from evolution.domain.enums import PromptStrategy, SynthesisMode
-    from evolution.application.candidate_evaluation import CandidateEvaluationService
+    from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
     from evolution.domain.services.noise_strategy import (
         HeteroscedasticNoiseStrategy,
         NoNoiseStrategy,
@@ -97,18 +100,22 @@ def test_nb01_noise_pipeline():
     print("✅ NB01 noise pipeline verified.")
 
 
-def test_nb02_synthesis_pipeline():
+def test_nb02_synthesis_pipeline(tmp_path: Path):
     """Verify Notebook 02 (02_synthesis.ipynb: Evolutionary Synthesis Campaign Use Case & Task Construction)."""
     from evolution.application import SynthesisCampaignCoordinator
-    from evolution.application.interfaces import BaseLogger
+    from evolution.application.ports import BaseLogger
     from evolution.infra.engines.llamea import LLaMEAEngine
     from evolution.infra.llm.client import LLMClient
     from evolution.infra.logging import SynthesisLogger
     from evolution.infra.storage.synthesis_config.repository import SynthesisConfigRepository
-    from shared.database.engine import initialize_sqlite_storage
+    from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
+    from shared.infra.database.engine import build_engine, create_db_session_factory
+    from shared.infra.database.tables import Base
 
-    # Explicit repository and logger dependency injection
-    sqlite_repo = initialize_sqlite_storage()
+    # Exercise the notebook workflow against a fresh schema, not historical data.
+    engine = build_engine(f"sqlite:///{tmp_path / 'synthesis.db'}")
+    Base.metadata.create_all(engine)
+    sqlite_repo = SQLiteSynthesisRepository(create_db_session_factory(engine))
     config_repo = SynthesisConfigRepository()
     llm = LLMClient("local")
     logger = SynthesisLogger(verbose=False)
@@ -123,13 +130,13 @@ def test_nb02_synthesis_pipeline():
         problem_factory=BBOBProblemFactory(),
     )
 
-    assert campaign_usecase.sqlite_repo is sqlite_repo
-    assert campaign_usecase.config_repo is config_repo
+    assert campaign_usecase.planner.sqlite_repo is sqlite_repo
+    assert campaign_usecase.config is campaign_usecase.planner.config
     assert campaign_usecase.llm_client is llm
     assert campaign_usecase.logger is logger
     assert isinstance(campaign_usecase.logger, BaseLogger)
-    assert hasattr(campaign_usecase, "audit_matrix")
-    assert hasattr(campaign_usecase, "build_tasks")
+    assert hasattr(campaign_usecase.auditor, "audit_matrix")
+    assert hasattr(campaign_usecase.planner, "build_tasks")
     assert hasattr(campaign_usecase, "run_campaign")
 
     cfg = config_repo.load_config()
@@ -140,7 +147,7 @@ def test_nb02_synthesis_pipeline():
     assert cfg["problem_ids"] == [1, 8, 11, 15, 21]
     assert cfg["dimensions"] == [2, 3, 5, 10]
 
-    matrix_df, summary = campaign_usecase.audit_matrix()
+    matrix_df, summary = campaign_usecase.auditor.audit_matrix()
     assert not matrix_df.empty
     assert isinstance(matrix_df.index, pd.MultiIndex)
     assert list(matrix_df.index.names) == ["Problem", "Dimension", "Environment", "Strategy"]
@@ -150,7 +157,7 @@ def test_nb02_synthesis_pipeline():
     assert "total_conditions" in summary
     assert "problem_targets" in summary
 
-    tasks = campaign_usecase.build_tasks()
+    tasks = campaign_usecase.planner.build_tasks()
     assert len(tasks) > 0
 
     print(f"✅ NB02 evolutionary synthesis pipeline verified ({len(tasks)} tasks constructed).")
@@ -159,18 +166,15 @@ def test_nb02_synthesis_pipeline():
 def test_nb03_evaluation_pipeline():
     """Verify Notebook 03 (03_evaluation.ipynb: Champion Selection + Evaluations Audit & Dispatch)."""
     print("Testing NB03 logic with ChampionSelectionService & EvaluationService...")
-    from benchmarking.infra.io.trace_repository import IOHTraceReader
     from benchmarking.infra.storage import (
         ChampionsReadRepository,
         SQLiteSynthesisReadRepository,
     )
-    from shared.database.engine import create_db_session_factory
+    from shared.infra.database.engine import create_db_session_factory
 
     session_factory = create_db_session_factory()
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
-    trace_repo = IOHTraceReader()
-
     champ_service = ChampionSelectionService(champions_repo=champions_repo)
     summary, total = sqlite_repo.get_experiment_balance()
     assert total >= 0
@@ -197,7 +201,6 @@ def test_nb03_evaluation_pipeline():
     eval_service = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
-        trace_repo=trace_repo,
         state_repo=state_repo,
         config_repo=config_repo,
         logger=logger,
@@ -210,7 +213,7 @@ def test_nb03_evaluation_pipeline():
     champions_flat = eval_service.champion_selection.flatten_champions(champions_raw)
     assert len(champions_flat) > 0
 
-    df_audit = eval_service.audit_champions_workload()
+    df_audit = eval_service.workload.audit_champions_workload()
     assert not df_audit.empty
     print(f"  • Audited champions count: {len(df_audit)}")
     print("✅ NB03 benchmark evaluation pipeline verified.")
@@ -232,8 +235,8 @@ def test_nb03_import_order_isolation():
         "    ChampionsReadRepository,\n"
         "    SQLiteSynthesisReadRepository,\n"
         ")\n"
-        "from benchmarking.application.selection_service import ChampionSelectionService\n"
-        "from benchmarking.application.evaluation_service import EvaluationService\n"
+        "from benchmarking.application.select_champions import ChampionSelectionService\n"
+        "from benchmarking.application.evaluation.run import EvaluationService\n"
         "from benchmarking.infra.logging import EvaluationLogger\n"
         "repo = EvaluationConfigRepository()\n"
         "cfg = repo.load_config()\n"
@@ -249,7 +252,7 @@ def test_nb04_audit_pipeline():
     print("\nTesting NB04 logic with EvaluationAuditService...")
     from benchmarking.infra.io.trace_repository import IOHTraceReader
     from benchmarking.infra.storage import EvaluationConfigRepository, SQLiteSynthesisReadRepository
-    from shared.database.engine import create_db_session_factory
+    from shared.infra.database.engine import create_db_session_factory
 
     session_factory = create_db_session_factory()
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
@@ -260,6 +263,7 @@ def test_nb04_audit_pipeline():
         sqlite_repo=sqlite_repo,
         trace_repo=trace_repo,
         config_repo=config_repo,
+        model_names=configured_model_names(),
     )
     audit_data = service.get_global_audit_matrix()
     assert hasattr(audit_data, "dims")
@@ -280,31 +284,31 @@ def test_nb04_audit_pipeline():
 
 def test_nb05_analysis_pipeline(tmp_path):
     """Verify Notebook 05 (05_analysis.ipynb: Statistical Hypothesis Testing, Reports & Figures)."""
-    print("\nTesting NB05 logic with StatisticalEvaluationService...")
+    print("\nTesting NB05 logic with AnalysisData...")
     from benchmarking.infra.io.trace_repository import IOHTraceReader
     from benchmarking.infra.storage import SQLiteSynthesisReadRepository
-    from shared.database.engine import create_db_session_factory
+    from shared.infra.database.engine import create_db_session_factory
 
     session_factory = create_db_session_factory()
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     trace_repo = IOHTraceReader()
 
-    service = StatisticalEvaluationService(
+    service = AnalysisData(
         sqlite_repo=sqlite_repo,
         trace_repo=trace_repo,
-        report_writer=MarkdownFileWriter(),
+        model_names=configured_model_names(),
     )
     df_exp, df_iter = service.get_synthesis_dataframes()
     all_benchmark_data = service.load_all_traces()
     assert len(all_benchmark_data) > 0
     print(f"  • Problem conditions loaded: {len(all_benchmark_data)}")
 
-    df_omnibus = service.run_omnibus_kruskal(all_benchmark_data)
-    df_pairwise = service.run_pairwise_fdr(all_benchmark_data, alpha=0.05)
+    df_omnibus = service.hypothesis_engine.run_omnibus_kruskal(all_benchmark_data)
+    df_pairwise = service.hypothesis_engine.run_pairwise_fdr(all_benchmark_data, alpha=0.05)
     print(f"  • Omnibus tests: {len(df_omnibus)} rows")
     print(f"  • Pairwise tests (FDR-corrected): {len(df_pairwise)} rows")
 
-    r_val, p_val = service.compute_synthesis_transfer_correlation(df_exp)
+    r_val, p_val = service.hypothesis_engine.compute_synthesis_transfer_correlation(df_exp)
     print(f"  • Synthesis transfer correlation: r = {r_val:.3f} (p = {p_val:.3e})")
 
     # Verify figure computing methods
@@ -312,19 +316,19 @@ def test_nb05_analysis_pipeline(tmp_path):
     p_ids = all_benchmark_data.problem_ids
     dim = all_benchmark_data.dims[0]
 
-    matrix, labels = service.compute_fragility_matrix(all_benchmark_data, dim, solvers, p_ids)
+    matrix, labels = service.performance_engine.compute_fragility_matrix(all_benchmark_data, dim, solvers, p_ids)
     assert matrix.shape == (len(p_ids), len(solvers))
 
-    c_meds, n_meds, _ = service.compute_validation_medians(all_benchmark_data, dim, p_ids)
+    c_meds, n_meds, _ = service.performance_engine.compute_validation_medians(all_benchmark_data, dim, p_ids)
     assert len(c_meds) == len(p_ids)
 
-    valid_s, c_rates, n_rates, deltas = service.compute_robustness_profile(
+    valid_s, c_rates, n_rates, deltas = service.performance_engine.compute_robustness_profile(
         all_benchmark_data, dim, solvers, p_ids
     )
     assert len(valid_s) == len(c_rates) == len(n_rates) == len(deltas)
 
     report_path = tmp_path / "comprehensive_master_report.md"
-    service.generate_markdown_report(df_omnibus, df_pairwise, report_path)
+    generate_markdown_report(df_omnibus, df_pairwise, report_path, writer=MarkdownFileWriter())
     assert report_path.exists()
     print(f"  • Master report generated: {report_path}")
     print("✅ NB05 statistical analysis & figures pipeline verified.")
@@ -378,7 +382,7 @@ runs_per_config = 1
         problem_factory=BBOBProblemFactory(),
     )
 
-    tasks = service.build_tasks()
+    tasks = service.planner.build_tasks()
     # Problem 1 has 2D and 5D (2x2=4 tasks), Problem 8 has 3D (1x2=2 tasks) -> total 6 tasks (both explicit and implicit)
     assert len(tasks) == 6
     task_keys = [t["key"] for t in tasks]
@@ -439,7 +443,7 @@ runs_per_config = 1
         engine=mm_engine,
         problem_factory=BBOBProblemFactory(),
     )
-    mm_tasks = mm_service.build_tasks()
+    mm_tasks = mm_service.planner.build_tasks()
     # 1 problem, 1 dim: 2 noise conditions x 2 modes -> total 4 tasks
     assert len(mm_tasks) == 4
     mm_keys = [t["key"] for t in mm_tasks]
@@ -487,7 +491,7 @@ runs_per_config = 1
         engine=dm_engine,
         problem_factory=BBOBProblemFactory(),
     )
-    dm_tasks = dm_service.build_tasks()
+    dm_tasks = dm_service.planner.build_tasks()
     # 1 problem, 1 dim, std=0.05:
     # explicit has 2 strategies (baseline, thinking) -> 2 tasks
     # implicit has 1 strategy (guided) -> 1 task
@@ -507,7 +511,7 @@ def test_custom_minimal_base_logger():
     stagnation_warning, task_complete, audit_summary, summary, success) execute without
     errors and route to the core logging methods.
     """
-    from evolution.application.interfaces import BaseLogger
+    from evolution.application.ports import BaseLogger
 
     class MinimalLogger(BaseLogger):
         def __init__(self, verbose: bool = True):
@@ -633,7 +637,7 @@ def test_campaign_usecase_run_worker_and_campaign():
         "synthesis_mode": SynthesisMode.EXPLICIT,
         "initial_iteration": 0,
     }
-    with patch("shared.database.engine.initialize_sqlite_storage", return_value=mock_sqlite):
+    with patch("shared.infra.database.engine.initialize_sqlite_storage", return_value=mock_sqlite):
         res = run_synthesis_worker(item=mock_task)
     assert res is dummy_result
     mock_engine.run.assert_called_once()
@@ -651,7 +655,7 @@ def test_campaign_usecase_run_worker_and_campaign():
     assert res_single is dummy_result
 
     # 3. Test run_campaign when no tasks
-    with patch.object(service, "build_tasks", return_value=[]):
+    with patch.object(service.planner, "build_tasks", return_value=[]):
         empty_res = service.run_campaign()
         assert empty_res.results == {}
         mock_logger.success.assert_called()
@@ -671,7 +675,7 @@ def test_campaign_usecase_run_worker_and_campaign():
     dispatcher.run.return_value = {"test_task_key": dummy_result}
     service.dispatcher = dispatcher
     service.worker_fn = run_synthesis_worker
-    with patch.object(service, "build_tasks", return_value=[mock_item]):
+    with patch.object(service.planner, "build_tasks", return_value=[mock_item]):
         campaign_res = service.run_campaign()
         assert campaign_res.results == {"test_task_key": dummy_result}
         dispatcher.run.assert_called_once()
@@ -707,7 +711,7 @@ def test_campaign_usecase_audit_matrix_standalone():
         logger=mock_logger,
     )
 
-    df_matrix, summary = usecase.audit_matrix(model_name="mock_model_standalone")
+    df_matrix, summary = usecase.auditor.audit_matrix(model_name="mock_model_standalone")
     assert df_matrix.empty
     assert summary["model_name"] == "mock_model_standalone"
     mock_sqlite.load.assert_called_once_with(llm_name="mock_model_standalone")

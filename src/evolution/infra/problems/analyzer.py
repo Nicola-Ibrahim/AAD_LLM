@@ -30,7 +30,7 @@ class ProblemAnalyzer:
         log_dir: str | Path | None = None,
         algorithm_info: str = "algorithm_info",
         store_positions: bool = False,
-    ):
+    ) -> None:
         self.problem = problem
         self.algorithm_name = algorithm_name
         self.folder_name = (

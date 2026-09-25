@@ -14,7 +14,7 @@ import scipy.linalg
 import scipy.special
 import scipy.stats
 
-from shared.execution.exceptions import CodeValidationException
+from shared.infra.execution.exceptions import CodeValidationException
 
 
 class CodeCompiler:

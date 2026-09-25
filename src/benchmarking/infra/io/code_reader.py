@@ -2,11 +2,12 @@
 
 from pathlib import Path
 
+from benchmarking.application.ports import CandidateCodeReader
 from shared.config import PROJECT_ROOT
 
 
-class FilesystemCodeReader:
-    def __init__(self, project_root: Path = PROJECT_ROOT):
+class FilesystemCodeReader(CandidateCodeReader):
+    def __init__(self, project_root: Path = PROJECT_ROOT) -> None:
         self.project_root = Path(project_root)
 
     def resolve(self, code_path: str | Path) -> Path:

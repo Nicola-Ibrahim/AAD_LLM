@@ -1,7 +1,7 @@
 """Ports for creating campaign problems and dispatching worker tasks."""
 
 from collections.abc import Callable
-from typing import Any, Protocol
+from typing import Protocol, TypeVar
 
 from evolution.domain.enums import NoiseModelEnum
 from evolution.domain.interfaces import BaseProblem
@@ -19,7 +19,11 @@ class ProblemFactory(Protocol):
     ) -> BaseProblem: ...
 
 
-class TaskDispatcher(Protocol):
+Task = TypeVar("Task")
+Result = TypeVar("Result")
+
+
+class TaskDispatcher(Protocol[Task, Result]):
     def run(
-        self, fn: Callable[[Any], Any], items: list[Any], key_fn: Callable[[Any], str]
-    ) -> dict[str, Any]: ...
+        self, fn: Callable[[Task], Result], items: list[Task], key_fn: Callable[[Task], str]
+    ) -> dict[str, Result]: ...

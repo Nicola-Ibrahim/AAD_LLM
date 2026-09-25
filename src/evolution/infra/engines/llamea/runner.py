@@ -17,10 +17,11 @@ from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces import BaseProblem
 from evolution.domain.vos import ProblemProfile
-from evolution.application.interfaces import (
+from evolution.application.ports import (
     BaseLogger,
     SessionConfig,
     SessionResult,
+    SynthesisCodeStore,
     SynthesisEngine,
 )
 from evolution.infra.llm.client import LLMClient
@@ -29,12 +30,12 @@ from evolution.infra.engines.llamea.prompts import (
     SynthesisPrompts,
     build_synthesis_prompts,
 )
-from evolution.application.interfaces.repository import SynthesisRepository
+from evolution.application.ports.repository import SynthesisRepository
 from evolution.infra.storage.code.repository import CodeRepository
-from evolution.application.candidate_evaluation import CandidateEvaluationService
+from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.infra.execution.candidate_executor import AlgorithmExecutorAdapter
 from evolution.infra.engines.llamea.evaluator import Evaluator
-from shared.execution import AlgorithmExecutor
+from shared.infra.execution import AlgorithmExecutor
 
 # Suppress joblib warning when LLaMEA passes timeout to SequentialBackend
 warnings.filterwarnings(
@@ -63,11 +64,11 @@ class LLaMEASession:
         prompt_strategy: PromptStrategy,
         llm_client: LLMClient,
         db_repo: SynthesisRepository,
-        code_repo: CodeRepository,
+        code_repo: SynthesisCodeStore,
         config: SessionConfig,
         initial_iteration: int = 0,
         synthesis_mode: SynthesisMode = SynthesisMode.EXPLICIT,
-    ):
+    ) -> None:
         """Initializes the synthesis session with pre-resolved domain objects and execution configuration."""
         self._problem = problem
         self._experiment_id = experiment_id
@@ -291,7 +292,7 @@ class LLaMEAEngine(SynthesisEngine):
     def __init__(
         self,
         llm_client: LLMClient,
-        code_repo: CodeRepository | None = None,
+        code_repo: SynthesisCodeStore | None = None,
         config: SessionConfig | None = None,
         db_repo: SynthesisRepository | None = None,
         prompt_strategy: PromptStrategy = PromptStrategy.BASELINE,

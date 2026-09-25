@@ -2,24 +2,23 @@
 
 import json
 from pathlib import Path
-from typing import Any
-
 import pandas as pd
 from sqlalchemy import select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
+from benchmarking.application.ports import ChampionCatalog, ChampionRepository
 from shared.config import RESULTS_DIR
-from shared.database.tables import ExperimentORM, IterationORM
+from shared.infra.database.tables import ExperimentORM, IterationORM
 
 
-class ChampionsReadRepository:
+class ChampionsReadRepository(ChampionRepository):
     """Infrastructure adapter for reading candidate rows and writing champion exports."""
 
     def __init__(
         self,
-        session_factory: sessionmaker,
+        session_factory: sessionmaker[Session],
         champions_path: Path = RESULTS_DIR / "benchmark" / "champions.json",
-    ):
+    ) -> None:
         self.SessionLocal = session_factory
         self.champions_path = Path(champions_path)
 
@@ -60,7 +59,7 @@ class ChampionsReadRepository:
             return pd.read_sql_query(stmt, session.connection())
 
     def write_champions_json(
-        self, champions: dict[str, dict[str, Any]], output_path: Path | None = None
+        self, champions: ChampionCatalog, output_path: Path | None = None
     ) -> Path:
         path = Path(output_path) if output_path else self.champions_path
         path.parent.mkdir(parents=True, exist_ok=True)

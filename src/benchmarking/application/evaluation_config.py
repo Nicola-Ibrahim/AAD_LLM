@@ -3,7 +3,6 @@
 Defines the strongly-typed configuration parameter object for EvaluationService.
 """
 
-from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -69,7 +68,7 @@ class EvaluationConfig(BaseModel):
         default_factory=list,
         description="Optional filtered noise levels for evaluation.",
     )
-    benchmarking: dict[str, Any] = Field(
+    benchmarking: dict[str, object] = Field(
         default_factory=dict,
         description="Raw benchmark section dictionary from TOML.",
     )

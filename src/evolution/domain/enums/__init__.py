@@ -1,4 +1,4 @@
-from evolution.domain.enums.bbob_function import BBOBFunction
+from shared.domain.bbob import BBOBFunction
 from evolution.domain.enums.noise_environment import NoiseEnvironment
 from evolution.domain.enums.noise_model import NoiseModelEnum
 from evolution.domain.enums.synthesis_mode import SynthesisMode

@@ -42,11 +42,16 @@ def test_cached_and_completed_errors_use_three_decimals():
 def test_noise_level_preserves_configured_precision_without_repeated_noise_label():
     stream = StringIO()
     logger = EvaluationLogger(stream=stream)
-    logger.condition_start(1, 2, "champion", "Model", 3, 0.05, 8)
+    logger.condition_start(
+        1, 2, "champion", "Model", 3, 0.05, 8,
+        problem_name="Sphere", mode="explicit", strategy="guided",
+    )
 
     output = stream.getvalue()
-    assert "Noise level:\033[0m \033[93mσ=0.05\033[0m" in output
+    assert "Noise level: \033[0m\033[93mσ=0.05  \033[0m" in output
     assert "noisy" not in output
     assert "σ=0.050" not in output
-    assert "Dim:\033[0m 3D" in output
-    assert "Problem:\033[0m \033[95mf8\033[0m" in output
+    assert "Mode:        \033[0m\033[96mexplicit \033[0m" in output
+    assert "Strategy:    \033[0m\033[95mguided       \033[0m" in output
+    assert "Dim:         \033[0m\033[36m3D   \033[0m" in output
+    assert "Problem:     \033[0m\033[95mf8 (Sphere)\033[0m" in output

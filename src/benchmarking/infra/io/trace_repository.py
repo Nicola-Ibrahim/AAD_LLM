@@ -2,23 +2,24 @@
 
 from collections.abc import Callable
 from contextlib import contextmanager
+from collections.abc import Iterator
 import json
 from pathlib import Path
 import re
 import shutil
-from typing import Any
 
 import ioh
 import numpy as np
 
+from benchmarking.application.ports import EvaluationStateStore, EvaluationTraceReader
 from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
 from shared.config import RESULTS_DIR
 
 
-class IOHTraceReader:
+class IOHTraceReader(EvaluationTraceReader):
     """Read-only infrastructure reader managing filesystem access to IOHprofiler `.dat` and `.json` logs."""
 
-    def __init__(self, eval_dir: Path = RESULTS_DIR / "ioh_traces"):
+    def __init__(self, eval_dir: Path = RESULTS_DIR / "ioh_traces") -> None:
         self.eval_dir = Path(eval_dir)
 
     @staticmethod
@@ -126,16 +127,20 @@ class IOHTraceReader:
 
             try:
                 with open(json_path, "r", encoding="utf-8") as jf:
-                    meta: dict[str, Any] = json.load(jf)
+                    raw_metadata = json.load(jf)
             except Exception:
                 continue
+            if not isinstance(raw_metadata, dict):
+                continue
+            meta: dict[str, object] = raw_metadata
 
             path_str = str(json_path.relative_to(self.eval_dir))
             dim_m = re.search(r"(\d+)D", path_str)
             dim = int(dim_m.group(1)) if dim_m else None
             noise_m = re.search(r"std_([\d\.]+)", path_str)
             noise_std = float(noise_m.group(1)) if noise_m else 0.0
-            p_id = meta.get("function_id")
+            raw_problem_id = meta.get("function_id")
+            p_id = int(raw_problem_id) if isinstance(raw_problem_id, (int, float)) else None
             if p_id is None:
                 p_m = re.search(r"f(\d+)", path_str)
                 p_id = int(p_m.group(1)) if p_m else None
@@ -155,15 +160,21 @@ class IOHTraceReader:
             if solvers and solver_name not in solvers:
                 continue
 
-            for sc in meta.get("scenarios", []):
+            scenarios = meta.get("scenarios", [])
+            if not isinstance(scenarios, list):
+                continue
+            for sc in scenarios:
+                if not isinstance(sc, dict):
+                    continue
                 if dim is None:
-                    dim = sc.get("dimension")
+                    raw_dim = sc.get("dimension")
+                    dim = int(raw_dim) if isinstance(raw_dim, (int, float)) else None
                 if p_id is None or dim is None:
                     continue
 
                 cond = EvaluationCondition(dim=dim, noise_std=noise_std, problem_id=p_id)
                 dat_p = sc.get("path")
-                if dat_p and (json_path.parent / dat_p).exists():
+                if isinstance(dat_p, str) and dat_p and (json_path.parent / dat_p).exists():
                     parsed_runs = self.parse_dat_file(json_path.parent / dat_p)
                     for r in parsed_runs:
                         dataset.add_run(cond, solver_name, r)
@@ -171,10 +182,10 @@ class IOHTraceReader:
         return dataset
 
 
-class EvaluationStateRepository:
+class EvaluationStateRepository(EvaluationStateStore):
     """Infrastructure repository managing read/write operations for benchmark evaluation provenance and log merging."""
 
-    def __init__(self, eval_dir: Path = RESULTS_DIR / "ioh_traces"):
+    def __init__(self, eval_dir: Path = RESULTS_DIR / "ioh_traces") -> None:
         self.eval_dir = Path(eval_dir)
 
     def remove_solver_traces(self, solver_dir: Path) -> None:
@@ -187,7 +198,9 @@ class EvaluationStateRepository:
         return solver_dir.is_dir()
 
     @contextmanager
-    def open_run_logger(self, target_dir: Path, algorithm_name: str, incremental: bool):
+    def open_run_logger(
+        self, target_dir: Path, algorithm_name: str, incremental: bool
+    ) -> Iterator[object]:
         """Own temporary log staging, IOH logger construction, and incremental merging."""
         if incremental:
             from tempfile import TemporaryDirectory
@@ -220,7 +233,7 @@ class EvaluationStateRepository:
         finally:
             logger.close()
 
-    def read_provenance(self, solver_dir: Path) -> dict[str, Any] | None:
+    def read_provenance(self, solver_dir: Path) -> dict[str, object] | None:
         """Reads and parses provenance.json for a solver directory if it exists."""
         prov_path = solver_dir / "provenance.json"
         if not prov_path.exists():
@@ -231,7 +244,7 @@ class EvaluationStateRepository:
         except Exception:
             return None
 
-    def write_provenance(self, solver_dir: Path, data: dict[str, Any]) -> None:
+    def write_provenance(self, solver_dir: Path, data: dict[str, object]) -> None:
         """Persists complete metadata, metrics, and trial arrays into provenance.json."""
         solver_dir.mkdir(parents=True, exist_ok=True)
         prov_path = solver_dir / "provenance.json"

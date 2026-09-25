@@ -1,17 +1,9 @@
-"""Champion selection use case and application-owned ranking policy."""
+"""Select champion candidates using application-owned ranking policy."""
 
 from pathlib import Path
-from typing import Any, Protocol
-
 import pandas as pd
 
-
-class ChampionCandidateRepository(Protocol):
-    def query_candidates(self) -> pd.DataFrame: ...
-
-    def write_champions_json(
-        self, champions: dict[str, dict[str, Any]], output_path: Path | None = None
-    ) -> Path: ...
+from benchmarking.application.ports import Champion, ChampionCatalog, ChampionRepository
 
 
 class ChampionSelectionService:
@@ -19,13 +11,13 @@ class ChampionSelectionService:
 
     def __init__(
         self,
-        champions_repo: ChampionCandidateRepository,
-    ):
+        champions_repo: ChampionRepository,
+    ) -> None:
         self.champions_repo = champions_repo
 
     @staticmethod
-    def select_candidates(rows: pd.DataFrame) -> dict[str, dict[str, Any]]:
-        champions: dict[str, dict[str, Any]] = {}
+    def select_candidates(rows: pd.DataFrame) -> ChampionCatalog:
+        champions: ChampionCatalog = {}
         if rows.empty:
             return champions
 
@@ -69,14 +61,14 @@ class ChampionSelectionService:
                 add_best(subset, "implicit", float(noise_std))
         return champions
 
-    def get_champions(self) -> dict[str, dict[str, Any]]:
+    def get_champions(self) -> ChampionCatalog:
         return self.select_candidates(self.champions_repo.query_candidates())
 
     def flatten_champions(
-        self, champions_dict: dict[str, dict[str, Any]] | None = None
-    ) -> dict[str, dict[str, Any]]:
+        self, champions_dict: ChampionCatalog | None = None
+    ) -> dict[str, Champion]:
         champions = champions_dict if champions_dict is not None else self.get_champions()
-        flat: dict[str, dict[str, Any]] = {}
+        flat: dict[str, Champion] = {}
         for model, conditions in champions.items():
             if isinstance(conditions, dict) and "code_path" in conditions:
                 flat[model] = conditions
@@ -86,7 +78,7 @@ class ChampionSelectionService:
 
     def export_champions(
         self, output_path: Path | None = None
-    ) -> tuple[dict[str, dict[str, Any]], pd.DataFrame]:
+    ) -> tuple[ChampionCatalog, pd.DataFrame]:
         champions = self.get_champions()
         self.champions_repo.write_champions_json(champions, output_path)
         summary_rows = [

@@ -12,7 +12,7 @@ The following sequence diagram captures the end-to-end flow from experiment camp
 sequenceDiagram
     autonumber
     actor User as Notebook / CLI Runner
-    participant Service as SynthesisCampaignCoordinator
+    participant Service as Campaign audit / plan / run
     participant Runner as TaskDispatcher / ProcessPoolRunner adapter
     participant Single as SingleSynthesisUseCase (Worker)
     participant Engine as LLaMEAEngine

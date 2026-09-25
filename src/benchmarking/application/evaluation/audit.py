@@ -1,16 +1,24 @@
-"""Benchmark Audit Application Service (Notebook 06 Use Case).
+"""Coverage audit for benchmark evaluation results.
 
 Coordinates multi-model, multi-strategy coverage matrix analysis across all 30 BBOB conditions.
 """
 
 import re
-from typing import Any
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
 from benchmarking.domain.enums import BBOBFunction
-from benchmarking.domain.services.resolvers import get_clean_model_label, get_model_slug
+from benchmarking.domain.services.resolvers import ModelNames
 from benchmarking.application.evaluation_config import EvaluationConfig
+from benchmarking.application.ports import (
+    EvaluationConfigReader,
+    EvaluationTraceReader,
+    SynthesisReadRepository,
+)
+
+EvaluationCountMap = dict[
+    tuple[int, float, int] | tuple[int, float, int, str], dict[str, int] | int
+]
 
 
 class AuditCoverageSummary(BaseModel):
@@ -40,8 +48,8 @@ class AuditMatrixData(BaseModel):
     dims: list[int] = Field(default_factory=list)
     noise_levels: list[float] = Field(default_factory=list)
     problem_ids: list[int] = Field(default_factory=list)
-    eval_counts: dict[Any, Any] = Field(default_factory=dict)
-    coverage_summary: AuditCoverageSummary | dict[str, Any] = Field(default_factory=dict)
+    eval_counts: EvaluationCountMap = Field(default_factory=dict)
+    coverage_summary: AuditCoverageSummary | dict[str, int | float] = Field(default_factory=dict)
 
 
 class EvaluationAuditService:
@@ -49,19 +57,21 @@ class EvaluationAuditService:
 
     def __init__(
         self,
-        sqlite_repo: Any,
-        trace_repo: Any,
-        config_repo: Any,
-    ):
+        sqlite_repo: SynthesisReadRepository,
+        trace_repo: EvaluationTraceReader,
+        config_repo: EvaluationConfigReader,
+        model_names: ModelNames,
+    ) -> None:
         self.sqlite_repo = sqlite_repo
         self.trace_repo = trace_repo
         self.config_repo = config_repo
+        self.model_names = model_names
 
         self.config: EvaluationConfig = self.config_repo.load_config()
         self.target_runs = self.config.target_eval_runs
         self.classical_baselines = self.config.classical_baselines
 
-    def get_audit_matrix(self) -> tuple[pd.DataFrame, dict[str, Any]]:
+    def get_audit_matrix(self) -> tuple[pd.DataFrame, dict[str, object]]:
         """Generate the complete 30-condition audit matrix across discovered models and baselines."""
         df_db = self.sqlite_repo.get_completed_experiments_matrix()
         if df_db.empty:
@@ -78,14 +88,14 @@ class EvaluationAuditService:
         strategies = ["baseline", "guided", "thinking", "vectorization"]
         baselines = self.classical_baselines
 
-        matrix_rows: list[dict[str, Any]] = []
+        matrix_rows: list[dict[str, object]] = []
         total_cells = 0
         completed_cells = 0
         partial_cells = 0
         missing_cells = 0
 
         for dim, noise_std, p_id in unique_conditions:
-            row: dict[str, Any] = {
+            row: dict[str, object] = {
                 "Dim": f"{dim}D",
                 "Noise": f"std_{noise_std}",
                 "Problem": BBOBFunction.get_name(p_id),
@@ -96,7 +106,7 @@ class EvaluationAuditService:
             for b in baselines:
                 total_cells += 1
                 b_dir = self.trace_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / b
-                runs = self.trace_repo.get_run_count(b_dir) if b_dir.exists() else 0
+                runs = self.trace_repo.get_run_count(b_dir)
                 col_name = f"Baseline / {b.upper()}"
 
                 if runs >= self.target_runs:
@@ -111,8 +121,8 @@ class EvaluationAuditService:
 
             # 2. Model Strategies
             for llm_name in unique_models:
-                m_label = get_clean_model_label(llm_name)
-                m_slug = get_model_slug(llm_name)
+                m_label = self.model_names.get_clean_model_label(llm_name)
+                m_slug = self.model_names.get_model_slug(llm_name)
 
                 for strat in strategies:
                     total_cells += 1
@@ -122,15 +132,13 @@ class EvaluationAuditService:
                         self.trace_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}"
                     )
                     s_dir = cond_dir / folder_name
-                    runs = self.trace_repo.get_run_count(s_dir) if s_dir.exists() else 0
+                    runs = self.trace_repo.get_run_count(s_dir)
                     if runs < self.target_runs:
                         s_noisy = cond_dir / f"{m_slug}_{strat}_noisy"
-                        if s_noisy.exists():
-                            runs = max(runs, self.trace_repo.get_run_count(s_noisy))
+                        runs = max(runs, self.trace_repo.get_run_count(s_noisy))
                     if runs < self.target_runs:
                         s_impl = cond_dir / f"{m_slug}_{strat}_implicit"
-                        if s_impl.exists():
-                            runs = max(runs, self.trace_repo.get_run_count(s_impl))
+                        runs = max(runs, self.trace_repo.get_run_count(s_impl))
 
                     if runs >= self.target_runs:
                         row[col_name] = f"✅ {runs}/{self.target_runs}"
@@ -192,7 +200,7 @@ class EvaluationAuditService:
             )
         )
 
-        eval_counts: dict[Any, Any] = {
+        eval_counts: EvaluationCountMap = {
             (d, n, p): {s: 0 for s in solver_cols}
             for d in dims
             for n in noise_levels

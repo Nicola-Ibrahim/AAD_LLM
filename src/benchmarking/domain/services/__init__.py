@@ -13,21 +13,15 @@ from benchmarking.domain.services.reliability import ReliabilityEngine
 from benchmarking.domain.services.resolvers import (
     CLASSICAL_SOLVERS_MAP,
     KNOWN_STRATEGIES,
-    format_db_solver_name,
-    get_clean_model_label,
-    get_model_slug,
-    resolve_canonical_model_slug,
-    resolve_folder_solver_name,
+    LLMModelSpec,
+    ModelNames,
 )
 
 __all__ = [
     "CLASSICAL_SOLVERS_MAP",
     "KNOWN_STRATEGIES",
-    "format_db_solver_name",
-    "get_clean_model_label",
-    "get_model_slug",
-    "resolve_canonical_model_slug",
-    "resolve_folder_solver_name",
+    "LLMModelSpec",
+    "ModelNames",
     "HypothesisTestingEngine",
     "EcdfConvergenceEngine",
     "PerformanceMetricsEngine",

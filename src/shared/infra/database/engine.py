@@ -4,15 +4,21 @@ Provides thread-safe connection pooling, WAL mode enforcement, and session facto
 configured globally via shared.config.DATABASE_URL.
 """
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
 import sqlite3
+from typing import TYPE_CHECKING
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from shared.config import DATABASE_URL, PROJECT_ROOT
+
+if TYPE_CHECKING:
+    from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
 
 
 def ensure_wal_mode(db_path: Path) -> None:
@@ -72,7 +78,7 @@ def build_engine(db_url: str | None = None, *, echo: bool = False) -> Engine:
     if is_sqlite:
 
         @event.listens_for(engine, "connect")
-        def _configure_sqlite(dbapi_conn, _):
+        def _configure_sqlite(dbapi_conn: sqlite3.Connection, _connection_record: object) -> None:
             cursor = dbapi_conn.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.execute("PRAGMA busy_timeout=60000")
@@ -88,7 +94,7 @@ def create_db_session_factory(engine: Engine | None = None) -> sessionmaker[Sess
     return sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
-def initialize_sqlite_storage():
+def initialize_sqlite_storage() -> SQLiteSynthesisRepository:
     """Creates an engine using global DATABASE_URL and returns an initialized synthesis repository."""
     from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
 

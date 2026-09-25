@@ -1,5 +1,6 @@
 """RunTrace and SolverRunCollection Value Objects representing empirical optimization convergence traces."""
 
+from collections.abc import Iterator
 from typing import Self
 import numpy as np
 from pydantic import Field, model_validator
@@ -83,7 +84,7 @@ class SolverRunCollection(ValueObject):
     def __len__(self) -> int:
         return len(self.runs)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[RunTrace]:
         return iter(self.runs)
 
     def __getitem__(self, idx: int) -> RunTrace:

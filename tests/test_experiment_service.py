@@ -18,7 +18,7 @@ from evolution.domain.vos import (
     ProblemProfile,
 )
 from evolution.domain.enums import NoiseModelEnum, SynthesisMode, PromptStrategy
-from evolution.application.candidate_evaluation import CandidateEvaluationService
+from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.infra.execution.candidate_executor import create_candidate_executor
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy, NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
@@ -30,8 +30,8 @@ from evolution.application import (
 from evolution.infra.concurrency.runner import ProcessPoolRunner
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
-from shared.database.engine import build_engine
-from shared.database.tables import Base, ExperimentORM
+from shared.infra.database.engine import build_engine
+from shared.infra.database.tables import Base, ExperimentORM
 from evolution.infra.engines.llamea import Evaluator, LLaMEAEngine, LLaMEASession
 from evolution.application.exceptions import OrchestrationError
 from evolution.infra.concurrency.worker import run_synthesis_worker
@@ -777,7 +777,7 @@ def test_prompt_strategy_persisted(db_session_factory, tmp_path):
 
 def test_scipy_optimize_banned(tmp_path):
     """Verify that generated code attempting to use scipy.optimize fails execution or compilation."""
-    from shared.execution import AlgorithmExecutor, CodeValidationException
+    from shared.infra.execution import AlgorithmExecutor, CodeValidationException
 
     executor = AlgorithmExecutor(timeout_seconds=2.0)
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
@@ -1123,8 +1123,8 @@ def test_experiment_summary_domain_aggregate(db_session_factory):
 def test_synthesis_engine_lsp_contract():
     """Verify that any SynthesisEngine conforms to run(task, db_repo) returning SessionResult."""
     from typing import Any
-    from evolution.application.interfaces.engine import SynthesisEngine
-    from evolution.application.interfaces.engine import SessionResult
+    from evolution.application.ports.engine import SynthesisEngine
+    from evolution.application.ports.engine import SessionResult
     from evolution.domain.enums import SynthesisMode
 
     class CustomEngine(SynthesisEngine):

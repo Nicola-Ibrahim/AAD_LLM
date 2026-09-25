@@ -1,12 +1,13 @@
 from pathlib import Path
 
+from evolution.application.ports.code_store import SynthesisCodeStore
 from shared.config import DATA_DIR, PROJECT_ROOT
 
 
-class CodeRepository:
+class CodeRepository(SynthesisCodeStore):
     """Handles persistence of generated candidate algorithm source code on disk."""
 
-    def __init__(self, base_dir: Path = DATA_DIR / "code"):
+    def __init__(self, base_dir: Path = DATA_DIR / "code") -> None:
         self.base_dir = base_dir
 
     def save_code(

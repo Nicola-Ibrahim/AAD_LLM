@@ -1,6 +1,6 @@
 from evolution.domain.base import DomainEntity, EntityID, ValueObject
 from evolution.domain.entities.experiment import ExperimentSummary
-from evolution.domain.enums.bbob_function import BBOBFunction
+from shared.domain.bbob import BBOBFunction
 from evolution.domain.enums.noise_model import NoiseModelEnum
 from evolution.domain.enums.synthesis_mode import SynthesisMode
 from evolution.domain.enums.prompt_strategy import PromptStrategy

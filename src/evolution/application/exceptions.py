@@ -4,7 +4,7 @@
 class OrchestrationError(RuntimeError):
     """Aggregate failures from one or more dispatched campaign tasks."""
 
-    def __init__(self, errors: dict[str, Exception]):
+    def __init__(self, errors: dict[str, Exception]) -> None:
         formatted = "\n".join(
             f"  - Task '{key}': {type(err).__name__}: {err}" for key, err in errors.items()
         )

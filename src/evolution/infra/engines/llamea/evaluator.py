@@ -12,17 +12,17 @@ from typing import Any
 
 from llamea import Solution
 
-from evolution.application.interfaces import BaseLogger, SessionConfig
+from evolution.application.ports import BaseLogger, SessionConfig
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.interfaces import BaseProblem
-from evolution.application.candidate_evaluation import CandidateEvaluationService
+from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.domain.vos import IterationMetadata, ProblemProfile
 from evolution.infra.engines.llamea.prompts import FeedbackRenderer
 from evolution.infra.logging import SynthesisLogger
-from evolution.application.interfaces.repository import SynthesisRepository
+from evolution.application.ports.repository import SynthesisRepository
 from evolution.infra.execution.candidate_executor import AlgorithmExecutorAdapter
 from evolution.infra.storage.code.repository import CodeRepository
-from shared.execution import AlgorithmExecutor
+from shared.infra.execution import AlgorithmExecutor
 
 
 class Evaluator:

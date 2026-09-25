@@ -1,6 +1,6 @@
 """EvaluationDataset Value Object representing complete multi-condition benchmark traces."""
 
-from collections.abc import Iterator, Mapping
+from collections.abc import ItemsView, Iterator, KeysView, Mapping, ValuesView
 from typing import Any, Self
 import numpy as np
 from pydantic import Field
@@ -119,13 +119,13 @@ class EvaluationDataset(ValueObject, Mapping[EvaluationCondition, dict[str, list
     def __len__(self) -> int:
         return len(self.conditions_data)
 
-    def items(self):
+    def items(self) -> ItemsView[EvaluationCondition, dict[str, list[RunTrace]]]:
         return self.conditions_data.items()
 
-    def keys(self):
+    def keys(self) -> KeysView[EvaluationCondition]:
         return self.conditions_data.keys()
 
-    def values(self):
+    def values(self) -> ValuesView[dict[str, list[RunTrace]]]:
         return self.conditions_data.values()
 
     def get(self, key: EvaluationCondition, default: Any = None) -> Any:

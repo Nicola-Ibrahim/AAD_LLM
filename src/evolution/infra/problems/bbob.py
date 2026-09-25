@@ -30,7 +30,7 @@ class BBOBProblem(BaseProblem):
         noise_strategy: BaseNoiseStrategy,
         instance_id: int = 1,
         seed: int = 42,
-    ):
+    ) -> None:
         self.problem_id = problem_id
         self.dim = dim
         self.instance_id = instance_id
@@ -113,7 +113,7 @@ class BBOBProblem(BaseProblem):
             f"instance_id={self.instance_id})"
         )
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset the IOH problem state (call counter) for reuse across runs."""
         self._last_f = float("inf")
         self._clean_problem.reset()
@@ -200,14 +200,14 @@ class BBOBProblem(BaseProblem):
         f_sub = str(self.problem_id).translate(subscripts)
         return f"{self.name} (bbob f{f_sub}, {self.dim}-D, inst. {self.instance_id})"
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, object]:
         state = self.__dict__.copy()
         # Exclude C++ unpicklable wrappers
         state["_clean_problem"] = None
         state["_scoring_problem"] = None
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, object]) -> None:
         self.__dict__.update(state)
         # Re-initialize clean IOH problem instance on unpickling
         self._clean_problem = get_problem(

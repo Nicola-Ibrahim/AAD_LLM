@@ -16,6 +16,7 @@ import urllib.request
 
 import openai
 from llamea import LLM, Gemini_LLM, OpenAI_LLM
+from llamea.solution import Solution
 
 
 class Provider(StrEnum):
@@ -71,7 +72,7 @@ class LLMClient:
         provider: Provider | str,
         validate_on_init: bool = True,
         **kwargs: Any,
-    ):
+    ) -> None:
         self.provider = provider if isinstance(provider, Provider) else Provider(provider)
         self.validate_on_init = validate_on_init
         self.kwargs = kwargs
@@ -168,12 +169,12 @@ class LLMClient:
 
     def sample_solution(
         self,
-        session_messages: list,
-        parent_ids: list | None = None,
+        session_messages: list[dict[str, str]],
+        parent_ids: list[str] | None = None,
         HPO: bool = False,
         base_code: str | None = None,
         diff_mode: bool = False,
-    ):
+    ) -> Solution:
         """Samples a solution from the LLM with retry and telemetry tracking."""
         max_retries = 3
         backoff = 2.0

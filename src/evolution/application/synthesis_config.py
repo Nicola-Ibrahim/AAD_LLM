@@ -1,6 +1,5 @@
 """Typed synthesis matrix and campaign configuration models owned by the application."""
 
-from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from evolution.domain.enums import (
@@ -19,18 +18,18 @@ class ProblemTarget(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    def __getitem__(self, key: str) -> Any:
+    def __getitem__(self, key: str) -> object:
         if hasattr(self, key):
             return getattr(self, key)
         raise KeyError(key)
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: str, default: object = None) -> object:
         return getattr(self, key, default)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         return {"id": self.id, "dimensions": list(self.dimensions)}
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, dict):
             return self.id == other.get("id") and list(self.dimensions) == list(
                 other.get("dimensions", [])
@@ -46,15 +45,15 @@ class SynthesisModeConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    def __getitem__(self, key: str) -> Any:
+    def __getitem__(self, key: str) -> object:
         if hasattr(self, key):
             return getattr(self, key)
         raise KeyError(key)
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: str, default: object = None) -> object:
         return getattr(self, key, default)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "mode": self.mode.value if isinstance(self.mode, SynthesisMode) else str(self.mode),
             "strategies": [
@@ -62,7 +61,7 @@ class SynthesisModeConfig(BaseModel):
             ],
         }
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, dict):
             other_mode = other.get("mode")
             if isinstance(other_mode, SynthesisMode):
@@ -94,7 +93,7 @@ class NoiseConditionConfig(BaseModel):
     def noise_model(self) -> NoiseModelEnum:
         return self.model
 
-    def __getitem__(self, idx: int | str) -> Any:
+    def __getitem__(self, idx: int | str) -> object:
         if isinstance(idx, int):
             return (self.std, self.model, self.mode)[idx]
         if hasattr(self, idx):
@@ -103,12 +102,12 @@ class NoiseConditionConfig(BaseModel):
             return self.model
         raise KeyError(idx)
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: str, default: object = None) -> object:
         if key == "noise_model":
             return self.model
         return getattr(self, key, default)
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "std": self.std,
             "model": self.model.value
@@ -121,7 +120,7 @@ class NoiseConditionConfig(BaseModel):
             "modes": [m.to_dict() for m in self.modes],
         }
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, dict):
             model_val = other.get("noise_model") or other.get("model")
             model_match = (
@@ -161,7 +160,7 @@ class MatrixCondition(BaseModel):
             )
         )
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, MatrixCondition):
             return False
         return (
@@ -200,12 +199,12 @@ class MatrixCondition(BaseModel):
         """SynthesisMode passed to synthesis session."""
         return self.mode
 
-    def __getitem__(self, key: str) -> Any:
+    def __getitem__(self, key: str) -> object:
         if hasattr(self, key):
             return getattr(self, key)
         raise KeyError(key)
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: str, default: object = None) -> object:
         return getattr(self, key, default)
 
 
@@ -233,9 +232,9 @@ class SynthesisConfig(BaseModel):
     noise_model: NoiseModelEnum = NoiseModelEnum.HETEROSCEDASTIC
 
     # 3. Raw configuration dictionary sections
-    matrix: dict[str, Any] = Field(default_factory=dict)
-    evolution: dict[str, Any] = Field(default_factory=dict)
-    execution: dict[str, Any] = Field(default_factory=dict)
+    matrix: dict[str, object] = Field(default_factory=dict)
+    evolution: dict[str, object] = Field(default_factory=dict)
+    execution: dict[str, object] = Field(default_factory=dict)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -289,7 +288,7 @@ class SynthesisConfig(BaseModel):
     def convergence_threshold(self) -> float:
         return float(self.evolution.get("convergence_threshold", 1e-6))
 
-    def to_session_config_dict(self) -> dict[str, Any]:
+    def to_session_config_dict(self) -> dict[str, int | float]:
         """Derive a dictionary of session execution configuration parameters."""
         return {
             "budget": self.budget,
@@ -300,12 +299,12 @@ class SynthesisConfig(BaseModel):
         }
 
     # Dictionary-style mapping interface
-    def __getitem__(self, key: str) -> Any:
+    def __getitem__(self, key: str) -> object:
         if hasattr(self, key):
             return getattr(self, key)
         raise KeyError(f"Configuration key '{key}' not found in SynthesisConfig.")
 
-    def get(self, key: str, default: Any = None) -> Any:
+    def get(self, key: str, default: object = None) -> object:
         if hasattr(self, key):
             return getattr(self, key)
         return default

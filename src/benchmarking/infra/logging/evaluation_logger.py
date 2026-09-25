@@ -7,7 +7,11 @@ utilizing Python's standard logging.Logger infrastructure.
 
 import logging
 import sys
-from typing import Any, TextIO
+from collections.abc import Mapping
+from typing import TextIO
+
+from benchmarking.application.ports import EvaluationLoggerPort
+from evolution.domain.enums import SynthesisMode
 
 
 class Colors:
@@ -38,7 +42,7 @@ class EvaluationFormatter(logging.Formatter):
         return record.getMessage()
 
 
-class EvaluationLogger:
+class EvaluationLogger(EvaluationLoggerPort):
     """Specialized evaluation logger utilizing standard Python logging.Logger with custom colorization and emojis."""
 
     def __init__(
@@ -46,7 +50,7 @@ class EvaluationLogger:
         verbose: bool = True,
         logger_name: str = "benchmarking.evaluation",
         stream: TextIO | None = None,
-    ):
+    ) -> None:
         self.logger = logging.getLogger(logger_name)
         self.logger.propagate = False
         self._stream = stream or sys.stdout
@@ -89,22 +93,33 @@ class EvaluationLogger:
         noise_std: float,
         problem_id: int,
         problem_name: str = "",
+        mode: SynthesisMode | str | None = None,
+        strategy: str | None = None,
     ) -> None:
         """Logs the start of an evaluation condition."""
-        noise_label = (
-            f"{Colors.GREEN}σ={noise_std:g}{Colors.RESET}"
-            if noise_std == 0.0
-            else f"{Colors.BRIGHT_YELLOW}σ={noise_std:g}{Colors.RESET}"
-        )
+        noise_color = Colors.GREEN if noise_std == 0.0 else Colors.BRIGHT_YELLOW
         p_name = f" ({problem_name})" if problem_name else ""
         icon = "🏆" if solver_type.lower() == "champion" else "⚙️"
 
+        def column(label: str, value: str, color: str, width: int) -> str:
+            return f"{Colors.BOLD}{label:<13}{Colors.RESET}{color}{value:<{width}}{Colors.RESET}"
+
+        mode_value = getattr(mode, "value", mode) or "—"
+        strategy_value = strategy or "—"
+        fields = "  " + "  ".join(
+            (
+                column("Mode:", str(mode_value), Colors.BRIGHT_CYAN, 9),
+                column("Strategy:", str(strategy_value), Colors.BRIGHT_MAGENTA, 13),
+                column("Dim:", f"{dim}D", Colors.CYAN, 5),
+                column("Noise level:", f"σ={noise_std:g}", noise_color, 8),
+                f"{Colors.BOLD}{'Problem:':<13}{Colors.RESET}"
+                f"{Colors.BRIGHT_MAGENTA}f{problem_id}{p_name}{Colors.RESET}",
+            )
+        )
         self.logger.info(
             f"\n{Colors.BOLD}{Colors.BRIGHT_BLUE}[{index}/{total}]{Colors.RESET} "
-            f"{icon} {Colors.BOLD}{solver_type.title()}:{Colors.RESET} {Colors.BRIGHT_CYAN}{solver_name}{Colors.RESET} | "
-            f"{Colors.BOLD}Dim:{Colors.RESET} {dim}D | "
-            f"{Colors.BOLD}Noise level:{Colors.RESET} {noise_label} | "
-            f"{Colors.BOLD}Problem:{Colors.RESET} {Colors.BRIGHT_MAGENTA}f{problem_id}{p_name}{Colors.RESET}"
+            f"{icon} {Colors.BOLD}{solver_type.title()}:{Colors.RESET} "
+            f"{Colors.BRIGHT_CYAN}{solver_name}{Colors.RESET}\n{fields}"
         )
 
     def trial(
@@ -191,7 +206,7 @@ class EvaluationLogger:
         """Logs an error message."""
         self.logger.error(f"❌ {Colors.BRIGHT_RED}{msg}{Colors.RESET}")
 
-    def summary(self, title: str, stats: dict[str, Any], width: int = 80) -> None:
+    def summary(self, title: str, stats: Mapping[str, object], width: int = 80) -> None:
         """Logs a batch completion summary banner."""
         sep = f"{Colors.BRIGHT_GREEN}{'=' * width}{Colors.RESET}"
         stats_str = " | ".join(

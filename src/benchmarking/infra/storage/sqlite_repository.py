@@ -2,15 +2,16 @@
 
 import pandas as pd
 from sqlalchemy import func, select
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
-from shared.database.tables import ExperimentORM, IterationORM
+from benchmarking.application.ports import SynthesisReadRepository
+from shared.infra.database.tables import ExperimentORM, IterationORM
 
 
-class SQLiteSynthesisReadRepository:
+class SQLiteSynthesisReadRepository(SynthesisReadRepository):
     """Read-only infrastructure repository managing SQLite queries for synthesis experiments and champion discovery."""
 
-    def __init__(self, session_factory: sessionmaker):
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self.SessionLocal = session_factory
 
     def get_experiment_balance(self) -> tuple[pd.DataFrame, int]:

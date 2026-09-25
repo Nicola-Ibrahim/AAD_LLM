@@ -1,13 +1,12 @@
 """Picklable process-pool worker entry point for one synthesis session."""
 
-from typing import Any
+from evolution.application.campaign.models import CampaignTask
+from evolution.application.ports.engine import SessionResult
 
-from evolution.application.interfaces.engine import SessionResult
 
-
-def run_synthesis_worker(item: dict[str, Any]) -> SessionResult:
-    from shared.database.engine import initialize_sqlite_storage
-    from evolution.application.single_synthesis_usecase import SingleSynthesisUseCase
+def run_synthesis_worker(item: CampaignTask) -> SessionResult:
+    from shared.infra.database.engine import initialize_sqlite_storage
+    from evolution.application.synthesis.run import SingleSynthesisUseCase
 
     repository = initialize_sqlite_storage()
     use_case = SingleSynthesisUseCase(engine=item["engine"], sqlite_repo=repository)

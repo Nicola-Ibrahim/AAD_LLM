@@ -1,11 +1,12 @@
 """IOH-backed factory for concrete BBOB problem adapters."""
 
 from evolution.domain.enums import NoiseModelEnum
+from evolution.application.ports import ProblemFactory
 from evolution.domain.services.noise_strategy import NoiseStrategyFactory
 from evolution.infra.problems.bbob import BBOBProblem
 
 
-class BBOBProblemFactory:
+class BBOBProblemFactory(ProblemFactory):
     def create(
         self,
         problem_id: int,

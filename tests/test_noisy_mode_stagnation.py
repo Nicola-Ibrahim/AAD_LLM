@@ -4,13 +4,13 @@ from evolution.domain.enums import NoiseModelEnum, SynthesisMode
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy
 from evolution.domain.vos import ProblemProfile
 from evolution.application import SessionConfig
-from evolution.application.candidate_evaluation import CandidateEvaluationService
+from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.infra.execution.candidate_executor import create_candidate_executor
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from evolution.infra.engines.llamea import Evaluator
-from shared.execution import AlgorithmExecutor, CodeCompiler
+from shared.infra.execution import AlgorithmExecutor, CodeCompiler
 
 
 def build_candidate_evaluation_service(*, problem, **kwargs):

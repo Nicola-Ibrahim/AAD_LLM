@@ -1,13 +1,10 @@
 """Application use cases and orchestration services for evolutionary synthesis."""
 
-from evolution.application.campaign_coordinator import (
-    CampaignResults,
-    CampaignTask,
-    SynthesisCampaignCoordinator,
-)
-from evolution.application.interfaces.engine import SessionConfig, SessionResult, SynthesisEngine
-from evolution.application.interfaces.logger import BaseLogger
-from evolution.application.single_synthesis_usecase import SingleSynthesisUseCase
+from evolution.application.campaign.models import CampaignResults, CampaignTask
+from evolution.application.campaign.run import SynthesisCampaignCoordinator
+from evolution.application.ports.engine import SessionConfig, SessionResult, SynthesisEngine
+from evolution.application.ports.logger import BaseLogger
+from evolution.application.synthesis.run import SingleSynthesisUseCase
 
 __all__ = [
     "BaseLogger",

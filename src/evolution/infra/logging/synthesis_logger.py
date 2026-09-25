@@ -7,9 +7,10 @@ and task dispatch summaries utilizing Python's standard logging.Logger infrastru
 
 import logging
 import sys
-from typing import Any, TextIO
+from collections.abc import Mapping
+from typing import TextIO
 
-from evolution.application.interfaces import BaseLogger
+from evolution.application.ports import BaseLogger
 
 
 class Colors:
@@ -48,7 +49,7 @@ class SynthesisLogger(BaseLogger):
         verbose: bool = True,
         logger_name: str = "evolution.synthesis",
         stream: TextIO | None = None,
-    ):
+    ) -> None:
         self.logger = logging.getLogger(logger_name)
         self.logger.propagate = False
         self._stream = stream or sys.stdout
@@ -230,7 +231,7 @@ class SynthesisLogger(BaseLogger):
     def summary(
         self,
         title: str,
-        stats: dict[str, Any],
+        stats: Mapping[str, object],
         width: int = 80,
     ) -> None:
         """Logs a formatted summary box with key-value metric pairs."""

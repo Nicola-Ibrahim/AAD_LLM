@@ -31,6 +31,35 @@ class BBOBFunction(Enum):
     F23 = (23, "Katsuura", "Multi-Modal (Weak)")
     F24 = (24, "Lunacek Bi-Rastrigin", "Multi-Modal (Weak)")
 
+    # Established synthesis-side names for the same 24 scientific functions.
+    SPHERE = F1
+    ELLIPSOIDAL = F2
+    RASTRIGIN_SEPARABLE = F3
+    BUECHE_RASTRIGIN = F4
+    LINEAR_SLOPE = F5
+    ATTRACTIVE_SECTOR = F6
+    STEP_ELLIPSOIDAL = F7
+    ROSENBROCK = F8
+    ROSENBROCK_ROTATED = F9
+    ELLIPSOIDAL_HIGH_COND = F10
+    DISCUS = F11
+    BENT_CIGAR = F12
+    SHARP_RIDGE = F13
+    DIFFERENT_POWERS = F14
+    RASTRIGIN = F15
+    WEIERSTRASS = F16
+    SCHAFFERS_F7 = F17
+    SCHAFFERS_F7_ILL_COND = F18
+    GRIEWANK_ROSENBROCK = F19
+    SCHWEFEL = F20
+    GALLAGHER_101 = F21
+    GALLAGHER_21 = F22
+    KATUSHA = F23
+    LUNACEK = F24
+
+    def __int__(self) -> int:
+        return self.problem_id
+
     @property
     def problem_id(self) -> int:
         """The 1-indexed BBOB function number."""
@@ -70,6 +99,48 @@ class BBOBFunction(Enum):
         """Return landscape hardness group e.g. 'Separable'."""
         func = cls.from_id(p_id)
         return func.hardness_group if func else "Unknown"
+
+    @property
+    def short_name(self) -> str:
+        return self.function_name.split()[0]
+
+    @classmethod
+    def get_short_name(cls, problem_id: int) -> str:
+        func = cls.from_id(problem_id)
+        return cls.get_display_name(problem_id).split()[0] if func else f"f{problem_id}"
+
+    @classmethod
+    def get_display_name(cls, problem_id: int) -> str:
+        func = cls.from_id(problem_id)
+        return SYNTHESIS_DISPLAY_NAMES[problem_id] if func else f"Function {problem_id}"
+
+
+SYNTHESIS_DISPLAY_NAMES = {
+    1: "Sphere (Separable)",
+    2: "Ellipsoidal (Separable)",
+    3: "Rastrigin (Separable)",
+    4: "Büche-Rastrigin",
+    5: "Linear Slope",
+    6: "Attractive Sector",
+    7: "Step Ellipsoidal",
+    8: "Rosenbrock (Moderate)",
+    9: "Rosenbrock (Rotated)",
+    10: "Ellipsoidal (High Conditioning)",
+    11: "Discus (Ill-conditioned)",
+    12: "Bent Cigar",
+    13: "Sharp Ridge",
+    14: "Different Powers",
+    15: "Rastrigin (Multi-modal)",
+    16: "Weierstrass",
+    17: "Schaffers F7",
+    18: "Schaffers F7 (Ill-conditioned)",
+    19: "Griewank-Rosenbrock",
+    20: "Schwefel",
+    21: "Gallagher 101 (Deceptive)",
+    22: "Gallagher 21",
+    23: "Katsuura",
+    24: "Lunacek bi-Rastrigin",
+}
 
 
 BBOB_CLASSES_ORDER = [

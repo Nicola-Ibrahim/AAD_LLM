@@ -6,15 +6,16 @@ Has zero dependencies on application services or domain contracts.
 
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import TypeVar
+from typing import Generic, TypeVar
 
 from evolution.application.exceptions import OrchestrationError
+from evolution.application.ports.campaign_runtime import TaskDispatcher
 
 T = TypeVar("T")
 R = TypeVar("R")
 
 
-class ProcessPoolRunner:
+class ProcessPoolRunner(Generic[T, R], TaskDispatcher[T, R]):
     """Manages multi-core parallel execution of arbitrary callable units via ProcessPoolExecutor."""
 
     def __init__(self, max_workers: int | None = None) -> None:

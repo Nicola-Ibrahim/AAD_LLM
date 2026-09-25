@@ -4,14 +4,14 @@ from collections.abc import Callable
 
 import numpy as np
 
-from evolution.application.interfaces.candidate_executor import CandidateTimeout
-from shared.execution import AlgorithmExecutor, AlgorithmTimeoutException
+from evolution.application.ports.candidate_executor import CandidateExecutor, CandidateTimeout
+from shared.infra.execution import AlgorithmExecutor, AlgorithmTimeoutException
 
 
-class AlgorithmExecutorAdapter:
+class AlgorithmExecutorAdapter(CandidateExecutor):
     """Translate shared executor behavior into the candidate-execution application port."""
 
-    def __init__(self, executor: AlgorithmExecutor):
+    def __init__(self, executor: AlgorithmExecutor) -> None:
         self._executor = executor
 
     @property

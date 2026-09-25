@@ -1,4 +1,4 @@
-"""Application workflow for candidate execution and result construction.
+"""Application use case for candidate execution and result construction.
 
 Runs generated optimizers through an executor port, captures execution diagnostics,
 and assembles domain result values. Scientific scoring is delegated to the domain
@@ -24,7 +24,7 @@ from evolution.domain.vos.metrics import (
     Fitness,
 )
 from evolution.domain.services.algorithm_scoring import AlgorithmScoringService, FailureKind
-from evolution.application.interfaces.candidate_executor import CandidateExecutor, CandidateTimeout
+from evolution.application.ports.candidate_executor import CandidateExecutor, CandidateTimeout
 
 
 @dataclass

@@ -2,12 +2,14 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces import BaseProblem
+from evolution.domain.vos import ProblemProfile
+from evolution.application.ports.repository import SynthesisRepository
 
 
 class SessionConfig(BaseModel):
@@ -46,6 +48,18 @@ class SessionConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class ModelIdentity(Protocol):
+    """Name exposed by an LLM client model descriptor."""
+
+    name: str
+
+
+class LanguageModelClient(Protocol):
+    """Application view of the model client used for campaign naming."""
+
+    model: ModelIdentity
+
+
 @dataclass(slots=True)
 class SessionResult:
     """Contract returned per-problem run by an evolutionary synthesis engine."""
@@ -56,12 +70,12 @@ class SessionResult:
     noise_std: float
     experiment_id: int
     best_error: float | None = None
-    run_history: list[Any] = field(default_factory=list)
+    run_history: list[object] = field(default_factory=list)
     experiment_name: str = ""
     llm_name: str = ""
     error_msg: str = ""
-    best_solution: Any = None
-    problem_profile: Any = None
+    best_solution: object | None = None
+    problem_profile: ProblemProfile | None = None
 
 
 class SynthesisEngine(ABC):
@@ -76,7 +90,7 @@ class SynthesisEngine(ABC):
     def __init__(
         self,
         config: SessionConfig | None = None,
-        db_repo: Any | None = None,
+        db_repo: SynthesisRepository | None = None,
         prompt_strategy: PromptStrategy = PromptStrategy.BASELINE,
         synthesis_mode: SynthesisMode = SynthesisMode.EXPLICIT,
     ) -> None:
@@ -91,7 +105,7 @@ class SynthesisEngine(ABC):
         problem: BaseProblem,
         experiment_id: int,
         config: SessionConfig | None = None,
-        db_repo: Any | None = None,
+        db_repo: SynthesisRepository | None = None,
         prompt_strategy: PromptStrategy | None = None,
         synthesis_mode: SynthesisMode | None = None,
         initial_iteration: int = 0,

@@ -1,6 +1,6 @@
 """Benchmarking domain enums."""
 
-from benchmarking.domain.enums.bbob_function import (
+from shared.domain.bbob import (
     BBOB_CLASSES_ORDER,
     BBOBFunction,
 )

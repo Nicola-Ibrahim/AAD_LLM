@@ -6,7 +6,8 @@ use cases; the application and domain do not import the infrastructure package.
 
 ```mermaid
 flowchart LR
-    Notebook[Notebook / bootstrap] --> Coordinator[SynthesisCampaignCoordinator]
+    Notebook[Notebook] --> Bootstrap[build_synthesis_campaign]
+    Bootstrap --> Coordinator[SynthesisCampaignCoordinator]
     Coordinator --> RepoPort[SynthesisRepository]
     Coordinator --> ConfigPort[SynthesisConfigReader]
     Coordinator --> ProblemPort[ProblemFactory]
@@ -28,7 +29,7 @@ flowchart LR
 | Layer | Components | Responsibility |
 |---|---|---|
 | Domain | `ExperimentSummary`, value objects, `NoiseStrategy`, `AlgorithmScoringService` | Scientific state and scoring policy: objective gap, fitness, failure tiers, and noise calculations. |
-| Application | `SynthesisCampaignCoordinator`, `SingleSynthesisUseCase`, `CandidateEvaluationService`, interfaces | Reconcile campaign state, plan work, coordinate candidate execution, and construct evaluation results. |
+| Application | `campaign/` audit, plan, and run; `synthesis/` session and candidate evaluation; `ports/` | Reconcile campaign state, plan work, coordinate candidate execution, and construct evaluation results. |
 | Infrastructure | `LLaMEAEngine`, `Evaluator`, BBOB and SQLite adapters, executor, process dispatcher, logger | Adapt IOH, LLaMEA, SQLite/files, generated-code execution, and worker processes to application contracts. |
 | Entry points | `notebooks/02_synthesis.ipynb` and bootstrap code | Construct the infrastructure adapters and inject them into application use cases. |
 
@@ -41,7 +42,8 @@ telemetry through the repository port.
 
 ## Campaign lifecycle
 
-`SynthesisCampaignCoordinator` reads typed application configuration and a
+`SynthesisCampaignCoordinator` composes campaign auditing, planning, and dispatch.
+It reads typed application configuration and a
 `SynthesisRepository`, audits requested conditions, and builds typed `CampaignTask`
 payloads. It submits those payloads through `TaskDispatcher`. The module-level
 `run_synthesis_worker` is the process-pool entry point so it remains pickleable; each

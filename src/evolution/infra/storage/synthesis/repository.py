@@ -1,10 +1,10 @@
 """SQLite-based repository for LLaMEA algorithm synthesis sessions."""
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import cast
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import selectinload, sessionmaker
+from sqlalchemy.orm import Session, selectinload, sessionmaker
 
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
@@ -18,26 +18,26 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
-from evolution.application.interfaces.repository import SynthesisRepository
-from shared.database.tables import ErrorLogORM, ExperimentORM, IterationORM
+from evolution.application.ports.repository import SynthesisRepository
+from shared.infra.database.tables import ErrorLogORM, ExperimentORM, IterationORM
 
 
 class SQLiteSynthesisRepository(SynthesisRepository):
     """SQLite-based repository for LLaMEA synthesis sessions and iteration lifecycle using SQLAlchemy ORM."""
 
-    def __init__(self, session_factory: sessionmaker):
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self.SessionLocal = session_factory
 
-    def __getstate__(self) -> dict[str, Any]:
+    def __getstate__(self) -> dict[str, object]:
         """Strip non-picklable SQLAlchemy session_factory before serialization."""
         state = self.__dict__.copy()
         state.pop("SessionLocal", None)
         return state
 
-    def __setstate__(self, state: dict[str, Any]) -> None:
+    def __setstate__(self, state: dict[str, object]) -> None:
         """Restore state for process workers."""
         self.__dict__.update(state)
-        self.SessionLocal = state.get("SessionLocal", None)
+        self.SessionLocal = cast(sessionmaker[Session], state.get("SessionLocal"))
 
     def create_experiment(
         self,

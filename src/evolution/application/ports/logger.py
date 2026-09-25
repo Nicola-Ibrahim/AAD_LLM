@@ -5,7 +5,7 @@ decoupling the application layer from concrete infrastructure console/file logge
 """
 
 from abc import ABC, abstractmethod
-from typing import Any
+from collections.abc import Mapping
 
 
 class BaseLogger(ABC):
@@ -16,7 +16,7 @@ class BaseLogger(ABC):
     specific domain telemetry handlers.
     """
 
-    def __init__(self, verbose: bool = True):
+    def __init__(self, verbose: bool = True) -> None:
         self.verbose = verbose
 
     # -------------------------------------------------------------------------
@@ -150,7 +150,7 @@ class BaseLogger(ABC):
     def summary(
         self,
         title: str,
-        stats: dict[str, Any],
+        stats: Mapping[str, object],
         width: int = 80,
     ) -> None:
         """Logs a formatted summary box with key-value metric pairs."""

@@ -4,19 +4,19 @@ Provides high-level application services orchestrating domain logic and infrastr
 - `ChampionSelectionService`: Discover and export problem champions.
 - `EvaluationService`: Audit evaluation workload and orchestrate empirical benchmark trials.
 - `EvaluationAuditService`: Audit multi-condition coverage matrix.
-- `StatisticalEvaluationService`: Hypothesis testing, effect sizes, and reporting.
+- `AnalysisData`: Load traces and synthesis data for domain analysis engines.
 """
 
-from benchmarking.application.audit_service import (
+from benchmarking.application.evaluation.audit import (
     AuditCoverageSummary,
     AuditMatrixData,
     EvaluationAuditService,
 )
 from benchmarking.application.evaluation_config import EvaluationConfig
-from benchmarking.application.evaluation_service import EvaluationService
-from benchmarking.application.selection_service import ChampionSelectionService
-from benchmarking.application.statistical_service import (
-    StatisticalEvaluationService,
+from benchmarking.application.evaluation.run import EvaluationService
+from benchmarking.application.select_champions import ChampionSelectionService
+from benchmarking.application.analysis import (
+    AnalysisData,
     generate_markdown_report,
 )
 
@@ -27,6 +27,6 @@ __all__ = [
     "EvaluationAuditService",
     "EvaluationConfig",
     "EvaluationService",
-    "StatisticalEvaluationService",
+    "AnalysisData",
     "generate_markdown_report",
 ]

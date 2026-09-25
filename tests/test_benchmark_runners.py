@@ -3,7 +3,9 @@
 import json
 from pathlib import Path
 
-from benchmarking.application.evaluation_service import EvaluationService
+import pandas as pd
+
+from benchmarking.application.evaluation.run import EvaluationService
 from benchmarking.infra.solvers.baselines import run_cmaes, run_de, run_pso
 from benchmarking.infra.io.trace_repository import EvaluationStateRepository, IOHTraceReader
 from benchmarking.infra.logging import EvaluationLogger
@@ -18,19 +20,45 @@ from evolution.domain.services.noise_strategy import NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.problems.factory import BBOBProblemFactory
 from evolution.infra.execution.candidate_executor import create_candidate_executor
-from shared.database.engine import create_db_session_factory
+from shared.infra.database.engine import create_db_session_factory
 from shared.config import PROJECT_ROOT
+from benchmarking.infra.storage.model_registry import configured_model_names
 
 
 def build_evaluation_service(**kwargs):
-    project_root = kwargs.get("project_root", PROJECT_ROOT)
+    project_root = kwargs.pop("project_root", PROJECT_ROOT)
     return EvaluationService(
         **kwargs,
         problem_factory=BBOBProblemFactory(),
         executor_factory=create_candidate_executor,
         baseline_resolver=get_baseline_runner,
         code_reader=FilesystemCodeReader(project_root),
+        model_names=configured_model_names(),
     )
+
+
+class FixtureChampionsRepository:
+    """Supply candidate rows without consulting the project's historical database."""
+
+    def __init__(self, champions_path: Path):
+        self.champions_path = champions_path
+
+    def query_candidates(self) -> pd.DataFrame:
+        champions = json.loads(self.champions_path.read_text(encoding="utf-8"))
+        rows = []
+        for model, conditions in champions.items():
+            for candidate in conditions.values():
+                rows.append(
+                    {
+                        **candidate,
+                        "llm_name": candidate.get("llm_name", model),
+                        "experiment_id": 1,
+                        "iteration_id": len(rows) + 1,
+                        "final_error": 0.1,
+                        "evaluations_used": 50,
+                    }
+                )
+        return pd.DataFrame(rows)
 
 
 def test_baselines_callables():
@@ -76,7 +104,6 @@ target_noise_levels = [0.0]
     session_factory = create_db_session_factory()
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
-    trace_repo = IOHTraceReader(eval_dir=eval_dir)
     state_repo = EvaluationStateRepository(eval_dir=eval_dir)
     config_repo = EvaluationConfigRepository(config_path=cfg_file)
     logger = EvaluationLogger()
@@ -84,14 +111,13 @@ target_noise_levels = [0.0]
     service = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
-        trace_repo=trace_repo,
         state_repo=state_repo,
         config_repo=config_repo,
         logger=logger,
     )
 
     # 1. Run evaluation
-    res = service.run_baseline_trials(dim=2, noise_std=0.0, p_id=1, baseline_slug="pso")
+    res = service.trials.run_baseline_trials(dim=2, noise_std=0.0, p_id=1, baseline_slug="pso")
     assert res["status"] == "SUCCESS"
     assert len(res["clean_errors"]) == 2
     assert res["median_clean_error"] is not None
@@ -103,7 +129,7 @@ target_noise_levels = [0.0]
     assert prov_data["n_runs"] == 2
 
     # 2. Second call should hit cache
-    cached_res = service.run_baseline_trials(dim=2, noise_std=0.0, p_id=1, baseline_slug="pso")
+    cached_res = service.trials.run_baseline_trials(dim=2, noise_std=0.0, p_id=1, baseline_slug="pso")
     assert cached_res["status"] == "CACHED"
 
 
@@ -131,7 +157,6 @@ target_noise_levels = [0.0]
     session_factory = create_db_session_factory()
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
-    trace_repo = IOHTraceReader(eval_dir=eval_dir)
     state_repo = EvaluationStateRepository(eval_dir=eval_dir)
     config_repo = EvaluationConfigRepository(config_path=cfg_file)
 
@@ -164,7 +189,6 @@ class RandomOptimizer:
     service = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
-        trace_repo=trace_repo,
         state_repo=state_repo,
         config_repo=config_repo,
         logger=logger,
@@ -183,7 +207,7 @@ class RandomOptimizer:
     }
 
     # 1. Run evaluation
-    res = service.run_champion_trials(champ_info)
+    res = service.trials.run_champion_trials(champ_info)
     assert res["status"] == "SUCCESS"
     assert len(res["clean_errors"]) == 2
     assert res["median_clean_error"] is not None
@@ -195,13 +219,13 @@ class RandomOptimizer:
     assert prov_data["n_runs"] == 2
 
     # 2. Second call should hit cache
-    cached_res = service.run_champion_trials(champ_info)
+    cached_res = service.trials.run_champion_trials(champ_info)
     assert cached_res["status"] == "CACHED"
 
     # 3. Missing code handling
     missing_champ = dict(champ_info)
     missing_champ["code_path"] = "algorithms/nonexistent.py"
-    missing_res = service.run_champion_trials(missing_champ)
+    missing_res = service.trials.run_champion_trials(missing_champ)
     assert missing_res["status"] == "MISSING_CODE"
 
 
@@ -280,13 +304,12 @@ class IncrementalOptimizer:
     service_initial = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
-        trace_repo=trace_repo,
         state_repo=state_repo,
         config_repo=config_repo_2,
         logger=logger,
         project_root=project_root,
     )
-    res_1 = service_initial.run_champion_trials(champ_info)
+    res_1 = service_initial.trials.run_champion_trials(champ_info)
     assert res_1["status"] == "SUCCESS"
     assert len(res_1["clean_errors"]) == 2
 
@@ -297,13 +320,12 @@ class IncrementalOptimizer:
     service_resumed = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
-        trace_repo=trace_repo,
         state_repo=state_repo,
         config_repo=config_repo_4,
         logger=logger,
         project_root=project_root,
     )
-    res_2 = service_resumed.run_champion_trials(champ_info)
+    res_2 = service_resumed.trials.run_champion_trials(champ_info)
     assert res_2["status"] == "SUCCESS"
     assert len(res_2["clean_errors"]) == 4
     assert trace_repo.get_run_count(solver_dir) == 4
@@ -314,7 +336,7 @@ class IncrementalOptimizer:
     assert len(prov_data["clean_errors"]) == 4
 
     # Step 3: Baseline incremental resumption
-    base_res_1 = service_initial.run_baseline_trials(
+    base_res_1 = service_initial.trials.run_baseline_trials(
         dim=2, noise_std=0.0, p_id=1, baseline_slug="pso"
     )
     assert base_res_1["status"] == "SUCCESS"
@@ -323,7 +345,7 @@ class IncrementalOptimizer:
     pso_dir = eval_dir / "2D" / "std_0.0" / "f1" / "pso"
     assert trace_repo.get_run_count(pso_dir) == 2
 
-    base_res_2 = service_resumed.run_baseline_trials(
+    base_res_2 = service_resumed.trials.run_baseline_trials(
         dim=2, noise_std=0.0, p_id=1, baseline_slug="pso"
     )
     assert base_res_2["status"] == "SUCCESS"
@@ -401,7 +423,7 @@ def test_evaluation_logger(tmp_path: Path):
     assert "Success message" in output
     assert "TestSolver" in output
     assert "Sphere" in output
-    assert "Trial  1/10" in output
+    assert "Trial 1/10" in output
     assert "CACHED" in output
 
     # 2. Quiet mode (verbose=False)
@@ -439,14 +461,12 @@ target_noise_levels = [0.0]
     session_factory = create_db_session_factory()
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
-    trace_repo = IOHTraceReader()
     state_repo = EvaluationStateRepository(eval_dir=eval_dir)
     config_repo = EvaluationConfigRepository(config_path=cfg_file)
 
     service = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
-        trace_repo=trace_repo,
         state_repo=state_repo,
         config_repo=config_repo,
         logger=custom_logger,
@@ -506,10 +526,8 @@ target_noise_stds = [0.0, 0.05, 0.1]
         encoding="utf-8",
     )
 
-    session_factory = create_db_session_factory()
-    sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
-    champions_repo = ChampionsReadRepository(session_factory, champions_path=champions_json)
-    trace_repo = IOHTraceReader(eval_dir=eval_dir)
+    sqlite_repo = None
+    champions_repo = FixtureChampionsRepository(champions_json)
     state_repo = EvaluationStateRepository(eval_dir=eval_dir)
     config_repo = EvaluationConfigRepository(config_path=cfg_file)
     logger = EvaluationLogger()
@@ -517,25 +535,24 @@ target_noise_stds = [0.0, 0.05, 0.1]
     service = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
-        trace_repo=trace_repo,
         state_repo=state_repo,
         config_repo=config_repo,
         logger=logger,
         project_root=project_root,
     )
 
-    df_native = service.audit_champions_workload()
+    df_native = service.workload.audit_champions_workload()
     assert len(df_native) == 1
     assert df_native.iloc[0]["noise_std"] == 0.0
     assert df_native.iloc[0]["solver_type"] == "champion"
 
-    df_cross = service.audit_cross_eval_workload()
+    df_cross = service.workload.audit_cross_eval_workload()
     assert len(df_cross) == 2
     assert set(df_cross["noise_std"]) == {0.05, 0.1}
     assert all(df_cross["solver_type"] == "cross_eval")
     assert all(df_cross["solver"] == "qwen_14b_baseline")
 
-    df_all = service.audit_workload(solver_type="all")
+    df_all = service.workload.audit_workload(solver_type="all")
     # 1 native champion + 2 cross-evals + 3 baselines (dim 2, 3 noises = 3 runs)
     assert len(df_all[df_all["solver_type"] == "champion"]) == 1
     assert len(df_all[df_all["solver_type"] == "cross_eval"]) == 2
@@ -593,10 +610,8 @@ classical_baselines = ["cmaes"]
         encoding="utf-8",
     )
 
-    session_factory = create_db_session_factory()
-    sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
-    champions_repo = ChampionsReadRepository(session_factory, champions_path=champions_json)
-    trace_repo = IOHTraceReader(eval_dir=eval_dir)
+    sqlite_repo = None
+    champions_repo = FixtureChampionsRepository(champions_json)
     state_repo = EvaluationStateRepository(eval_dir=eval_dir)
     config_repo = EvaluationConfigRepository(config_path=cfg_file)
     logger = EvaluationLogger()
@@ -604,7 +619,6 @@ classical_baselines = ["cmaes"]
     service = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
-        trace_repo=trace_repo,
         state_repo=state_repo,
         config_repo=config_repo,
         logger=logger,
@@ -612,9 +626,9 @@ classical_baselines = ["cmaes"]
     )
 
     # Defaults to True for cross_eval_clean_champions
-    assert service.cross_eval_clean_champions is True
+    assert service.config.cross_eval_clean_champions is True
 
-    df_native = service.audit_champions_workload()
+    df_native = service.workload.audit_champions_workload()
     assert len(df_native) == 2  # clean champion and noisy champion
     assert any(
         row["noise_std"] == 0.0 and row["solver"] == "qwen_14b_baseline"
@@ -625,7 +639,7 @@ classical_baselines = ["cmaes"]
         for _, row in df_native.iterrows()
     )
 
-    df_cross = service.audit_cross_eval_workload()
+    df_cross = service.workload.audit_cross_eval_workload()
     assert len(df_cross) >= 1
     assert 0.05 in df_cross["noise_std"].values
     assert all(df_cross["solver"] == "qwen_14b_baseline")
@@ -653,7 +667,6 @@ target_noise_levels = [0.2]
     session_factory = create_db_session_factory()
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
-    trace_repo = IOHTraceReader(eval_dir=eval_dir)
     state_repo = EvaluationStateRepository(eval_dir=eval_dir)
     config_repo = EvaluationConfigRepository(config_path=cfg_file)
     logger = EvaluationLogger()
@@ -661,13 +674,12 @@ target_noise_levels = [0.2]
     service = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
-        trace_repo=trace_repo,
         state_repo=state_repo,
         config_repo=config_repo,
         logger=logger,
     )
 
-    res = service.run_baseline_trials(dim=2, noise_std=0.2, p_id=1, baseline_slug="pso")
+    res = service.trials.run_baseline_trials(dim=2, noise_std=0.2, p_id=1, baseline_slug="pso")
     assert res["status"] == "SUCCESS"
     assert len(res["clean_errors"]) == 3
     # With distinct seeds under noisy evaluations, PSO trajectories should vary across runs

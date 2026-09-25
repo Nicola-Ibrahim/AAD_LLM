@@ -207,6 +207,8 @@ def test_bbob_function_enum():
     assert BBOBFunction.get_class(1) == "Separable"
     assert BBOBFunction.get_name(99) == "f99"
     assert BBOBFunction.get_class(99) == "Unknown"
+    assert BBOBFunction.get_display_name(8) == "Rosenbrock (Moderate)"
+    assert BBOBFunction.get_display_name(21) == "Gallagher 101 (Deceptive)"
 
     # 5. Order
     assert len(BBOB_CLASSES_ORDER) == 5

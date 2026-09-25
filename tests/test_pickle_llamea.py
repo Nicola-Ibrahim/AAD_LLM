@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 from evolution.application import SessionConfig
 from evolution.infra.engines.llamea import Evaluator, LLaMEASession
-from evolution.application.candidate_evaluation import CandidateEvaluationService
+from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.infra.execution.candidate_executor import create_candidate_executor
 from evolution.domain.services.noise_strategy import NoNoiseStrategy
 from evolution.domain.vos import ProblemProfile
@@ -15,8 +15,8 @@ from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.engines.llamea.prompts import SynthesisPrompts
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
-from shared.database.engine import build_engine
-from shared.database.tables import Base
+from shared.infra.database.engine import build_engine
+from shared.infra.database.tables import Base
 
 
 def build_candidate_evaluation_service(*, problem, **kwargs):

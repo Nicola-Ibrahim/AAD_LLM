@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Protocol
 
 import numpy as np
 
@@ -6,18 +7,26 @@ import numpy as np
 from evolution.domain.enums import NoiseModelEnum
 
 
+class CleanObjective(Protocol):
+    """Clean objective capability used to calibrate noise strategies."""
+
+    def __call__(self, x: list[float]) -> float: ...
+
+    def reset(self) -> None: ...
+
+
 class BaseNoiseStrategy(ABC):
     """Abstract base class for noise injection strategies into objective values."""
 
     name: str
 
-    def __init__(self, noise_std: float = 0.0):
+    def __init__(self, noise_std: float = 0.0) -> None:
         self.noise_std = noise_std
         self._rng: np.random.Generator = np.random.default_rng()
 
     def setup(
         self,
-        clean_problem,
+        clean_problem: CleanObjective,
         lb: np.ndarray,
         ub: np.ndarray,
         true_optimum: float,
@@ -37,7 +46,7 @@ class NoNoiseStrategy(BaseNoiseStrategy):
 
     name: str = NoiseModelEnum.NONE
 
-    def __init__(self, noise_std: float = 0.0):
+    def __init__(self, noise_std: float = 0.0) -> None:
         super().__init__(noise_std=0.0)
 
     def add_noise(self, true_value: float) -> float:
@@ -49,13 +58,13 @@ class HeteroscedasticNoiseStrategy(BaseNoiseStrategy):
 
     name: str = NoiseModelEnum.HETEROSCEDASTIC
 
-    def __init__(self, noise_std: float = 0.0):
+    def __init__(self, noise_std: float = 0.0) -> None:
         super().__init__(noise_std=noise_std)
         self.true_optimum: float = 0.0
 
     def setup(
         self,
-        clean_problem,
+        clean_problem: CleanObjective,
         lb: np.ndarray,
         ub: np.ndarray,
         true_optimum: float,
@@ -77,14 +86,14 @@ class HomoscedasticAdditiveNoiseStrategy(BaseNoiseStrategy):
 
     name: str = NoiseModelEnum.HOMOSCEDASTIC_ADDITIVE
 
-    def __init__(self, noise_std: float = 0.0, n_samples: int = 200):
+    def __init__(self, noise_std: float = 0.0, n_samples: int = 200) -> None:
         super().__init__(noise_std=noise_std)
         self.landscape_scale: float = 1.0
         self.n_samples: int = n_samples
 
     def setup(
         self,
-        clean_problem,
+        clean_problem: CleanObjective,
         lb: np.ndarray,
         ub: np.ndarray,
         true_optimum: float,
@@ -111,7 +120,7 @@ class AWGNStrategy(BaseNoiseStrategy):
 
     name: str = NoiseModelEnum.AWGN
 
-    def __init__(self, noise_std: float = 0.0):
+    def __init__(self, noise_std: float = 0.0) -> None:
         super().__init__(noise_std=noise_std)
 
     def add_noise(self, true_value: float) -> float:
@@ -135,7 +144,7 @@ class NoiseStrategyFactory:
         cls,
         noise_model: NoiseModelEnum,
         noise_std: float = 0.0,
-        **kwargs,
+        **kwargs: object,
     ) -> BaseNoiseStrategy:
         """Create a BaseNoiseStrategy instance based on noise_model and noise_std value."""
         if noise_std <= 0.0 or noise_model == NoiseModelEnum.NONE:

@@ -14,11 +14,8 @@ from benchmarking.domain.services import (
     HypothesisTestingEngine,
     PerformanceMetricsEngine,
     ReliabilityEngine,
-    format_db_solver_name,
-    get_clean_model_label,
-    get_model_slug,
-    resolve_canonical_model_slug,
-    resolve_folder_solver_name,
+    LLMModelSpec,
+    ModelNames,
 )
 from benchmarking.domain.vos import (
     EvaluationCondition,
@@ -43,9 +40,6 @@ __all__ = [
     "BBOB_CLASSES_ORDER",
     "CLASSICAL_SOLVERS_MAP",
     "KNOWN_STRATEGIES",
-    "format_db_solver_name",
-    "get_clean_model_label",
-    "get_model_slug",
-    "resolve_canonical_model_slug",
-    "resolve_folder_solver_name",
+    "LLMModelSpec",
+    "ModelNames",
 ]

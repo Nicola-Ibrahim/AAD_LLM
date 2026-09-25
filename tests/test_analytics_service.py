@@ -4,18 +4,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from benchmarking.application.audit_service import AuditCoverageSummary, EvaluationAuditService
-from benchmarking.application.selection_service import ChampionSelectionService
-from benchmarking.application.statistical_service import (
-    StatisticalEvaluationService,
+from benchmarking.application.evaluation.audit import AuditCoverageSummary, EvaluationAuditService
+from benchmarking.application.select_champions import ChampionSelectionService
+from benchmarking.application.analysis import (
+    AnalysisData,
     generate_markdown_report,
 )
-from benchmarking.domain.services.resolvers import (
-    format_db_solver_name,
-    get_clean_model_label,
-    get_model_slug,
-    resolve_folder_solver_name,
-)
+from benchmarking.infra.storage.model_registry import configured_model_names
 from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
 from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
 from benchmarking.domain.services.performance import PerformanceMetricsEngine
@@ -30,7 +25,7 @@ from benchmarking.infra.storage.config_repository import EvaluationConfigReposit
 from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
 from benchmarking.infra.io.markdown_report_writer import MarkdownFileWriter
 from shared.config import DATA_DIR, RESULTS_DIR
-from shared.database.engine import create_db_session_factory
+from shared.infra.database.engine import create_db_session_factory
 
 
 class TestDomainTaxonomy:
@@ -54,46 +49,54 @@ class TestDomainTaxonomy:
 
 
 class TestDomainResolvers:
+    @pytest.fixture(autouse=True)
+    def naming(self):
+        names = configured_model_names()
+        self.get_clean_model_label = names.get_clean_model_label
+        self.format_db_solver_name = names.format_db_solver_name
+        self.get_model_slug = names.get_model_slug
+        self.resolve_folder_solver_name = names.resolve_folder_solver_name
+
     def test_clean_model_labels_dynamic(self):
         assert (
-            get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m.gguf") == "Qwen2.5-Coder-14B"
+            self.get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m.gguf") == "Qwen2.5-Coder-14B"
         )
-        assert get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m") == "Qwen2.5-Coder-14B"
-        assert get_clean_model_label("qwen2.5-coder-7b-instruct-q4_k_m.gguf") == "Qwen2.5-Coder-7B"
-        assert get_clean_model_label("deepseek-r1-distill-qwen-70b.gguf") == "DeepSeek-70B"
-        assert get_clean_model_label("meta-llama-3-8b-instruct") == "Llama-3.1-8B"
-        assert get_clean_model_label("Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf") == "Llama-3.1-8B"
+        assert self.get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m") == "Qwen2.5-Coder-14B"
+        assert self.get_clean_model_label("qwen2.5-coder-7b-instruct-q4_k_m.gguf") == "Qwen2.5-Coder-7B"
+        assert self.get_clean_model_label("deepseek-r1-distill-qwen-70b.gguf") == "DeepSeek-70B"
+        assert self.get_clean_model_label("meta-llama-3-8b-instruct") == "Llama-3.1-8B"
+        assert self.get_clean_model_label("Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf") == "Llama-3.1-8B"
         # Dynamic fallback for unregistered models without hardcoding
-        assert get_clean_model_label("mistral-7b-instruct") == "Mistral-7B"
+        assert self.get_clean_model_label("mistral-7b-instruct") == "Mistral-7B"
 
     def test_format_db_solver_name(self):
         assert (
-            format_db_solver_name("qwen2.5-coder-14b-instruct-q4_k_m.gguf", "baseline")
+            self.format_db_solver_name("qwen2.5-coder-14b-instruct-q4_k_m.gguf", "baseline")
             == "Qwen2.5-Coder-14B / baseline"
         )
         assert (
-            format_db_solver_name("qwen2.5-coder-70b-instruct.gguf", "thinking")
+            self.format_db_solver_name("qwen2.5-coder-70b-instruct.gguf", "thinking")
             == "Qwen2.5-Coder-70B / thinking"
         )
 
     def test_get_model_slug(self):
-        assert get_model_slug("qwen2.5-coder-14b-instruct-q4_k_m.gguf") == "qwen_14b"
-        assert get_model_slug("qwen2.5-coder-7b-instruct-q4_k_m.gguf") == "qwen_7b"
-        assert get_model_slug("llama-3-8b-instruct") == "llama_8b"
+        assert self.get_model_slug("qwen2.5-coder-14b-instruct-q4_k_m.gguf") == "qwen_14b"
+        assert self.get_model_slug("qwen2.5-coder-7b-instruct-q4_k_m.gguf") == "qwen_7b"
+        assert self.get_model_slug("llama-3-8b-instruct") == "llama_8b"
 
     def test_resolve_folder_solver_name(self):
         # Classical
-        assert resolve_folder_solver_name("cmaes") == "CMA-ES"
-        assert resolve_folder_solver_name("cma_es") == "CMA-ES"
-        assert resolve_folder_solver_name("cmaes-1") == "CMA-ES"
-        assert resolve_folder_solver_name("de") == "DE"
-        assert resolve_folder_solver_name("de_1") == "DE"
-        assert resolve_folder_solver_name("pso") == "PSO"
+        assert self.resolve_folder_solver_name("cmaes") == "CMA-ES"
+        assert self.resolve_folder_solver_name("cma_es") == "CMA-ES"
+        assert self.resolve_folder_solver_name("cmaes-1") == "CMA-ES"
+        assert self.resolve_folder_solver_name("de") == "DE"
+        assert self.resolve_folder_solver_name("de_1") == "DE"
+        assert self.resolve_folder_solver_name("pso") == "PSO"
 
         # LLM structured folders
-        assert resolve_folder_solver_name("qwen_14b_baseline") == "Qwen2.5-Coder-14B / baseline"
-        assert resolve_folder_solver_name("qwen_7b_guided") == "Qwen2.5-Coder-7B / guided"
-        assert resolve_folder_solver_name("qwen_70b_thinking") == "Qwen2.5-Coder-70B / thinking"
+        assert self.resolve_folder_solver_name("qwen_14b_baseline") == "Qwen2.5-Coder-14B / baseline"
+        assert self.resolve_folder_solver_name("qwen_7b_guided") == "Qwen2.5-Coder-7B / guided"
+        assert self.resolve_folder_solver_name("qwen_70b_thinking") == "Qwen2.5-Coder-70B / thinking"
 
 
 class TestDomainEngines:
@@ -260,6 +263,7 @@ class TestApplicationServicesIntegration:
             sqlite_repo=sqlite_repo,
             trace_repo=IOHTraceReader(RESULTS_DIR / "ioh_traces"),
             config_repo=config_repo,
+            model_names=configured_model_names(),
         )
         if (DATA_DIR / "db.sqlite3").exists():
             matrix_df, summary = service.get_audit_matrix()
@@ -280,10 +284,10 @@ class TestApplicationServicesIntegration:
         session_factory = create_db_session_factory()
         sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
         trace_repo = IOHTraceReader(RESULTS_DIR / "ioh_traces")
-        service = StatisticalEvaluationService(
+        service = AnalysisData(
             sqlite_repo=sqlite_repo,
             trace_repo=trace_repo,
-            report_writer=MarkdownFileWriter(),
+            model_names=configured_model_names(),
         )
         if (DATA_DIR / "db.sqlite3").exists():
             df_exp, df_iter = service.get_synthesis_dataframes()
