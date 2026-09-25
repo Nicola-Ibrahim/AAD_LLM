@@ -20,7 +20,12 @@ class IOHTraceReader(EvaluationTraceReader):
     """Read-only infrastructure reader managing filesystem access to IOHprofiler `.dat` and `.json` logs."""
 
     def __init__(self, eval_dir: Path = RESULTS_DIR / "ioh_traces") -> None:
-        self.eval_dir = Path(eval_dir)
+        self._eval_dir = Path(eval_dir)
+
+    @property
+    def eval_dir(self) -> Path:
+        """Directory containing IOH traces."""
+        return self._eval_dir
 
     @staticmethod
     def parse_dat_file(dat_path: Path) -> list[RunTrace]:
@@ -186,7 +191,12 @@ class EvaluationStateRepository(EvaluationStateStore):
     """Infrastructure repository managing read/write operations for benchmark evaluation provenance and log merging."""
 
     def __init__(self, eval_dir: Path = RESULTS_DIR / "ioh_traces") -> None:
-        self.eval_dir = Path(eval_dir)
+        self._eval_dir = Path(eval_dir)
+
+    @property
+    def eval_dir(self) -> Path:
+        """Directory containing evaluation traces and provenance."""
+        return self._eval_dir
 
     def remove_solver_traces(self, solver_dir: Path) -> None:
         """Remove one stale solver condition directory before a clean evaluation."""
