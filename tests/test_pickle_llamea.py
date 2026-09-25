@@ -6,7 +6,8 @@ from sqlalchemy.orm import sessionmaker
 
 from evolution.application import SessionConfig
 from evolution.infra.engines.llamea import Evaluator, LLaMEASession
-from evolution.domain.services.algorithm_evaluator import AlgorithmEvaluator
+from evolution.application.candidate_evaluation import CandidateEvaluationService
+from evolution.infra.execution.candidate_executor import create_candidate_executor
 from evolution.domain.services.noise_strategy import NoNoiseStrategy
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.llm.client import LLMClient, Provider
@@ -16,6 +17,14 @@ from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from shared.database.engine import build_engine
 from shared.database.tables import Base
+
+
+def build_candidate_evaluation_service(*, problem, **kwargs):
+    return CandidateEvaluationService(
+        problem=problem,
+        executor=create_candidate_executor(kwargs.get("timeout_seconds", 30.0)),
+        **kwargs,
+    )
 
 
 # Mock logger
@@ -48,14 +57,14 @@ def test_pickle_llamea(tmp_path, test_repos):
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
     llm = LLMClient(Provider.LOCAL)
 
-    algorithm_evaluator = AlgorithmEvaluator(problem=problem, budget=10)
+    candidate_evaluation_service = build_candidate_evaluation_service(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=db_repo,
         code_repo=code_repo,
         experiment_id=1,
         config=SessionConfig(budget=10),
-        algorithm_evaluator=algorithm_evaluator,
+        candidate_evaluation_service=candidate_evaluation_service,
     )
     opt = LLaMEA(f=evaluator, llm=llm, log=False)
 

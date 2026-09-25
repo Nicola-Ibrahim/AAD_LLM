@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from benchmarking.application.evaluation_service import EvaluationService
-from benchmarking.domain.services.baselines import run_cmaes, run_de, run_pso
+from benchmarking.infra.solvers.baselines import run_cmaes, run_de, run_pso
 from benchmarking.infra.io.trace_repository import EvaluationStateRepository, IOHTraceReader
 from benchmarking.infra.logging import EvaluationLogger
 from benchmarking.infra.storage import (
@@ -12,9 +12,25 @@ from benchmarking.infra.storage import (
     EvaluationConfigRepository,
     SQLiteSynthesisReadRepository,
 )
+from benchmarking.infra.io.code_reader import FilesystemCodeReader
+from benchmarking.infra.solvers.baselines import get_baseline_runner
 from evolution.domain.services.noise_strategy import NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
+from evolution.infra.problems.factory import BBOBProblemFactory
+from evolution.infra.execution.candidate_executor import create_candidate_executor
 from shared.database.engine import create_db_session_factory
+from shared.config import PROJECT_ROOT
+
+
+def build_evaluation_service(**kwargs):
+    project_root = kwargs.get("project_root", PROJECT_ROOT)
+    return EvaluationService(
+        **kwargs,
+        problem_factory=BBOBProblemFactory(),
+        executor_factory=create_candidate_executor,
+        baseline_resolver=get_baseline_runner,
+        code_reader=FilesystemCodeReader(project_root),
+    )
 
 
 def test_baselines_callables():
@@ -65,7 +81,7 @@ target_noise_levels = [0.0]
     config_repo = EvaluationConfigRepository(config_path=cfg_file)
     logger = EvaluationLogger()
 
-    service = EvaluationService(
+    service = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         trace_repo=trace_repo,
@@ -145,7 +161,7 @@ class RandomOptimizer:
     code_path.write_text(dummy_code, encoding="utf-8")
 
     logger = EvaluationLogger()
-    service = EvaluationService(
+    service = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         trace_repo=trace_repo,
@@ -261,7 +277,7 @@ class IncrementalOptimizer:
     }
 
     # Step 1: Initial run with target_eval_runs=2
-    service_initial = EvaluationService(
+    service_initial = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         trace_repo=trace_repo,
@@ -278,7 +294,7 @@ class IncrementalOptimizer:
     assert trace_repo.get_run_count(solver_dir) == 2
 
     # Step 2: Resume with target_eval_runs=4
-    service_resumed = EvaluationService(
+    service_resumed = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         trace_repo=trace_repo,
@@ -427,7 +443,7 @@ target_noise_levels = [0.0]
     state_repo = EvaluationStateRepository(eval_dir=eval_dir)
     config_repo = EvaluationConfigRepository(config_path=cfg_file)
 
-    service = EvaluationService(
+    service = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         trace_repo=trace_repo,
@@ -498,7 +514,7 @@ target_noise_stds = [0.0, 0.05, 0.1]
     config_repo = EvaluationConfigRepository(config_path=cfg_file)
     logger = EvaluationLogger()
 
-    service = EvaluationService(
+    service = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         trace_repo=trace_repo,
@@ -585,7 +601,7 @@ classical_baselines = ["cmaes"]
     config_repo = EvaluationConfigRepository(config_path=cfg_file)
     logger = EvaluationLogger()
 
-    service = EvaluationService(
+    service = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         trace_repo=trace_repo,
@@ -642,7 +658,7 @@ target_noise_levels = [0.2]
     config_repo = EvaluationConfigRepository(config_path=cfg_file)
     logger = EvaluationLogger()
 
-    service = EvaluationService(
+    service = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         trace_repo=trace_repo,

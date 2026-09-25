@@ -10,12 +10,29 @@ from benchmarking.application.evaluation_service import EvaluationService
 from benchmarking.application.selection_service import ChampionSelectionService
 from benchmarking.application.statistical_service import StatisticalEvaluationService
 from shared.config import RESULTS_DIR
+from evolution.infra.problems.factory import BBOBProblemFactory
+from evolution.infra.execution.candidate_executor import create_candidate_executor
+from benchmarking.infra.io.code_reader import FilesystemCodeReader
+from benchmarking.infra.solvers.baselines import get_baseline_runner
+from benchmarking.infra.io.markdown_report_writer import MarkdownFileWriter
+from shared.config import PROJECT_ROOT
+
+
+def build_evaluation_service(**kwargs):
+    project_root = kwargs.get("project_root", PROJECT_ROOT)
+    return EvaluationService(
+        **kwargs,
+        problem_factory=BBOBProblemFactory(),
+        executor_factory=create_candidate_executor,
+        baseline_resolver=get_baseline_runner,
+        code_reader=FilesystemCodeReader(project_root),
+    )
 
 
 def test_nb00_prompts_pipeline():
     """Verify Notebook 00 (00_prompts.ipynb: Prompts & Diagnostic Feedback Inspection)."""
     from evolution.domain.enums import PromptStrategy, SynthesisMode
-    from evolution.domain.services.algorithm_evaluator import AlgorithmEvaluator
+    from evolution.application.candidate_evaluation import CandidateEvaluationService
     from evolution.domain.services.noise_strategy import (
         HeteroscedasticNoiseStrategy,
         NoNoiseStrategy,
@@ -53,7 +70,7 @@ def test_nb00_prompts_pipeline():
     # 3. Failure feedback & code context extraction
     tb_str = 'Traceback (most recent call last):\n  File "<string>", line 4, in __call__\n    inv_cov = np.linalg.inv(cov)\nValueError: Matrix is singular'
     code = "import numpy as np\nclass Opt:\n  def __call__(self, p, b):\n    inv_cov = np.linalg.inv(cov)\n    return x, y"
-    code_ctx = AlgorithmEvaluator.extract_code_context(tb_str, code)
+    code_ctx = CandidateEvaluationService.extract_code_context(tb_str, code)
     assert "line   4" in code_ctx
     assert "inv_cov" in code_ctx
 
@@ -82,7 +99,7 @@ def test_nb01_noise_pipeline():
 
 def test_nb02_synthesis_pipeline():
     """Verify Notebook 02 (02_synthesis.ipynb: Evolutionary Synthesis Campaign Use Case & Task Construction)."""
-    from evolution.application import SynthesisCampaignUseCase
+    from evolution.application import SynthesisCampaignCoordinator
     from evolution.application.interfaces import BaseLogger
     from evolution.infra.engines.llamea import LLaMEAEngine
     from evolution.infra.llm.client import LLMClient
@@ -97,12 +114,13 @@ def test_nb02_synthesis_pipeline():
     logger = SynthesisLogger(verbose=False)
     engine = LLaMEAEngine(llm_client=llm)
 
-    campaign_usecase = SynthesisCampaignUseCase(
+    campaign_usecase = SynthesisCampaignCoordinator(
         sqlite_repo=sqlite_repo,
         config_repo=config_repo,
         llm_client=llm,
         logger=logger,
         engine=engine,
+        problem_factory=BBOBProblemFactory(),
     )
 
     assert campaign_usecase.sqlite_repo is sqlite_repo
@@ -112,7 +130,6 @@ def test_nb02_synthesis_pipeline():
     assert isinstance(campaign_usecase.logger, BaseLogger)
     assert hasattr(campaign_usecase, "audit_matrix")
     assert hasattr(campaign_usecase, "build_tasks")
-    assert hasattr(campaign_usecase, "run_worker")
     assert hasattr(campaign_usecase, "run_campaign")
 
     cfg = config_repo.load_config()
@@ -154,8 +171,8 @@ def test_nb03_evaluation_pipeline():
     champions_repo = ChampionsReadRepository(session_factory)
     trace_repo = IOHTraceReader()
 
-    champ_service = ChampionSelectionService(sqlite_repo=sqlite_repo, champions_repo=champions_repo)
-    summary, total = champ_service.get_experiment_balance()
+    champ_service = ChampionSelectionService(champions_repo=champions_repo)
+    summary, total = sqlite_repo.get_experiment_balance()
     assert total >= 0
     print(f"  • Completed experiments: {total}")
 
@@ -177,7 +194,7 @@ def test_nb03_evaluation_pipeline():
     config_repo = EvaluationConfigRepository()
     logger = EvaluationLogger()
 
-    eval_service = EvaluationService(
+    eval_service = build_evaluation_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         trace_repo=trace_repo,
@@ -190,7 +207,7 @@ def test_nb03_evaluation_pipeline():
     assert champions_path.exists(), "champions.json does not exist!"
     with open(champions_path, "r", encoding="utf-8") as f:
         champions_raw = json.load(f)
-    champions_flat = eval_service.champions_repo.get_champions_flat(champions_raw)
+    champions_flat = eval_service.champion_selection.flatten_champions(champions_raw)
     assert len(champions_flat) > 0
 
     df_audit = eval_service.audit_champions_workload()
@@ -272,7 +289,11 @@ def test_nb05_analysis_pipeline(tmp_path):
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     trace_repo = IOHTraceReader()
 
-    service = StatisticalEvaluationService(sqlite_repo=sqlite_repo, trace_repo=trace_repo)
+    service = StatisticalEvaluationService(
+        sqlite_repo=sqlite_repo,
+        trace_repo=trace_repo,
+        report_writer=MarkdownFileWriter(),
+    )
     df_exp, df_iter = service.get_synthesis_dataframes()
     all_benchmark_data = service.load_all_traces()
     assert len(all_benchmark_data) > 0
@@ -311,7 +332,7 @@ def test_nb05_analysis_pipeline(tmp_path):
 
 def test_synthesis_config_problem_targets_and_fallbacks(tmp_path):
     """Verify Option 3 problem_targets parsing, per-problem dimensions, and legacy fallback."""
-    from evolution.application import SynthesisCampaignUseCase
+    from evolution.application import SynthesisCampaignCoordinator
     from evolution.infra.engines.llamea import LLaMEAEngine
     from evolution.infra.storage.synthesis_config import SynthesisConfigRepository
 
@@ -348,18 +369,19 @@ runs_per_config = 1
     mock_llm.model.name = "mock_model"
     mock_logger = MagicMock()
     engine = LLaMEAEngine(llm_client=mock_llm)
-    service = SynthesisCampaignUseCase(
+    service = SynthesisCampaignCoordinator(
         sqlite_repo=mock_sqlite,
         config_repo=repo,
         llm_client=mock_llm,
         logger=mock_logger,
         engine=engine,
+        problem_factory=BBOBProblemFactory(),
     )
 
     tasks = service.build_tasks()
     # Problem 1 has 2D and 5D (2x2=4 tasks), Problem 8 has 3D (1x2=2 tasks) -> total 6 tasks (both explicit and implicit)
     assert len(tasks) == 6
-    task_keys = [t.key for t in tasks]
+    task_keys = [t["key"] for t in tasks]
     assert any("f1_2D_explicit" in k for k in task_keys)
     assert any("f1_2D_implicit" in k for k in task_keys)
     assert any("f1_5D_explicit" in k for k in task_keys)
@@ -409,17 +431,18 @@ runs_per_config = 1
     assert mm_cfg["synthesis_mode_names"] == ["explicit", "implicit"]
 
     mm_engine = LLaMEAEngine(llm_client=mock_llm)
-    mm_service = SynthesisCampaignUseCase(
+    mm_service = SynthesisCampaignCoordinator(
         sqlite_repo=mock_sqlite,
         config_repo=mm_repo,
         llm_client=mock_llm,
         logger=mock_logger,
         engine=mm_engine,
+        problem_factory=BBOBProblemFactory(),
     )
     mm_tasks = mm_service.build_tasks()
     # 1 problem, 1 dim: 2 noise conditions x 2 modes -> total 4 tasks
     assert len(mm_tasks) == 4
-    mm_keys = [t.key for t in mm_tasks]
+    mm_keys = [t["key"] for t in mm_tasks]
     assert any("explicit_std_0.0" in k for k in mm_keys)
     assert any("explicit_std_0.05" in k for k in mm_keys)
     assert any("implicit_std_0.0" in k for k in mm_keys)
@@ -456,12 +479,13 @@ runs_per_config = 1
     assert dm_cfg["prompt_strategies"] == ["baseline", "guided", "thinking"]
 
     dm_engine = LLaMEAEngine(llm_client=mock_llm)
-    dm_service = SynthesisCampaignUseCase(
+    dm_service = SynthesisCampaignCoordinator(
         sqlite_repo=mock_sqlite,
         config_repo=dm_repo,
         llm_client=mock_llm,
         logger=mock_logger,
         engine=dm_engine,
+        problem_factory=BBOBProblemFactory(),
     )
     dm_tasks = dm_service.build_tasks()
     # 1 problem, 1 dim, std=0.05:
@@ -469,7 +493,7 @@ runs_per_config = 1
     # implicit has 1 strategy (guided) -> 1 task
     # total = 3 tasks
     assert len(dm_tasks) == 3
-    dm_keys = [t.key for t in dm_tasks]
+    dm_keys = [t["key"] for t in dm_tasks]
     assert any("explicit_std_0.05_baseline" in k for k in dm_keys)
     assert any("explicit_std_0.05_thinking" in k for k in dm_keys)
     assert any("implicit_std_0.05_guided" in k for k in dm_keys)
@@ -537,10 +561,11 @@ def test_custom_minimal_base_logger():
 
 
 def test_campaign_usecase_run_worker_and_campaign():
-    """Verify SynthesisCampaignUseCase run_worker and run_campaign methods."""
+    """Verify SynthesisCampaignCoordinator run_worker and run_campaign methods."""
     from unittest.mock import MagicMock, patch
-    from evolution.application import SessionResult, SynthesisCampaignUseCase
+    from evolution.application import SessionResult, SynthesisCampaignCoordinator
     from evolution.domain.enums import SynthesisMode
+    from evolution.infra.concurrency.worker import run_synthesis_worker
 
     mock_sqlite = MagicMock()
     mock_config = MagicMock()
@@ -572,12 +597,14 @@ def test_campaign_usecase_run_worker_and_campaign():
     mock_logger = MagicMock()
 
     mock_engine = MagicMock()
-    service = SynthesisCampaignUseCase(
+    service = SynthesisCampaignCoordinator(
         sqlite_repo=mock_sqlite,
         config_repo=mock_config,
         llm_client=mock_llm,
         logger=mock_logger,
         engine=mock_engine,
+        problem_factory=BBOBProblemFactory(),
+        worker_fn=run_synthesis_worker,
     )
 
     # 1. Test run_worker
@@ -607,7 +634,7 @@ def test_campaign_usecase_run_worker_and_campaign():
         "initial_iteration": 0,
     }
     with patch("shared.database.engine.initialize_sqlite_storage", return_value=mock_sqlite):
-        res = SynthesisCampaignUseCase.run_worker(item=mock_task)
+        res = run_synthesis_worker(item=mock_task)
     assert res is dummy_result
     mock_engine.run.assert_called_once()
 
@@ -640,20 +667,20 @@ def test_campaign_usecase_run_worker_and_campaign():
         "prompt_strategy": PromptStrategy.BASELINE,
         "synthesis_mode": SynthesisMode.EXPLICIT,
     }
+    dispatcher = MagicMock()
+    dispatcher.run.return_value = {"test_task_key": dummy_result}
+    service.dispatcher = dispatcher
+    service.worker_fn = run_synthesis_worker
     with patch.object(service, "build_tasks", return_value=[mock_item]):
-        with patch("evolution.application.campaign_usecase.ProcessPoolRunner") as MockRunner:
-            runner_instance = MockRunner.return_value
-            runner_instance.run.return_value = {"test_task_key": dummy_result}
-
-            campaign_res = service.run_campaign()
-            assert campaign_res.results == {"test_task_key": dummy_result}
-            runner_instance.run.assert_called_once()
+        campaign_res = service.run_campaign()
+        assert campaign_res.results == {"test_task_key": dummy_result}
+        dispatcher.run.assert_called_once()
 
 
 def test_campaign_usecase_audit_matrix_standalone():
-    """Verify SynthesisCampaignUseCase can audit database coverage without an LLMClient."""
+    """Verify SynthesisCampaignCoordinator can audit database coverage without an LLMClient."""
     from unittest.mock import MagicMock
-    from evolution.application import SynthesisCampaignUseCase
+    from evolution.application import SynthesisCampaignCoordinator
 
     mock_sqlite = MagicMock()
     mock_sqlite.load.return_value = []
@@ -674,7 +701,7 @@ def test_campaign_usecase_audit_matrix_standalone():
     )
     mock_logger = MagicMock()
 
-    usecase = SynthesisCampaignUseCase(
+    usecase = SynthesisCampaignCoordinator(
         sqlite_repo=mock_sqlite,
         config_repo=mock_config,
         logger=mock_logger,

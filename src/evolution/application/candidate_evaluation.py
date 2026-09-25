@@ -1,11 +1,8 @@
-"""Domain Algorithm Evaluator Service.
+"""Application workflow for candidate execution and result construction.
 
-Encapsulates scientific evaluation rules for synthesized optimization algorithms:
-- Validating search space bounds and dimensionality.
-- Ground-truth scoring on un-noised objective: y_clean = problem.eval_clean(best_x), error = |y_clean - y*|.
-- Mapping error to fitness score (-error).
-- Categorizing failure tiers (-4.0e8, -4.5e8, -5.0e8).
-- Tracking consecutive failures and detecting stagnation.
+Runs generated optimizers through an executor port, captures execution diagnostics,
+and assembles domain result values. Scientific scoring is delegated to the domain
+AlgorithmScoringService.
 """
 
 import math
@@ -26,7 +23,8 @@ from evolution.domain.vos.metrics import (
     Execution,
     Fitness,
 )
-from shared.execution import AlgorithmExecutor, AlgorithmTimeoutException
+from evolution.domain.services.algorithm_scoring import AlgorithmScoringService, FailureKind
+from evolution.application.interfaces.candidate_executor import CandidateExecutor, CandidateTimeout
 
 
 @dataclass
@@ -45,37 +43,39 @@ class _AlgorithmExecutionContext:
     captured_warnings: list[str] = field(default_factory=list)
 
 
-class AlgorithmEvaluator:
-    """Core domain evaluation service for synthesized optimization algorithms.
+class CandidateEvaluationService:
+    """Application use case for executing and scoring synthesized optimizer candidates.
 
     Agnostic of framework (LLaMEA, EoH, FunSearch, Reflection). Evaluates candidate code
     against a BaseProblem instance and constructs an AlgorithmEvaluationResult.
     """
 
-    FAILURE_FITNESS: float = -5.0e8
-    RUNTIME_FAILURE_FITNESS: float = -4.5e8
-    TIMEOUT_FAILURE_FITNESS: float = -4.0e8
+    FAILURE_FITNESS: float = AlgorithmScoringService.FAILURE_FITNESS
+    RUNTIME_FAILURE_FITNESS: float = AlgorithmScoringService.RUNTIME_FAILURE_FITNESS
+    TIMEOUT_FAILURE_FITNESS: float = AlgorithmScoringService.TIMEOUT_FAILURE_FITNESS
 
     @classmethod
     def is_failure(cls, score: float) -> bool:
         """Returns True if the score represents any failure tier (crash, runtime, or timeout)."""
-        return not math.isfinite(score) or score <= -4.0e8
+        return AlgorithmScoringService.is_failure(score)
 
     def __init__(
         self,
         problem: BaseProblem,
+        executor: CandidateExecutor,
         budget: int = 1_000_000,
         timeout_seconds: float = 30.0,
         stagnation_threshold: int = 3,
         convergence_threshold: float = 1e-6,
-        executor: AlgorithmExecutor | None = None,
+        scoring_service: AlgorithmScoringService | None = None,
     ) -> None:
         self._problem = problem
         self._budget = budget
         self._timeout_seconds = timeout_seconds
         self._stagnation_threshold = stagnation_threshold
         self._convergence_threshold = convergence_threshold
-        self._executor = executor or AlgorithmExecutor(timeout_seconds=timeout_seconds)
+        self._executor = executor
+        self._scoring_service = scoring_service or AlgorithmScoringService()
         self._consecutive_failures = 0
 
     def evaluate(
@@ -302,9 +302,10 @@ class AlgorithmEvaluator:
         """Compute final error, fitness score, and metadata object."""
         true_optimum = self._problem.true_optimum
         clean_y = self._resolve_clean_objective(ctx.best_x, ctx.algorithm_returned_fitness)
-        final_error = abs(clean_y - true_optimum)
+        scoring = self._scoring_service.success(clean_y, true_optimum)
+        final_error = scoring.objective_gap
         metadata = self._build_success_metadata(ctx, final_error)
-        fitness_score = -final_error
+        fitness_score = scoring.fitness
 
         return fitness_score, final_error, metadata
 
@@ -314,17 +315,18 @@ class AlgorithmEvaluator:
         error: Exception,
     ) -> tuple[float, IterationMetadata, str]:
         """Handle execution timeout or runtime error, determining failure tier, metadata, and code context."""
-        is_timeout = isinstance(error, AlgorithmTimeoutException)
+        is_timeout = isinstance(error, CandidateTimeout)
 
         if is_timeout:
-            internal_score = self.TIMEOUT_FAILURE_FITNESS
+            failure_kind = FailureKind.TIMEOUT
         elif isinstance(
             error,
             (ValueError, TypeError, ZeroDivisionError, OverflowError, FloatingPointError),
         ):
-            internal_score = self.RUNTIME_FAILURE_FITNESS
+            failure_kind = FailureKind.RUNTIME
         else:
-            internal_score = self.FAILURE_FITNESS
+            failure_kind = FailureKind.EXECUTION
+        internal_score = self._scoring_service.failure_score(failure_kind)
 
         tb_str = "" if is_timeout else traceback.format_exc()
         code_context = self.extract_code_context(tb_str, ctx.candidate_code)

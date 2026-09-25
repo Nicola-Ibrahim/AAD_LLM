@@ -6,37 +6,31 @@ and classical baselines driven purely by configs/benchmark.toml.
 """
 
 from datetime import datetime, timezone
+import hashlib
 from pathlib import Path
 import random
-import shutil
-import tempfile
 import time
 from typing import Any, Callable
 
-import ioh
 import numpy as np
 import pandas as pd
 
 from benchmarking.domain.enums import BBOBFunction
-from benchmarking.domain.services.baselines import get_baseline_runner
+from benchmarking.application.selection_service import ChampionSelectionService
 from benchmarking.domain.services.resolvers import get_model_slug
-from benchmarking.infra.io.hashing import compute_code_hash
-from benchmarking.infra.io.trace_repository import EvaluationStateRepository, IOHTraceReader
-from benchmarking.infra.logging import EvaluationLogger
-from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
-from benchmarking.infra.storage.config_repository import EvaluationConfigRepository
-from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
 from benchmarking.application.evaluation_config import EvaluationConfig
-
-from evolution.domain.enums import SynthesisMode
-from evolution.domain.services.noise_strategy import (
-    HeteroscedasticNoiseStrategy,
-    NoNoiseStrategy,
+from benchmarking.application.ports import (
+    BaselineResolver,
+    CandidateCodeReader,
+    CandidateExecutorFactory,
+    ProblemFactory,
 )
 
-from evolution.infra.problems.bbob import BBOBProblem
+from evolution.domain.enums import SynthesisMode
+from evolution.domain.enums import NoiseModelEnum
+from evolution.domain.services.algorithm_scoring import AlgorithmScoringService
+
 from shared.config import PROJECT_ROOT
-from shared.execution import AlgorithmExecutor
 
 EVALUATION_SCHEMA_VERSION = 2
 ERROR_DEFINITION = "max(0, best_clean_objective - true_optimum)"
@@ -71,21 +65,30 @@ class EvaluationService:
 
     def __init__(
         self,
-        sqlite_repo: SQLiteSynthesisReadRepository,
-        champions_repo: ChampionsReadRepository,
-        trace_repo: IOHTraceReader,
-        state_repo: EvaluationStateRepository,
-        config_repo: EvaluationConfigRepository,
-        logger: EvaluationLogger,
+        sqlite_repo: Any,
+        champions_repo: Any,
+        trace_repo: Any,
+        state_repo: Any,
+        config_repo: Any,
+        logger: Any,
+        problem_factory: ProblemFactory,
+        executor_factory: CandidateExecutorFactory,
+        baseline_resolver: BaselineResolver,
+        code_reader: CandidateCodeReader,
         project_root: Path = PROJECT_ROOT,
     ):
         self.sqlite_repo = sqlite_repo
         self.champions_repo = champions_repo
+        self.champion_selection = ChampionSelectionService(champions_repo=champions_repo)
         self.trace_repo = trace_repo
         self.state_repo = state_repo
         self.config_repo = config_repo
         self.logger = logger
         self.project_root = Path(project_root)
+        self.problem_factory = problem_factory
+        self.executor_factory = executor_factory
+        self.baseline_resolver = baseline_resolver
+        self.code_reader = code_reader
 
         self.config: EvaluationConfig = self.config_repo.load_config()
         self.n_runs = self.config.target_eval_runs
@@ -110,7 +113,7 @@ class EvaluationService:
                 raw_conditions = []
 
         if not raw_conditions:
-            champions_flat = self.champions_repo.get_champions_flat()
+            champions_flat = self.champion_selection.flatten_champions()
             raw_conditions = [
                 (c["dim"], float(c.get("noise_std", 0.0)), c["problem_id"])
                 for c in champions_flat.values()
@@ -145,7 +148,7 @@ class EvaluationService:
         if not code_valid:
             return "MISSING_CODE", 0, None
 
-        if not target_dir.exists():
+        if not self.state_repo.solver_directory_exists(target_dir):
             return "PENDING", 0, None
 
         prov = self.state_repo.read_provenance(target_dir)
@@ -196,23 +199,30 @@ class EvaluationService:
             mode_enum = SynthesisMode.EXPLICIT
 
         code_path_raw = Path(champ["code_path"])
-        code_file = (
-            self.project_root / code_path_raw if not code_path_raw.is_absolute() else code_path_raw
+        code_valid = self._code_exists(code_path_raw)
+        code_hash = (
+            hashlib.sha256(self._read_code(code_path_raw).strip().encode("utf-8")).hexdigest()
+            if code_valid
+            else None
         )
-        code_valid = code_file.exists()
-        code_hash = compute_code_hash(code_file.read_text(encoding="utf-8")) if code_valid else None
 
         match mode_enum:
             case SynthesisMode.IMPLICIT:
                 solver_folder = f"{model_slug}_{strat}_implicit"
-                display_suffix = " (cross-eval)" if is_cross_eval else " (noise-implicit)"
             case SynthesisMode.EXPLICIT:
                 if native_noise == 0.0:
                     solver_folder = f"{model_slug}_{strat}"
-                    display_suffix = " (cross-eval)" if is_cross_eval else ""
                 else:
                     solver_folder = f"{model_slug}_{strat}_noisy"
-                    display_suffix = " (cross-eval)" if is_cross_eval else " (noise-adapted)"
+
+        scaffold = (
+            "baseline prompt (no added scaffold)"
+            if strat == "baseline"
+            else f"{strat} scaffold"
+        )
+        display_suffix = f" [{mode_enum.value} | {scaffold}]"
+        if is_cross_eval:
+            display_suffix += " (cross-eval)"
 
         target_dir = (
             self.state_repo.eval_dir / f"{dim}D" / f"std_{eval_noise}" / f"f{p_id}" / solver_folder
@@ -247,7 +257,7 @@ class EvaluationService:
 
     def audit_champions_workload(self, include_cross_eval: bool = False) -> pd.DataFrame:
         """Audit LLM champion algorithms (evaluates native environments by default)."""
-        champions_flat = self.champions_repo.get_champions_flat()
+        champions_flat = self.champion_selection.flatten_champions()
         rows = [
             self._build_champion_audit_row(
                 champ_key=k,
@@ -266,7 +276,7 @@ class EvaluationService:
 
     def audit_cross_eval_workload(self) -> pd.DataFrame:
         """Audit out-of-distribution cross-environment evaluations for clean champions."""
-        champions_flat = self.champions_repo.get_champions_flat()
+        champions_flat = self.champion_selection.flatten_champions()
         target_conditions = self._discover_target_conditions()
         noisy_levels = sorted(list({float(c[1]) for c in target_conditions if c[1] > 0.0}))
         if not noisy_levels:
@@ -350,7 +360,7 @@ class EvaluationService:
         noise_std: float,
         p_id: int,
         algo_name: str,
-        runner_fn: Callable[[BBOBProblem, int], tuple[float, float, int]],
+        runner_fn: Callable[[Any, int], tuple[float, float, int]],
         prov_metadata: dict[str, Any],
         expected_code_hash: str | None = None,
         verbose: bool = True,
@@ -367,7 +377,7 @@ class EvaluationService:
         evals_list: list[int] = []
         can_resume = False
 
-        if not self.force_rerun and target_dir.exists():
+        if not self.force_rerun and self.state_repo.solver_directory_exists(target_dir):
             prov = self.state_repo.read_provenance(target_dir)
             provenance_is_current = (
                 prov is not None
@@ -399,11 +409,11 @@ class EvaluationService:
                     self.logger.resuming(existing_runs, self.n_runs)
 
         if not can_resume:
-            if target_dir.exists():
+            if self.state_repo.solver_directory_exists(target_dir):
                 # Stale traces cannot safely be resumed under the current
                 # evaluation schema. Remove only this exact condition folder;
                 # the notebook regenerates the champion export from the DB.
-                shutil.rmtree(target_dir)
+                self.state_repo.remove_solver_traces(target_dir)
             target_dir.parent.mkdir(parents=True, exist_ok=True)
             clean_errors, best_objectives, true_optima = [], [], []
             instance_ids, trial_seeds = [], []
@@ -416,17 +426,9 @@ class EvaluationService:
 
         budget = dim * self.budget_multiplier
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            run_dir = Path(tmpdir) / target_dir.name if is_incremental else target_dir
-            run_dir.parent.mkdir(parents=True, exist_ok=True)
-
-            logger_ioh = ioh.logger.Analyzer(
-                root=str(run_dir.parent),
-                folder_name=run_dir.name,
-                algorithm_name=algo_name,
-                store_positions=False,
-            )
-
+        with self.state_repo.open_run_logger(
+            target_dir, algo_name, is_incremental
+        ) as logger_ioh:
             consecutive_failures = 0
             for run_idx in range(start_run_idx, self.n_runs + 1):
                 instance_id = run_idx
@@ -434,15 +436,10 @@ class EvaluationService:
                 random.seed(trial_seed)
                 np.random.seed(trial_seed)
 
-                noise_strat = (
-                    NoNoiseStrategy()
-                    if noise_std == 0.0
-                    else HeteroscedasticNoiseStrategy(noise_std=noise_std)
-                )
-                prob = BBOBProblem(
+                prob = self._create_problem(
                     problem_id=p_id,
                     dim=dim,
-                    noise_strategy=noise_strat,
+                    noise_std=noise_std,
                     instance_id=instance_id,
                     seed=trial_seed,
                 )
@@ -479,7 +476,9 @@ class EvaluationService:
                         best_error = float("inf")
                         consecutive_failures += 1
                     else:
-                        best_error = max(0.0, best_objective - true_optimum)
+                        best_error = AlgorithmScoringService.objective_gap(
+                            best_objective, true_optimum
+                        )
                         consecutive_failures = 0
                 except Exception:
                     best_objective, best_error = float("inf"), float("inf")
@@ -501,10 +500,6 @@ class EvaluationService:
                     true_optimum=true_optimum,
                 )
                 prob.reset()
-
-            logger_ioh.close()
-            if is_incremental:
-                self.state_repo.merge_run_logs(run_dir, target_dir)
 
         median_err = float(np.median(clean_errors)) if clean_errors else float("inf")
         self.logger.condition_complete(len(clean_errors), median_err)
@@ -554,6 +549,24 @@ class EvaluationService:
 
     # ── Champion & Baseline Trial Callables ──────────────────────────────────────
 
+    def _create_problem(
+        self, problem_id: int, dim: int, noise_std: float, instance_id: int, seed: int
+    ):
+        model = NoiseModelEnum.NONE if noise_std == 0.0 else NoiseModelEnum.HETEROSCEDASTIC
+        return self.problem_factory.create(problem_id, dim, noise_std, model, instance_id, seed)
+
+    def _code_exists(self, code_path: str | Path) -> bool:
+        return self.code_reader.exists(code_path)
+
+    def _read_code(self, code_path: str | Path) -> str:
+        return self.code_reader.read(code_path)
+
+    def _create_executor(self, timeout_seconds: float):
+        return self.executor_factory(timeout_seconds)
+
+    def _resolve_baseline(self, baseline_slug: str):
+        return self.baseline_resolver(baseline_slug)
+
     def run_champion_trials(
         self,
         champion_info: dict[str, Any],
@@ -575,22 +588,19 @@ class EvaluationService:
         algo_name = champion_info.get("algorithm_name", "ChampionAlgorithm")
 
         raw_code_path = Path(champion_info["code_path"])
-        code_file = (
-            self.project_root / raw_code_path if not raw_code_path.is_absolute() else raw_code_path
-        )
-        if not code_file.exists():
+        if not self._code_exists(raw_code_path):
             self.logger.missing_code(str(raw_code_path))
             return {"status": "MISSING_CODE", "errors": []}
 
-        code_str = code_file.read_text(encoding="utf-8")
-        code_hash = compute_code_hash(code_str)
+        code_str = self._read_code(raw_code_path)
+        code_hash = hashlib.sha256(code_str.strip().encode("utf-8")).hexdigest()
         model_slug = get_model_slug(llm_name)
         folder = solver_folder or f"{model_slug}_{strat}"
         target_dir = self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder
 
-        executor = AlgorithmExecutor(timeout_seconds=self.trial_timeout_seconds)
+        executor = self._create_executor(self.trial_timeout_seconds)
 
-        def champion_runner(prob: BBOBProblem, budget: int) -> tuple[float, float, int]:
+        def champion_runner(prob: Any, budget: int) -> tuple[float, float, int]:
             t0 = time.perf_counter()
             best_x, returned_fitness = executor.execute_algorithm(
                 code=code_str,
@@ -639,12 +649,12 @@ class EvaluationService:
     ) -> dict[str, Any]:
         """Execute empirical trials for a classical baseline algorithm."""
         self.logger.verbose = verbose
-        baseline_fn = get_baseline_runner(baseline_slug)
+        baseline_fn = self._resolve_baseline(baseline_slug)
         target_dir = (
             self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / baseline_slug
         )
 
-        def baseline_runner(prob: BBOBProblem, budget: int) -> tuple[float, float, int]:
+        def baseline_runner(prob: Any, budget: int) -> tuple[float, float, int]:
             return baseline_fn(prob, budget)
 
         prov_metadata = {"baseline": baseline_slug}
@@ -675,7 +685,7 @@ class EvaluationService:
         active = df_audit[~df_audit["is_filtered"] & (df_audit["status"] != "MISSING_CODE")]
 
         champions_flat = (
-            self.champions_repo.get_champions_flat()
+            self.champion_selection.flatten_champions()
             if solver_type in ("all", "champions", "cross_eval")
             else {}
         )

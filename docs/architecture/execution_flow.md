@@ -12,13 +12,15 @@ The following sequence diagram captures the end-to-end flow from experiment camp
 sequenceDiagram
     autonumber
     actor User as Notebook / CLI Runner
-    participant Service as SynthesisCampaignUseCase
-    participant Runner as ProcessPoolRunner
+    participant Service as SynthesisCampaignCoordinator
+    participant Runner as TaskDispatcher / ProcessPoolRunner adapter
     participant Single as SingleSynthesisUseCase (Worker)
     participant Engine as LLaMEAEngine
     participant Session as LLaMEASession
     participant LLaMEA as LLaMEA Optimizer
     participant Eval as Evaluator
+    participant Candidate as CandidateEvaluationService
+    participant Scoring as AlgorithmScoringService
     participant DB as SQLite DB (WAL)
 
     User->>Service: run_campaign() (or SingleSynthesisUseCase.execute())
@@ -27,7 +29,7 @@ sequenceDiagram
     Service->>Runner: run(tasks)
     
     par Parallel Work Units Across Workers
-        Runner->>Single: SynthesisCampaignUseCase.run_worker(item)
+        Runner->>Single: run_synthesis_worker(item)
         Single->>DB: initialize_sqlite_storage()
         Single->>Engine: engine.run(...)
         Engine->>Session: LLaMEASession(...) & session.run()
@@ -44,7 +46,9 @@ sequenceDiagram
 
         loop Generations (Budget Iterations)
             LLaMEA->>Eval: __call__(solution)
-            Eval->>Eval: AlgorithmExecutor.execute()
+            Eval->>Candidate: evaluate(candidate code)
+            Candidate->>Candidate: CandidateExecutor.execute()
+            Candidate->>Scoring: score clean objective gap
             Eval->>DB: append_iteration_log()
             Eval-->>LLaMEA: solution with fitness/feedback
         end
@@ -68,9 +72,9 @@ sequenceDiagram
 1. **State Persistence**:
    During active evolution runs, checkpoints (`llamea_config.pkl`) are maintained in `data/evolution_state/{dim}D/std_{noise}/f{problem_id}/experiment_{id}/`.
 2. **Crash Interruption Detection**:
-   When `SynthesisCampaignUseCase.audit_matrix()` inspects the database, any experiment whose status remains `running` is earmarked for resumption.
+   When `SynthesisCampaignCoordinator.audit_matrix()` inspects the database, any experiment whose status remains `running` is earmarked for resumption.
 3. **Resumption Dispatch**:
-   `SynthesisCampaignUseCase._build_resume_task()` creates a resume work item with `initial_iteration` set to the number of existing iterations already recorded in the database.
+   `SynthesisCampaignCoordinator._build_resume_task()` creates a resume work item with `initial_iteration` set to the number of existing iterations already recorded in the database.
 4. **Warm Start**:
    `LLaMEASession._create_synthesis_engine()` invokes `LLaMEA.warm_start()`, restores the existing population and generation count, attaches fresh `Evaluator` and `LLMClient` instances, and proceeds to complete the remaining iterations.
 5. **Post-Run Cleanup**:

@@ -76,13 +76,3 @@ class EvaluationConfig(BaseModel):
     reliability: ReliabilityConfig = Field(default_factory=ReliabilityConfig)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    def get(self, item: str, default: Any = None) -> Any:
-        """Dictionary-like access helper for backward compatibility with config dicts."""
-        return getattr(self, item, default)
-
-    def __getitem__(self, item: str) -> Any:
-        """Subscript access helper for backward compatibility with config dicts."""
-        if hasattr(self, item):
-            return getattr(self, item)
-        raise KeyError(item)

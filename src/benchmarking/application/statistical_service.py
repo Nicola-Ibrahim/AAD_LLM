@@ -17,8 +17,7 @@ from benchmarking.domain.services.performance import PerformanceMetricsEngine
 from benchmarking.domain.services.reliability import ReliabilityEngine
 from benchmarking.domain.services.resolvers import resolve_folder_solver_name
 from benchmarking.domain.vos import EvaluationDataset, RunTrace
-from benchmarking.infra.io.trace_repository import IOHTraceReader
-from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
+from benchmarking.application.ports import MarkdownReportWriter
 
 
 def generate_markdown_report(
@@ -27,6 +26,7 @@ def generate_markdown_report(
     output_path: Path | None = None,
     omnibus_df: pd.DataFrame | None = None,
     pairwise_df: pd.DataFrame | None = None,
+    writer: MarkdownReportWriter | None = None,
     **kwargs: Any,
 ) -> str:
     """Generate scientific Markdown summary report documenting statistical test results."""
@@ -99,9 +99,9 @@ def generate_markdown_report(
         report_lines.append("")
 
     if output_path is not None:
-        p = Path(output_path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text("\n".join(report_lines), encoding="utf-8")
+        if writer is None:
+            raise ValueError("A MarkdownReportWriter is required when output_path is set.")
+        writer.write(Path(output_path), "\n".join(report_lines))
 
     return "\n".join(report_lines)
 
@@ -111,15 +111,17 @@ class StatisticalEvaluationService:
 
     def __init__(
         self,
-        sqlite_repo: SQLiteSynthesisReadRepository,
-        trace_repo: IOHTraceReader | None = None,
+        sqlite_repo: Any,
+        trace_repo: Any,
+        report_writer: MarkdownReportWriter,
         hypothesis_engine: HypothesisTestingEngine | None = None,
         ecdf_engine: EcdfConvergenceEngine | None = None,
         performance_engine: PerformanceMetricsEngine | None = None,
         reliability_engine: ReliabilityEngine | None = None,
     ):
         self.sqlite_repo = sqlite_repo
-        self.trace_repo = trace_repo or IOHTraceReader()
+        self.trace_repo = trace_repo
+        self.report_writer = report_writer
         self.hypothesis_engine = hypothesis_engine or HypothesisTestingEngine()
         self.ecdf_engine = ecdf_engine or EcdfConvergenceEngine()
         self.performance_engine = performance_engine or PerformanceMetricsEngine()
@@ -128,13 +130,15 @@ class StatisticalEvaluationService:
     @classmethod
     def create_standard(
         cls,
-        sqlite_repo: SQLiteSynthesisReadRepository,
-        trace_repo: IOHTraceReader | None = None,
+        sqlite_repo: Any,
+        trace_repo: Any,
+        report_writer: MarkdownReportWriter,
     ) -> "StatisticalEvaluationService":
         """Factory method to construct StatisticalEvaluationService with standard domain engines."""
         return cls(
             sqlite_repo=sqlite_repo,
             trace_repo=trace_repo,
+            report_writer=report_writer,
             hypothesis_engine=HypothesisTestingEngine(),
             ecdf_engine=EcdfConvergenceEngine(),
             performance_engine=PerformanceMetricsEngine(),
@@ -503,5 +507,6 @@ class StatisticalEvaluationService:
             df_omnibus=df_omnibus,
             df_pairwise=df_pairwise,
             output_path=output_path,
+            writer=self.report_writer,
             **kwargs,
         )

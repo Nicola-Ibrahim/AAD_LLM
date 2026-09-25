@@ -26,6 +26,11 @@ class SynthesisRepository(ABC):
         pass
 
     @abstractmethod
+    def load_by_ids(self, experiment_ids: list[int]) -> list[ExperimentSummary]:
+        """Loads experiment summaries with the requested identifiers."""
+        pass
+
+    @abstractmethod
     def get_experiment_status(self, experiment_id: int) -> tuple[str | None, int]:
         """Returns a tuple of (status_string, max_iteration_number) for an experiment, or (None, 0) if not found."""
         pass

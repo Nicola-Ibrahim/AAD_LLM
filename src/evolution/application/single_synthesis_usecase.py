@@ -12,7 +12,7 @@ from evolution.application.interfaces import (
 )
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces import BaseProblem
-from evolution.infra.storage.base import SynthesisRepository
+from evolution.application.interfaces.repository import SynthesisRepository
 
 
 class SingleSynthesisUseCase:

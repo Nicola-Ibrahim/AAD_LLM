@@ -29,9 +29,10 @@ from evolution.infra.engines.llamea.prompts import (
     SynthesisPrompts,
     build_synthesis_prompts,
 )
-from evolution.infra.storage.base import SynthesisRepository
+from evolution.application.interfaces.repository import SynthesisRepository
 from evolution.infra.storage.code.repository import CodeRepository
-from evolution.domain.services.algorithm_evaluator import AlgorithmEvaluator
+from evolution.application.candidate_evaluation import CandidateEvaluationService
+from evolution.infra.execution.candidate_executor import AlgorithmExecutorAdapter
 from evolution.infra.engines.llamea.evaluator import Evaluator
 from shared.execution import AlgorithmExecutor
 
@@ -145,7 +146,7 @@ class LLaMEASession:
         if (
             fitness_score is not None
             and math.isfinite(fitness_score)
-            and not AlgorithmEvaluator.is_failure(fitness_score)
+            and not CandidateEvaluationService.is_failure(fitness_score)
         ):
             best_error = -fitness_score
             raw_fitness = self._db_repo.get_best_raw_fitness(self._experiment_id)
@@ -240,13 +241,15 @@ class LLaMEASession:
 
     def _setup_evaluator(self) -> Evaluator:
         """Initializes the problem evaluator with experiment metadata and budget limits."""
-        algorithm_evaluator = AlgorithmEvaluator(
+        candidate_evaluation_service = CandidateEvaluationService(
             problem=self._problem,
             budget=self._config.budget,
             timeout_seconds=self._config.timeout_seconds,
             stagnation_threshold=self._config.stagnation_threshold,
             convergence_threshold=self._config.convergence_threshold,
-            executor=AlgorithmExecutor(timeout_seconds=self._config.timeout_seconds),
+            executor=AlgorithmExecutorAdapter(
+                AlgorithmExecutor(timeout_seconds=self._config.timeout_seconds)
+            ),
         )
         evaluator = Evaluator(
             problem=self._problem,
@@ -254,7 +257,7 @@ class LLaMEASession:
             code_repo=self._code_repo,
             experiment_id=self._experiment_id,
             config=self._config,
-            algorithm_evaluator=algorithm_evaluator,
+            candidate_evaluation_service=candidate_evaluation_service,
             initial_iteration=self._initial_iteration,
         )
         evaluator.experiment = self._experiment

@@ -1,50 +1,100 @@
-"""Champion Selection Application Service (Notebook 03 Use Case).
-
-Coordinates database balance audits, dynamic champion algorithm discovery,
-and JSON serialization for empirical benchmarking.
-"""
+"""Champion selection use case and application-owned ranking policy."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
+
 import pandas as pd
 
-from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
-from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
+
+class ChampionCandidateRepository(Protocol):
+    def query_candidates(self) -> pd.DataFrame: ...
+
+    def write_champions_json(
+        self, champions: dict[str, dict[str, Any]], output_path: Path | None = None
+    ) -> Path: ...
 
 
 class ChampionSelectionService:
-    """Application use case for selecting and exporting problem-specific champions."""
+    """Select best candidates per model, function, dimension, strategy, and mode."""
 
     def __init__(
         self,
-        sqlite_repo: SQLiteSynthesisReadRepository,
-        champions_repo: ChampionsReadRepository,
+        champions_repo: ChampionCandidateRepository,
     ):
-        self.sqlite_repo = sqlite_repo
         self.champions_repo = champions_repo
 
-    def get_experiment_balance(self) -> tuple[pd.DataFrame, int]:
-        """Query DB for completed experiments balance summary."""
-        return self.sqlite_repo.get_experiment_balance()
+    @staticmethod
+    def select_candidates(rows: pd.DataFrame) -> dict[str, dict[str, Any]]:
+        champions: dict[str, dict[str, Any]] = {}
+        if rows.empty:
+            return champions
 
-    def get_target_conditions(self) -> list[tuple[int, float, int]]:
-        """Discover unique (dim, noise_std, problem_id) experimental conditions from DB."""
-        return self.sqlite_repo.get_target_conditions()
+        grouped = rows.groupby(["llm_name", "problem_id", "dim", "prompt_strategy"])
+        for (model, problem_id, dim, strategy), group in grouped:
+            model_name = str(model)
+            model_champions = champions.setdefault(model_name, {})
+
+            def add_best(subset: pd.DataFrame, mode: str, noise_std: float) -> None:
+                if subset.empty:
+                    return
+                best = subset.iloc[0]
+                key = f"f{problem_id}_{dim}D_{mode}_std{noise_std}_{strategy}"
+                model_champions[key] = {
+                    "problem_id": int(problem_id),
+                    "dim": int(dim),
+                    "mode": mode.removesuffix("_explicit"),
+                    "noise_std": float(noise_std),
+                    "prompt_strategy": str(strategy),
+                    "experiment_id": int(best["experiment_id"]),
+                    "iteration_id": int(best["iteration_id"]),
+                    "algorithm_name": str(best["algorithm_name"]),
+                    "final_error": float(best["final_error"]),
+                    "evaluations_used": (
+                        int(best["evaluations_used"])
+                        if pd.notnull(best["evaluations_used"])
+                        else None
+                    ),
+                    "code_path": str(best["code_path"]),
+                    "llm_name": model_name,
+                }
+
+            explicit = group[group["mode"] == "explicit"]
+            clean = explicit[explicit["noise_std"] == 0.0]
+            add_best(clean, "explicit", 0.0)
+            noisy = explicit[explicit["noise_std"] > 0.0]
+            for noise_std, subset in noisy.groupby("noise_std"):
+                add_best(subset, "explicit", float(noise_std))
+            implicit = group[group["mode"] == "implicit"]
+            for noise_std, subset in implicit.groupby("noise_std"):
+                add_best(subset, "implicit", float(noise_std))
+        return champions
 
     def get_champions(self) -> dict[str, dict[str, Any]]:
-        """Extract best Clean and Noisy champions per LLM model and experimental condition."""
-        return self.champions_repo.extract_champions()
+        return self.select_candidates(self.champions_repo.query_candidates())
 
-    def get_champions_flat(
-        self,
-        champions_dict: dict[str, dict[str, Any]] | None = None,
+    def flatten_champions(
+        self, champions_dict: dict[str, dict[str, Any]] | None = None
     ) -> dict[str, dict[str, Any]]:
-        """Flatten model-nested champions dictionary into a single key-value mapping."""
-        return self.champions_repo.get_champions_flat(champions_dict)
+        champions = champions_dict if champions_dict is not None else self.get_champions()
+        flat: dict[str, dict[str, Any]] = {}
+        for model, conditions in champions.items():
+            if isinstance(conditions, dict) and "code_path" in conditions:
+                flat[model] = conditions
+            elif isinstance(conditions, dict):
+                flat.update({f"{model}/{key}": value for key, value in conditions.items()})
+        return flat
 
     def export_champions(
-        self,
-        output_path: Path | None = None,
+        self, output_path: Path | None = None
     ) -> tuple[dict[str, dict[str, Any]], pd.DataFrame]:
-        """Discover champions from the current DB, export JSON, and return a summary DataFrame."""
-        return self.champions_repo.export_champions_json(output_path)
+        champions = self.get_champions()
+        self.champions_repo.write_champions_json(champions, output_path)
+        summary_rows = [
+            {"model": model, "key": key, **candidate}
+            for model, conditions in champions.items()
+            for key, candidate in conditions.items()
+        ]
+        return champions, pd.DataFrame(summary_rows)
+
+
+__all__ = ["ChampionSelectionService"]

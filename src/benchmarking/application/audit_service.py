@@ -10,9 +10,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from benchmarking.domain.enums import BBOBFunction
 from benchmarking.domain.services.resolvers import get_clean_model_label, get_model_slug
-from benchmarking.infra.io.trace_repository import IOHTraceReader
-from benchmarking.infra.storage.config_repository import EvaluationConfigRepository
-from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
 from benchmarking.application.evaluation_config import EvaluationConfig
 
 
@@ -52,9 +49,9 @@ class EvaluationAuditService:
 
     def __init__(
         self,
-        sqlite_repo: SQLiteSynthesisReadRepository,
-        trace_repo: IOHTraceReader,
-        config_repo: EvaluationConfigRepository,
+        sqlite_repo: Any,
+        trace_repo: Any,
+        config_repo: Any,
     ):
         self.sqlite_repo = sqlite_repo
         self.trace_repo = trace_repo

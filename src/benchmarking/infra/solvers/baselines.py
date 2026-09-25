@@ -1,4 +1,4 @@
-"""Classical baseline optimization algorithms (Domain Solvers).
+"""Classical solver adapters for benchmark baseline algorithms.
 
 Contains mathematical optimization procedures for:
 - CMA-ES (Covariance Matrix Adaptation Evolution Strategy)

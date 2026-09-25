@@ -1,4 +1,3 @@
-from evolution.domain.services.algorithm_evaluator import AlgorithmEvaluator
 from evolution.domain.services.noise_strategy import (
     AWGNStrategy,
     BaseNoiseStrategy,
@@ -7,9 +6,11 @@ from evolution.domain.services.noise_strategy import (
     NoNoiseStrategy,
     NoiseStrategyFactory,
 )
+from evolution.domain.services.algorithm_scoring import AlgorithmScoringService, FailureKind
 
 __all__ = [
-    "AlgorithmEvaluator",
+    "AlgorithmScoringService",
+    "FailureKind",
     "BaseNoiseStrategy",
     "NoNoiseStrategy",
     "HeteroscedasticNoiseStrategy",

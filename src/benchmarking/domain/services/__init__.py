@@ -1,11 +1,5 @@
 """Benchmarking domain computational, normalization, and baseline services."""
 
-from benchmarking.domain.services.baselines import (
-    get_baseline_runner,
-    run_cmaes,
-    run_de,
-    run_pso,
-)
 from benchmarking.domain.services.ecdf import (
     EcdfConvergenceEngine,
 )
@@ -27,10 +21,6 @@ from benchmarking.domain.services.resolvers import (
 )
 
 __all__ = [
-    "get_baseline_runner",
-    "run_cmaes",
-    "run_de",
-    "run_pso",
     "CLASSICAL_SOLVERS_MAP",
     "KNOWN_STRATEGIES",
     "format_db_solver_name",

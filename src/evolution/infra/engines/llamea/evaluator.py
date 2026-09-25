@@ -1,8 +1,8 @@
 """LLaMEA Evaluation Adapter (Infrastructure Component).
 
-Adapts the Domain AlgorithmEvaluator service to the LLaMEA Solution callable interface:
+Adapts the CandidateEvaluationService service to the LLaMEA Solution callable interface:
 - Receives candidate solution from LLaMEA framework.
-- Delegates code execution, bounds validation, scoring, and failure classification to domain AlgorithmEvaluator.
+- Delegates code execution, bounds validation, scoring, and failure classification to CandidateEvaluationService.
 - Sets fitness and feedback scores onto the LLaMEA Solution.
 - Handles dual-repository persistence (filesystem code storage and database iteration telemetry).
 - Manages state serialization for picklable warm starts.
@@ -15,11 +15,12 @@ from llamea import Solution
 from evolution.application.interfaces import BaseLogger, SessionConfig
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.interfaces import BaseProblem
-from evolution.domain.services.algorithm_evaluator import AlgorithmEvaluator
+from evolution.application.candidate_evaluation import CandidateEvaluationService
 from evolution.domain.vos import IterationMetadata, ProblemProfile
 from evolution.infra.engines.llamea.prompts import FeedbackRenderer
 from evolution.infra.logging import SynthesisLogger
-from evolution.infra.storage.base import SynthesisRepository
+from evolution.application.interfaces.repository import SynthesisRepository
+from evolution.infra.execution.candidate_executor import AlgorithmExecutorAdapter
 from evolution.infra.storage.code.repository import CodeRepository
 from shared.execution import AlgorithmExecutor
 
@@ -27,8 +28,8 @@ from shared.execution import AlgorithmExecutor
 class Evaluator:
     """LLaMEA-compatible evaluator adapter for optimization problems.
 
-    Acts as an infrastructure adapter delegating domain evaluation rules
-    to AlgorithmEvaluator while fulfilling LLaMEA's callable contract.
+    Acts as an infrastructure adapter delegating candidate evaluation to
+    CandidateEvaluationService while fulfilling LLaMEA's callable contract.
     """
 
     def __init__(
@@ -38,7 +39,7 @@ class Evaluator:
         code_repo: CodeRepository,
         experiment_id: int,
         config: SessionConfig,
-        algorithm_evaluator: AlgorithmEvaluator,
+        candidate_evaluation_service: CandidateEvaluationService,
         feedback_renderer: FeedbackRenderer | None = None,
         initial_iteration: int = 0,
     ) -> None:
@@ -50,13 +51,13 @@ class Evaluator:
         self._current_iteration = initial_iteration
         self._logger: BaseLogger = SynthesisLogger()
         self._experiment: ExperimentSummary | None = None
-        self._algorithm_evaluator = algorithm_evaluator
+        self._candidate_evaluation_service = candidate_evaluation_service
         self._feedback_renderer = feedback_renderer or FeedbackRenderer()
 
     @property
-    def algorithm_evaluator(self) -> AlgorithmEvaluator:
-        """Expose underlying domain algorithm evaluator service."""
-        return self._algorithm_evaluator
+    def candidate_evaluation_service(self) -> CandidateEvaluationService:
+        """Expose the candidate evaluation application service."""
+        return self._candidate_evaluation_service
 
     @property
     def feedback_renderer(self) -> FeedbackRenderer:
@@ -133,7 +134,7 @@ class Evaluator:
         llm_gen_time = solution.metadata.get("llm_generation_time")
         total_gens = self._config.iterations
 
-        result = self._algorithm_evaluator.evaluate(
+        result = self._candidate_evaluation_service.evaluate(
             code=solution.code,
             name=solution.name,
             llm_generation_time=llm_gen_time,
@@ -181,7 +182,7 @@ class Evaluator:
 
     def __getstate__(self) -> dict[str, Any]:
         state = self.__dict__.copy()
-        state["_algorithm_evaluator"] = None
+        state["_candidate_evaluation_service"] = None
         state["_logger"] = None
         return state
 
@@ -189,13 +190,15 @@ class Evaluator:
         self.__dict__.update(state)
         self._logger = getattr(self, "_logger", None) or SynthesisLogger()
         self._feedback_renderer = getattr(self, "_feedback_renderer", None) or FeedbackRenderer()
-        self._algorithm_evaluator = AlgorithmEvaluator(
+        self._candidate_evaluation_service = CandidateEvaluationService(
             problem=self._problem,
             budget=self._config.budget,
             timeout_seconds=self._config.timeout_seconds,
             stagnation_threshold=self._config.stagnation_threshold,
             convergence_threshold=self._config.convergence_threshold,
-            executor=AlgorithmExecutor(timeout_seconds=self._config.timeout_seconds),
+            executor=AlgorithmExecutorAdapter(
+                AlgorithmExecutor(timeout_seconds=self._config.timeout_seconds)
+            ),
         )
         if getattr(self, "_db_repo", None) is None:
             print(

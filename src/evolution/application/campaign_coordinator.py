@@ -1,11 +1,7 @@
-"""Synthesis Campaign Application Use Case (Hexagonal Architecture).
-
-Coordinates synthesis configuration reading, database status reconciliation,
-matrix auditing, task planning, and parallel multi-process dispatching.
-"""
+"""Application orchestration for synthesis campaigns."""
 
 from collections import defaultdict
-from typing import Any
+from typing import Any, TypedDict
 
 import numpy as np
 import pandas as pd
@@ -16,19 +12,16 @@ from evolution.application.interfaces import (
     SessionConfig,
     SessionResult,
     SynthesisEngine,
+    SynthesisRepository,
+    SynthesisConfigReader,
+    ProblemFactory,
+    TaskDispatcher,
 )
-from evolution.application.single_synthesis_usecase import SingleSynthesisUseCase
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import BBOBFunction, NoiseModelEnum
-from evolution.domain.services.noise_strategy import NoiseStrategyFactory
-from evolution.infra.concurrency.runner import ProcessPoolRunner
-from evolution.infra.llm.client import LLMClient
-from evolution.infra.problems.bbob import BBOBProblem
-from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
-from evolution.infra.storage.synthesis_config import (
+from evolution.application.synthesis_config import (
     MatrixCondition,
     SynthesisConfig,
-    SynthesisConfigRepository,
 )
 
 
@@ -56,66 +49,41 @@ class CampaignResults(BaseModel):
         return self.total_tasks - self.successful_tasks
 
 
-class CampaignTask(dict[str, Any]):
-    """Lightweight dictionary representation of a planned campaign task work item.
+class CampaignTask(TypedDict):
+    """Typed, picklable payload passed from campaign planning to worker processes."""
 
-    Supports both dictionary key indexing (task["key"]) and attribute access (task.key).
-    """
+    key: str
+    problem: Any
+    experiment_id: int
+    config: SessionConfig
+    engine: SynthesisEngine
+    initial_iteration: int
+    prompt_strategy: Any
+    synthesis_mode: Any
 
-    def __getattr__(self, name: str) -> Any:
-        try:
-            return self[name]
-        except KeyError:
-            raise AttributeError(f"CampaignTask has no attribute {name!r}")
 
-
-class SynthesisCampaignUseCase:
-    """Hexagonal application use case managing algorithm synthesis campaigns and multiprocessing.
-
-    Workflow Architecture:
-    ┌────────────────────────────────────────────────────────┐
-    │              SynthesisConfigRepository                 │
-    │         (YAML Configuration -> SynthesisConfig)        │
-    └───────────────────────────┬────────────────────────────┘
-                                │
-                                ▼
-    ┌────────────────────────────────────────────────────────┐
-    │               SynthesisCampaignUseCase                 │
-    │                                                        │
-    │  1. audit_matrix()                                     │
-    │     Reconcile Config Conditions vs SQLite DB Records   │
-    │     ├── Completed (Valid Champions)                    │
-    │     ├── Failed Synthesis (Candidates for Retry)        │
-    │     └── Running / Incomplete (Candidates for Resume)   │
-    │                                                        │
-    │  2. build_tasks()                                      │
-    │     Generate Concrete Work Item Parameter Dictionaries │
-    │     ├── Targeted Tasks  ──> Target Experiment IDs      │
-    │     ├── Resume Tasks    ──> Interrupted DB Experiments │
-    │     └── Fresh Tasks     ──> Upfront DB Record Created  │
-    │                                                        │
-    │  3. run_campaign()                                     │
-    │     Direct ProcessPoolRunner Concurrency               │
-    │     Worker Subprocess ──> SingleSynthesisUseCase      │
-    │                                                        │
-    │  4. Results Aggregation & Logging                      │
-    │     Harvest SessionResult, summarize champion metrics  │
-    └────────────────────────────────────────────────────────┘
-    """
+class SynthesisCampaignCoordinator:
+    """Plan and dispatch synthesis work through application-owned ports."""
 
     def __init__(
         self,
-        sqlite_repo: SQLiteSynthesisRepository,
-        config_repo: SynthesisConfigRepository,
+        sqlite_repo: SynthesisRepository,
+        config_repo: SynthesisConfigReader,
         logger: BaseLogger,
         engine: SynthesisEngine | None = None,
-        llm_client: LLMClient | None = None,
+        llm_client: Any | None = None,
+        problem_factory: ProblemFactory | None = None,
+        dispatcher: TaskDispatcher | None = None,
+        worker_fn: Any | None = None,
     ):
         self.sqlite_repo = sqlite_repo
         self.config_repo = config_repo
         self.logger = logger
         self.engine = engine
         self.llm_client = llm_client
+        self.problem_factory = problem_factory
+        self.dispatcher = dispatcher
+        self.worker_fn = worker_fn
         self.config: SynthesisConfig = self.config_repo.load_config()
 
     # -------------------------------------------------------------------------
@@ -319,32 +287,11 @@ class SynthesisCampaignUseCase:
     # Execution
     # -------------------------------------------------------------------------
 
-    @staticmethod
-    def run_worker(item: dict[str, Any]) -> SessionResult:
-        """Worker entrypoint executed in an isolated worker process during multiprocessing."""
-        from shared.database.engine import initialize_sqlite_storage
-
-        repo = initialize_sqlite_storage()
-        usecase = SingleSynthesisUseCase(
-            engine=item["engine"],
-            sqlite_repo=repo,
-        )
-        return usecase.execute(
-            problem=item["problem"],
-            experiment_id=item["experiment_id"],
-            config=item["config"],
-            prompt_strategy=item["prompt_strategy"],
-            synthesis_mode=item["synthesis_mode"],
-            initial_iteration=item["initial_iteration"],
-            key=item["key"],
-            verbose=False,
-        )
-
     def run_campaign(
         self,
         verbose: bool = True,
     ) -> CampaignResults:
-        """Builds tasks and executes the evolutionary synthesis campaign in parallel using ProcessPoolRunner."""
+        """Build tasks, dispatch them through the configured worker adapter, and aggregate results."""
         if self.engine is None:
             raise ValueError("SynthesisEngine must be configured to run campaigns.")
 
@@ -365,9 +312,10 @@ class SynthesisCampaignUseCase:
             subtitle=f"Model: {model_name} | Pending Tasks: {len(tasks)} | Concurrency: {workers} workers",
         )
 
-        runner = ProcessPoolRunner(max_workers=workers)
-        raw_results = runner.run(
-            fn=self.run_worker,
+        if self.dispatcher is None or self.worker_fn is None:
+            raise RuntimeError("Campaign dispatcher and worker function must be configured.")
+        raw_results = self.dispatcher.run(
+            fn=self.worker_fn,
             items=tasks,
             key_fn=lambda item: item["key"],
         )
@@ -388,25 +336,24 @@ class SynthesisCampaignUseCase:
     # Private Task Builder Helpers
     # -------------------------------------------------------------------------
 
-    @staticmethod
     def _create_problem(
+        self,
         problem_id: int,
         dim: int,
         noise_std: float,
         noise_model: NoiseModelEnum = NoiseModelEnum.HETEROSCEDASTIC,
         instance_id: int = 1,
         seed: int = 42,
-    ) -> BBOBProblem:
-        """Helper to create a configured BBOBProblem with appropriate noise strategy."""
-        noise_strat = NoiseStrategyFactory.create(
-            noise_model=noise_model,
-            noise_std=noise_std,
-        )
-        return BBOBProblem(
+    ):
+        """Create a problem through the configured application port."""
+        if self.problem_factory is None:
+            raise RuntimeError("Problem factory must be configured.")
+        return self.problem_factory.create(
             problem_id=problem_id,
             dim=dim,
+            noise_std=noise_std,
+            noise_model=noise_model,
             instance_id=instance_id,
-            noise_strategy=noise_strat,
             seed=seed,
         )
 

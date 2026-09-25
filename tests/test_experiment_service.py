@@ -18,13 +18,13 @@ from evolution.domain.vos import (
     ProblemProfile,
 )
 from evolution.domain.enums import NoiseModelEnum, SynthesisMode, PromptStrategy
-from evolution.domain.services.algorithm_evaluator import AlgorithmEvaluator
+from evolution.application.candidate_evaluation import CandidateEvaluationService
+from evolution.infra.execution.candidate_executor import create_candidate_executor
 from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy, NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.application import (
     SessionConfig,
     SingleSynthesisUseCase,
-    SynthesisCampaignUseCase,
     SynthesisEngine,
 )
 from evolution.infra.concurrency.runner import ProcessPoolRunner
@@ -33,7 +33,16 @@ from evolution.infra.storage.synthesis.repository import SQLiteSynthesisReposito
 from shared.database.engine import build_engine
 from shared.database.tables import Base, ExperimentORM
 from evolution.infra.engines.llamea import Evaluator, LLaMEAEngine, LLaMEASession
-from evolution.domain.exceptions import OrchestrationError
+from evolution.application.exceptions import OrchestrationError
+from evolution.infra.concurrency.worker import run_synthesis_worker
+
+
+def build_candidate_evaluation_service(*, problem, **kwargs):
+    return CandidateEvaluationService(
+        problem=problem,
+        executor=create_candidate_executor(kwargs.get("timeout_seconds", 30.0)),
+        **kwargs,
+    )
 
 
 class DummyLLM:
@@ -129,7 +138,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
 
     runner = ProcessPoolRunner(max_workers=2)
     results = runner.run(
-        fn=SynthesisCampaignUseCase.run_worker, items=tasks, key_fn=lambda t: t["key"]
+        fn=run_synthesis_worker, items=tasks, key_fn=lambda t: t["key"]
     )
 
     assert "clean" in results
@@ -199,7 +208,7 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
 
     with pytest.raises(OrchestrationError) as exc_info:
         ProcessPoolRunner().run(
-            fn=SynthesisCampaignUseCase.run_worker, items=tasks, key_fn=lambda t: t["key"]
+            fn=run_synthesis_worker, items=tasks, key_fn=lambda t: t["key"]
         )
 
     errors = exc_info.value.errors
@@ -242,14 +251,14 @@ def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
         llm_name="dummy-llm",
     )
 
-    algorithm_evaluator = AlgorithmEvaluator(problem=problem, budget=10)
+    candidate_evaluation_service = build_candidate_evaluation_service(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(budget=10),
-        algorithm_evaluator=algorithm_evaluator,
+        candidate_evaluation_service=candidate_evaluation_service,
     )
 
     # Run evaluation
@@ -286,14 +295,14 @@ def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory
         llm_name="dummy-llm",
     )
 
-    algorithm_evaluator = AlgorithmEvaluator(problem=problem, budget=10)
+    candidate_evaluation_service = build_candidate_evaluation_service(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(budget=10),
-        algorithm_evaluator=algorithm_evaluator,
+        candidate_evaluation_service=candidate_evaluation_service,
     )
 
     # Invalid syntax code to trigger compiler failure
@@ -643,14 +652,14 @@ def test_evaluator_current_iteration_resumes_from_db(temp_dir, db_session_factor
     assert status == "running"
     assert max_iter == 0
 
-    algorithm_evaluator1 = AlgorithmEvaluator(problem=problem)
+    candidate_evaluation_service1 = build_candidate_evaluation_service(problem=problem)
     evaluator1 = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(),
-        algorithm_evaluator=algorithm_evaluator1,
+        candidate_evaluation_service=candidate_evaluation_service1,
     )
     assert evaluator1._current_iteration == 0
 
@@ -678,14 +687,14 @@ def test_evaluator_current_iteration_resumes_from_db(temp_dir, db_session_factor
     assert max_iter == 3
 
     # New Evaluator created for the same experiment_id (e.g. during warm start)
-    algorithm_evaluator2 = AlgorithmEvaluator(problem=problem)
+    candidate_evaluation_service2 = build_candidate_evaluation_service(problem=problem)
     evaluator2 = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(),
-        algorithm_evaluator=algorithm_evaluator2,
+        candidate_evaluation_service=candidate_evaluation_service2,
         initial_iteration=max_iter,
     )
     assert evaluator2._current_iteration == 3
@@ -802,14 +811,14 @@ def test_evaluator_clean_reevaluation_with_tuple_return(db_session_factory, tmp_
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
     )
-    algorithm_evaluator = AlgorithmEvaluator(problem=problem, budget=10)
+    candidate_evaluation_service = build_candidate_evaluation_service(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(budget=10),
-        algorithm_evaluator=algorithm_evaluator,
+        candidate_evaluation_service=candidate_evaluation_service,
     )
 
     good_code = """
@@ -841,14 +850,14 @@ def test_evaluator_out_of_bounds_best_x_rejected(db_session_factory, tmp_path):
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
     )
-    algorithm_evaluator = AlgorithmEvaluator(problem=problem, budget=10)
+    candidate_evaluation_service = build_candidate_evaluation_service(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(budget=10),
-        algorithm_evaluator=algorithm_evaluator,
+        candidate_evaluation_service=candidate_evaluation_service,
     )
 
     out_of_bounds_code = """
@@ -860,8 +869,8 @@ class BadOpt:
 """
     sol = Solution(code=out_of_bounds_code, name="BadOpt", description="Out of bounds solution")
     scored_sol = evaluator(sol)
-    assert AlgorithmEvaluator.is_failure(scored_sol.fitness)
-    assert scored_sol.fitness == AlgorithmEvaluator.RUNTIME_FAILURE_FITNESS
+    assert CandidateEvaluationService.is_failure(scored_sol.fitness)
+    assert scored_sol.fitness == CandidateEvaluationService.RUNTIME_FAILURE_FITNESS
     assert "outside search space bounds" in scored_sol.feedback
 
 
@@ -891,14 +900,14 @@ def test_evaluator_failure_fitness_and_categorized_feedback(db_session_factory, 
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
     )
-    algorithm_evaluator = AlgorithmEvaluator(problem=problem, budget=10)
+    candidate_evaluation_service = build_candidate_evaluation_service(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(budget=10),
-        algorithm_evaluator=algorithm_evaluator,
+        candidate_evaluation_service=candidate_evaluation_service,
     )
 
     # Test Runtime Error (ZeroDivisionError / Math Error)
@@ -910,8 +919,8 @@ class ZeroDivOpt:
 """
     sol = Solution(code=zero_div_code, name="ZeroDivOpt", description="Zero div solution")
     scored = evaluator(sol)
-    assert AlgorithmEvaluator.is_failure(scored.fitness)
-    assert scored.fitness == AlgorithmEvaluator.RUNTIME_FAILURE_FITNESS
+    assert CandidateEvaluationService.is_failure(scored.fitness)
+    assert scored.fitness == CandidateEvaluationService.RUNTIME_FAILURE_FITNESS
     assert "[RUNTIME ERROR]" in scored.feedback
     assert "ZeroDivisionError" in scored.feedback
 
@@ -924,8 +933,8 @@ class NanOpt:
 """
     sol_nan = Solution(code=nan_return_code, name="NanOpt", description="Nan return solution")
     scored_nan = evaluator(sol_nan)
-    assert AlgorithmEvaluator.is_failure(scored_nan.fitness)
-    assert scored_nan.fitness == AlgorithmEvaluator.RUNTIME_FAILURE_FITNESS
+    assert CandidateEvaluationService.is_failure(scored_nan.fitness)
+    assert scored_nan.fitness == CandidateEvaluationService.RUNTIME_FAILURE_FITNESS
     assert "[INVALID RETURN]" in scored_nan.feedback
 
 
@@ -941,14 +950,14 @@ def test_evaluator_enriched_feedback_and_warnings(db_session_factory, tmp_path):
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
     )
-    algorithm_evaluator = AlgorithmEvaluator(problem=problem, budget=10)
+    candidate_evaluation_service = build_candidate_evaluation_service(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
         config=SessionConfig(budget=10),
-        algorithm_evaluator=algorithm_evaluator,
+        candidate_evaluation_service=candidate_evaluation_service,
     )
 
     # Candidate code with runtime error and numpy warning
@@ -965,8 +974,8 @@ class BadMatrixOpt:
     sol = Solution(code=runtime_err_code, name="BadMatrixOpt", description="Bad matrix option")
     scored = evaluator(sol)
 
-    assert AlgorithmEvaluator.is_failure(scored.fitness)
-    assert scored.fitness == AlgorithmEvaluator.RUNTIME_FAILURE_FITNESS
+    assert CandidateEvaluationService.is_failure(scored.fitness)
+    assert scored.fitness == CandidateEvaluationService.RUNTIME_FAILURE_FITNESS
     # Option A check: relevant code line extracted
     assert "Relevant code:" in scored.feedback
     assert "line   8:" in scored.feedback
@@ -1115,7 +1124,7 @@ def test_synthesis_engine_lsp_contract():
     """Verify that any SynthesisEngine conforms to run(task, db_repo) returning SessionResult."""
     from typing import Any
     from evolution.application.interfaces.engine import SynthesisEngine
-    from evolution.application.campaign_usecase import SessionResult
+    from evolution.application.interfaces.engine import SessionResult
     from evolution.domain.enums import SynthesisMode
 
     class CustomEngine(SynthesisEngine):
@@ -1226,13 +1235,14 @@ def test_campaign_item_and_engine_pickling(temp_dir):
     assert isinstance(restored_item["engine"], LLaMEAEngine)
 
 
-def test_campaign_usecase_create_problem_seed():
-    """Verify SynthesisCampaignUseCase._create_problem sets seed and produces distinct noise streams."""
+def test_problem_factory_seed_produces_reproducible_noise_streams():
+    """Verify the BBOB adapter uses its seed for reproducible noise streams."""
     import numpy as np
-    from evolution.application.campaign_usecase import SynthesisCampaignUseCase
     from evolution.domain.enums import NoiseModelEnum
+    from evolution.infra.problems.factory import BBOBProblemFactory
 
-    prob1 = SynthesisCampaignUseCase._create_problem(
+    factory = BBOBProblemFactory()
+    prob1 = factory.create(
         problem_id=1,
         dim=2,
         noise_std=0.2,
@@ -1240,7 +1250,7 @@ def test_campaign_usecase_create_problem_seed():
         instance_id=1,
         seed=43,
     )
-    prob2 = SynthesisCampaignUseCase._create_problem(
+    prob2 = factory.create(
         problem_id=1,
         dim=2,
         noise_std=0.2,
@@ -1248,7 +1258,7 @@ def test_campaign_usecase_create_problem_seed():
         instance_id=1,
         seed=43,
     )
-    prob3 = SynthesisCampaignUseCase._create_problem(
+    prob3 = factory.create(
         problem_id=1,
         dim=2,
         noise_std=0.2,

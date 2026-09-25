@@ -1,12 +1,14 @@
 """Trace reader for parsing and scanning empirical IOHprofiler benchmark logs."""
 
 from collections.abc import Callable
+from contextlib import contextmanager
 import json
 from pathlib import Path
 import re
 import shutil
 from typing import Any
 
+import ioh
 import numpy as np
 
 from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
@@ -174,6 +176,49 @@ class EvaluationStateRepository:
 
     def __init__(self, eval_dir: Path = RESULTS_DIR / "ioh_traces"):
         self.eval_dir = Path(eval_dir)
+
+    def remove_solver_traces(self, solver_dir: Path) -> None:
+        """Remove one stale solver condition directory before a clean evaluation."""
+        if solver_dir.exists():
+            shutil.rmtree(solver_dir)
+
+    @staticmethod
+    def solver_directory_exists(solver_dir: Path) -> bool:
+        return solver_dir.is_dir()
+
+    @contextmanager
+    def open_run_logger(self, target_dir: Path, algorithm_name: str, incremental: bool):
+        """Own temporary log staging, IOH logger construction, and incremental merging."""
+        if incremental:
+            from tempfile import TemporaryDirectory
+
+            with TemporaryDirectory() as tmpdir:
+                run_dir = Path(tmpdir) / target_dir.name
+                run_dir.parent.mkdir(parents=True, exist_ok=True)
+                logger = ioh.logger.Analyzer(
+                    root=str(run_dir.parent),
+                    folder_name=run_dir.name,
+                    algorithm_name=algorithm_name,
+                    store_positions=False,
+                )
+                try:
+                    yield logger
+                finally:
+                    logger.close()
+                    self.merge_run_logs(run_dir, target_dir)
+            return
+
+        target_dir.parent.mkdir(parents=True, exist_ok=True)
+        logger = ioh.logger.Analyzer(
+            root=str(target_dir.parent),
+            folder_name=target_dir.name,
+            algorithm_name=algorithm_name,
+            store_positions=False,
+        )
+        try:
+            yield logger
+        finally:
+            logger.close()
 
     def read_provenance(self, solver_dir: Path) -> dict[str, Any] | None:
         """Reads and parses provenance.json for a solver directory if it exists."""

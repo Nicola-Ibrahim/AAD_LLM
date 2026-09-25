@@ -8,7 +8,7 @@ from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import TypeVar
 
-from evolution.domain.exceptions import OrchestrationError
+from evolution.application.exceptions import OrchestrationError
 
 T = TypeVar("T")
 R = TypeVar("R")

@@ -1,3 +1,5 @@
+"""Typed synthesis matrix and campaign configuration models owned by the application."""
+
 from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 

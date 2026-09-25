@@ -81,7 +81,7 @@ class FeedbackRenderer:
         """Render complete feedback message for an algorithm evaluation result.
 
         Args:
-            result: Evaluation outcome from AlgorithmEvaluator domain service.
+            result: Evaluation outcome from the candidate evaluation service.
             problem: Target optimization problem instance.
 
         Returns:

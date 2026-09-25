@@ -28,6 +28,7 @@ from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
 from benchmarking.infra.storage.config_repository import EvaluationConfigRepository
 from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
+from benchmarking.infra.io.markdown_report_writer import MarkdownFileWriter
 from shared.config import DATA_DIR, RESULTS_DIR
 from shared.database.engine import create_db_session_factory
 
@@ -246,9 +247,7 @@ class TestApplicationServicesIntegration:
     def test_selection_service(self):
         session_factory = create_db_session_factory()
         sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
-        champions_repo = ChampionsReadRepository(session_factory)
-        service = ChampionSelectionService(sqlite_repo=sqlite_repo, champions_repo=champions_repo)
-        summary, count = service.get_experiment_balance()
+        summary, count = sqlite_repo.get_experiment_balance()
         if (DATA_DIR / "db.sqlite3").exists():
             assert isinstance(summary, pd.DataFrame)
             assert count >= 0
@@ -281,7 +280,11 @@ class TestApplicationServicesIntegration:
         session_factory = create_db_session_factory()
         sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
         trace_repo = IOHTraceReader(RESULTS_DIR / "ioh_traces")
-        service = StatisticalEvaluationService(sqlite_repo=sqlite_repo, trace_repo=trace_repo)
+        service = StatisticalEvaluationService(
+            sqlite_repo=sqlite_repo,
+            trace_repo=trace_repo,
+            report_writer=MarkdownFileWriter(),
+        )
         if (DATA_DIR / "db.sqlite3").exists():
             df_exp, df_iter = service.get_synthesis_dataframes()
             assert isinstance(df_exp, pd.DataFrame)
@@ -304,9 +307,10 @@ class TestConcreteInfraRepositories:
         session_factory = create_db_session_factory()
         repo = ChampionsReadRepository(session_factory)
         if (DATA_DIR / "db.sqlite3").exists():
-            champs = repo.extract_champions()
+            service = ChampionSelectionService(champions_repo=repo)
+            champs = service.get_champions()
             assert isinstance(champs, dict)
-            flat = repo.get_champions_flat(champs)
+            flat = service.flatten_champions(champs)
             assert isinstance(flat, dict)
 
     def test_trace_reader(self):
@@ -329,7 +333,10 @@ class TestMarkdownReporting:
         df_pairwise = pd.DataFrame([{"Comparison": "A vs B", "p-value": 0.01, "A12": 0.85}])
         out_file = tmp_path / "test_report.md"
         report = generate_markdown_report(
-            df_omnibus=df_omnibus, df_pairwise=df_pairwise, output_path=out_file
+            df_omnibus=df_omnibus,
+            df_pairwise=df_pairwise,
+            output_path=out_file,
+            writer=MarkdownFileWriter(),
         )
         assert out_file.exists()
         assert "Comprehensive Empirical Evaluation" in report

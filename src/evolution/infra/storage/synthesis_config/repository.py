@@ -11,7 +11,7 @@ import tomllib
 
 from shared.config import CONFIGS_DIR
 from evolution.domain.enums import NoiseModelEnum, PromptStrategy, SynthesisMode
-from evolution.infra.storage.synthesis_config.models import (
+from evolution.application.synthesis_config import (
     MatrixCondition,
     NoiseConditionConfig,
     ProblemTarget,

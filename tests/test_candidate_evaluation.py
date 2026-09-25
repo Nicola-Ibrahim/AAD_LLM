@@ -1,11 +1,20 @@
-"""Unit tests for AlgorithmEvaluator domain service."""
+"""Unit tests for candidate execution and evaluation orchestration."""
 
 import numpy as np
 import pytest
 
 from evolution.domain.enums import SynthesisMode
 from evolution.domain.interfaces.problem import BaseProblem
-from evolution.domain.services.algorithm_evaluator import AlgorithmEvaluator
+from evolution.application.candidate_evaluation import CandidateEvaluationService
+from evolution.infra.execution.candidate_executor import create_candidate_executor
+
+
+def build_candidate_evaluation_service(*, problem, **kwargs):
+    return CandidateEvaluationService(
+        problem=problem,
+        executor=create_candidate_executor(kwargs.get("timeout_seconds", 30.0)),
+        **kwargs,
+    )
 
 
 class DummyProblem(BaseProblem):
@@ -61,22 +70,22 @@ class DummyProblem(BaseProblem):
 
 def test_is_failure_classification():
     """Verify classification of failure score tiers vs valid fitness scores."""
-    assert AlgorithmEvaluator.is_failure(AlgorithmEvaluator.FAILURE_FITNESS) is True
-    assert AlgorithmEvaluator.is_failure(AlgorithmEvaluator.RUNTIME_FAILURE_FITNESS) is True
-    assert AlgorithmEvaluator.is_failure(AlgorithmEvaluator.TIMEOUT_FAILURE_FITNESS) is True
-    assert AlgorithmEvaluator.is_failure(float("-inf")) is True
-    assert AlgorithmEvaluator.is_failure(float("nan")) is True
+    assert CandidateEvaluationService.is_failure(CandidateEvaluationService.FAILURE_FITNESS) is True
+    assert CandidateEvaluationService.is_failure(CandidateEvaluationService.RUNTIME_FAILURE_FITNESS) is True
+    assert CandidateEvaluationService.is_failure(CandidateEvaluationService.TIMEOUT_FAILURE_FITNESS) is True
+    assert CandidateEvaluationService.is_failure(float("-inf")) is True
+    assert CandidateEvaluationService.is_failure(float("nan")) is True
 
-    assert AlgorithmEvaluator.is_failure(0.0) is False
-    assert AlgorithmEvaluator.is_failure(-0.05) is False
-    assert AlgorithmEvaluator.is_failure(-1000.0) is False
-    assert AlgorithmEvaluator.is_failure(-1e6) is False
+    assert CandidateEvaluationService.is_failure(0.0) is False
+    assert CandidateEvaluationService.is_failure(-0.05) is False
+    assert CandidateEvaluationService.is_failure(-1000.0) is False
+    assert CandidateEvaluationService.is_failure(-1e6) is False
 
 
 def test_evaluate_successful_candidate():
     """Verify evaluation of an optimal candidate code."""
     problem = DummyProblem()
-    evaluator = AlgorithmEvaluator(problem=problem, budget=100)
+    evaluator = build_candidate_evaluation_service(problem=problem, budget=100)
 
     code = """
 import numpy as np
@@ -100,7 +109,7 @@ class OptimumFinder:
 def test_evaluate_out_of_bounds_candidate():
     """Verify that candidate returning best_x outside domain bounds is penalized."""
     problem = DummyProblem()
-    evaluator = AlgorithmEvaluator(problem=problem, budget=100)
+    evaluator = build_candidate_evaluation_service(problem=problem, budget=100)
 
     code = """
 import numpy as np
@@ -115,7 +124,7 @@ class OutOfBoundsSearch:
     result = evaluator.evaluate(code=code, name="OutOfBoundsSearch")
 
     assert result.is_failure is True
-    assert result.fitness_score == AlgorithmEvaluator.RUNTIME_FAILURE_FITNESS
+    assert result.fitness_score == CandidateEvaluationService.RUNTIME_FAILURE_FITNESS
     assert result.metadata.error.error_type == "ValueError"
     assert "outside search space bounds" in (result.metadata.error.error_message or "")
 
@@ -123,7 +132,7 @@ class OutOfBoundsSearch:
 def test_evaluate_dimension_mismatch():
     """Verify that candidate returning best_x of incorrect dimension is penalized."""
     problem = DummyProblem()
-    evaluator = AlgorithmEvaluator(problem=problem, budget=100)
+    evaluator = build_candidate_evaluation_service(problem=problem, budget=100)
 
     code = """
 import numpy as np
@@ -138,7 +147,7 @@ class DimMismatchSearch:
     result = evaluator.evaluate(code=code, name="DimMismatchSearch")
 
     assert result.is_failure is True
-    assert result.fitness_score == AlgorithmEvaluator.RUNTIME_FAILURE_FITNESS
+    assert result.fitness_score == CandidateEvaluationService.RUNTIME_FAILURE_FITNESS
     assert result.metadata.error.error_type == "ValueError"
     assert "expected problem dimension" in (result.metadata.error.error_message or "")
 
@@ -146,7 +155,7 @@ class DimMismatchSearch:
 def test_evaluate_runtime_error_feedback():
     """Verify that candidate throwing a runtime error generates structured diagnostics and code context."""
     problem = DummyProblem()
-    evaluator = AlgorithmEvaluator(problem=problem, budget=100)
+    evaluator = build_candidate_evaluation_service(problem=problem, budget=100)
 
     code = """
 class CrashingSearch:
@@ -157,7 +166,7 @@ class CrashingSearch:
     result = evaluator.evaluate(code=code, name="CrashingSearch")
 
     assert result.is_failure is True
-    assert result.fitness_score == AlgorithmEvaluator.RUNTIME_FAILURE_FITNESS
+    assert result.fitness_score == CandidateEvaluationService.RUNTIME_FAILURE_FITNESS
     assert result.metadata.error.error_type == "ZeroDivisionError"
     assert "division by zero" in (result.metadata.error.error_message or "")
     assert "line   4:" in result.code_context
@@ -166,7 +175,7 @@ class CrashingSearch:
 def test_stagnation_detection_and_meta_feedback():
     """Verify that consecutive failures trigger stagnation detection."""
     problem = DummyProblem()
-    evaluator = AlgorithmEvaluator(problem=problem, budget=100, stagnation_threshold=2)
+    evaluator = build_candidate_evaluation_service(problem=problem, budget=100, stagnation_threshold=2)
 
     crashing_code = """
 class CrashingSearch:

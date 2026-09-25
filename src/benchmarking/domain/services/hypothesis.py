@@ -173,10 +173,6 @@ class HypothesisTestingEngine:
             df_pairwise["p-adjusted"] = np.nan
             df_pairwise["Significant (FDR)"] = False
 
-        # Aliases for notebook compatibility
-        df_pairwise["p-value-adj"] = df_pairwise["p-adjusted"]
-        df_pairwise["FDR_Sig"] = df_pairwise["Significant (FDR)"]
-
         def get_outcome(row: pd.Series) -> str:
             if not bool(row["Significant (FDR)"]):
                 return "Tie"

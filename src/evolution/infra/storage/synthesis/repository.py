@@ -18,7 +18,7 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
-from evolution.infra.storage.base import SynthesisRepository
+from evolution.application.interfaces.repository import SynthesisRepository
 from shared.database.tables import ErrorLogORM, ExperimentORM, IterationORM
 
 

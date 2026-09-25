@@ -92,9 +92,9 @@ class EvaluationLogger:
     ) -> None:
         """Logs the start of an evaluation condition."""
         noise_label = (
-            f"{Colors.GREEN}clean (σ=0.0){Colors.RESET}"
+            f"{Colors.GREEN}σ={noise_std:g}{Colors.RESET}"
             if noise_std == 0.0
-            else f"{Colors.BRIGHT_YELLOW}noisy (σ={noise_std}){Colors.RESET}"
+            else f"{Colors.BRIGHT_YELLOW}σ={noise_std:g}{Colors.RESET}"
         )
         p_name = f" ({problem_name})" if problem_name else ""
         icon = "🏆" if solver_type.lower() == "champion" else "⚙️"
@@ -103,7 +103,7 @@ class EvaluationLogger:
             f"\n{Colors.BOLD}{Colors.BRIGHT_BLUE}[{index}/{total}]{Colors.RESET} "
             f"{icon} {Colors.BOLD}{solver_type.title()}:{Colors.RESET} {Colors.BRIGHT_CYAN}{solver_name}{Colors.RESET} | "
             f"{Colors.BOLD}Dim:{Colors.RESET} {dim}D | "
-            f"{Colors.BOLD}Noise:{Colors.RESET} {noise_label} | "
+            f"{Colors.BOLD}Noise level:{Colors.RESET} {noise_label} | "
             f"{Colors.BOLD}Problem:{Colors.RESET} {Colors.BRIGHT_MAGENTA}f{problem_id}{p_name}{Colors.RESET}"
         )
 
@@ -119,28 +119,28 @@ class EvaluationLogger:
     ) -> None:
         """Log the clean objective, known optimum, and objective-gap error for a trial."""
         if best_clean < float("inf"):
-            err_str = f"{Colors.BRIGHT_GREEN}{best_clean:>24,.12f}{Colors.RESET}"
+            err_str = f"{Colors.BRIGHT_GREEN}{best_clean:.3f}{Colors.RESET}"
         else:
-            err_str = f"{Colors.BRIGHT_RED}{'FAILED (inf)':>24}{Colors.RESET}"
+            err_str = f"{Colors.BRIGHT_RED}FAILED (inf){Colors.RESET}"
 
         score_details = ""
         if best_objective is not None and true_optimum is not None:
             score_details = (
-                f"f-opt: {Colors.BRIGHT_MAGENTA}{true_optimum:>24,.12f}{Colors.RESET} | "
-                f"Best f: {Colors.BRIGHT_CYAN}{best_objective:>24,.12f}{Colors.RESET} | "
+                f"f-opt: {Colors.BRIGHT_MAGENTA}{true_optimum:.3f}{Colors.RESET} | "
+                f"Best f: {Colors.BRIGHT_CYAN}{best_objective:.3f}{Colors.RESET} | "
             )
 
         self.logger.info(
-            f"  {Colors.GRAY}•{Colors.RESET} {Colors.BOLD}⚡ Trial {trial_idx:2d}/{total_trials:2d}{Colors.RESET} | "
+            f"  {Colors.GRAY}•{Colors.RESET} {Colors.BOLD}⚡ Trial {trial_idx}/{total_trials}{Colors.RESET} | "
             f"{score_details}Δy Error: {err_str} | "
-            f"Evals: {Colors.CYAN}{evals_used:>7,}{Colors.RESET} | "
-            f"Time: {Colors.YELLOW}{runtime:>5.2f}s{Colors.RESET}"
+            f"Evals: {Colors.CYAN}{evals_used:,}{Colors.RESET} | "
+            f"Time: {Colors.YELLOW}{runtime:.3f}s{Colors.RESET}"
         )
 
     def cached(self, runs_count: int, median_error: float | None) -> None:
         """Logs a cache-hit notice."""
         err_str = (
-            f"{Colors.BRIGHT_GREEN}{median_error:,.12f}{Colors.RESET}"
+            f"{Colors.BRIGHT_GREEN}{median_error:.3f}{Colors.RESET}"
             if median_error is not None
             else "N/A"
         )
@@ -159,7 +159,7 @@ class EvaluationLogger:
     def condition_complete(self, n_runs: int, median_error: float | None) -> None:
         """Logs completion of a condition."""
         err_str = (
-            f"{Colors.BRIGHT_GREEN}{median_error:,.12f}{Colors.RESET}"
+            f"{Colors.BRIGHT_GREEN}{median_error:.3f}{Colors.RESET}"
             if median_error is not None
             else "N/A"
         )
