@@ -77,10 +77,6 @@ model variant, benchmark functions, dimensions, noise levels, execution
 limits, and benchmark repetitions are experimental parameters and are
 specified in Chapter~\ref{chap:experiments}.
 
-This separation makes it possible to reproduce the same implementation
-architecture using different experimental configurations without changing the
-underlying synthesis procedure.
-
 
 %==============================================================================
 \section{Problem and Evaluation Setup}
@@ -99,14 +95,6 @@ behave when the fitness information available during search is uncertain
 without changing the underlying optimization problem itself. Stochasticity is
 therefore introduced at the objective interface rather than by modifying the
 generated optimization algorithm.
-
-The evaluation framework maintains two different roles for objective
-information. The values exposed through the objective interface determine the
-information available to the optimizer during its search. The clean benchmark
-objective remains available internally to the surrounding framework. Under
-stochastic evaluation, the generated optimizer therefore searches using noisy
-observations without receiving either the clean objective value or information
-about the known optimum.
 
 The outer framework deliberately retains access to the clean objective because
 the methodology separates two levels of optimization. At the inner level, a
@@ -642,10 +630,6 @@ algorithms, their observed performance, and execution failures. This allows
 the model to modify previously generated approaches rather than generating
 every candidate independently.
 
-The incumbent provides the current reference algorithm, while the evaluation
-history provides additional information about approaches that have already
-been explored.
-
 The LLM uses this context to generate a new candidate. The model can modify an
 existing algorithm or produce a substantially different search procedure.
 Changes can therefore affect the complete search strategy rather than only
@@ -664,10 +648,6 @@ run. It is generated using the same task, prompt configuration, and program
 interface as subsequent candidates. Once this candidate has been executed,
 its clean diagnostic evaluation establishes the reference against which later
 children are compared.
-
-The synthesis controller therefore begins the elitist $(1+1)$ process with a
-valid incumbent rather than comparing a child against an uninitialized
-parent.
 
 The synthesis run terminates according to the configured stopping criteria.
 These criteria include the maximum permitted synthesis generations and/or the
@@ -785,70 +765,26 @@ an externally supplied function that can be queried at candidate points. The
 optimizer must construct its search strategy from the values returned by these
 queries.
 
-The worker process also provides a boundary between candidate execution and
-the rest of the synthesis framework. A candidate that enters an infinite
-loop, exceeds the permitted runtime, or encounters a runtime failure can be
-terminated without stopping the complete synthesis process.
+The worker process provides an execution boundary between candidate evaluation and the rest of the synthesis framework. Candidate execution is subject to a maximum runtime, and runtime failures are recorded so that they do not normally terminate the complete synthesis process. Where appropriate, diagnostic information is included in the context supplied to later generations, allowing the model to use execution feedback when revising a program, consistent with the feedback-driven design of LLaMEA \cite{LLaMEA2024}.
 
-The execution result can therefore be classified as either a valid
-optimization result or a failure with corresponding diagnostic information.
+Let $T_{\mathrm{exec}}$ denote the maximum permitted execution time for one candidate. If execution exceeds this limit, the candidate is classified as a timeout. The execution time limit is treated as an implementation constraint rather than as an optimization objective; its experimental value is reported in Chapter~\ref{chap:experiments}.
 
-Let $T_{\mathrm{exec}}$ denote the maximum permitted execution time for one
-candidate. If the candidate does not terminate within this limit, the worker
-is terminated and the candidate is classified as a timeout.
+Generated algorithms may fail because of invalid numerical operations, incompatible array dimensions, incorrect use of the objective interface, undefined variables, or other implementation errors. These failures are captured during candidate evaluation and recorded with diagnostic information. They are handled as candidate failures rather than being allowed to terminate the complete synthesis process.
 
-The execution time limit is treated as an implementation constraint rather
-than as an optimization objective. The value used in the experiments is
-reported in Chapter~\ref{chap:experiments}.
+For the standard return format \texttt{(best\_x, best\_y)}, the evaluation environment checks that \texttt{best\_x} has the expected dimension and lies within the problem bounds, allowing a small numerical tolerance. Non-finite coordinates fail this bounds check. The environment then evaluates \texttt{best\_x} on the clean objective and rejects a non-finite objective value. The execution interface also accepts a scalar-only return; in that case, there is no coordinate vector to validate, and the scalar is checked for finiteness.
 
-Runtime failures are handled within the same evaluation stage. A generated
-algorithm can fail because of invalid numerical operations, incompatible
-array dimensions, incorrect use of the objective interface, undefined
-variables, or other implementation errors.
-
-Such failures are recorded rather than terminating the complete synthesis
-process. Where appropriate, the corresponding error information is included
-in the context supplied to later generations. This allows the model to use
-execution feedback when modifying a previously generated program, consistent
-with the feedback-driven design of LLaMEA \cite{LLaMEA2024}.
-
-The execution environment also checks the numerical validity of the returned
-solution. Invalid returned solutions, including non-finite coordinates or
-coordinates outside the allowed search domain, are rejected rather than being
-treated as successful optimization results.
-
-The objective evaluation budget is defined in terms of calls to the supplied
-objective interface. Let $B$ denote the available budget and let
-$N_{\mathrm{eval}}$ denote the number of objective evaluations. The execution
-contract requires
+Let $B$ denote the configured objective-evaluation budget and let $N_{\mathrm{eval}}$ denote the number of objective evaluations. The intended protocol is
 
 \begin{equation}
 N_{\mathrm{eval}} \leq B.
 \label{eq:evaluation_budget}
 \end{equation}
 
-Every invocation of \texttt{problem(x)} counts as one objective evaluation,
-including repeated evaluations of the same point.
+Each actual evaluation through \texttt{problem(x)} counts, including repeated evaluations of the same point. The generated optimizer is instructed to maintain an internal evaluation counter and stop objective queries before exceeding the configured budget. The common prompt example performs an initial evaluation and sets its counter to one before beginning further search.
 
-The generated optimizer is responsible for maintaining its internal
-evaluation counter and stopping objective queries before the configured
-budget is exceeded.
+This inequality is an intended protocol, not a strict runtime guarantee in the current implementation. Although the BBOB wrapper can enforce a hard cap when a budget is set on the problem, the synthesis path does not currently set that cap. The executor records the observed evaluation count and warns about substantial overruns, but does not reject every over-budget candidate.
 
-The initial point shown in the common prompt example also consumes one
-objective evaluation. An implementation that begins with this initial
-evaluation must therefore count it before performing additional search
-operations.
-
-The returned \texttt{best\_x} is the coordinate vector selected by the
-generated optimizer according to its internal search logic. The corresponding
-\texttt{best\_y} is the scalar objective value maintained by the optimizer.
-
-Under stochastic evaluation, \texttt{best\_y} can correspond to a noisy
-observation. The outer synthesis framework therefore does not use the
-returned \texttt{best\_y} directly as its algorithm-level selection
-criterion. Instead, it evaluates the returned \texttt{best\_x} using the
-clean objective according to the procedure defined in
-Section~\ref{subsec:deterministic_stochastic}.
+For the standard return format, \texttt{best\_x} is the coordinate vector selected by the generated optimizer, and \texttt{best\_y} is the objective value it reports for that vector. Under stochastic evaluation, \texttt{best\_y} may reflect a noisy observation. The outer synthesis framework therefore uses a clean reevaluation of \texttt{best\_x} as the algorithm-level selection criterion, following the procedure described in Section~\ref{subsec:deterministic_stochastic}. For a scalar-only return, no \texttt{best\_x} is available for clean reevaluation, so the framework uses the returned scalar value instead.
 
 
 %==============================================================================
@@ -1710,17 +1646,11 @@ The independent evaluation executes these fixed synthesized optimizers using a
 common benchmark protocol. The selected established optimization methods are
 evaluated under the corresponding benchmark conditions as reference methods.
 
-This separation provides a common basis for comparing algorithms generated
-under different synthesis configurations.
-
-It also enables cross-environment evaluation. An algorithm synthesized using
+Independent benchmarking also enables cross-environment evaluation. An
+algorithm synthesized using
 deterministic objective observations can subsequently be evaluated under
 stochastic fitness. Likewise, an algorithm synthesized under stochastic
 fitness can be evaluated on the corresponding clean objective.
-
-This makes it possible to examine whether search mechanisms generated under
-one synthesis environment remain effective when the evaluation environment
-changes.
 
 No information from the independent benchmark stage is returned to the
 completed synthesis process. The benchmark results therefore cannot modify
@@ -1750,9 +1680,6 @@ Under stochastic conditions, a synthesized optimizer interacts with the
 stochastic objective through the same type of objective interface used during
 synthesis. Final solution quality is subsequently assessed using the
 corresponding clean objective.
-
-The benchmark stage therefore retains the same distinction between search
-observations and diagnostic assessment used during synthesis.
 
 The evaluated optimizer receives only the observations permitted by the
 configured benchmark environment. The surrounding benchmark framework
