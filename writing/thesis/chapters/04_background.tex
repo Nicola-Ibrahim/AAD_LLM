@@ -371,7 +371,6 @@ AutoEP \cite{AutoEP2026} & Hyperparameter control & Online landscape analysis an
 LLaMEA-SAGE \cite{LLaMEASAGE2026} & Optimizer code & Performance and structural features of source code & Automated optimizer design \\
 LLaMEA-BO \cite{LLaMEABO2025} & Bayesian optimizer code & Benchmark scores & Bayesian optimization benchmarks \\
 LLaMEA \cite{LLaMEA2024} & Optimizer code & Benchmark scores and execution feedback & Noiseless BBOB functions \\
-\textbf{This thesis} & \textbf{Optimizer code} & \textbf{Performance and execution feedback} & \textbf{Clean and noisy BBOB evaluation} \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -408,12 +407,11 @@ understanding the link between generated algorithm behavior and performance.
 These approaches suggest that algorithm synthesis can use information beyond
 a single scalar fitness value.
 
-Despite these developments, the evaluation setting is an important common
-point across much of this literature. The reported experiments in Table~\ref{tab:llm_aad_comparison} differ in
-task and evaluation protocol. The papers reviewed here do not establish how
-the LLaMEA-style choice of a parent program behaves when objective evaluations
-used to score generated optimizers are noisy. This is a specific open question
-for the present study, not a claim that all earlier AAD work is deterministic.
+The reported experiments in Table~\ref{tab:llm_aad_comparison} differ in
+task and evaluation protocol. The studies provide evidence about algorithm
+generation and feedback, but do not establish how generated continuous
+optimizers behave when objective observations during search are noisy. This
+is a more specific question than whether an LLM can produce executable code.
 
 %------------------------------------------------------------------------------
 \section{Selection Under Noise}\label{sec:selection_under_noise}
@@ -542,16 +540,17 @@ One AOCC value measures one optimizer run on one benchmark instance. To
 score a generated algorithm, the original LLaMEA experiment first averaged
 over 24 BBOB functions and three instances per function, and then averaged
 the resulting suite scores over five independent runs \cite{LLaMEA2024}.
-These counts describe the original experiment, not the AOCC definition or a
-required protocol for this thesis. Let $\widehat{F}(a)$ denote the resulting
+These counts describe the original experiment, not the AOCC definition. Let
+$\widehat{F}(a)$ denote the resulting
 estimated mean AOCC for algorithm $a$; higher values indicate better anytime
 performance. The benchmark functions in the original experiment were
 noiseless, although runs could still vary because the optimizer itself was
-stochastic. In this thesis's benchmark setting, the known optimum $f(x^*)$
-is available to the external evaluator for measuring precision. It is not
-provided to the candidate optimizer through its objective-function interface.
+stochastic. The known optimum $f(x^*)$ is used by the evaluator to calculate
+the precision measure; it is not an objective value supplied to the
+candidate optimizer during its search.
 
-Selection then follows the $(1+1)$ replacement rule:
+In the original LLaMEA experiment, selection can be written as the
+$(1+1)$ replacement rule:
 \begin{equation}\label{eq:one_plus_one_selection}
 \mathcal{A}_{\text{parent}}^{(g+1)} =
 \begin{cases}
@@ -560,9 +559,11 @@ Selection then follows the $(1+1)$ replacement rule:
 \end{cases}
 \end{equation}
 
-Here $\widehat{F}$ is the estimated aggregate AOCC, so higher is better.
+Here $\widehat{F}$ is the original experiment's estimated aggregate AOCC,
+so higher is better. The equation describes the published selection rule,
+not a necessary scoring rule for every application of the LLaMEA framework.
 The LLaMEA paper describes both $(1+1)$ and $(1,1)$ variants; the elitist
-$(1+1)$ case is the one used for the selection argument in this thesis
+$(1+1)$ case illustrates how evaluation affects the retained program
 \cite{LLaMEA2024}. The important point here is that one candidate is retained
 as the parent, and this candidate becomes the starting point for the next
 generation.
@@ -579,56 +580,44 @@ original maximization formulation. The feedback therefore allows the LLM to
 use both performance information and execution errors when modifying or
 redesigning an algorithm.
 
-This feedback mechanism is relevant when considering LLaMEA under stochastic
-fitness. The paper evaluates optimizers on noiseless BBOB functions, while algorithm
-runs can vary owing to stochastic optimizer behavior
-\cite{LLaMEA2024}. Adding objective-function noise introduces another source
-of variability into their scores. If the same elitist
-$(1+1)$ selection mechanism is applied to noisy evaluations, an inferior
-child can occasionally obtain a more favorable observed fitness than its
-parent. Such a child may then be accepted as the new incumbent even though
-its underlying performance is worse.
+This feedback mechanism is relevant to LLaMEA under stochastic fitness. The
+original paper evaluates optimizers on noiseless BBOB functions, although
+individual runs can vary because an optimizer may be stochastic
+\cite{LLaMEA2024}. Adding noise to the objective values observed during a
+generated optimizer's search introduces another source of variation. The
+noise can change candidate comparisons, the search trajectory, and the point
+the algorithm returns.
 
-This creates a potential failure mode in the evolutionary search. Let
-$\mathcal{A}_p$ denote the current parent algorithm and
-$\mathcal{A}_c$ the generated child. Their observed performances can be
-written as
+There is a second, distinct possibility: an outer controller might select
+generated programs directly using noisy performance measurements. In that
+case, a child with worse expected performance can receive a favorable score
+in one evaluation and displace a better parent. To describe this general
+problem, let $F(\mathcal{A})$ denote an algorithm's expected score under a
+specified evaluation protocol. A measured score can be written as
 \begin{equation}
 \widehat{F}(\mathcal{A}) =
 F(\mathcal{A})+\epsilon_{\mathcal{A}},
 \end{equation}
-where $F(\mathcal{A})$ is an expected score under a stated evaluation
-protocol and $\epsilon_{\mathcal{A}}$ is the deviation of a measured score
-from that expectation. This is a conceptual model: for finite, clipped AOCC,
-score errors need not follow the same additive distribution as individual
-objective observations.
+where $\epsilon_{\mathcal{A}}$ is the deviation of that particular measurement
+from the expected score. This identity makes no assumption that algorithm-level
+score errors have the same distribution as noise in individual objective
+observations. It is a general conceptual model, not an additional AOCC
+formula or a claim about how this thesis computes its score.
 
-Under a favorable noise realization, a child with lower underlying
-performance can therefore appear better than its parent. Strict elitist
-selection can then replace the parent with this statistically favored
-candidate. Since the selected candidate becomes the incumbent supplied to
-the LLM for subsequent generations, the effect of the incorrect selection
-can extend beyond the evaluation in which the ranking error occurred.
+When selection uses such one-run scores, a fortunate evaluation can cause a
+child with lower expected performance to become the incumbent. The LLM may
+then modify that program in subsequent generations. If a later run does not
+reproduce the favorable outcome, the earlier selection can still have
+changed the trajectory of program generation. This illustrates why
+variation in program-level scores matters in an elitist search.
 
-In a program-space search such as LLaMEA, an incorrect selection can influence
-which algorithmic structure is used as the basis for subsequent modifications.
-If later evaluations do not reproduce the same favorable stochastic
-realization, the selected algorithm may no longer appear as strong as it did
-when it was accepted. The search has nevertheless already moved to a
-different incumbent. This illustrates how stochastic evaluation can affect
-not only the assessment of an individual algorithm, but also the subsequent
-trajectory of the algorithm-generation process.
-
-The distinction between algorithm evaluation and algorithm synthesis is
-important here. Evaluating an already generated algorithm under noise
-measures how its performance changes when the fitness signal is stochastic.
-Running the synthesis process itself under noisy feedback introduces an
-additional source of uncertainty: the stochastic fitness signal can influence
-which generated algorithms are retained and subsequently used to guide
-further LLM generations. The former therefore concerns the robustness of a
-fixed algorithm, whereas the latter also concerns the reliability of the
-algorithm-generation process under stochastic selection. This thesis
-investigates the latter setting.
+The distinction between evaluating a fixed optimizer and synthesizing one is
+important. In the former, noisy fitness affects the search over numerical
+solutions. In a feedback-driven generation process, its effects can also
+reach later program generations through the returned solutions and their
+assessment. Directly selecting on noisy returned values and separately
+assessing returned points are different protocols; the Methodology chapter
+specifies which protocol is used in this thesis.
 
 %------------------------------------------------------------------------------
 \section{Research Gap}\label{sec:research_gap}
@@ -656,23 +645,17 @@ execution feedback to guide later generations \cite{LLaMEA2024}.
 
 These two areas have not been studied to the same extent in combination. The
 LLM-based AAD frameworks reviewed in this chapter primarily report evaluations
-under deterministic or otherwise controlled benchmark conditions. These papers demonstrate different forms of performance, structural,
-reflective, and task-specific feedback. The reviewed LLaMEA studies do not
-directly establish how objective-function noise changes program selection
-during the generation process. The question is therefore limited to that
-setting and the evidence reviewed here.
+under deterministic or otherwise controlled benchmark conditions. They use
+different forms of performance, structural, reflective, and task-specific
+feedback. They do not establish how noisy objective observations during a
+generated optimizer's search affect the quality and behavior of the
+algorithms produced by a feedback-driven generation process.
 
-This creates a different problem from conventional noisy optimization. For an
-established optimizer, noisy fitness affects the search over numerical
-solutions. In an LLM-based AAD system, the same noisy feedback can also affect
-the search over algorithmic programs. An incorrect selection can change the
-parent program and, as a result, influence all subsequent generations.
-
-A favorable noise realization can cause an inferior generated algorithm to
-become the incumbent. Subsequent generations are then conditioned on this
-algorithm, so the effect of stochastic evaluation can extend beyond the
-assessment of a single candidate. The resulting behavior cannot be inferred
-from the deterministic performance of the generated heuristics alone.
+For an established optimizer, noisy fitness can change its search over
+numerical solutions. In an LLM-based AAD process, altered search outcomes
+may also affect the feedback used to develop later programs. The resulting
+behavior cannot be inferred from evaluations of fixed optimizers on
+deterministic objectives alone.
 
 It therefore remains insufficiently characterized whether LLM-generated
 continuous optimization heuristics remain effective under stochastic fitness
