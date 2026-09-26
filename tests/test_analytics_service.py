@@ -25,7 +25,7 @@ from benchmarking.infra.storage.config_repository import EvaluationConfigReposit
 from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
 from benchmarking.infra.io.markdown_report_writer import MarkdownFileWriter
 from shared.config import DATA_DIR, RESULTS_DIR
-from shared.infra.database.engine import create_db_session_factory
+from shared.infra.database import Database
 
 
 class TestDomainTaxonomy:
@@ -60,19 +60,31 @@ class TestDomainResolvers:
     def test_clean_model_labels_dynamic(self):
         assert (
             self.get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m.gguf")
-            == "Qwen2.5-Coder-14B"
+            == "Qwen2.5-Coder-14B-Instruct"
         )
         assert (
-            self.get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m") == "Qwen2.5-Coder-14B"
+            self.get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m")
+            == "Qwen2.5-Coder-14B-Instruct"
         )
         assert (
             self.get_clean_model_label("qwen2.5-coder-7b-instruct-q4_k_m.gguf")
-            == "Qwen2.5-Coder-7B"
+            == "Qwen2.5-Coder-7B-Instruct"
         )
-        assert self.get_clean_model_label("deepseek-r1-distill-qwen-70b.gguf") == "DeepSeek-70B"
-        assert self.get_clean_model_label("meta-llama-3-8b-instruct") == "Llama-3.1-8B"
         assert (
-            self.get_clean_model_label("Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf") == "Llama-3.1-8B"
+            self.get_clean_model_label("DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf")
+            == "DeepSeek-Coder-V2-Lite-Instruct"
+        )
+        assert (
+            self.get_clean_model_label("deepseek-r1-distill-qwen-70b.gguf")
+            == "DeepSeek-R1-Distill-Qwen-70B"
+        )
+        assert (
+            self.get_clean_model_label("meta-llama-3-8b-instruct")
+            == "Meta-Llama-3.1-8B-Instruct"
+        )
+        assert (
+            self.get_clean_model_label("Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf")
+            == "Meta-Llama-3.1-8B-Instruct"
         )
         # Dynamic fallback for unregistered models without hardcoding
         assert self.get_clean_model_label("mistral-7b-instruct") == "Mistral-7B"
@@ -80,11 +92,11 @@ class TestDomainResolvers:
     def test_format_db_solver_name(self):
         assert (
             self.format_db_solver_name("qwen2.5-coder-14b-instruct-q4_k_m.gguf", "baseline")
-            == "Qwen2.5-Coder-14B / baseline"
+            == "Qwen2.5-Coder-14B-Instruct / baseline"
         )
         assert (
             self.format_db_solver_name("qwen2.5-coder-70b-instruct.gguf", "thinking")
-            == "Qwen2.5-Coder-70B / thinking"
+            == "Qwen2.5-Coder-70B-Instruct / thinking"
         )
 
     def test_get_model_slug(self):
@@ -103,11 +115,22 @@ class TestDomainResolvers:
 
         # LLM structured folders
         assert (
-            self.resolve_folder_solver_name("qwen_14b_baseline") == "Qwen2.5-Coder-14B / baseline"
+            self.resolve_folder_solver_name("qwen_14b_baseline")
+            == "Qwen2.5-Coder-14B-Instruct / baseline"
         )
-        assert self.resolve_folder_solver_name("qwen_7b_guided") == "Qwen2.5-Coder-7B / guided"
         assert (
-            self.resolve_folder_solver_name("qwen_70b_thinking") == "Qwen2.5-Coder-70B / thinking"
+            self.resolve_folder_solver_name(
+                "deepseek_coder_v2_lite_instruct_q4_k_m_baseline_noisy"
+            )
+            == "DeepSeek-Coder-V2-Lite-Instruct / baseline (noise-adapted)"
+        )
+        assert (
+            self.resolve_folder_solver_name("qwen_7b_guided")
+            == "Qwen2.5-Coder-7B-Instruct / guided"
+        )
+        assert (
+            self.resolve_folder_solver_name("qwen_70b_thinking")
+            == "Qwen2.5-Coder-70B-Instruct / thinking"
         )
 
 
@@ -180,6 +203,56 @@ class TestDomainEngines:
         assert len(med) == 10
         assert np.all(med >= q25)
         assert np.all(q75 >= med)
+
+    def test_condition_and_aggregate_curve_queries(self, ecdf_engine):
+        benchmark_data = EvaluationDataset()
+        traces = [
+            RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 0.1])),
+            RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([8.0, 0.2])),
+        ]
+        for problem_id in (1, 8):
+            condition = EvaluationCondition(dim=2, noise_std=0.0, problem_id=problem_id)
+            for trace in traces:
+                benchmark_data.add_run(condition, "CMA-ES", trace)
+
+        eval_grid = np.array([1.0, 10.0])
+        targets = np.array([0.15])
+        trajectory = ecdf_engine.get_convergence_trajectory(
+            benchmark_data,
+            dim=2,
+            noise_std=0.0,
+            problem_id=1,
+            solver="CMA-ES",
+            eval_grid=eval_grid,
+        )
+        assert trajectory is not None
+        assert trajectory["median"] == pytest.approx([9.0, 0.15])
+
+        curve = ecdf_engine.get_target_ecdf_curve(
+            benchmark_data,
+            targets,
+            dim=2,
+            noise_std=0.0,
+            problem_id=1,
+            solver="CMA-ES",
+            eval_grid=eval_grid,
+        )
+        assert curve == pytest.approx([0.0, 0.5])
+        assert ecdf_engine.get_aggregate_target_ecdf_curve(
+            benchmark_data,
+            targets,
+            dim=2,
+            noise_std=0.0,
+            solver="CMA-ES",
+            eval_grid=eval_grid,
+        ) == pytest.approx(curve)
+        assert ecdf_engine.get_aggregate_convergence(
+            benchmark_data,
+            dim=2,
+            noise_std=0.0,
+            solver="missing solver",
+            eval_grid=eval_grid,
+        ) is None
 
     def test_compute_auc_ecdf_matrix(self, ecdf_engine):
         bench_data = EvaluationDataset()
@@ -260,7 +333,7 @@ class TestDomainEngines:
 
 class TestApplicationServicesIntegration:
     def test_selection_service(self):
-        session_factory = create_db_session_factory()
+        session_factory = Database().session_factory
         sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
         summary, count = sqlite_repo.get_experiment_balance()
         if (DATA_DIR / "db.sqlite3").exists():
@@ -268,7 +341,7 @@ class TestApplicationServicesIntegration:
             assert count >= 0
 
     def test_audit_service(self):
-        session_factory = create_db_session_factory()
+        session_factory = Database().session_factory
         sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
         config_repo = EvaluationConfigRepository()
         service = EvaluationAuditService(
@@ -293,7 +366,7 @@ class TestApplicationServicesIntegration:
             assert cov_pct >= 0.0
 
     def test_statistical_service(self):
-        session_factory = create_db_session_factory()
+        session_factory = Database().session_factory
         sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
         trace_repo = IOHTraceReader(RESULTS_DIR / "ioh_traces")
         service = AnalysisData(
@@ -311,7 +384,7 @@ class TestApplicationServicesIntegration:
 
 class TestConcreteInfraRepositories:
     def test_sqlite_synthesis_read_repository(self):
-        session_factory = create_db_session_factory()
+        session_factory = Database().session_factory
         repo = SQLiteSynthesisReadRepository(session_factory)
         if (DATA_DIR / "db.sqlite3").exists():
             df, count = repo.get_experiment_balance()
@@ -320,7 +393,7 @@ class TestConcreteInfraRepositories:
             assert isinstance(conditions, list)
 
     def test_champions_read_repository(self):
-        session_factory = create_db_session_factory()
+        session_factory = Database().session_factory
         repo = ChampionsReadRepository(session_factory)
         if (DATA_DIR / "db.sqlite3").exists():
             service = ChampionSelectionService(champions_repo=repo)

@@ -20,7 +20,7 @@ from evolution.domain.services.noise_strategy import NoNoiseStrategy
 from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.problems.factory import BBOBProblemFactory
 from evolution.infra.execution.candidate_executor import create_candidate_executor
-from shared.infra.database.engine import create_db_session_factory
+from shared.infra.database import Database
 from shared.config import PROJECT_ROOT
 from benchmarking.infra.storage.model_registry import configured_model_names
 
@@ -103,7 +103,7 @@ target_noise_levels = [0.0]
         encoding="utf-8",
     )
 
-    session_factory = create_db_session_factory()
+    session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
     state_repo = EvaluationStateRepository(eval_dir=eval_dir)
@@ -158,7 +158,7 @@ target_noise_levels = [0.0]
         encoding="utf-8",
     )
 
-    session_factory = create_db_session_factory()
+    session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
     state_repo = EvaluationStateRepository(eval_dir=eval_dir)
@@ -269,7 +269,7 @@ target_noise_levels = [0.0]
         encoding="utf-8",
     )
 
-    session_factory = create_db_session_factory()
+    session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
     trace_repo = IOHTraceReader(eval_dir=eval_dir)
@@ -462,7 +462,7 @@ target_noise_levels = [0.0]
         encoding="utf-8",
     )
 
-    session_factory = create_db_session_factory()
+    session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
     state_repo = EvaluationStateRepository(eval_dir=eval_dir)
@@ -668,7 +668,7 @@ target_noise_levels = [0.2]
         encoding="utf-8",
     )
 
-    session_factory = create_db_session_factory()
+    session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
     state_repo = EvaluationStateRepository(eval_dir=eval_dir)

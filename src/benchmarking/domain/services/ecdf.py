@@ -44,6 +44,25 @@ _AUC_GROUPING_DISPATCH: dict[str, Callable[[pd.DataFrame], pd.DataFrame]] = {
 class EcdfConvergenceEngine:
     """Computational engine for ECDF convergence, trapezoidal AUC integration, and trajectory statistics."""
 
+    @staticmethod
+    def _interpolate_runs(runs: list[RunTrace], eval_grid: np.ndarray) -> np.ndarray:
+        """Interpolate each run's incumbent objective values to a shared evaluation grid."""
+        interpolated: list[np.ndarray] = []
+        for run in runs:
+            if len(run.evaluations) == 0:
+                continue
+            incumbent = np.minimum.accumulate(run.raw_objectives)
+            interpolated.append(
+                np.interp(
+                    eval_grid,
+                    run.evaluations,
+                    incumbent,
+                    left=incumbent[0],
+                    right=incumbent[-1],
+                )
+            )
+        return np.asarray(interpolated)
+
     def compute_convergence_iqr(
         self,
         runs: list[RunTrace],
@@ -54,40 +73,26 @@ class EcdfConvergenceEngine:
         """Interpolate irregular run traces onto a uniform log/linear grid and compute Median, Q25, Q75."""
         if grid_points is not None:
             n_points = grid_points
-        if not runs:
-            grid = np.linspace(1, max_evals, n_points)
-            nan_arr = np.full(n_points, np.nan)
-            return grid, nan_arr, nan_arr, nan_arr
-
         eval_grid = np.logspace(0, np.log10(max_evals), n_points)
-        interpolated = []
-
-        for run in runs:
-            min_len = min(len(run.evaluations), len(run.raw_objectives))
-            if min_len == 0:
-                continue
-            evals = run.evaluations[:min_len]
-            raws = run.raw_objectives[:min_len]
-            cum_best = np.minimum.accumulate(raws)
-            y_interp = np.interp(
-                eval_grid,
-                evals,
-                cum_best,
-                left=cum_best[0],
-                right=cum_best[-1],
-            )
-            interpolated.append(y_interp)
-
-        if not interpolated:
-            grid = np.linspace(1, max_evals, n_points)
+        trajectories = self.compute_convergence_trajectory(runs, eval_grid)
+        if trajectories is None:
+            empty_grid = np.linspace(1, max_evals, n_points)
             nan_arr = np.full(n_points, np.nan)
-            return grid, nan_arr, nan_arr, nan_arr
+            return empty_grid, nan_arr, nan_arr, nan_arr
+        return eval_grid, trajectories["median"], trajectories["q25"], trajectories["q75"]
 
-        arr = np.array(interpolated)
-        medians = np.median(arr, axis=0)
-        q25 = np.percentile(arr, 25, axis=0)
-        q75 = np.percentile(arr, 75, axis=0)
-        return eval_grid, medians, q25, q75
+    def compute_convergence_trajectory(
+        self, runs: list[RunTrace], eval_grid: np.ndarray
+    ) -> dict[str, np.ndarray] | None:
+        """Summarize run-level incumbent trajectories by median and interquartile range."""
+        values = self._interpolate_runs(runs, eval_grid)
+        if values.size == 0:
+            return None
+        return {
+            "median": np.median(values, axis=0),
+            "q25": np.percentile(values, 25, axis=0),
+            "q75": np.percentile(values, 75, axis=0),
+        }
 
     def compute_trajectory_and_ecdf(
         self,
@@ -96,32 +101,10 @@ class EcdfConvergenceEngine:
         targets: np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Compute convergence trajectory (median, Q25, Q75) and BBOB Empirical Runtime ECDF curve."""
-        if not runs:
+        arr = self._interpolate_runs(runs, eval_grid)
+        if arr.size == 0:
             nan_arr = np.full(len(eval_grid), np.nan)
             return nan_arr, nan_arr, nan_arr, np.zeros(len(eval_grid))
-
-        interp_matrix = []
-        for run in runs:
-            min_len = min(len(run.evaluations), len(run.raw_objectives))
-            if min_len == 0:
-                continue
-            evals = run.evaluations[:min_len]
-            raws = run.raw_objectives[:min_len]
-            cum_best = np.minimum.accumulate(raws)
-            y_interp = np.interp(
-                eval_grid,
-                evals,
-                cum_best,
-                left=cum_best[0],
-                right=cum_best[-1],
-            )
-            interp_matrix.append(y_interp)
-
-        if not interp_matrix:
-            nan_arr = np.full(len(eval_grid), np.nan)
-            return nan_arr, nan_arr, nan_arr, np.zeros(len(eval_grid))
-
-        arr = np.array(interp_matrix)
         med = np.median(arr, axis=0)
         q25 = np.percentile(arr, 25, axis=0)
         q75 = np.percentile(arr, 75, axis=0)
@@ -130,6 +113,92 @@ class EcdfConvergenceEngine:
         # Proportion of (run, target) pairs solved at or before each evaluation step
         ecdf_curve = np.mean(arr[:, :, None] <= targets[None, None, :], axis=(0, 2))
         return med, q25, q75, ecdf_curve
+
+    def get_convergence_trajectory(
+        self,
+        benchmark_data: EvaluationDataset,
+        *,
+        dim: int,
+        noise_std: float,
+        problem_id: int,
+        solver: str,
+        eval_grid: np.ndarray,
+    ) -> dict[str, np.ndarray] | None:
+        """Return one solver's median and IQR trajectory for a benchmark condition."""
+        runs = benchmark_data.get_runs(dim, noise_std, problem_id, solver)
+        return self.compute_convergence_trajectory(runs, eval_grid)
+
+    def get_aggregate_convergence(
+        self,
+        benchmark_data: EvaluationDataset,
+        *,
+        dim: int,
+        noise_std: float,
+        solver: str,
+        eval_grid: np.ndarray,
+    ) -> dict[str, np.ndarray] | None:
+        """Average condition-level median/IQR trajectories over observed BBOB functions."""
+        trajectories = [
+            self.get_convergence_trajectory(
+                benchmark_data,
+                dim=dim,
+                noise_std=noise_std,
+                problem_id=problem_id,
+                solver=solver,
+                eval_grid=eval_grid,
+            )
+            for problem_id in benchmark_data.problem_ids
+        ]
+        available = [trajectory for trajectory in trajectories if trajectory is not None]
+        if not available:
+            return None
+        return {
+            key: np.nanmean([trajectory[key] for trajectory in available], axis=0)
+            for key in ("median", "q25", "q75")
+        }
+
+    def get_target_ecdf_curve(
+        self,
+        benchmark_data: EvaluationDataset,
+        target_evals: np.ndarray,
+        *,
+        dim: int,
+        noise_std: float,
+        problem_id: int,
+        solver: str,
+        eval_grid: np.ndarray,
+    ) -> np.ndarray | None:
+        """Return the empirical runtime ECDF for a solver and target set."""
+        runs = benchmark_data.get_runs(dim, noise_std, problem_id, solver)
+        if not runs:
+            return None
+        return self.compute_trajectory_and_ecdf(runs, eval_grid, target_evals)[3]
+
+    def get_aggregate_target_ecdf_curve(
+        self,
+        benchmark_data: EvaluationDataset,
+        target_evals: np.ndarray,
+        *,
+        dim: int,
+        noise_std: float,
+        solver: str,
+        eval_grid: np.ndarray,
+    ) -> np.ndarray | None:
+        """Average the per-function runtime ECDF curves over observed BBOB functions."""
+        curves = [
+            self.get_target_ecdf_curve(
+                benchmark_data,
+                target_evals,
+                dim=dim,
+                noise_std=noise_std,
+                problem_id=problem_id,
+                solver=solver,
+                eval_grid=eval_grid,
+            )
+            for problem_id in benchmark_data.problem_ids
+        ]
+        available = [curve for curve in curves if curve is not None]
+        return np.nanmean(available, axis=0) if available else None
 
     def compute_auc_ecdf_ranking(
         self,

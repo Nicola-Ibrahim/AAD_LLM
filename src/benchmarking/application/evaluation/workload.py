@@ -42,7 +42,6 @@ class EvaluationWorkload:
 
     def _discover_target_conditions(self) -> list[tuple[int, float, int]]:
         """Discover unique (dim, noise_std, problem_id) conditions directly from SQLite or champions."""
-        raw_conditions: list[tuple[int, float, int]] = []
         raw_conditions = self.sqlite_repo.get_target_conditions()
 
         if not raw_conditions:

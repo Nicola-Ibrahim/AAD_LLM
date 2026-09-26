@@ -5,8 +5,6 @@ from types import SimpleNamespace
 
 import pytest
 from llamea import Solution
-from sqlalchemy.orm import sessionmaker
-
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.vos import (
     Code,
@@ -30,7 +28,7 @@ from evolution.application import (
 from evolution.infra.concurrency.runner import ProcessPoolRunner
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
-from shared.infra.database.engine import build_engine
+from shared.infra.database import Database
 from shared.infra.database.tables import Base, ExperimentORM
 from evolution.infra.engines.llamea import Evaluator, LLaMEAEngine, LLaMEASession
 from evolution.application.exceptions import OrchestrationError
@@ -225,13 +223,11 @@ def temp_dir():
 
 
 @pytest.fixture
-def db_session_factory(temp_dir, monkeypatch):
+def db_session_factory(temp_dir):
     db_path = temp_dir / "test.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
-    engine = build_engine()
-    Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    return Session
+    database = Database(f"sqlite:///{db_path}")
+    Base.metadata.create_all(database.engine)
+    return database.session_factory
 
 
 def test_evaluator_iteration_persistence(temp_dir, db_session_factory):

@@ -8,15 +8,17 @@ from evolution.infra.engines.llamea import LLaMEAEngine
 from evolution.infra.logging import SynthesisLogger
 from evolution.infra.problems.factory import BBOBProblemFactory
 from evolution.infra.storage.code.repository import CodeRepository
+from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from evolution.infra.storage.synthesis_config.repository import SynthesisConfigRepository
-from shared.infra.database.engine import initialize_sqlite_storage
+from shared.infra.database import Database
 
 
 def build_synthesis_campaign(llm_client: LLMClient) -> SynthesisCampaignCoordinator:
     config_repo = SynthesisConfigRepository()
     config = config_repo.load_config()
+    database = Database()
     return SynthesisCampaignCoordinator(
-        sqlite_repo=initialize_sqlite_storage(),
+        sqlite_repo=SQLiteSynthesisRepository(database.session_factory),
         config=config,
         model_name=llm_client.model.name,
         logger=SynthesisLogger(verbose=True),

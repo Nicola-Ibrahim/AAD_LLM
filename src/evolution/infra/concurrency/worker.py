@@ -5,23 +5,28 @@ from evolution.application.synthesis.models import SessionResult
 
 
 def run_synthesis_worker(item: CampaignTask) -> SessionResult:
-    from shared.infra.database.engine import initialize_sqlite_storage
+    from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
+    from shared.infra.database import Database
     from evolution.application.synthesis.run import SingleSynthesisUseCase
     from evolution.infra.logging import SynthesisLogger
 
-    repository = initialize_sqlite_storage()
+    database = Database()
+    repository = SQLiteSynthesisRepository(database.session_factory)
     use_case = SingleSynthesisUseCase(
         engine=item["engine"],
         sqlite_repo=repository,
         logger=SynthesisLogger(verbose=False),
     )
-    return use_case.execute(
-        problem=item["problem"],
-        experiment_id=item["experiment_id"],
-        config=item["config"],
-        prompt_strategy=item["prompt_strategy"],
-        synthesis_mode=item["synthesis_mode"],
-        initial_iteration=item["initial_iteration"],
-        key=item["key"],
-        verbose=False,
-    )
+    try:
+        return use_case.execute(
+            problem=item["problem"],
+            experiment_id=item["experiment_id"],
+            config=item["config"],
+            prompt_strategy=item["prompt_strategy"],
+            synthesis_mode=item["synthesis_mode"],
+            initial_iteration=item["initial_iteration"],
+            key=item["key"],
+            verbose=False,
+        )
+    finally:
+        database.dispose()

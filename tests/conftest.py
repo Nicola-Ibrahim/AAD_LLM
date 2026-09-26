@@ -3,9 +3,8 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from sqlalchemy.orm import sessionmaker
 
-from shared.infra.database.engine import build_engine
+from shared.infra.database import Database
 from shared.infra.database.tables import Base
 
 
@@ -49,19 +48,17 @@ def temp_dir():
 
 
 @pytest.fixture
-def db_session_factory(temp_dir, monkeypatch):
+def db_session_factory(temp_dir):
     """File-backed SQLite database session factory for isolated testing."""
     db_path = temp_dir / "test.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
-    engine = build_engine()
-    Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine)
+    database = Database(f"sqlite:///{db_path}")
+    Base.metadata.create_all(database.engine)
+    return database.session_factory
 
 
 @pytest.fixture
-def test_db_session_factory(monkeypatch):
+def test_db_session_factory():
     """In-memory SQLite database session factory for fast isolated testing."""
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
-    engine = build_engine()
-    Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine)
+    database = Database("sqlite:///:memory:")
+    Base.metadata.create_all(database.engine)
+    return database.session_factory

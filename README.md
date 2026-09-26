@@ -188,7 +188,7 @@ end
 subgraph group_persistence["Persistence"]
   node_code_repo["Algorithm code store<br/>[repository.py]"]
   node_synthesis_repo[("Synthesis repository<br/>[repository.py]")]
-  node_database[("SQLite database<br/>[engine.py]")]
+  node_database[("SQLite database<br/>[Database]")]
 end
 
 node_notebook_user(("Notebook user"))
@@ -239,7 +239,7 @@ click node_candidate_eval "https://github.com/nicola-ibrahim/aad_llm/blob/main/s
 click node_executor "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/execution/executor.py"
 click node_code_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/code/repository.py"
 click node_synthesis_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis/repository.py"
-click node_database "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/database/engine.py"
+click node_database "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/database/engine.py"
 click node_evaluation "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation_service.py"
 click node_champions "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/storage/champions_repository.py"
 click node_audit "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/audit_service.py"

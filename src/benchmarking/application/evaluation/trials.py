@@ -16,7 +16,6 @@ from benchmarking.application.interfaces.candidate_code_reader import CandidateC
 from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
 from benchmarking.application.interfaces.logger import EvaluationLoggerInterface
 from shared.application.interfaces.problem_factory import ProblemFactory
-from shared.application.interfaces.candidate_executor import CandidateExecutor
 from benchmarking.application.champions import Champion
 from benchmarking.application.evaluation.types import BaselineRunnerResolver, ExecutorBuilder
 from benchmarking.domain.services.resolvers import ModelNames
@@ -123,6 +122,9 @@ class EvaluationTrialRunner:
             is_incremental = True
 
         budget = dim * self.budget_multiplier
+        noise_model = (
+            NoiseModelEnum.NONE if noise_std == 0.0 else NoiseModelEnum.HETEROSCEDASTIC
+        )
 
         with self.state_repo.open_run_logger(target_dir, algo_name, is_incremental) as logger_ioh:
             consecutive_failures = 0
@@ -132,10 +134,11 @@ class EvaluationTrialRunner:
                 random.seed(trial_seed)
                 np.random.seed(trial_seed)
 
-                prob = self._create_problem(
+                prob = self.problem_factory.create(
                     problem_id=p_id,
                     dim=dim,
                     noise_std=noise_std,
+                    noise_model=noise_model,
                     instance_id=instance_id,
                     seed=trial_seed,
                 )
@@ -245,26 +248,6 @@ class EvaluationTrialRunner:
 
     # ── Champion & Baseline Trial Callables ──────────────────────────────────────
 
-    def _create_problem(
-        self, problem_id: int, dim: int, noise_std: float, instance_id: int, seed: int
-    ) -> BaseProblem:
-        model = NoiseModelEnum.NONE if noise_std == 0.0 else NoiseModelEnum.HETEROSCEDASTIC
-        return self.problem_factory.create(problem_id, dim, noise_std, model, instance_id, seed)
-
-    def _code_exists(self, code_path: str | Path) -> bool:
-        return self.code_reader.exists(code_path)
-
-    def _read_code(self, code_path: str | Path) -> str:
-        return self.code_reader.read(code_path)
-
-    def _create_executor(self, timeout_seconds: float) -> CandidateExecutor:
-        return self.executor_factory.create(timeout_seconds)
-
-    def _resolve_baseline(
-        self, baseline_slug: str
-    ) -> Callable[[BaseProblem, int], tuple[float, float, int]]:
-        return self.baseline_resolver.resolve(baseline_slug)
-
     def run_champion_trials(
         self,
         champion_info: Champion,
@@ -286,17 +269,17 @@ class EvaluationTrialRunner:
         algo_name = champion_info.get("algorithm_name", "ChampionAlgorithm")
 
         raw_code_path = Path(champion_info["code_path"])
-        if not self._code_exists(raw_code_path):
+        if not self.code_reader.exists(raw_code_path):
             self.logger.missing_code(str(raw_code_path))
             return {"status": "MISSING_CODE", "errors": []}
 
-        code_str = self._read_code(raw_code_path)
+        code_str = self.code_reader.read(raw_code_path)
         code_hash = hashlib.sha256(code_str.strip().encode("utf-8")).hexdigest()
         model_slug = self.model_names.get_model_slug(llm_name)
         folder = solver_folder or f"{model_slug}_{strat}"
         target_dir = self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder
 
-        executor = self._create_executor(self.trial_timeout_seconds)
+        executor = self.executor_factory(self.trial_timeout_seconds)
 
         def champion_runner(prob: BaseProblem, budget: int) -> tuple[float, float, int]:
             t0 = time.perf_counter()
@@ -342,13 +325,10 @@ class EvaluationTrialRunner:
     ) -> dict[str, object]:
         """Execute empirical trials for a classical baseline algorithm."""
         self.logger.verbose = verbose
-        baseline_fn = self._resolve_baseline(baseline_slug)
+        baseline_fn = self.baseline_resolver(baseline_slug)
         target_dir = (
             self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / baseline_slug
         )
-
-        def baseline_runner(prob: BaseProblem, budget: int) -> tuple[float, float, int]:
-            return baseline_fn(prob, budget)
 
         prov_metadata = {"baseline": baseline_slug}
 
@@ -358,7 +338,7 @@ class EvaluationTrialRunner:
             noise_std=noise_std,
             p_id=p_id,
             algo_name=baseline_slug,
-            runner_fn=baseline_runner,
+            runner_fn=baseline_fn,
             prov_metadata=prov_metadata,
             expected_code_hash=None,
             verbose=verbose,

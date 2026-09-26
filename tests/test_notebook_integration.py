@@ -114,13 +114,13 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
     from evolution.infra.storage.code.repository import CodeRepository
     from evolution.infra.storage.synthesis_config.repository import SynthesisConfigRepository
     from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
-    from shared.infra.database.engine import build_engine, create_db_session_factory
+    from shared.infra.database import Database
     from shared.infra.database.tables import Base
 
     # Exercise the notebook workflow against a fresh schema, not historical data.
-    engine = build_engine(f"sqlite:///{tmp_path / 'synthesis.db'}")
-    Base.metadata.create_all(engine)
-    sqlite_repo = SQLiteSynthesisRepository(create_db_session_factory(engine))
+    database = Database(f"sqlite:///{tmp_path / 'synthesis.db'}")
+    Base.metadata.create_all(database.engine)
+    sqlite_repo = SQLiteSynthesisRepository(database.session_factory)
     config_repo = SynthesisConfigRepository()
     llm = LLMClient("local")
     logger = SynthesisLogger(verbose=False)
@@ -174,9 +174,9 @@ def test_nb03_evaluation_pipeline():
         ChampionsReadRepository,
         SQLiteSynthesisReadRepository,
     )
-    from shared.infra.database.engine import create_db_session_factory
+    from shared.infra.database import Database
 
-    session_factory = create_db_session_factory()
+    session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
     champ_service = ChampionSelectionService(champions_repo=champions_repo)
@@ -256,9 +256,9 @@ def test_nb04_audit_pipeline():
     print("\nTesting NB04 logic with EvaluationAuditService...")
     from benchmarking.infra.io.trace_repository import IOHTraceReader
     from benchmarking.infra.storage import EvaluationConfigRepository, SQLiteSynthesisReadRepository
-    from shared.infra.database.engine import create_db_session_factory
+    from shared.infra.database import Database
 
-    session_factory = create_db_session_factory()
+    session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     trace_repo = IOHTraceReader()
     config_repo = EvaluationConfigRepository()
@@ -291,9 +291,9 @@ def test_nb05_analysis_pipeline(tmp_path):
     print("\nTesting NB05 logic with AnalysisData...")
     from benchmarking.infra.io.trace_repository import IOHTraceReader
     from benchmarking.infra.storage import SQLiteSynthesisReadRepository
-    from shared.infra.database.engine import create_db_session_factory
+    from shared.infra.database import Database
 
-    session_factory = create_db_session_factory()
+    session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     trace_repo = IOHTraceReader()
 
@@ -662,8 +662,13 @@ def test_campaign_usecase_run_worker_and_campaign():
         "synthesis_mode": SynthesisMode.EXPLICIT,
         "initial_iteration": 0,
     }
-    with patch("shared.infra.database.engine.initialize_sqlite_storage", return_value=mock_sqlite):
-        res = run_synthesis_worker(item=mock_task)
+    with patch("shared.infra.database.Database") as mock_database:
+        mock_database.return_value.session_factory = object()
+        with patch(
+            "evolution.infra.storage.synthesis.repository.SQLiteSynthesisRepository",
+            return_value=mock_sqlite,
+        ):
+            res = run_synthesis_worker(item=mock_task)
     assert res is dummy_result
     mock_engine.run.assert_called_once()
 

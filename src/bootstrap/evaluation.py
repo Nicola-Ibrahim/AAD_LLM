@@ -18,7 +18,7 @@ from benchmarking.infra.storage.model_registry import configured_model_names
 from evolution.infra.execution.candidate_executor import create_candidate_executor
 from evolution.infra.problems.factory import BBOBProblemFactory
 from shared.config import PROJECT_ROOT
-from shared.infra.database.engine import create_db_session_factory
+from shared.infra.database import Database
 
 
 @dataclass(frozen=True)
@@ -29,9 +29,9 @@ class EvaluationWorkflow:
 
 
 def build_evaluation_workflow(project_root: Path = PROJECT_ROOT) -> EvaluationWorkflow:
-    session_factory = create_db_session_factory()
-    sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
-    champions_repo = ChampionsReadRepository(session_factory)
+    database = Database()
+    sqlite_repo = SQLiteSynthesisReadRepository(database.session_factory)
+    champions_repo = ChampionsReadRepository(database.session_factory)
     config = EvaluationConfigRepository().load_config()
     return EvaluationWorkflow(
         service=EvaluationService(

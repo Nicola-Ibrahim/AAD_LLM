@@ -2,8 +2,6 @@ import pickle
 
 import pytest
 from llamea import LLaMEA
-from sqlalchemy.orm import sessionmaker
-
 from evolution.application import SessionConfig
 from evolution.infra.engines.llamea import Evaluator, LLaMEASession
 from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
@@ -15,7 +13,7 @@ from evolution.infra.problems.bbob import BBOBProblem
 from evolution.infra.engines.llamea.prompts import SynthesisPrompts
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
-from shared.infra.database.engine import build_engine
+from shared.infra.database import Database
 from shared.infra.database.tables import Base
 
 
@@ -41,13 +39,11 @@ class MockLogger:
 
 
 @pytest.fixture
-def test_repos(tmp_path, monkeypatch):
+def test_repos(tmp_path):
     db_path = tmp_path / "test.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
-    engine = build_engine()
-    Base.metadata.create_all(engine)
-    session_factory = sessionmaker(bind=engine)
-    db_repo = SQLiteSynthesisRepository(session_factory)
+    database = Database(f"sqlite:///{db_path}")
+    Base.metadata.create_all(database.engine)
+    db_repo = SQLiteSynthesisRepository(database.session_factory)
     code_repo = CodeRepository(base_dir=tmp_path / "code")
     return db_repo, code_repo
 

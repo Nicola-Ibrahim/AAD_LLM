@@ -6,8 +6,6 @@ from evolution.application.interfaces.synthesis_repository import SynthesisRepos
 from evolution.application.synthesis.models import SessionConfig
 from evolution.application.synthesis_config import MatrixCondition, SynthesisConfig
 from evolution.domain.entities import ExperimentSummary
-from evolution.domain.enums import NoiseModelEnum
-from evolution.domain.interfaces import BaseProblem
 
 
 class CampaignPlanner:
@@ -49,7 +47,7 @@ class CampaignPlanner:
             # Step A: Resume interrupted/running runs from DB if AUTO_RESUME enabled
             if self.config.auto_resume:
                 for exp in running_list:
-                    tasks.append(self._build_resume_task(exp=exp))
+                    tasks.append(self._build_task_from_summary(exp, tag="resume"))
 
             # Step B: Calculate accounted count
             accounted_runs = (len(completed_list) if self.config.skip_completed else 0) + (
@@ -70,25 +68,6 @@ class CampaignPlanner:
 
     # -------------------------------------------------------------------------
 
-    def _create_problem(
-        self,
-        problem_id: int,
-        dim: int,
-        noise_std: float,
-        noise_model: NoiseModelEnum = NoiseModelEnum.HETEROSCEDASTIC,
-        instance_id: int = 1,
-        seed: int = 42,
-    ) -> BaseProblem:
-        """Create a problem through the configured application port."""
-        return self.problem_factory.create(
-            problem_id=problem_id,
-            dim=dim,
-            noise_std=noise_std,
-            noise_model=noise_model,
-            instance_id=instance_id,
-            seed=seed,
-        )
-
     def _build_session_config(self, max_iterations: int | None = None) -> SessionConfig:
         """Constructs a SessionConfig from campaign settings, optionally overriding iterations."""
         cfg = SessionConfig(**self.config.to_session_config_dict())
@@ -105,7 +84,7 @@ class CampaignPlanner:
         if exp.id is None:
             raise ValueError(f"Cannot build task without a valid database id: {exp}")
         noise_std = exp.problem.noise_std or 0.0
-        problem = self._create_problem(
+        problem = self.problem_factory.create(
             problem_id=exp.problem.problem_id,
             dim=exp.problem.dim,
             noise_std=noise_std,
@@ -139,13 +118,6 @@ class CampaignPlanner:
             if exp.id is not None
         ]
 
-    def _build_resume_task(
-        self,
-        exp: ExperimentSummary,
-    ) -> CampaignTask:
-        """Constructs a resume work item dictionary from an active running experiment in the database."""
-        return self._build_task_from_summary(exp, tag="resume")
-
     def _build_fresh_task(
         self,
         condition: MatrixCondition,
@@ -153,7 +125,7 @@ class CampaignPlanner:
         key_prefix: str = "",
     ) -> CampaignTask:
         """Registers a new experiment record in the database and returns a fresh work item dictionary."""
-        problem = self._create_problem(
+        problem = self.problem_factory.create(
             problem_id=condition.problem_id,
             dim=condition.dim,
             noise_std=condition.noise_std,

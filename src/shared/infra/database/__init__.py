@@ -1,12 +1,7 @@
-"""Shared database infrastructure, connection pooling, and schema definitions."""
+"""Shared SQLAlchemy database infrastructure and schema definitions."""
 
 from shared.config import DATABASE_URL
-from shared.infra.database.engine import (
-    build_engine,
-    create_db_session_factory,
-    ensure_wal_mode,
-    initialize_sqlite_storage,
-)
+from shared.infra.database.engine import Database
 from shared.infra.database.tables import (
     Base,
     ErrorLogORM,
@@ -15,12 +10,9 @@ from shared.infra.database.tables import (
 )
 
 __all__ = [
-    # Global Config & Primitives
+    # Database composition
     "DATABASE_URL",
-    "build_engine",
-    "create_db_session_factory",
-    "ensure_wal_mode",
-    "initialize_sqlite_storage",
+    "Database",
     # Declarative Schema Tables
     "Base",
     "ErrorLogORM",

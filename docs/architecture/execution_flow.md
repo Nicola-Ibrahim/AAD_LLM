@@ -30,7 +30,7 @@ sequenceDiagram
     
     par Parallel Work Units Across Workers
         Runner->>Single: run_synthesis_worker(item)
-        Single->>DB: initialize_sqlite_storage()
+        Single->>DB: Database().session_factory
         Single->>Engine: engine.run(...)
         Engine->>Session: LLaMEASession(...) & session.run()
 

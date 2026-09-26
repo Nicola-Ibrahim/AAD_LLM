@@ -26,6 +26,14 @@ relationship is runtime wiring, not an import from a port to its implementation.
 Shared BBOB metadata lives in `shared/domain/`; shared SQLite and generated-code
 execution live in `shared/infra/`.
 
+Database wiring is intentionally small: each bootstrap function creates one
+`shared.infra.database.Database`, which owns the configured SQLAlchemy engine and
+session factory, then passes that factory to the repositories it constructs. The
+database adapter preserves SQLite WAL, foreign-key enforcement, busy timeout, and
+normal synchronous mode. Repositories open and close short-lived sessions per
+operation; application use cases receive repositories rather than a live SQLAlchemy
+session. Synthesis workers create their own `Database` inside the worker process.
+
 ## Evolution context (`src/evolution/`)
 
 - `application/campaign/` separates audit, task planning, and campaign dispatch.

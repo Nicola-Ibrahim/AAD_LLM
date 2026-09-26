@@ -50,33 +50,38 @@ class ModelNames:
         return ids
 
     def get_clean_model_label(self, llm_name: str) -> str:
-        """Derive clean publication-ready LLM model label dynamically from configs/llms.toml tags.
+        """Return the full configured model name, with dynamic fallback for unknown IDs.
 
-        Matches against configured tags (e.g. 'Qwen2.5-Coder-7B', 'Qwen2.5-Coder-14B', 'Llama-8B')
-        without any hardcoded model conditional branches.
+        Registered IDs resolve to their complete ``name`` (including suffixes such as
+        ``-Instruct``), rather than the abbreviated display tag.
         """
         if not llm_name:
             return "LLM"
 
         s = llm_name.strip()
         s_lower = s.lower().removesuffix(".gguf")
+        normalized_s = re.sub(r"[^a-z0-9]", "", s_lower)
         specs = self.registry
 
         # 1. Exact or direct normalized match in registry
         for spec in specs:
-            spec_model = spec.model.lower().removesuffix(".gguf")
-            spec_file = spec.file.lower().removesuffix(".gguf")
-            spec_name = spec.name.lower().removesuffix(".gguf")
-            spec_tag = spec.tag.lower()
-            if s_lower in (spec_model, spec_file, spec_name, spec_tag):
-                return spec.tag
+            identifiers = (spec.model, spec.file, spec.name, spec.tag)
+            normalized_identifiers = {
+                re.sub(r"[^a-z0-9]", "", identifier.lower().removesuffix(".gguf"))
+                for identifier in identifiers
+                if identifier
+            }
+            if normalized_s in normalized_identifiers:
+                return spec.name
 
         # 2. Substring containment match for model ID or filename
         for spec in specs:
-            spec_model = spec.model.lower().removesuffix(".gguf")
-            spec_file = spec.file.lower().removesuffix(".gguf")
-            if (spec_model and spec_model in s_lower) or (spec_file and spec_file in s_lower):
-                return spec.tag
+            normalized_identifiers = (
+                re.sub(r"[^a-z0-9]", "", identifier.lower().removesuffix(".gguf"))
+                for identifier in (spec.model, spec.file)
+            )
+            if any(identifier and identifier in normalized_s for identifier in normalized_identifiers):
+                return spec.name
 
         # 3. Family + Parameter Size matching (e.g. "qwen_14b" -> matches Qwen family with 14B size)
         size_m = re.search(r"(\d+(?:\.\d+)?b)", s_lower)
@@ -86,15 +91,20 @@ class ModelNames:
             for spec in specs:
                 if spec.size_slug == size_str:
                     if spec.family_slug in s_lower or spec.category.lower() in s_lower:
-                        return spec.tag
+                        return spec.name
 
         # 4. Fallback if family is registered in llms.toml categories
         for spec in specs:
             if spec.family_slug in s_lower or spec.category.lower() in s_lower:
                 if size_str:
-                    prefix = spec.tag.rsplit("-", 1)[0] if "-" in spec.tag else spec.category
-                    return f"{prefix}-{size_str.upper()}"
-                return spec.tag
+                    return re.sub(
+                        re.escape(spec.size_slug),
+                        size_str.upper(),
+                        spec.name,
+                        count=1,
+                        flags=re.IGNORECASE,
+                    )
+                return spec.name
 
         # 5. Generic dynamic fallback for unregistered models (e.g. "mistral-7b" -> "Mistral-7B")
         if size_str:
