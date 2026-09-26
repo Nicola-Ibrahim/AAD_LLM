@@ -1,0 +1,106 @@
+%%{init: {"theme": "base", "themeVariables": {"background": "#f2e6ff", "clusterBkg": "#f7f7f7", "clusterBorder": "#dedede", "lineColor": "#333333", "edgeLabelBackground": "#f2e6ff", "fontFamily": "Arial, Helvetica, sans-serif", "primaryTextColor": "#111111"}, "flowchart": {"curve": "basis", "htmlLabels": true, "wrappingWidth": 1000}, "look": "classic", "fontFamily": "Arial, Helvetica, sans-serif", "markdownAutoWrap": false, "themeCSS": ".label, .nodeLabel, .edgeLabel, .cluster-label { font-family: Arial, Helvetica, sans-serif !important; }"}}%%
+flowchart TD
+
+subgraph group_synthesis["Algorithm synthesis"]
+  node_campaign["Synthesis campaign<br/>[run.py]"]
+  node_campaign_plan["Campaign planning<br/>[plan.py]"]
+  node_synth_config["Synthesis configuration<br/>[repository.py]"]
+  node_single_synthesis["Synthesis session<br/>[run.py]"]
+end
+
+subgraph group_runtime["Candidate execution"]
+  node_llamea["LLaMEA adapter<br/>[runner.py]"]
+  node_prompts["Prompt construction<br/>[builder.py]"]
+  node_llm_client["LLM provider client<br/>[client.py]"]
+  node_candidate_evaluator["Candidate evaluator<br/>[evaluator.py]"]
+  node_guarded_executor["Guarded execution<br/>[executor.py]"]
+  node_problem_factory["BBOB problem factory<br/>[factory.py]"]
+  node_noise_model["Noise model<br/>[noise_model.py]"]
+end
+
+subgraph group_benchmark["Benchmarking and audit"]
+  node_evaluation["Champion and baseline trials<br/>[run.py]"]
+  node_baselines["Classical optimizers<br/>[baselines.py]"]
+  node_champions["Champion selection"]
+  node_audit["Coverage and run audit<br/>[audit.py]"]
+end
+
+subgraph group_analysis["Analysis and transfer"]
+  node_analysis["Statistical analysis<br/>[report.py]"]
+  node_analysis_services["ECDF and statistics<br/>[ecdf.py]"]
+  node_transfer["Noise and transfer analysis<br/>[transfer.py]"]
+  node_figures["Analysis figures<br/>[summary.py]"]
+end
+
+subgraph group_persistence["Experiment persistence"]
+  node_code_store["Candidate code store<br/>[repository.py]"]
+  node_synthesis_store[("Synthesis records<br/>[repository.py]")]
+  node_database[("SQLite database<br/>[engine.py]")]
+  node_trace_repo["Benchmark traces"]
+end
+
+node_researcher(("Notebook researcher"))
+node_llm_service{{"LLM provider"}}
+
+node_researcher -->|"starts campaign"| node_campaign
+node_researcher -->|"runs trials"| node_evaluation
+node_researcher -->|"audits coverage"| node_audit
+node_researcher -->|"analyses results"| node_analysis
+node_campaign -->|"plans matrix"| node_campaign_plan
+node_campaign -->|"loads settings"| node_synth_config
+node_campaign -->|"dispatches sessions"| node_single_synthesis
+node_single_synthesis -->|"runs synthesis"| node_llamea
+node_llamea -->|"builds prompts"| node_prompts
+node_llamea -->|"requests generations"| node_llm_client
+node_llm_client -->|"calls provider"| node_llm_service
+node_llamea -->|"evaluates candidates"| node_candidate_evaluator
+node_candidate_evaluator -->|"executes candidate"| node_guarded_executor
+node_candidate_evaluator -->|"creates objective"| node_problem_factory
+node_problem_factory -->|"applies noise"| node_noise_model
+node_single_synthesis -->|"persists code"| node_code_store
+node_single_synthesis -->|"records iterations"| node_synthesis_store
+node_evaluation -->|"runs baselines"| node_baselines
+node_evaluation -->|"writes traces"| node_trace_repo
+node_champions -->|"reads candidates"| node_synthesis_store
+node_audit -->|"checks trace coverage"| node_trace_repo
+node_analysis -->|"reads traces"| node_trace_repo
+node_analysis -->|"computes metrics"| node_analysis_services
+node_analysis -->|"presents results"| node_figures
+node_transfer -.->|"writes isolated traces"| node_trace_repo
+
+click node_campaign "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/run.py"
+click node_campaign_plan "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/plan.py"
+click node_synth_config "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis_config/repository.py"
+click node_single_synthesis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/synthesis/run.py"
+click node_llamea "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/runner.py"
+click node_prompts "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/prompts/builder.py"
+click node_llm_client "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/llm/client.py"
+click node_candidate_evaluator "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/evaluator.py"
+click node_guarded_executor "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/execution/executor.py"
+click node_problem_factory "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/problems/factory.py"
+click node_noise_model "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/domain/noise_model.py"
+click node_code_store "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/code/repository.py"
+click node_synthesis_store "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis/repository.py"
+click node_database "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/database/engine.py"
+click node_evaluation "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation/run.py"
+click node_baselines "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/solvers/baselines.py"
+click node_champions "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/select_champions.py"
+click node_trace_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/io/trace_repository.py"
+click node_audit "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation/audit.py"
+click node_analysis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/analysis/report.py"
+click node_analysis_services "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/ecdf.py"
+click node_transfer "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/transfer.py"
+click node_figures "https://github.com/nicola-ibrahim/aad_llm/blob/main/notebooks/analysis/plotting/summary.py"
+
+classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
+classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
+class node_campaign,node_campaign_plan,node_synth_config,node_single_synthesis toneBlue
+class node_llamea,node_prompts,node_llm_client,node_candidate_evaluator,node_guarded_executor,node_problem_factory,node_noise_model toneAmber
+class node_evaluation,node_baselines,node_champions,node_audit toneMint
+class node_analysis,node_analysis_services,node_transfer,node_figures toneRose
+class node_code_store,node_synthesis_store,node_database,node_trace_repo,node_researcher,node_llm_service toneIndigo

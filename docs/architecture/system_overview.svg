@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="system-overview-title system-overview-desc">
+  <title id="system-overview-title">AAD LLM research workflows</title>
+  <desc id="system-overview-desc">Notebook researchers coordinate synthesis, benchmarking, audit and analysis, supported by candidate execution, an LLM provider and experiment persistence; these are workflow groups, not separate services.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#333333"/></marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#d97706"/></marker>
+    <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f46e5"/></marker>
+    <style>
+      text{font-family:Arial,Helvetica,sans-serif;fill:#111111}
+      .title{font-size:28px;font-weight:600}.name{font-size:16px;font-weight:600}
+      .detail{font-size:12px}.tag{font-size:8px;letter-spacing:1px}
+      .label{font-size:12px;fill:#333333}.wire{fill:none;stroke:#333333;stroke-width:1.4;marker-end:url(#arrow)}
+      .node{stroke-width:1.5}.legend{font-size:12px}
+    </style>
+  </defs>
+  <rect width="1280" height="720" fill="#f2e6ff"/>
+  <text x="80" y="52" class="title">From generated algorithms to measured performance</text>
+  <text x="80" y="76" class="detail">Two workflow contexts · shared scientific/runtime foundation · notebook-owned presentation</text>
+
+  <!-- Distinct ports and rounded orthogonal routes; all connectors precede nodes. -->
+  <g class="wire">
+    <path d="M560 164 V200 Q560 208 552 208 H228 Q220 208 220 216 V260"/>
+    <path d="M640 164 V260"/>
+    <path d="M720 164 V200 Q720 208 728 208 H1052 Q1060 208 1060 216 V260"/>
+    <path d="M220 356 V460"/>
+    <path d="M360 324 H404 Q412 324 412 332 V484 Q412 492 420 492 H500"/>
+    <path d="M620 356 V460"/>
+    <path d="M700 356 V460"/>
+    <path d="M1060 356 V500 Q1060 508 1052 508 H780"/>
+    <path d="M220 556 V596"/>
+  </g>
+  <g class="label">
+    <rect x="304" y="180" width="128" height="20" fill="#f2e6ff"/><text x="368" y="194" text-anchor="middle">starts campaigns</text>
+    <rect x="648" y="228" width="160" height="20" fill="#f2e6ff"/><text x="656" y="242">runs trials / audits</text>
+    <rect x="836" y="180" width="128" height="20" fill="#f2e6ff"/><text x="900" y="194" text-anchor="middle">analyses results</text>
+    <rect x="228" y="396" width="112" height="20" fill="#f2e6ff"/><text x="236" y="410">runs synthesis</text>
+    <rect x="420" y="396" width="104" height="20" fill="#f2e6ff"/><text x="428" y="410">saves candidates</text>
+    <rect x="532" y="392" width="80" height="20" fill="#f2e6ff"/><text x="604" y="406" text-anchor="end">writes traces</text>
+    <rect x="708" y="420" width="144" height="20" fill="#f2e6ff"/><text x="716" y="434">reads candidates</text>
+    <rect x="900" y="480" width="112" height="20" fill="#f2e6ff"/><text x="956" y="494" text-anchor="middle">reads / transfer</text>
+    <rect x="228" y="568" width="128" height="20" fill="#f2e6ff"/><text x="236" y="582">requests generations</text>
+  </g>
+
+  <g>
+    <rect class="node" x="480" y="100" width="320" height="64" rx="8" fill="#e0e7ff" stroke="#4f46e5"/>
+    <text x="640" y="124" text-anchor="middle" class="name" fill="#312e81">Notebook researcher</text>
+    <text x="640" y="146" text-anchor="middle" class="detail">configuration · orchestration · figures · exports</text>
+
+    <rect class="node" x="80" y="260" width="280" height="96" rx="8" fill="#dbeafe" stroke="#2563eb"/>
+    <text x="96" y="280" class="tag">EVOLUTION CONTEXT</text>
+    <text x="96" y="306" class="name">Algorithm synthesis</text>
+    <text x="96" y="328" class="detail">campaign planning · settings · sessions</text>
+    <text x="96" y="344" class="detail">generation feedback and candidate scoring</text>
+
+    <rect class="node" x="500" y="260" width="280" height="96" rx="8" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="516" y="280" class="tag">BENCHMARKING CONTEXT</text>
+    <text x="516" y="306" class="name">Benchmarking and audit</text>
+    <text x="516" y="328" class="detail">champion selection · classical optimizers</text>
+    <text x="516" y="344" class="detail">trial execution · coverage and run status</text>
+
+    <rect class="node" x="920" y="260" width="280" height="96" rx="8" fill="#ffe4e6" stroke="#e11d48"/>
+    <text x="936" y="280" class="tag">BENCHMARKING + NOTEBOOK PRESENTATION</text>
+    <text x="936" y="306" class="name">Analysis and transfer</text>
+    <text x="936" y="328" class="detail">ECDF · reliability · statistics · robustness</text>
+    <text x="936" y="344" class="detail">notebook figures · isolated transfer traces</text>
+
+    <rect class="node" x="80" y="460" width="280" height="96" rx="8" fill="#fef3c7" stroke="#d97706"/>
+    <text x="96" y="480" class="tag">SUPPORTING ADAPTERS + SHARED FOUNDATION</text>
+    <text x="96" y="506" class="name">Candidate execution</text>
+    <text x="96" y="528" class="detail">LLaMEA · prompts · provider client</text>
+    <text x="96" y="544" class="detail">evaluation · guarded execution · BBOB / noise</text>
+
+    <rect class="node" x="500" y="460" width="280" height="96" rx="8" fill="#e0e7ff" stroke="#4f46e5"/>
+    <text x="516" y="480" class="tag">SUPPORTING INFRASTRUCTURE</text>
+    <text x="516" y="506" class="name">Experiment persistence</text>
+    <text x="516" y="528" class="detail">candidate code · synthesis records · SQLite</text>
+    <text x="516" y="544" class="detail">benchmark traces and provenance</text>
+
+    <rect class="node" x="80" y="596" width="280" height="48" rx="8" fill="#e0e7ff" stroke="#4f46e5" stroke-dasharray="4 3"/>
+    <text x="220" y="624" text-anchor="middle" class="name">LLM provider</text>
+  </g>
+  <line x1="80" y1="664" x2="1200" y2="664" stroke="#c8bad8"/>
+  <g class="legend">
+    <rect x="80" y="680" width="12" height="12" fill="#dbeafe" stroke="#2563eb"/><text x="100" y="691">Synthesis</text>
+    <rect x="260" y="680" width="12" height="12" fill="#dcfce7" stroke="#16a34a"/><text x="280" y="691">Evaluation / audit</text>
+    <rect x="488" y="680" width="12" height="12" fill="#ffe4e6" stroke="#e11d48"/><text x="508" y="691">Analysis</text>
+    <rect x="680" y="680" width="12" height="12" fill="#fef3c7" stroke="#d97706"/><text x="700" y="691">Runtime</text>
+    <rect x="872" y="680" width="12" height="12" fill="#e0e7ff" stroke="#4f46e5"/><text x="892" y="691">Persistence / external</text>
+  </g>
+</svg>

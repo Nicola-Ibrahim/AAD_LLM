@@ -5,6 +5,19 @@ work through ports, domain modules own scientific rules, and infrastructure adap
 perform database, filesystem, process, and third-party-library work. It is not a
 strictly pure DDD model.
 
+The README displays both complementary, C4-inspired views: **Level 0 — Workflow
+overview** ([SVG](system_overview.svg)) and **Level 1 — Detailed system view**
+([SVG](system_diagram.svg)). These are project-specific overview/detail labels,
+not standard C4 system-context/container levels. The detailed view's
+[editable Mermaid source](system_diagram.mmd) retains the original components,
+relationships, and code links. The overview preserves the palette and adds explicit
+context labels for quick orientation. It
+collapses each workflow/supporting group into one node (25 components become 7);
+internal links and per-file labels remain in the detailed view. Arrows describe
+workflow/data access, not import dependencies. Analysis belongs to benchmarking;
+its figure construction belongs to notebooks. Runtime and persistence are supporting
+capabilities, not additional bounded contexts.
+
 ## Context map and ownership
 
 This is a modular monolith with two workflow contexts, not independent services.
