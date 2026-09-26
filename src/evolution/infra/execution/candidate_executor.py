@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-from evolution.application.ports.candidate_executor import CandidateExecutor, CandidateTimeout
+from shared.application.interfaces.candidate_executor import CandidateExecutor, CandidateTimeout
 from shared.infra.execution import AlgorithmExecutor, AlgorithmTimeoutException
 
 
@@ -20,7 +20,7 @@ class AlgorithmExecutorAdapter(CandidateExecutor):
 
     def execute_algorithm(
         self, code: str, name: str, dim: int, problem: Callable[..., float], budget: int
-    ) -> tuple[np.ndarray | None, float]:
+    ) -> tuple[np.ndarray, float]:
         try:
             return self._executor.execute_algorithm(code, name, dim, problem, budget)
         except AlgorithmTimeoutException as exc:

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from benchmarking.application.ports import CandidateCodeReader
+from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
 from shared.config import PROJECT_ROOT
 
 

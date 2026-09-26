@@ -18,24 +18,6 @@ class ProblemTarget(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    def __getitem__(self, key: str) -> object:
-        if hasattr(self, key):
-            return getattr(self, key)
-        raise KeyError(key)
-
-    def get(self, key: str, default: object = None) -> object:
-        return getattr(self, key, default)
-
-    def to_dict(self) -> dict[str, object]:
-        return {"id": self.id, "dimensions": list(self.dimensions)}
-
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, dict):
-            return self.id == other.get("id") and list(self.dimensions) == list(
-                other.get("dimensions", [])
-            )
-        return super().__eq__(other)
-
 
 class SynthesisModeConfig(BaseModel):
     """Synthesis prompting mode and its evaluated prompt engineering strategies."""
@@ -45,95 +27,16 @@ class SynthesisModeConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    def __getitem__(self, key: str) -> object:
-        if hasattr(self, key):
-            return getattr(self, key)
-        raise KeyError(key)
-
-    def get(self, key: str, default: object = None) -> object:
-        return getattr(self, key, default)
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "mode": self.mode.value if isinstance(self.mode, SynthesisMode) else str(self.mode),
-            "strategies": [
-                s.value if isinstance(s, PromptStrategy) else str(s) for s in self.strategies
-            ],
-        }
-
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, dict):
-            other_mode = other.get("mode")
-            if isinstance(other_mode, SynthesisMode):
-                mode_match = self.mode == other_mode
-            else:
-                mode_match = self.mode.value == str(other_mode).lower()
-            other_strats = [
-                s.value if isinstance(s, PromptStrategy) else str(s).lower()
-                for s in other.get("strategies", [])
-            ]
-            my_strats = [
-                s.value if isinstance(s, PromptStrategy) else str(s) for s in self.strategies
-            ]
-            return mode_match and my_strats == other_strats
-        return super().__eq__(other)
-
 
 class NoiseConditionConfig(BaseModel):
     """Evaluated noise condition (std, noise model strategy, optional mode override, and pre-associated modes)."""
 
     std: float
-    model: NoiseModelEnum = NoiseModelEnum.NONE
+    noise_model: NoiseModelEnum = NoiseModelEnum.NONE
     mode: str | None = None
     modes: list[SynthesisModeConfig] = Field(default_factory=list)
 
     model_config = ConfigDict(frozen=True)
-
-    @property
-    def noise_model(self) -> NoiseModelEnum:
-        return self.model
-
-    def __getitem__(self, idx: int | str) -> object:
-        if isinstance(idx, int):
-            return (self.std, self.model, self.mode)[idx]
-        if hasattr(self, idx):
-            return getattr(self, idx)
-        if idx == "noise_model":
-            return self.model
-        raise KeyError(idx)
-
-    def get(self, key: str, default: object = None) -> object:
-        if key == "noise_model":
-            return self.model
-        return getattr(self, key, default)
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "std": self.std,
-            "model": self.model.value
-            if isinstance(self.model, NoiseModelEnum)
-            else str(self.model),
-            "noise_model": self.model.value
-            if isinstance(self.model, NoiseModelEnum)
-            else str(self.model),
-            "mode": self.mode,
-            "modes": [m.to_dict() for m in self.modes],
-        }
-
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, dict):
-            model_val = other.get("noise_model") or other.get("model")
-            model_match = (
-                self.model.value == str(model_val).lower() if model_val is not None else True
-            )
-            return (
-                abs(self.std - float(other.get("std", 0.0))) < 1e-9
-                and model_match
-                and self.mode == other.get("mode")
-            )
-        if isinstance(other, (tuple, list)):
-            return (self.std, self.model, self.mode)[: len(other)] == tuple(other)
-        return super().__eq__(other)
 
 
 class MatrixCondition(BaseModel):
@@ -147,30 +50,6 @@ class MatrixCondition(BaseModel):
     strategy: PromptStrategy
 
     model_config = ConfigDict(frozen=True)
-
-    def __hash__(self) -> int:
-        return hash(
-            (
-                self.problem_id,
-                self.dim,
-                self.mode,
-                round(self.noise_std, 4),
-                self.noise_model,
-                self.strategy,
-            )
-        )
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, MatrixCondition):
-            return False
-        return (
-            self.problem_id == other.problem_id
-            and self.dim == other.dim
-            and self.mode == other.mode
-            and abs(self.noise_std - other.noise_std) < 1e-6
-            and self.noise_model == other.noise_model
-            and self.strategy == other.strategy
-        )
 
     @property
     def prompt_template(self) -> str:
@@ -194,19 +73,6 @@ class MatrixCondition(BaseModel):
             return f"implicit_std_{self.noise_std}"
         return f"explicit_std_{self.noise_std}"
 
-    @property
-    def synthesis_mode(self) -> SynthesisMode:
-        """SynthesisMode passed to synthesis session."""
-        return self.mode
-
-    def __getitem__(self, key: str) -> object:
-        if hasattr(self, key):
-            return getattr(self, key)
-        raise KeyError(key)
-
-    def get(self, key: str, default: object = None) -> object:
-        return getattr(self, key, default)
-
 
 class SynthesisConfig(BaseModel):
     """Strongly-typed, structured domain configuration for evolutionary synthesis campaigns."""
@@ -221,6 +87,8 @@ class SynthesisConfig(BaseModel):
     budget: int = 1_000_000
     timeout_seconds: float = 30.0
     iterations: int = 10
+    stagnation_threshold: int = 3
+    convergence_threshold: float = 1e-6
     runs_per_config: int = 1
     num_processes: int = 8
     auto_resume: bool = True
@@ -231,21 +99,12 @@ class SynthesisConfig(BaseModel):
     name: str = "bbob_comprehensive_matrix"
     noise_model: NoiseModelEnum = NoiseModelEnum.HETEROSCEDASTIC
 
-    # 3. Raw configuration dictionary sections
-    matrix: dict[str, object] = Field(default_factory=dict)
-    evolution: dict[str, object] = Field(default_factory=dict)
-    execution: dict[str, object] = Field(default_factory=dict)
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(frozen=True)
 
     # Derived dot-access properties:
     @property
     def problem_ids(self) -> list[int]:
         return [t.id for t in self.problem_targets]
-
-    @property
-    def problems(self) -> list[int]:
-        return self.problem_ids
 
     @property
     def dimensions(self) -> list[int]:
@@ -256,37 +115,13 @@ class SynthesisConfig(BaseModel):
         return [c.std for c in self.noise_conditions]
 
     @property
-    def mode_enums(self) -> list[SynthesisMode]:
-        return [m.mode for m in self.synthesis_modes]
-
-    @property
     def synthesis_mode_names(self) -> list[str]:
         return [m.mode.value for m in self.synthesis_modes]
-
-    @property
-    def synthesis_mode(self) -> SynthesisMode | None:
-        return self.synthesis_modes[0].mode if len(self.synthesis_modes) == 1 else None
 
     @property
     def prompt_strategies(self) -> list[PromptStrategy]:
         all_s = {s for m in self.synthesis_modes for s in m.strategies}
         return sorted(list(all_s), key=lambda x: str(x.value))
-
-    @property
-    def target_experiment_ids(self) -> list[int]:
-        return self.target_exp_ids
-
-    @property
-    def max_workers(self) -> int:
-        return self.num_processes
-
-    @property
-    def stagnation_threshold(self) -> int:
-        return int(self.evolution.get("stagnation_threshold", 3))
-
-    @property
-    def convergence_threshold(self) -> float:
-        return float(self.evolution.get("convergence_threshold", 1e-6))
 
     def to_session_config_dict(self) -> dict[str, int | float]:
         """Derive a dictionary of session execution configuration parameters."""
@@ -294,20 +129,6 @@ class SynthesisConfig(BaseModel):
             "budget": self.budget,
             "timeout_seconds": self.timeout_seconds,
             "iterations": self.iterations,
-            "stagnation_threshold": int(self.evolution.get("stagnation_threshold", 3)),
-            "convergence_threshold": float(self.evolution.get("convergence_threshold", 1e-6)),
+            "stagnation_threshold": self.stagnation_threshold,
+            "convergence_threshold": self.convergence_threshold,
         }
-
-    # Dictionary-style mapping interface
-    def __getitem__(self, key: str) -> object:
-        if hasattr(self, key):
-            return getattr(self, key)
-        raise KeyError(f"Configuration key '{key}' not found in SynthesisConfig.")
-
-    def get(self, key: str, default: object = None) -> object:
-        if hasattr(self, key):
-            return getattr(self, key)
-        return default
-
-    def __contains__(self, key: str) -> bool:
-        return hasattr(self, key)

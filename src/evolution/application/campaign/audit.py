@@ -3,7 +3,8 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 
-from evolution.application.ports import BaseLogger, LanguageModelClient, SynthesisRepository
+from evolution.application.interfaces.logger import BaseLogger
+from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.application.synthesis_config import MatrixCondition, SynthesisConfig
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import BBOBFunction
@@ -17,12 +18,12 @@ class CampaignAuditor:
         sqlite_repo: SynthesisRepository,
         config: SynthesisConfig,
         logger: BaseLogger,
-        llm_client: LanguageModelClient | None = None,
+        model_name: str,
     ) -> None:
         self.sqlite_repo = sqlite_repo
         self.config = config
         self.logger = logger
-        self.llm_client = llm_client
+        self.model_name = model_name
 
     @staticmethod
     def _condition_from_summary(exp: ExperimentSummary) -> MatrixCondition:
@@ -76,7 +77,7 @@ class CampaignAuditor:
         Reconciles completed experiments with valid champions against planned matrix targets,
         producing a comprehensive MultiIndex audit DataFrame and coverage summary statistics.
         """
-        llm_name = model_name or (self.llm_client.model.name if self.llm_client else "unknown")
+        llm_name = self.model_name if model_name is None else model_name
         all_db_exps = self.sqlite_repo.load(llm_name=llm_name)
 
         db_completed, db_running, db_failed = self.group_experiments_by_condition(
@@ -154,10 +155,8 @@ class CampaignAuditor:
             "dimensions": self.config.dimensions,
             "noise_stds": self.config.noise_stds,
             "synthesis_modes": self.config.synthesis_mode_names,
-            "prompt_strategies": [
-                s.value if hasattr(s, "value") else str(s) for s in self.config.prompt_strategies
-            ],
-            "target_exp_ids": self.config.target_experiment_ids,
+            "prompt_strategies": [s.value for s in self.config.prompt_strategies],
+            "target_exp_ids": self.config.target_exp_ids,
         }
 
         self.logger.audit_summary(

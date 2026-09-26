@@ -27,8 +27,10 @@ from benchmarking.infra.storage.model_registry import configured_model_names
 
 def build_evaluation_service(**kwargs):
     project_root = kwargs.pop("project_root", PROJECT_ROOT)
+    config_repo = kwargs.pop("config_repo")
     return EvaluationService(
         **kwargs,
+        config=config_repo.load_config(),
         problem_factory=BBOBProblemFactory(),
         executor_factory=create_candidate_executor,
         baseline_resolver=get_baseline_runner,
@@ -129,7 +131,9 @@ target_noise_levels = [0.0]
     assert prov_data["n_runs"] == 2
 
     # 2. Second call should hit cache
-    cached_res = service.trials.run_baseline_trials(dim=2, noise_std=0.0, p_id=1, baseline_slug="pso")
+    cached_res = service.trials.run_baseline_trials(
+        dim=2, noise_std=0.0, p_id=1, baseline_slug="pso"
+    )
     assert cached_res["status"] == "CACHED"
 
 

@@ -1,7 +1,8 @@
 from collections.abc import Callable
 import pandas as pd
 
-from benchmarking.application.ports import EvaluationTraceReader, SynthesisReadRepository
+from benchmarking.application.interfaces.evaluation_trace_reader import EvaluationTraceReader
+from benchmarking.application.interfaces.synthesis_read_repository import SynthesisReadRepository
 from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
 from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
 from benchmarking.domain.services.performance import PerformanceMetricsEngine
@@ -44,21 +45,4 @@ class AnalysisData:
             noise_stds=noise_stds,
             solvers=solvers,
             solver_resolver=solver_resolver or self.model_names.resolve_folder_solver_name,
-        )
-
-    def load_all_traces(self) -> EvaluationDataset:
-        return self.load_evaluation_traces()
-
-    def load_filtered_traces(
-        self,
-        dims: list[int],
-        problems: list[int],
-        noise_stds: list[float],
-        solvers: list[str] | None = None,
-    ) -> EvaluationDataset:
-        return self.load_evaluation_traces(
-            dims=dims,
-            problems=problems,
-            noise_stds=noise_stds,
-            solvers=solvers,
         )

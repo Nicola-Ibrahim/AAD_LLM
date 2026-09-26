@@ -3,7 +3,8 @@
 from pathlib import Path
 import pandas as pd
 
-from benchmarking.application.ports import Champion, ChampionCatalog, ChampionRepository
+from benchmarking.application.champions import Champion, ChampionCatalog
+from benchmarking.application.interfaces.champion_repository import ChampionRepository
 
 
 class ChampionSelectionService:

@@ -10,7 +10,7 @@ import sys
 from collections.abc import Mapping
 from typing import TextIO
 
-from evolution.application.ports import BaseLogger
+from evolution.application.interfaces.logger import BaseLogger
 
 
 class Colors:

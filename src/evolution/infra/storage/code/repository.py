@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from evolution.application.ports.code_store import SynthesisCodeStore
+from evolution.application.interfaces.code_store import SynthesisCodeStore
 from shared.config import DATA_DIR, PROJECT_ROOT
 
 

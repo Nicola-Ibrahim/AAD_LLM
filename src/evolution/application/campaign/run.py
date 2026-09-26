@@ -3,16 +3,12 @@ from collections.abc import Callable
 from evolution.application.campaign.models import CampaignResults, CampaignTask
 from evolution.application.campaign.audit import CampaignAuditor
 from evolution.application.campaign.plan import CampaignPlanner
-from evolution.application.ports import (
-    BaseLogger,
-    LanguageModelClient,
-    SessionResult,
-    SynthesisEngine,
-    SynthesisRepository,
-    SynthesisConfigReader,
-    ProblemFactory,
-    TaskDispatcher,
-)
+from evolution.application.interfaces.logger import BaseLogger
+from shared.application.interfaces.problem_factory import ProblemFactory
+from evolution.application.interfaces.task_dispatcher import TaskDispatcher
+from evolution.application.interfaces.synthesis_engine import SynthesisEngine
+from evolution.application.interfaces.synthesis_repository import SynthesisRepository
+from evolution.application.synthesis.models import SessionResult
 from evolution.application.synthesis_config import SynthesisConfig
 
 
@@ -22,31 +18,31 @@ class SynthesisCampaignCoordinator:
     def __init__(
         self,
         sqlite_repo: SynthesisRepository,
-        config_repo: SynthesisConfigReader,
+        config: SynthesisConfig,
         logger: BaseLogger,
-        engine: SynthesisEngine | None = None,
-        llm_client: LanguageModelClient | None = None,
-        problem_factory: ProblemFactory | None = None,
-        dispatcher: TaskDispatcher[CampaignTask, SessionResult] | None = None,
-        worker_fn: Callable[[CampaignTask], SessionResult] | None = None,
+        engine: SynthesisEngine,
+        model_name: str,
+        problem_factory: ProblemFactory,
+        dispatcher: TaskDispatcher[CampaignTask, SessionResult],
+        worker_fn: Callable[[CampaignTask], SessionResult],
     ) -> None:
         self.logger = logger
         self.engine = engine
-        self.llm_client = llm_client
+        self.model_name = model_name
         self.dispatcher = dispatcher
         self.worker_fn = worker_fn
-        self.config: SynthesisConfig = config_repo.load_config()
+        self.config = config
         self.auditor = CampaignAuditor(
             sqlite_repo=sqlite_repo,
             config=self.config,
             logger=logger,
-            llm_client=llm_client,
+            model_name=model_name,
         )
         self.planner = CampaignPlanner(
             sqlite_repo=sqlite_repo,
             config=self.config,
             engine=engine,
-            llm_client=llm_client,
+            model_name=model_name,
             problem_factory=problem_factory,
             auditor=self.auditor,
         )
@@ -58,14 +54,11 @@ class SynthesisCampaignCoordinator:
         verbose: bool = True,
     ) -> CampaignResults:
         """Build tasks, dispatch them through the configured worker adapter, and aggregate results."""
-        if self.engine is None:
-            raise ValueError("SynthesisEngine must be configured to run campaigns.")
-
         self.logger.verbose = verbose
         workers = self.config.num_processes
 
         tasks = self.planner.build_tasks()
-        model_name = self.llm_client.model.name if self.llm_client else "unknown"
+        model_name = self.model_name
 
         if not tasks:
             self.logger.success(
@@ -78,8 +71,6 @@ class SynthesisCampaignCoordinator:
             subtitle=f"Model: {model_name} | Pending Tasks: {len(tasks)} | Concurrency: {workers} workers",
         )
 
-        if self.dispatcher is None or self.worker_fn is None:
-            raise RuntimeError("Campaign dispatcher and worker function must be configured.")
         raw_results = self.dispatcher.run(
             fn=self.worker_fn,
             items=tasks,

@@ -11,7 +11,8 @@ import shutil
 import ioh
 import numpy as np
 
-from benchmarking.application.ports import EvaluationStateStore, EvaluationTraceReader
+from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
+from benchmarking.application.interfaces.evaluation_trace_reader import EvaluationTraceReader
 from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
 from shared.config import RESULTS_DIR
 

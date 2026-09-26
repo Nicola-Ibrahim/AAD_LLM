@@ -4,15 +4,12 @@ Coordinates the in-process execution of a single evolutionary algorithm synthesi
 isolated from multiprocessing orchestration.
 """
 
-from evolution.application.ports import (
-    BaseLogger,
-    SessionConfig,
-    SessionResult,
-    SynthesisEngine,
-)
+from evolution.application.interfaces.logger import BaseLogger
+from evolution.application.interfaces.synthesis_engine import SynthesisEngine
+from evolution.application.synthesis.models import SessionConfig, SessionResult
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces import BaseProblem
-from evolution.application.ports.repository import SynthesisRepository
+from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 
 
 class SingleSynthesisUseCase:
@@ -26,14 +23,14 @@ class SingleSynthesisUseCase:
         self,
         engine: SynthesisEngine,
         sqlite_repo: SynthesisRepository,
-        logger: BaseLogger | None = None,
+        logger: BaseLogger,
     ) -> None:
         """Initializes the single synthesis use case with required engine and repository.
 
         Args:
             engine: SynthesisEngine strategy (e.g. LLaMEAEngine).
             sqlite_repo: Repository for persisting experiment telemetry and champion algorithms.
-            logger: Optional BaseLogger implementation for session telemetry.
+            logger: BaseLogger implementation for session telemetry.
         """
         self.engine = engine
         self.sqlite_repo = sqlite_repo
@@ -67,12 +64,11 @@ class SingleSynthesisUseCase:
         """
         task_label = key or f"exp_{experiment_id}"
 
-        if self.logger:
-            self.logger.verbose = verbose
-            self.logger.header(
-                title="LLaMEA Synthesis",
-                subtitle=f"Single run: {task_label}",
-            )
+        self.logger.verbose = verbose
+        self.logger.header(
+            title="LLaMEA Synthesis",
+            subtitle=f"Single run: {task_label}",
+        )
 
         result = self.engine.run(
             problem=problem,
@@ -84,13 +80,12 @@ class SingleSynthesisUseCase:
             initial_iteration=initial_iteration,
         )
 
-        if self.logger:
-            self.logger.summary(
-                title="Task Complete",
-                stats={
-                    "Key": task_label,
-                    "Best Error": result.best_error,
-                },
-            )
+        self.logger.summary(
+            title="Task Complete",
+            stats={
+                "Key": task_label,
+                "Best Error": result.best_error,
+            },
+        )
 
         return result

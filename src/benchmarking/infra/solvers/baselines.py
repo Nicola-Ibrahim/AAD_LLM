@@ -10,6 +10,7 @@ from collections.abc import Callable
 import time
 from typing import Any
 
+
 import numpy as np
 
 

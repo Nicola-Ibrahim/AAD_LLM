@@ -32,12 +32,13 @@ def build_evaluation_workflow(project_root: Path = PROJECT_ROOT) -> EvaluationWo
     session_factory = create_db_session_factory()
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
+    config = EvaluationConfigRepository().load_config()
     return EvaluationWorkflow(
         service=EvaluationService(
             sqlite_repo=sqlite_repo,
             champions_repo=champions_repo,
             state_repo=EvaluationStateRepository(),
-            config_repo=EvaluationConfigRepository(),
+            config=config,
             logger=EvaluationLogger(),
             problem_factory=BBOBProblemFactory(),
             executor_factory=create_candidate_executor,

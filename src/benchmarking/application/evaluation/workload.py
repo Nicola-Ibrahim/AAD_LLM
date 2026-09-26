@@ -7,12 +7,10 @@ from benchmarking.application.evaluation.constants import (
     EVALUATION_SCHEMA_VERSION,
     ERROR_DEFINITION,
 )
-from benchmarking.application.ports import (
-    CandidateCodeReader,
-    Champion,
-    EvaluationStateStore,
-    SynthesisReadRepository,
-)
+from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
+from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
+from benchmarking.application.interfaces.synthesis_read_repository import SynthesisReadRepository
+from benchmarking.application.champions import Champion
 from benchmarking.application.evaluation_config import EvaluationConfig
 from benchmarking.application.select_champions import ChampionSelectionService
 from evolution.domain.enums import SynthesisMode
@@ -24,7 +22,7 @@ class EvaluationWorkload:
 
     def __init__(
         self,
-        sqlite_repo: SynthesisReadRepository | None,
+        sqlite_repo: SynthesisReadRepository,
         champion_selection: ChampionSelectionService,
         state_repo: EvaluationStateStore,
         code_reader: CandidateCodeReader,
@@ -45,11 +43,7 @@ class EvaluationWorkload:
     def _discover_target_conditions(self) -> list[tuple[int, float, int]]:
         """Discover unique (dim, noise_std, problem_id) conditions directly from SQLite or champions."""
         raw_conditions: list[tuple[int, float, int]] = []
-        if self.sqlite_repo:
-            try:
-                raw_conditions = self.sqlite_repo.get_target_conditions()
-            except Exception:
-                raw_conditions = []
+        raw_conditions = self.sqlite_repo.get_target_conditions()
 
         if not raw_conditions:
             champions_flat = self.champion_selection.flatten_champions()

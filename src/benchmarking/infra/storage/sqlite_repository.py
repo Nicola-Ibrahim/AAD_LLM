@@ -4,7 +4,7 @@ import pandas as pd
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from benchmarking.application.ports import SynthesisReadRepository
+from benchmarking.application.interfaces.synthesis_read_repository import SynthesisReadRepository
 from shared.infra.database.tables import ExperimentORM, IterationORM
 
 

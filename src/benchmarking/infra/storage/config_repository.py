@@ -9,13 +9,12 @@ from typing import cast
 import tomllib
 
 from benchmarking.application.evaluation_config import EvaluationConfig
-from benchmarking.application.ports import EvaluationConfigReader
 from shared.config import CONFIGS_DIR
 
 TomlTable = dict[str, object]
 
 
-class EvaluationConfigRepository(EvaluationConfigReader):
+class EvaluationConfigRepository:
     """Infrastructure repository for reading and parsing benchmark.toml and baselines.toml."""
 
     def __init__(

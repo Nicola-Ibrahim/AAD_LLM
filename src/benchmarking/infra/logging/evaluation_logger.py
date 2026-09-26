@@ -10,7 +10,7 @@ import sys
 from collections.abc import Mapping
 from typing import TextIO
 
-from benchmarking.application.ports import EvaluationLoggerPort
+from benchmarking.application.interfaces.logger import EvaluationLoggerInterface
 from evolution.domain.enums import SynthesisMode
 
 
@@ -42,7 +42,7 @@ class EvaluationFormatter(logging.Formatter):
         return record.getMessage()
 
 
-class EvaluationLogger(EvaluationLoggerPort):
+class EvaluationLogger(EvaluationLoggerInterface):
     """Specialized evaluation logger utilizing standard Python logging.Logger with custom colorization and emojis."""
 
     def __init__(

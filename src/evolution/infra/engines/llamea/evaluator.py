@@ -12,14 +12,15 @@ from typing import Any
 
 from llamea import Solution
 
-from evolution.application.ports import BaseLogger, SessionConfig
+from evolution.application.interfaces.logger import BaseLogger
+from evolution.application.synthesis.models import SessionConfig
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.interfaces import BaseProblem
 from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.domain.vos import IterationMetadata, ProblemProfile
 from evolution.infra.engines.llamea.prompts import FeedbackRenderer
 from evolution.infra.logging import SynthesisLogger
-from evolution.application.ports.repository import SynthesisRepository
+from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.infra.execution.candidate_executor import AlgorithmExecutorAdapter
 from evolution.infra.storage.code.repository import CodeRepository
 from shared.infra.execution import AlgorithmExecutor
@@ -40,7 +41,6 @@ class Evaluator:
         experiment_id: int,
         config: SessionConfig,
         candidate_evaluation_service: CandidateEvaluationService,
-        feedback_renderer: FeedbackRenderer | None = None,
         initial_iteration: int = 0,
     ) -> None:
         self._problem = problem
@@ -52,7 +52,7 @@ class Evaluator:
         self._logger: BaseLogger = SynthesisLogger()
         self._experiment: ExperimentSummary | None = None
         self._candidate_evaluation_service = candidate_evaluation_service
-        self._feedback_renderer = feedback_renderer or FeedbackRenderer()
+        self._feedback_renderer = FeedbackRenderer()
 
     @property
     def candidate_evaluation_service(self) -> CandidateEvaluationService:

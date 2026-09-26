@@ -64,7 +64,7 @@ class DummyLLM:
             y = problem(x)
             if y < best_y:
                 best_y = y
-        return best_y
+        return best_x, best_y
 """
         sol = Solution(code=code, name="DummySearch", parent_ids=parent_ids or [])
         sol.add_metadata("llm_generation_time", 0.05)
@@ -137,9 +137,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
     ]
 
     runner = ProcessPoolRunner(max_workers=2)
-    results = runner.run(
-        fn=run_synthesis_worker, items=tasks, key_fn=lambda t: t["key"]
-    )
+    results = runner.run(fn=run_synthesis_worker, items=tasks, key_fn=lambda t: t["key"])
 
     assert "clean" in results
     assert "noisy" in results
@@ -207,9 +205,7 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
     ]
 
     with pytest.raises(OrchestrationError) as exc_info:
-        ProcessPoolRunner().run(
-            fn=run_synthesis_worker, items=tasks, key_fn=lambda t: t["key"]
-        )
+        ProcessPoolRunner().run(fn=run_synthesis_worker, items=tasks, key_fn=lambda t: t["key"])
 
     errors = exc_info.value.errors
     assert "failing" in errors
@@ -590,6 +586,8 @@ def test_session_mark_failed_on_error(temp_dir, db_session_factory):
 
 
 def test_evolution_task_execution(temp_dir, db_session_factory):
+    from unittest.mock import MagicMock
+
     repo = SQLiteSynthesisRepository(db_session_factory)
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
@@ -607,7 +605,7 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
         llm_client=llm,
         code_repo=CodeRepository(base_dir=temp_dir),
     )
-    usecase = SingleSynthesisUseCase(engine=engine, sqlite_repo=repo)
+    usecase = SingleSynthesisUseCase(engine=engine, sqlite_repo=repo, logger=MagicMock())
     res = usecase.execute(
         problem=problem,
         experiment_id=exp_id,
@@ -1121,32 +1119,33 @@ def test_experiment_summary_domain_aggregate(db_session_factory):
 
 
 def test_synthesis_engine_lsp_contract():
-    """Verify that any SynthesisEngine conforms to run(task, db_repo) returning SessionResult."""
-    from typing import Any
-    from evolution.application.ports.engine import SynthesisEngine
-    from evolution.application.ports.engine import SessionResult
+    """Verify that a SynthesisEngine receives a complete session request."""
+    from unittest.mock import MagicMock
+    from evolution.application.interfaces.synthesis_engine import SynthesisEngine
+    from evolution.application.synthesis.models import SessionResult
+    from evolution.application.interfaces.synthesis_repository import SynthesisRepository
     from evolution.domain.enums import SynthesisMode
+    from evolution.domain.interfaces import BaseProblem
 
     class CustomEngine(SynthesisEngine):
         def __init__(self, tag: str, score: float):
-            super().__init__(config=SessionConfig(iterations=1), db_repo=None)
             self.tag = tag
             self.score = score
 
         def run(
             self,
-            problem: Any,
+            problem: BaseProblem,
             experiment_id: int,
-            config: SessionConfig | None = None,
-            db_repo: Any | None = None,
-            prompt_strategy: PromptStrategy | None = None,
-            synthesis_mode: SynthesisMode | None = None,
+            config: SessionConfig,
+            db_repo: SynthesisRepository,
+            prompt_strategy: PromptStrategy,
+            synthesis_mode: SynthesisMode,
             initial_iteration: int = 0,
         ) -> SessionResult:
             return SessionResult(
                 problem_id=1,
                 dim=2,
-                mode=synthesis_mode or self.synthesis_mode,
+                mode=synthesis_mode,
                 noise_std=0.0,
                 experiment_id=experiment_id,
                 best_error=self.score,
@@ -1155,20 +1154,16 @@ def test_synthesis_engine_lsp_contract():
 
     engine = CustomEngine(tag="test_engine", score=0.05)
     assert isinstance(engine, SynthesisEngine)
-    # Test run() with overrides
     res = engine.run(
-        problem=None,
+        problem=MagicMock(),
         experiment_id=10,
         config=SessionConfig(iterations=2),
-        db_repo=None,
+        db_repo=MagicMock(),
+        prompt_strategy=PromptStrategy.BASELINE,
+        synthesis_mode=SynthesisMode.EXPLICIT,
     )
     assert res.experiment_name == "test_engine"
     assert res.best_error == 0.05
-
-    # Test run() relying on defaults from __init__
-    res_default = engine.run(problem=None, experiment_id=11)
-    assert res_default.experiment_id == 11
-    assert res_default.experiment_name == "test_engine"
 
 
 def test_llamea_engine_init_and_run(temp_dir, db_session_factory):
@@ -1220,7 +1215,7 @@ def test_campaign_item_and_engine_pickling(temp_dir):
 
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
-    engine = LLaMEAEngine(llm_client=llm)
+    engine = LLaMEAEngine(llm_client=llm, code_repo=CodeRepository())
     item = {
         "key": "pickle_task",
         "problem": problem,

@@ -59,13 +59,21 @@ class TestDomainResolvers:
 
     def test_clean_model_labels_dynamic(self):
         assert (
-            self.get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m.gguf") == "Qwen2.5-Coder-14B"
+            self.get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m.gguf")
+            == "Qwen2.5-Coder-14B"
         )
-        assert self.get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m") == "Qwen2.5-Coder-14B"
-        assert self.get_clean_model_label("qwen2.5-coder-7b-instruct-q4_k_m.gguf") == "Qwen2.5-Coder-7B"
+        assert (
+            self.get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m") == "Qwen2.5-Coder-14B"
+        )
+        assert (
+            self.get_clean_model_label("qwen2.5-coder-7b-instruct-q4_k_m.gguf")
+            == "Qwen2.5-Coder-7B"
+        )
         assert self.get_clean_model_label("deepseek-r1-distill-qwen-70b.gguf") == "DeepSeek-70B"
         assert self.get_clean_model_label("meta-llama-3-8b-instruct") == "Llama-3.1-8B"
-        assert self.get_clean_model_label("Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf") == "Llama-3.1-8B"
+        assert (
+            self.get_clean_model_label("Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf") == "Llama-3.1-8B"
+        )
         # Dynamic fallback for unregistered models without hardcoding
         assert self.get_clean_model_label("mistral-7b-instruct") == "Mistral-7B"
 
@@ -94,9 +102,13 @@ class TestDomainResolvers:
         assert self.resolve_folder_solver_name("pso") == "PSO"
 
         # LLM structured folders
-        assert self.resolve_folder_solver_name("qwen_14b_baseline") == "Qwen2.5-Coder-14B / baseline"
+        assert (
+            self.resolve_folder_solver_name("qwen_14b_baseline") == "Qwen2.5-Coder-14B / baseline"
+        )
         assert self.resolve_folder_solver_name("qwen_7b_guided") == "Qwen2.5-Coder-7B / guided"
-        assert self.resolve_folder_solver_name("qwen_70b_thinking") == "Qwen2.5-Coder-70B / thinking"
+        assert (
+            self.resolve_folder_solver_name("qwen_70b_thinking") == "Qwen2.5-Coder-70B / thinking"
+        )
 
 
 class TestDomainEngines:
@@ -262,7 +274,7 @@ class TestApplicationServicesIntegration:
         service = EvaluationAuditService(
             sqlite_repo=sqlite_repo,
             trace_repo=IOHTraceReader(RESULTS_DIR / "ioh_traces"),
-            config_repo=config_repo,
+            config=config_repo.load_config(),
             model_names=configured_model_names(),
         )
         if (DATA_DIR / "db.sqlite3").exists():
@@ -293,7 +305,7 @@ class TestApplicationServicesIntegration:
             df_exp, df_iter = service.get_synthesis_dataframes()
             assert isinstance(df_exp, pd.DataFrame)
             assert isinstance(df_iter, pd.DataFrame)
-            traces = service.load_all_traces()
+            traces = service.load_evaluation_traces()
             assert isinstance(traces, EvaluationDataset)
 
 

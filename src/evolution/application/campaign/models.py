@@ -3,7 +3,8 @@ from typing import TypedDict
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
-from evolution.application.ports.engine import SessionConfig, SessionResult, SynthesisEngine
+from evolution.application.interfaces.synthesis_engine import SynthesisEngine
+from evolution.application.synthesis.models import SessionConfig, SessionResult
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces import BaseProblem
 

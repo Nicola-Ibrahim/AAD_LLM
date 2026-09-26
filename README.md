@@ -150,3 +150,114 @@ If Poe the Poet is installed, the equivalent project tasks are `poe test`,
 - [Execution and recovery flow](docs/architecture/execution_flow.md)
 - [LLaMEA adapter architecture](docs/architecture/llamea_architecture.md)
 - [Evaluator methodology](docs/evaluator_methodology.md)
+
+```mermaid
+
+flowchart TD
+
+subgraph group_synthesis["Algorithm synthesis"]
+  node_campaign["Campaign use case"]
+  node_single_synthesis["Single synthesis"]
+  node_synth_config["Synthesis config<br/>[repository.py]"]
+  node_problem["Noisy BBOB<br/>[bbob.py]"]
+  node_problem_analysis["Problem analysis<br/>[analyzer.py]"]
+  node_noise["Noise strategy<br/>[noise_strategy.py]"]
+  node_engine_port["Synthesis engine port<br/>[engine.py]"]
+end
+
+subgraph group_runtime["Candidate runtime"]
+  node_llamea_runner["LLaMEA runner<br/>[runner.py]"]
+  node_prompt_builder["Prompt builder<br/>[builder.py]"]
+  node_llm_client["LLM client<br/>[client.py]"]
+  node_candidate_eval["Candidate evaluator<br/>[evaluator.py]"]
+  node_executor["Sandbox executor<br/>[executor.py]"]
+end
+
+subgraph group_benchmark["Benchmark evaluation"]
+  node_evaluation["Trial evaluation"]
+  node_champions["Champion selection"]
+end
+
+subgraph group_analysis["Audit and analysis"]
+  node_audit["Coverage audit<br/>[audit_service.py]"]
+  node_trace_repo["Trace ingestion"]
+  node_statistics["Statistical analysis"]
+  node_stats_engines["Analysis engines"]
+end
+
+subgraph group_persistence["Persistence"]
+  node_code_repo["Algorithm code store<br/>[repository.py]"]
+  node_synthesis_repo[("Synthesis repository<br/>[repository.py]")]
+  node_database[("SQLite database<br/>[engine.py]")]
+end
+
+node_notebook_user(("Notebook user"))
+node_llm_service{{"LLM backend"}}
+
+node_notebook_user -->|"starts campaign"| node_campaign
+node_notebook_user -->|"starts run"| node_single_synthesis
+node_notebook_user -->|"runs trials"| node_evaluation
+node_notebook_user -->|"audits coverage"| node_audit
+node_notebook_user -->|"analyzes results"| node_statistics
+node_campaign -->|"loads settings"| node_synth_config
+node_campaign -->|"dispatches runs"| node_single_synthesis
+node_single_synthesis -->|"runs synthesis"| node_engine_port
+node_engine_port -->|"implemented by"| node_llamea_runner
+node_llamea_runner -->|"builds prompts"| node_prompt_builder
+node_llamea_runner -->|"requests generation"| node_llm_client
+node_llm_client -.->|"calls model"| node_llm_service
+node_llamea_runner -->|"evaluates candidates"| node_candidate_eval
+node_candidate_eval -->|"executes code"| node_executor
+node_candidate_eval -->|"evaluates on problem"| node_problem
+node_problem -->|"applies noise"| node_noise
+node_problem -->|"analyzes landscape"| node_problem_analysis
+node_llamea_runner -->|"saves candidate code"| node_code_repo
+node_single_synthesis -->|"persists run"| node_synthesis_repo
+node_synthesis_repo -->|"reads and writes"| node_database
+node_campaign -->|"checks run state"| node_synthesis_repo
+node_evaluation -->|"loads champions"| node_champions
+node_champions -->|"queries experiments"| node_database
+node_evaluation -->|"loads algorithm code"| node_code_repo
+node_evaluation -->|"executes trials"| node_executor
+node_audit -->|"inspects champions"| node_champions
+node_audit -->|"checks coverage"| node_synthesis_repo
+node_statistics -->|"loads synthesis data"| node_synthesis_repo
+node_statistics -->|"loads evaluation traces"| node_trace_repo
+node_statistics -->|"computes analyses"| node_stats_engines
+
+click node_campaign "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign_usecase.py"
+click node_single_synthesis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/single_synthesis_usecase.py"
+click node_synth_config "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis_config/repository.py"
+click node_problem "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/problems/bbob.py"
+click node_problem_analysis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/problems/analyzer.py"
+click node_noise "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/domain/services/noise_strategy.py"
+click node_engine_port "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/interfaces/engine.py"
+click node_llamea_runner "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/runner.py"
+click node_prompt_builder "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/prompts/builder.py"
+click node_llm_client "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/llm/client.py"
+click node_candidate_eval "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/evaluator.py"
+click node_executor "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/execution/executor.py"
+click node_code_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/code/repository.py"
+click node_synthesis_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis/repository.py"
+click node_database "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/database/engine.py"
+click node_evaluation "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation_service.py"
+click node_champions "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/storage/champions_repository.py"
+click node_audit "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/audit_service.py"
+click node_trace_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/io/trace_repository.py"
+click node_statistics "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/statistical_service.py"
+click node_stats_engines "https://github.com/nicola-ibrahim/aad_llm/tree/main/src/benchmarking/domain/services"
+
+classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
+classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
+class node_campaign,node_single_synthesis,node_synth_config,node_problem,node_problem_analysis,node_noise,node_engine_port,node_notebook_user toneBlue
+class node_llamea_runner,node_prompt_builder,node_llm_client,node_candidate_eval,node_executor toneAmber
+class node_evaluation,node_champions toneMint
+class node_audit,node_trace_repo,node_statistics,node_stats_engines toneRose
+class node_code_repo,node_synthesis_repo,node_database,node_llm_service toneIndigo
+
+```

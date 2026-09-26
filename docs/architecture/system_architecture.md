@@ -30,7 +30,7 @@ execution live in `shared/infra/`.
 
 - `application/campaign/` separates audit, task planning, and campaign dispatch.
   `application/synthesis/` groups the single-session and candidate-evaluation use cases.
-- `application/ports/` owns repository, configuration, execution, problem-factory,
+- `application/interfaces/` owns abstract repository, configuration, execution, problem-factory,
   and dispatcher contracts. Worker functions remain module-level for process pickling.
 - `domain/` owns experiment entities, enums, noise rules, and
   `AlgorithmScoringService` (objective-gap, fitness, and failure classification).

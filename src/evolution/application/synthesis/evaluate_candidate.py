@@ -24,7 +24,7 @@ from evolution.domain.vos.metrics import (
     Fitness,
 )
 from evolution.domain.services.algorithm_scoring import AlgorithmScoringService, FailureKind
-from evolution.application.ports.candidate_executor import CandidateExecutor, CandidateTimeout
+from shared.application.interfaces.candidate_executor import CandidateExecutor, CandidateTimeout
 
 
 @dataclass
@@ -67,7 +67,6 @@ class CandidateEvaluationService:
         timeout_seconds: float = 30.0,
         stagnation_threshold: int = 3,
         convergence_threshold: float = 1e-6,
-        scoring_service: AlgorithmScoringService | None = None,
     ) -> None:
         self._problem = problem
         self._budget = budget
@@ -75,7 +74,6 @@ class CandidateEvaluationService:
         self._stagnation_threshold = stagnation_threshold
         self._convergence_threshold = convergence_threshold
         self._executor = executor
-        self._scoring_service = scoring_service or AlgorithmScoringService()
         self._consecutive_failures = 0
 
     def evaluate(
@@ -100,11 +98,7 @@ class CandidateEvaluationService:
         self._problem.reset()
         start_time = time.perf_counter()
 
-        problem_fn = (
-            self._problem.get_objective_fn()
-            if hasattr(self._problem, "get_objective_fn")
-            else self._problem
-        )
+        problem_fn = self._problem.get_objective_fn()
         try:
             best_x, algorithm_returned_fitness = self._executor.execute_algorithm(
                 code=code,
@@ -114,8 +108,8 @@ class CandidateEvaluationService:
                 budget=self._budget,
             )
             runtime_seconds = time.perf_counter() - start_time
-            evaluations_used = getattr(self._problem, "evaluations", 0)
-            captured = list(getattr(self._executor, "last_captured_warnings", []))
+            evaluations_used = self._problem.evaluations
+            captured = list(self._executor.last_captured_warnings)
             ctx = _AlgorithmExecutionContext(
                 algorithm_name=name,
                 runtime_seconds=runtime_seconds,
@@ -137,8 +131,8 @@ class CandidateEvaluationService:
 
         except Exception as error:
             runtime_seconds = time.perf_counter() - start_time
-            evaluations_used = getattr(self._problem, "evaluations", 0)
-            captured = list(getattr(self._executor, "last_captured_warnings", []))
+            evaluations_used = self._problem.evaluations
+            captured = list(self._executor.last_captured_warnings)
             ctx = _AlgorithmExecutionContext(
                 algorithm_name=name,
                 runtime_seconds=runtime_seconds,
@@ -180,29 +174,21 @@ class CandidateEvaluationService:
 
     def _resolve_clean_objective(
         self,
-        best_x: np.ndarray | None,
-        algorithm_returned_fitness: float,
+        best_x: np.ndarray,
     ) -> float:
         """Validate best_x dimension and bounds, re-evaluate on clean objective, and check finite return."""
-        if best_x is not None:
-            if len(best_x) != self._problem.dim:
-                raise ValueError(
-                    f"Returned best_x has dimension {len(best_x)}, expected problem dimension {self._problem.dim}."
-                )
-            if not self._problem.is_in_bounds(best_x):
-                lb_val = (
-                    self._problem.lower_bound[0] if hasattr(self._problem, "lower_bound") else -5.0
-                )
-                ub_val = (
-                    self._problem.upper_bound[0] if hasattr(self._problem, "upper_bound") else 5.0
-                )
-                raise ValueError(
-                    f"Returned best_x {best_x.tolist()} is outside search space bounds [{lb_val}, {ub_val}]. "
-                    "Ensure your algorithm clips candidate solutions to domain bounds using problem.clip(x) or np.clip(x, lb, ub)."
-                )
-            clean_y = self._problem.eval_clean(best_x)
-        else:
-            clean_y = algorithm_returned_fitness
+        if len(best_x) != self._problem.dim:
+            raise ValueError(
+                f"Returned best_x has dimension {len(best_x)}, expected problem dimension {self._problem.dim}."
+            )
+        if not self._problem.is_in_bounds(best_x):
+            lb_val = self._problem.lower_bound[0]
+            ub_val = self._problem.upper_bound[0]
+            raise ValueError(
+                f"Returned best_x {best_x.tolist()} is outside search space bounds [{lb_val}, {ub_val}]. "
+                "Ensure your algorithm clips candidate solutions to domain bounds using problem.clip(x) or np.clip(x, lb, ub)."
+            )
+        clean_y = self._problem.eval_clean(best_x)
 
         if not math.isfinite(clean_y):
             raise ValueError(
@@ -301,8 +287,10 @@ class CandidateEvaluationService:
     ) -> tuple[float, float, IterationMetadata]:
         """Compute final error, fitness score, and metadata object."""
         true_optimum = self._problem.true_optimum
-        clean_y = self._resolve_clean_objective(ctx.best_x, ctx.algorithm_returned_fitness)
-        scoring = self._scoring_service.success(clean_y, true_optimum)
+        if ctx.best_x is None:
+            raise ValueError("A successful optimizer result must include best_x coordinates.")
+        clean_y = self._resolve_clean_objective(ctx.best_x)
+        scoring = AlgorithmScoringService.success(clean_y, true_optimum)
         final_error = scoring.objective_gap
         metadata = self._build_success_metadata(ctx, final_error)
         fitness_score = scoring.fitness
@@ -326,7 +314,7 @@ class CandidateEvaluationService:
             failure_kind = FailureKind.RUNTIME
         else:
             failure_kind = FailureKind.EXECUTION
-        internal_score = self._scoring_service.failure_score(failure_kind)
+        internal_score = AlgorithmScoringService.failure_score(failure_kind)
 
         tb_str = "" if is_timeout else traceback.format_exc()
         code_context = self.extract_code_context(tb_str, ctx.candidate_code)

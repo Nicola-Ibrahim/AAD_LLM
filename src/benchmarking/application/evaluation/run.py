@@ -1,14 +1,10 @@
-from benchmarking.application.ports import (
-    BaselineResolver,
-    CandidateCodeReader,
-    CandidateExecutorFactory,
-    ChampionRepository,
-    EvaluationConfigReader,
-    EvaluationLoggerPort,
-    EvaluationStateStore,
-    SynthesisReadRepository,
-    ProblemFactory,
-)
+from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
+from benchmarking.application.interfaces.champion_repository import ChampionRepository
+from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
+from benchmarking.application.interfaces.logger import EvaluationLoggerInterface
+from benchmarking.application.interfaces.synthesis_read_repository import SynthesisReadRepository
+from shared.application.interfaces.problem_factory import ProblemFactory
+from benchmarking.application.evaluation.types import BaselineRunnerResolver, ExecutorBuilder
 
 import numpy as np
 import pandas as pd
@@ -29,18 +25,18 @@ class EvaluationService:
         sqlite_repo: SynthesisReadRepository,
         champions_repo: ChampionRepository,
         state_repo: EvaluationStateStore,
-        config_repo: EvaluationConfigReader,
-        logger: EvaluationLoggerPort,
+        config: EvaluationConfig,
+        logger: EvaluationLoggerInterface,
         problem_factory: ProblemFactory,
-        executor_factory: CandidateExecutorFactory,
-        baseline_resolver: BaselineResolver,
+        executor_factory: ExecutorBuilder,
+        baseline_resolver: BaselineRunnerResolver,
         code_reader: CandidateCodeReader,
         model_names: ModelNames,
     ) -> None:
         self.champion_selection = ChampionSelectionService(champions_repo=champions_repo)
         self.logger = logger
         self.model_names = model_names
-        self.config: EvaluationConfig = config_repo.load_config()
+        self.config = config
         self.workload = EvaluationWorkload(
             sqlite_repo=sqlite_repo,
             champion_selection=self.champion_selection,

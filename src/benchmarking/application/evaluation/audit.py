@@ -10,11 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from benchmarking.domain.enums import BBOBFunction
 from benchmarking.domain.services.resolvers import ModelNames
 from benchmarking.application.evaluation_config import EvaluationConfig
-from benchmarking.application.ports import (
-    EvaluationConfigReader,
-    EvaluationTraceReader,
-    SynthesisReadRepository,
-)
+from benchmarking.application.interfaces.evaluation_trace_reader import EvaluationTraceReader
+from benchmarking.application.interfaces.synthesis_read_repository import SynthesisReadRepository
 
 EvaluationCountMap = dict[
     tuple[int, float, int] | tuple[int, float, int, str], dict[str, int] | int
@@ -59,15 +56,14 @@ class EvaluationAuditService:
         self,
         sqlite_repo: SynthesisReadRepository,
         trace_repo: EvaluationTraceReader,
-        config_repo: EvaluationConfigReader,
+        config: EvaluationConfig,
         model_names: ModelNames,
     ) -> None:
         self.sqlite_repo = sqlite_repo
         self.trace_repo = trace_repo
-        self.config_repo = config_repo
         self.model_names = model_names
 
-        self.config: EvaluationConfig = self.config_repo.load_config()
+        self.config = config
         self.target_runs = self.config.target_eval_runs
         self.classical_baselines = self.config.classical_baselines
 

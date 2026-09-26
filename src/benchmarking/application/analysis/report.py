@@ -1,7 +1,7 @@
 from pathlib import Path
 import pandas as pd
 
-from benchmarking.application.ports import MarkdownReportWriter
+from benchmarking.application.interfaces.markdown_report_writer import MarkdownReportWriter
 
 
 def generate_markdown_report(

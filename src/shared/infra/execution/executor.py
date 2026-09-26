@@ -33,7 +33,7 @@ class AlgorithmExecutor:
            │                                         │
            ▼                                         ▼
     1. Unpack & Normalize:                Raise AlgorithmTimeoutException
-       • (best_x, best_y) or float(best_y)
+       • Require (best_x, best_y)
        • Convert best_x to np.ndarray
     2. Validate Finiteness (no NaN/inf)
     3. Budget Overrun Check (> 1.10x)
@@ -60,7 +60,7 @@ class AlgorithmExecutor:
 
     def execute_algorithm(
         self, code: str, name: str, dim: int, problem: Callable[..., float], budget: int
-    ) -> tuple[np.ndarray | None, float]:
+    ) -> tuple[np.ndarray, float]:
         """Dynamically compile and execute candidate algorithm code with budget and
         wall-clock timeout protection.
 
@@ -72,8 +72,7 @@ class AlgorithmExecutor:
             budget: Stopping criterion given to the algorithm.
 
         Returns:
-            tuple[np.ndarray | None, float]: A tuple containing the best search point coordinates
-                (if returned by the algorithm) and the best observed fitness value.
+            tuple[np.ndarray, float]: The best search point coordinates and its observed fitness.
         """
         algorithm = self._compiler.compile(code, name, dim)
         self.last_captured_warnings = list(getattr(self._compiler, "last_compiler_warnings", []))
@@ -103,24 +102,20 @@ class AlgorithmExecutor:
 
         if result is None:
             raise TypeError(
-                "The algorithm did not return a valid fitness/objective value. "
-                "Make sure your __call__ method returns (best_x, float(best_y))."
+                "The algorithm did not return a result. "
+                "Your __call__ method must return (best_x, float(best_y))."
             )
-
-        best_x: np.ndarray | None = None
-        algorithm_returned_fitness: float
 
         if isinstance(result, tuple) and len(result) == 2:
             raw_x, raw_y = result
-            if raw_x is not None:
-                best_x = np.asarray(raw_x, dtype=float)
+            if raw_x is None:
+                raise TypeError("Returned best_x must be a coordinate vector, not None.")
+            best_x = np.asarray(raw_x, dtype=float)
             algorithm_returned_fitness = float(raw_y)
-        elif isinstance(result, (int, float, np.number)):
-            algorithm_returned_fitness = float(result)
         else:
             raise TypeError(
-                f"The algorithm returned an unexpected object type {type(result).__name__}. "
-                "Expected (best_x, float(best_y)) or float(best_y)."
+                f"The algorithm returned {type(result).__name__}; "
+                "expected a (best_x, float(best_y)) tuple."
             )
 
         import math

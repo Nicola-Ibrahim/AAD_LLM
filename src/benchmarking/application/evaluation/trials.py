@@ -12,16 +12,13 @@ from benchmarking.application.evaluation.constants import (
     ERROR_DEFINITION,
 )
 from benchmarking.application.evaluation_config import EvaluationConfig
-from benchmarking.application.ports import (
-    BaselineResolver,
-    CandidateCodeReader,
-    CandidateExecutor,
-    CandidateExecutorFactory,
-    Champion,
-    EvaluationLoggerPort,
-    EvaluationStateStore,
-    ProblemFactory,
-)
+from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
+from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
+from benchmarking.application.interfaces.logger import EvaluationLoggerInterface
+from shared.application.interfaces.problem_factory import ProblemFactory
+from shared.application.interfaces.candidate_executor import CandidateExecutor
+from benchmarking.application.champions import Champion
+from benchmarking.application.evaluation.types import BaselineRunnerResolver, ExecutorBuilder
 from benchmarking.domain.services.resolvers import ModelNames
 from evolution.domain.interfaces import BaseProblem
 from evolution.domain.enums import NoiseModelEnum
@@ -34,10 +31,10 @@ class EvaluationTrialRunner:
     def __init__(
         self,
         state_repo: EvaluationStateStore,
-        logger: EvaluationLoggerPort,
+        logger: EvaluationLoggerInterface,
         problem_factory: ProblemFactory,
-        executor_factory: CandidateExecutorFactory,
-        baseline_resolver: BaselineResolver,
+        executor_factory: ExecutorBuilder,
+        baseline_resolver: BaselineRunnerResolver,
         code_reader: CandidateCodeReader,
         model_names: ModelNames,
         config: EvaluationConfig,
@@ -261,12 +258,12 @@ class EvaluationTrialRunner:
         return self.code_reader.read(code_path)
 
     def _create_executor(self, timeout_seconds: float) -> CandidateExecutor:
-        return self.executor_factory(timeout_seconds)
+        return self.executor_factory.create(timeout_seconds)
 
     def _resolve_baseline(
         self, baseline_slug: str
     ) -> Callable[[BaseProblem, int], tuple[float, float, int]]:
-        return self.baseline_resolver(baseline_slug)
+        return self.baseline_resolver.resolve(baseline_slug)
 
     def run_champion_trials(
         self,
@@ -303,7 +300,7 @@ class EvaluationTrialRunner:
 
         def champion_runner(prob: BaseProblem, budget: int) -> tuple[float, float, int]:
             t0 = time.perf_counter()
-            best_x, returned_fitness = executor.execute_algorithm(
+            best_x, _ = executor.execute_algorithm(
                 code=code_str,
                 name=algo_name,
                 dim=dim,
@@ -311,12 +308,7 @@ class EvaluationTrialRunner:
                 budget=budget,
             )
             t1 = time.perf_counter()
-            if best_x is not None:
-                best_objective = prob.eval_clean(best_x)
-            elif prob.noise_std > 0.0:
-                raise ValueError("Noisy champion must return best_x for clean objective scoring.")
-            else:
-                best_objective = float(returned_fitness)
+            best_objective = prob.eval_clean(best_x)
             return best_objective, (t1 - t0), prob.evaluations
 
         prov_metadata = {

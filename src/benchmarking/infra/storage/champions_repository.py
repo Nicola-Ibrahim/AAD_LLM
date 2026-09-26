@@ -6,7 +6,8 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from benchmarking.application.ports import ChampionCatalog, ChampionRepository
+from benchmarking.application.champions import ChampionCatalog
+from benchmarking.application.interfaces.champion_repository import ChampionRepository
 from shared.config import RESULTS_DIR
 from shared.infra.database.tables import ExperimentORM, IterationORM
 

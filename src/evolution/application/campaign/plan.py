@@ -1,12 +1,9 @@
 from evolution.application.campaign.audit import CampaignAuditor
 from evolution.application.campaign.models import CampaignTask
-from evolution.application.ports import (
-    LanguageModelClient,
-    ProblemFactory,
-    SynthesisEngine,
-    SynthesisRepository,
-)
-from evolution.application.ports.engine import SessionConfig
+from shared.application.interfaces.problem_factory import ProblemFactory
+from evolution.application.interfaces.synthesis_engine import SynthesisEngine
+from evolution.application.interfaces.synthesis_repository import SynthesisRepository
+from evolution.application.synthesis.models import SessionConfig
 from evolution.application.synthesis_config import MatrixCondition, SynthesisConfig
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import NoiseModelEnum
@@ -20,29 +17,25 @@ class CampaignPlanner:
         self,
         sqlite_repo: SynthesisRepository,
         config: SynthesisConfig,
-        engine: SynthesisEngine | None,
-        llm_client: LanguageModelClient | None,
-        problem_factory: ProblemFactory | None,
+        engine: SynthesisEngine,
+        model_name: str,
+        problem_factory: ProblemFactory,
         auditor: CampaignAuditor,
     ) -> None:
         self.sqlite_repo = sqlite_repo
         self.config = config
         self.engine = engine
-        self.llm_client = llm_client
+        self.model_name = model_name
         self.problem_factory = problem_factory
         self.auditor = auditor
 
     def build_tasks(self) -> list[CampaignTask]:
         """Constructs the list of work item parameter dictionaries to execute based on configuration."""
-        if self.engine is None:
-            raise ValueError("SynthesisEngine must be configured to build executable tasks.")
-
         # Fast path: targeted experiment IDs
-        if self.config.target_experiment_ids:
-            return self._build_targeted_tasks(target_ids=self.config.target_experiment_ids)
+        if self.config.target_exp_ids:
+            return self._build_targeted_tasks(target_ids=self.config.target_exp_ids)
 
-        model_name = self.llm_client.model.name if self.llm_client else "unknown"
-        all_db_exps = self.sqlite_repo.load(llm_name=model_name)
+        all_db_exps = self.sqlite_repo.load(llm_name=self.model_name)
         db_comp, db_run, _ = self.auditor.group_experiments_by_condition(
             experiments=all_db_exps,
             retry_failed_synthesis=self.config.retry_failed_synthesis,
@@ -87,8 +80,6 @@ class CampaignPlanner:
         seed: int = 42,
     ) -> BaseProblem:
         """Create a problem through the configured application port."""
-        if self.problem_factory is None:
-            raise RuntimeError("Problem factory must be configured.")
         return self.problem_factory.create(
             problem_id=problem_id,
             dim=dim,
@@ -111,7 +102,6 @@ class CampaignPlanner:
         tag: str = "resume",
     ) -> CampaignTask:
         """Constructs a work item for an existing experiment in the database."""
-        assert self.engine is not None
         if exp.id is None:
             raise ValueError(f"Cannot build task without a valid database id: {exp}")
         noise_std = exp.problem.noise_std or 0.0
@@ -142,7 +132,6 @@ class CampaignPlanner:
         self,
         target_ids: list[int],
     ) -> list[CampaignTask]:
-        assert self.engine is not None
         targeted_experiments = self.sqlite_repo.load_by_ids(target_ids)
         return [
             self._build_task_from_summary(exp, tag="target")
@@ -164,10 +153,6 @@ class CampaignPlanner:
         key_prefix: str = "",
     ) -> CampaignTask:
         """Registers a new experiment record in the database and returns a fresh work item dictionary."""
-        assert self.engine is not None
-        if self.llm_client is None:
-            raise ValueError("LLMClient must be configured to register fresh experiments in DB.")
-
         problem = self._create_problem(
             problem_id=condition.problem_id,
             dim=condition.dim,
@@ -179,8 +164,8 @@ class CampaignPlanner:
         fresh_cfg = self._build_session_config()
         exp_id = self.sqlite_repo.create_experiment(
             problem=problem.profile,
-            mode=condition.synthesis_mode,
-            llm_name=self.llm_client.model.name,
+            mode=condition.mode,
+            llm_name=self.model_name,
             prompt_strategy=condition.strategy,
             budget=fresh_cfg.budget,
             max_iterations=fresh_cfg.iterations,
@@ -199,5 +184,5 @@ class CampaignPlanner:
             engine=self.engine,
             initial_iteration=0,
             prompt_strategy=condition.strategy,
-            synthesis_mode=condition.synthesis_mode,
+            synthesis_mode=condition.mode,
         )

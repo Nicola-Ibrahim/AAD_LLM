@@ -9,7 +9,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Generic, TypeVar
 
 from evolution.application.exceptions import OrchestrationError
-from evolution.application.ports.campaign_runtime import TaskDispatcher
+from evolution.application.interfaces.task_dispatcher import TaskDispatcher
 
 T = TypeVar("T")
 R = TypeVar("R")

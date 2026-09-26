@@ -11,7 +11,6 @@ import tomllib
 
 from shared.config import CONFIGS_DIR
 from evolution.domain.enums import NoiseModelEnum, PromptStrategy, SynthesisMode
-from evolution.application.ports import SynthesisConfigReader
 from evolution.application.synthesis_config import (
     MatrixCondition,
     NoiseConditionConfig,
@@ -41,7 +40,7 @@ def _text(value: object, default: str) -> str:
     return value if isinstance(value, str) else default
 
 
-class SynthesisConfigRepository(SynthesisConfigReader):
+class SynthesisConfigRepository:
     """Infrastructure repository for reading and parsing synthesis.toml into SynthesisConfig."""
 
     def __init__(
@@ -167,7 +166,7 @@ class SynthesisConfigRepository(SynthesisConfigReader):
             noise_conditions.append(
                 NoiseConditionConfig(
                     std=std,
-                    model=model,
+                    noise_model=model,
                     mode=explicit_mode,
                     modes=applicable_modes,
                 )
@@ -212,7 +211,7 @@ class SynthesisConfigRepository(SynthesisConfigReader):
                                     dim=dim,
                                     mode=mode_cfg.mode,
                                     noise_std=noise_cond.std,
-                                    noise_model=noise_cond.model,
+                                    noise_model=noise_cond.noise_model,
                                     strategy=strat,
                                 )
                             )
@@ -242,6 +241,8 @@ class SynthesisConfigRepository(SynthesisConfigReader):
             budget=int(_number(evolution_cfg.get("budget"), 1_000_000)),
             timeout_seconds=timeout_sec,
             iterations=int(_number(evolution_cfg.get("iterations"), 10)),
+            stagnation_threshold=int(_number(evolution_cfg.get("stagnation_threshold"), 3)),
+            convergence_threshold=float(_number(evolution_cfg.get("convergence_threshold"), 1e-6)),
             runs_per_config=int(_number(evolution_cfg.get("runs_per_config"), 1)),
             num_processes=num_workers,
             auto_resume=bool(exec_meta.get("auto_resume", True)),
@@ -251,7 +252,4 @@ class SynthesisConfigRepository(SynthesisConfigReader):
             target_exp_ids=target_ids,
             name=_text(evolution_cfg.get("name"), "bbob_comprehensive_matrix"),
             noise_model=default_model,
-            matrix=matrix_cfg,
-            evolution=evolution_cfg,
-            execution=exec_meta,
         )

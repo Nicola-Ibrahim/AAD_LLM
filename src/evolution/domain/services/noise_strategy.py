@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Protocol
 
 import numpy as np
 
@@ -7,11 +6,13 @@ import numpy as np
 from evolution.domain.enums import NoiseModelEnum
 
 
-class CleanObjective(Protocol):
+class CleanObjective(ABC):
     """Clean objective capability used to calibrate noise strategies."""
 
+    @abstractmethod
     def __call__(self, x: list[float]) -> float: ...
 
+    @abstractmethod
     def reset(self) -> None: ...
 
 
