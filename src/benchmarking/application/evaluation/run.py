@@ -65,11 +65,13 @@ class EvaluationService:
         self.logger.verbose = verbose
 
         df_audit = self.workload.audit_workload(solver_type=solver_type)
+        if df_audit.empty:
+            return pd.DataFrame()
         active = df_audit[~df_audit["is_filtered"] & (df_audit["status"] != "MISSING_CODE")]
 
         champions_flat = (
             self.champion_selection.flatten_champions()
-            if solver_type in ("all", "champions", "cross_eval")
+            if solver_type in ("all", "champions", "noise_robustness", "cross_function")
             else {}
         )
         results: list[dict[str, object]] = []
@@ -98,11 +100,11 @@ class EvaluationService:
                 noise_std=noise_std,
                 problem_id=p_id,
                 problem_name=BBOBFunction.get_name(p_id),
-                mode=(row.get("mode") if stype in ("champion", "cross_eval") else None),
-                strategy=(row.get("strategy") if stype in ("champion", "cross_eval") else None),
+                mode=(row.get("mode") if stype != "baseline" else None),
+                strategy=(row.get("strategy") if stype != "baseline" else None),
             )
 
-            if stype in ("champion", "cross_eval"):
+            if stype != "baseline":
                 raw_k = row.get("raw_key", row["key"])
                 matching = [v for k, v in champions_flat.items() if k == raw_k or k.endswith(raw_k)]
                 if not matching:
@@ -118,6 +120,7 @@ class EvaluationService:
                     target_noise_std=row["noise_std"],
                     solver_folder=row["solver"],
                     verbose=verbose,
+                    target_problem_id=p_id if stype == "cross_function" else None,
                 )
             else:
                 res = self.trials.run_baseline_trials(
@@ -139,6 +142,7 @@ class EvaluationService:
                     "solver": row["solver"],
                     "display_name": row["display_name"],
                     "problem_id": p_id,
+                    "source_problem_id": row.get("source_problem_id"),
                     "dim": dim,
                     "noise_std": noise_std,
                     "status": res["status"],
@@ -171,12 +175,16 @@ class EvaluationService:
         """Run all pending/partial native champion evaluations."""
         return self.run_evaluations(solver_type="champions", verbose=verbose)
 
-    def run_cross_evaluations(
+    def run_noise_robustness(
         self,
         verbose: bool = True,
     ) -> pd.DataFrame:
-        """Run all pending/partial cross-environment evaluations for clean champions."""
-        return self.run_evaluations(solver_type="cross_eval", verbose=verbose)
+        """Run frozen clean champions on their original functions with added noise."""
+        return self.run_evaluations(solver_type="noise_robustness", verbose=verbose)
+
+    def run_cross_function_evaluations(self, verbose: bool = True) -> pd.DataFrame:
+        """Run opt-in cross-function trials and reuse paired clean baselines."""
+        return self.run_evaluations(solver_type="cross_function", verbose=verbose)
 
     def run_baselines(
         self,

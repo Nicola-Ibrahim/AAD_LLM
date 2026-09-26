@@ -63,6 +63,11 @@ class FixtureChampionsRepository:
         return pd.DataFrame(rows)
 
 
+class EmptyConditionsRepository:
+    def get_target_conditions(self) -> list[tuple[int, float, int]]:
+        return []
+
+
 def test_baselines_callables():
     """Verify that classical baselines execute and return a candidate and fitness."""
     prob = BBOBProblem(problem_id=1, dim=2, instance_id=1, noise_strategy=NoNoiseStrategy())
@@ -530,7 +535,7 @@ target_noise_stds = [0.0, 0.05, 0.1]
         encoding="utf-8",
     )
 
-    sqlite_repo = None
+    sqlite_repo = EmptyConditionsRepository()
     champions_repo = FixtureChampionsRepository(champions_json)
     state_repo = EvaluationStateRepository(eval_dir=eval_dir)
     config_repo = EvaluationConfigRepository(config_path=cfg_file)
@@ -550,16 +555,16 @@ target_noise_stds = [0.0, 0.05, 0.1]
     assert df_native.iloc[0]["noise_std"] == 0.0
     assert df_native.iloc[0]["solver_type"] == "champion"
 
-    df_cross = service.workload.audit_cross_eval_workload()
+    df_cross = service.workload.audit_noise_robustness_workload()
     assert len(df_cross) == 2
     assert set(df_cross["noise_std"]) == {0.05, 0.1}
-    assert all(df_cross["solver_type"] == "cross_eval")
+    assert all(df_cross["solver_type"] == "noise_robustness")
     assert all(df_cross["solver"] == "qwen_14b_baseline")
 
     df_all = service.workload.audit_workload(solver_type="all")
     # 1 native champion + 2 cross-evals + 3 baselines (dim 2, 3 noises = 3 runs)
     assert len(df_all[df_all["solver_type"] == "champion"]) == 1
-    assert len(df_all[df_all["solver_type"] == "cross_eval"]) == 2
+    assert len(df_all[df_all["solver_type"] == "noise_robustness"]) == 2
 
 
 def test_cross_eval_default_behavior_without_toml_flags(tmp_path: Path):
@@ -614,7 +619,7 @@ classical_baselines = ["cmaes"]
         encoding="utf-8",
     )
 
-    sqlite_repo = None
+    sqlite_repo = EmptyConditionsRepository()
     champions_repo = FixtureChampionsRepository(champions_json)
     state_repo = EvaluationStateRepository(eval_dir=eval_dir)
     config_repo = EvaluationConfigRepository(config_path=cfg_file)
@@ -643,11 +648,11 @@ classical_baselines = ["cmaes"]
         for _, row in df_native.iterrows()
     )
 
-    df_cross = service.workload.audit_cross_eval_workload()
+    df_cross = service.workload.audit_noise_robustness_workload()
     assert len(df_cross) >= 1
     assert 0.05 in df_cross["noise_std"].values
     assert all(df_cross["solver"] == "qwen_14b_baseline")
-    assert all(df_cross["solver_type"] == "cross_eval")
+    assert all(df_cross["solver_type"] == "noise_robustness")
 
 
 def test_evaluation_service_seeds_trials_independently(tmp_path: Path):

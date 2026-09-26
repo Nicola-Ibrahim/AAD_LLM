@@ -61,8 +61,24 @@ adjust `configs/synthesis.toml` before running a quick experiment.
    champions and classical baselines over repeated trials.
 4. [04_audit.ipynb](notebooks/04_audit.ipynb) — audit matrix coverage, pending
    work, failures, and resumable runs.
-5. [05_analysis.ipynb](notebooks/05_analysis.ipynb) — perform non-parametric
-   statistical analysis and create thesis/publication figures.
+5. [05_analysis.ipynb](notebooks/analysis/05_analysis.ipynb) — native reliability
+   tables and the three primary thesis PNGs.
+6. [06_performance_profiles.ipynb](notebooks/analysis/06_performance_profiles.ipynb)
+   — exploratory performance, strategy ablations, and detailed convergence/ECDF sweeps.
+7. [07_generalization.ipynb](notebooks/analysis/07_generalization.ipynb) — frozen-champion
+   noise robustness and cross-function transfer.
+
+The three analysis notebooks run independently. Their shared Plotly builders live
+in `notebooks/analysis/plotting/`; calculations remain in the domain engines.
+Successful PNG exports are cached per workflow and per figure. Run only the
+sections you need, use condition filters for smaller sweeps, and set
+`FORCE_EXPORT = True` only when you deliberately want to regenerate images.
+
+Noise robustness and cross-function generalization are separate secondary
+analyses, outside the native champion ranking. Cross-function evaluation is
+opt-in, uses frozen clean champions, and writes isolated transfer traces.
+See [the evaluation protocol](docs/transfer_evaluation.md) for execution switches,
+scoring, storage, and thesis interpretation.
 
 ## Configuration
 

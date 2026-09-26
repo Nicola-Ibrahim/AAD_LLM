@@ -50,17 +50,13 @@ class EcdfConvergenceEngine:
         interpolated: list[np.ndarray] = []
         for run in runs:
             if len(run.evaluations) == 0:
+                interpolated.append(np.full(len(eval_grid), np.inf))
                 continue
             incumbent = np.minimum.accumulate(run.raw_objectives)
-            interpolated.append(
-                np.interp(
-                    eval_grid,
-                    run.evaluations,
-                    incumbent,
-                    left=incumbent[0],
-                    right=incumbent[-1],
-                )
-            )
+            indices = np.searchsorted(run.evaluations, eval_grid, side="right") - 1
+            values = incumbent[np.maximum(indices, 0)].copy()
+            values[indices < 0] = np.inf
+            interpolated.append(values)
         return np.asarray(interpolated)
 
     def compute_convergence_iqr(

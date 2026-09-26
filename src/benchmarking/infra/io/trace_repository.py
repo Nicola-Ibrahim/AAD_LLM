@@ -14,6 +14,11 @@ import numpy as np
 from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
 from benchmarking.application.interfaces.evaluation_trace_reader import EvaluationTraceReader
 from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
+from benchmarking.application.evaluation.constants import (
+    EVALUATION_SCHEMA_VERSION,
+    ERROR_DEFINITION,
+    executed_trial_count,
+)
 from shared.config import RESULTS_DIR
 
 
@@ -92,7 +97,7 @@ class IOHTraceReader(EvaluationTraceReader):
                     prov = json.load(pf)
                 clean_errors = prov.get("clean_errors")
                 if clean_errors is not None and isinstance(clean_errors, list):
-                    return len(clean_errors)
+                    return executed_trial_count(prov)
                 n = prov.get("n_runs")
                 if n is not None and int(n) > 0:
                     return int(n)
@@ -112,6 +117,32 @@ class IOHTraceReader(EvaluationTraceReader):
 
         dat_files = [f for f in solver_dir.glob("**/*.dat") if f.stat().st_size > 0]
         return len(dat_files)
+
+    def load_provenance_records(self) -> list[dict[str, object]]:
+        """Load current terminal-result records, excluding historical skipped tails."""
+        records: list[dict[str, object]] = []
+        for path in sorted(self.eval_dir.rglob("provenance.json")):
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if (
+                not isinstance(record, dict)
+                or record.get("evaluation_schema_version") != EVALUATION_SCHEMA_VERSION
+                or record.get("error_definition") != ERROR_DEFINITION
+            ):
+                continue
+            count = executed_trial_count(record)
+            records.append(
+                {
+                    **record,
+                    "clean_errors": record.get("clean_errors", record.get("errors", []))[:count],
+                    "n_runs": count,
+                "solver_folder": path.parent.name,
+                "trace_directory": str(path.parent),
+                }
+            )
+        return records
 
     def load_evaluation_traces(
         self,
@@ -185,6 +216,33 @@ class IOHTraceReader(EvaluationTraceReader):
                     for r in parsed_runs:
                         dataset.add_run(cond, solver_name, r)
 
+        # Only confirmed pre-query execution failures get empty trace entries.
+        # Missing trace files for otherwise evaluated trials stay missing.
+        for record in self.load_provenance_records():
+            dim, noise_std, p_id = (
+                int(record["dim"]),
+                float(record["noise_std"]),
+                int(record["problem_id"]),
+            )
+            if (dims and dim not in dims) or (problems and p_id not in problems):
+                continue
+            if noise_stds and not any(np.isclose(noise_std, n) for n in noise_stds):
+                continue
+            folder = str(record["solver_folder"])
+            solver_name = solver_resolver(folder) if solver_resolver else folder
+            if solvers and solver_name not in solvers:
+                continue
+            condition = EvaluationCondition(dim=dim, noise_std=noise_std, problem_id=p_id)
+            for error, used in zip(record["clean_errors"], record.get("evaluations_used", [])):
+                if float(error) == float("inf") and used == 0:
+                    dataset.add_run(
+                        condition,
+                        solver_name,
+                        RunTrace(
+                            evaluations=np.array([], dtype=float),
+                            raw_objectives=np.array([], dtype=float),
+                        ),
+                    )
         return dataset
 
 
@@ -268,7 +326,7 @@ class EvaluationStateRepository(EvaluationStateStore):
         if prov is not None:
             clean_errors = prov.get("clean_errors")
             if clean_errors is not None and isinstance(clean_errors, list):
-                return len(clean_errors)
+                return executed_trial_count(prov)
             n_runs = prov.get("n_runs")
             if n_runs is not None and int(n_runs) > 0:
                 return int(n_runs)

@@ -7,6 +7,30 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1] / "src"
 
 
+def test_benchmarking_backend_does_not_depend_on_presentation() -> None:
+    """Figures belong to notebook-owned helpers, not any backend layer."""
+    violations: list[str] = []
+    for path in (ROOT / "benchmarking").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            else:
+                continue
+            for name in names:
+                if name.startswith(("plotly", "matplotlib", "notebooks")):
+                    violations.append(f"{path.relative_to(ROOT)}: {name}")
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in {"write_image", "write_html", "savefig"}
+            ):
+                violations.append(f"{path.relative_to(ROOT)}: {node.func.attr}()")
+    assert not violations, "Backend depends on presentation:\n" + "\n".join(violations)
+
+
 def test_core_modules_do_not_import_infrastructure_at_module_scope():
     core_roots = [
         ROOT / "evolution/domain",

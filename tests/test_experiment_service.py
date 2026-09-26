@@ -1,5 +1,8 @@
 import shutil
 import tempfile
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
+from multiprocessing import get_context
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -89,7 +92,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
         mode=SynthesisMode.EXPLICIT,
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
-        budget=1000000,
+        budget=100,
         max_iterations=2,
     )
 
@@ -103,7 +106,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
         mode=SynthesisMode.EXPLICIT,
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
-        budget=1000000,
+        budget=100,
         max_iterations=2,
     )
 
@@ -116,7 +119,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
             "key": "clean",
             "problem": problem_clean,
             "experiment_id": exp_id_clean,
-            "config": SessionConfig(iterations=2),
+            "config": SessionConfig(budget=100, iterations=2),
             "engine": engine,
             "prompt_strategy": PromptStrategy.BASELINE,
             "synthesis_mode": SynthesisMode.EXPLICIT,
@@ -126,7 +129,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
             "key": "noisy",
             "problem": problem_noisy,
             "experiment_id": exp_id_noisy,
-            "config": SessionConfig(iterations=2),
+            "config": SessionConfig(budget=100, iterations=2),
             "engine": engine,
             "prompt_strategy": PromptStrategy.BASELINE,
             "synthesis_mode": SynthesisMode.EXPLICIT,
@@ -223,9 +226,16 @@ def temp_dir():
 
 
 @pytest.fixture
-def db_session_factory(temp_dir):
+def db_session_factory(temp_dir, monkeypatch):
     db_path = temp_dir / "test.db"
-    database = Database(f"sqlite:///{db_path}")
+    database_url = f"sqlite:///{db_path}"
+    # Workers construct their own Database: isolate their environment too.
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setattr(
+        "evolution.infra.concurrency.runner.ProcessPoolExecutor",
+        partial(ProcessPoolExecutor, mp_context=get_context("spawn")),
+    )
+    database = Database(database_url)
     Base.metadata.create_all(database.engine)
     return database.session_factory
 
@@ -258,7 +268,8 @@ def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
         code="""class TestSearch:
     def __call__(self, problem, budget):
         import numpy as np
-        return problem(np.zeros(2))
+        best_x = np.zeros(2)
+        return best_x, float(problem(best_x))
 """,
         name="test_search",
     )

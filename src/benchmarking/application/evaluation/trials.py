@@ -10,6 +10,7 @@ import numpy as np
 from benchmarking.application.evaluation.constants import (
     EVALUATION_SCHEMA_VERSION,
     ERROR_DEFINITION,
+    executed_trial_count,
 )
 from benchmarking.application.evaluation_config import EvaluationConfig
 from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
@@ -91,7 +92,14 @@ class EvaluationTrialRunner:
                 trial_seeds = prov.get("trial_seeds", [])
                 runtimes = prov.get("runtimes", [])
                 evals_list = prov.get("evaluations_used", [])
-                existing_runs = len(clean_errors)
+                existing_runs = executed_trial_count(prov)
+                clean_errors = clean_errors[:existing_runs]
+                best_objectives = best_objectives[:existing_runs]
+                true_optima = true_optima[:existing_runs]
+                instance_ids = instance_ids[:existing_runs]
+                trial_seeds = trial_seeds[:existing_runs]
+                runtimes = runtimes[:existing_runs]
+                evals_list = evals_list[:existing_runs]
                 if existing_runs >= self.n_runs:
                     self.logger.cached(existing_runs, prov.get("median_error"))
                     return {
@@ -122,12 +130,9 @@ class EvaluationTrialRunner:
             is_incremental = True
 
         budget = dim * self.budget_multiplier
-        noise_model = (
-            NoiseModelEnum.NONE if noise_std == 0.0 else NoiseModelEnum.HETEROSCEDASTIC
-        )
+        noise_model = NoiseModelEnum.NONE if noise_std == 0.0 else NoiseModelEnum.HETEROSCEDASTIC
 
         with self.state_repo.open_run_logger(target_dir, algo_name, is_incremental) as logger_ioh:
-            consecutive_failures = 0
             for run_idx in range(start_run_idx, self.n_runs + 1):
                 instance_id = run_idx
                 trial_seed = self.random_seed + run_idx
@@ -147,23 +152,6 @@ class EvaluationTrialRunner:
                 instance_ids.append(instance_id)
                 trial_seeds.append(trial_seed)
 
-                if consecutive_failures >= 2:
-                    clean_errors.append(float("inf"))
-                    best_objectives.append(float("inf"))
-                    runtimes.append(0.0)
-                    evals_list.append(0)
-                    self.logger.trial(
-                        trial_idx=run_idx,
-                        total_trials=self.n_runs,
-                        best_clean=float("inf"),
-                        runtime=0.0,
-                        evals_used=0,
-                        best_objective=float("inf"),
-                        true_optimum=true_optimum,
-                    )
-                    prob.reset()
-                    continue
-
                 prob.attach_logger(logger_ioh)
                 prob.set_budget(budget)
                 trial_started = time.perf_counter()
@@ -173,16 +161,13 @@ class EvaluationTrialRunner:
                     if not np.isfinite(best_objective):
                         best_objective = float("inf")
                         best_error = float("inf")
-                        consecutive_failures += 1
                     else:
                         best_error = AlgorithmScoringService.objective_gap(
                             best_objective, true_optimum
                         )
-                        consecutive_failures = 0
                 except Exception:
                     best_objective, best_error = float("inf"), float("inf")
                     rt = time.perf_counter() - trial_started
-                    consecutive_failures += 1
 
                 evals_used = int(prob.evaluations)
                 clean_errors.append(best_error)
@@ -206,6 +191,7 @@ class EvaluationTrialRunner:
             **prov_metadata,
             "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
             "error_definition": ERROR_DEFINITION,
+            "all_trials_executed": True,
             "problem_id": p_id,
             "dim": dim,
             "noise_std": noise_std,
@@ -254,10 +240,12 @@ class EvaluationTrialRunner:
         target_noise_std: float | None = None,
         solver_folder: str | None = None,
         verbose: bool = True,
+        target_problem_id: int | None = None,
     ) -> dict[str, object]:
         """Execute empirical trials for a single LLM champion algorithm."""
         self.logger.verbose = verbose
-        p_id = champion_info["problem_id"]
+        source_problem_id = champion_info["problem_id"]
+        p_id = source_problem_id if target_problem_id is None else target_problem_id
         dim = champion_info["dim"]
         noise_std = (
             float(target_noise_std)
@@ -278,6 +266,16 @@ class EvaluationTrialRunner:
         model_slug = self.model_names.get_model_slug(llm_name)
         folder = solver_folder or f"{model_slug}_{strat}"
         target_dir = self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder
+        if target_problem_id is not None and p_id != source_problem_id:
+            target_dir = (
+                self.state_repo.eval_dir.parent
+                / "cross_function_traces"
+                / f"source_f{source_problem_id}"
+                / f"{dim}D"
+                / f"std_{noise_std}"
+                / f"f{p_id}"
+                / f"{folder}_{code_hash[:12]}"
+            )
 
         executor = self.executor_factory(self.trial_timeout_seconds)
 
@@ -301,6 +299,19 @@ class EvaluationTrialRunner:
             "algorithm_name": algo_name,
             "code_path": champion_info.get("code_path", ""),
             "code_hash": code_hash,
+            "source_problem_id": source_problem_id,
+            "target_problem_id": p_id,
+            "source_noise_std": float(champion_info.get("noise_std", 0.0)),
+            "target_noise_std": noise_std,
+            "experiment_id": champion_info.get("experiment_id"),
+            "iteration_id": champion_info.get("iteration_id"),
+            "evaluation_kind": (
+                "cross_function"
+                if target_problem_id is not None and p_id != source_problem_id
+                else "noise_robustness"
+                if noise_std != float(champion_info.get("noise_std", 0.0))
+                else "native"
+            ),
         }
 
         return self._execute_trial_runs(

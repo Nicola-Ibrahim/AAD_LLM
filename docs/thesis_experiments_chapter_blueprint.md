@@ -36,7 +36,7 @@ flowchart TD
     end
 
     subgraph Stage3 ["STAGE 3: Analysis & Thesis Figure Architecture"]
-        H --> I["Primary Publication Pipeline (05_analysis.ipynb)<br/>Fig 1: Difficulty Shift | Fig 9D: Solver × Problem Matrix<br/>Fig 9E: Model Scale Ablation | Fig 10A/C: Failure Breakdowns<br/>Hardness Success Profiles | Median IQR Trajectories"]
+        H --> I["Independent Analysis (notebooks/analysis/)<br/>05: Primary Reliability Figures<br/>06: Performance Profiles and Ablations<br/>07: Noise Robustness and Cross-Function Transfer"]
         H --> J["Supplementary & Legacy Archive (05_legacy_figures.ipynb)<br/>Non-Parametric Hypothesis Tests (Omnibus, FDR, Master Report)<br/>Effect Sizes: Fig 4 (A12) & Fig 7 (Win/Tie/Loss)<br/>Noise Robustness: Fig 5 (Fragility), Fig 6, Fig 9C<br/>Exploratory: Fig 3 (Prompts), Fig 9B (ECDFs), Fig 10D (Failure Grid)"]
     end
 ```
@@ -170,7 +170,7 @@ Categorizes run outcomes into four standardized precision tiers:
 
 ## 6. Primary Chapter Visual Architecture & Active Publication Figures
 
-The active analysis notebook ([`notebooks/05_analysis.ipynb`](file:///Users/nicolaibrahim/Desktop/proj/AAD_LLM/notebooks/05_analysis.ipynb)) generates the core visual evidence for the thesis chapter. Each figure addresses a specific research question and advances the chapter narrative:
+The independent analysis notebooks in [`notebooks/analysis/`](../notebooks/analysis/) generate the visual evidence for the thesis chapter: `05_analysis.ipynb` exports the three primary reliability figures, `06_performance_profiles.ipynb` exports performance/ablation profiles, and `07_generalization.ipynb` exports frozen-champion noise and transfer analyses. Each figure addresses a specific research question and advances the chapter narrative:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────┐

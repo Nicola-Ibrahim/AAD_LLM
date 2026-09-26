@@ -72,7 +72,9 @@ class ReliabilityEngine:
                 if parsed is None:
                     continue
                 model, strategy = parsed
-                valid_runs = [r for r in runs if len(r.raw_objectives)]
+                # Empty traces can represent confirmed executions that failed
+                # before their first query. They are not missing trials.
+                valid_runs = list(runs)
                 n_trials = len(valid_runs)
                 primary_hits = sum(r.is_success(primary_threshold) for r in valid_runs)
                 secondary_hits = sum(r.is_success(secondary_threshold) for r in valid_runs)
@@ -158,15 +160,16 @@ class ReliabilityEngine:
         bootstrap_seed: int = 20260923,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Fixed-target attainment curve and trial-bootstrap 95% confidence band."""
-        traces = [r for r in runs if len(r.raw_objectives)]
+        traces = list(runs)
         if not traces:
             zeros = np.zeros(len(eval_grid))
             return zeros, zeros, zeros
         matrix = []
         for run in traces:
-            best = np.minimum.accumulate(run.raw_objectives)
-            interpolated = np.interp(eval_grid, run.evaluations, best, left=best[0], right=best[-1])
-            matrix.append(interpolated <= threshold)
+            hit = self.evaluations_to_target(run, threshold)
+            matrix.append(
+                eval_grid >= hit if np.isfinite(hit) else np.zeros(len(eval_grid), dtype=bool)
+            )
         values = np.asarray(matrix, dtype=float)
         curve = values.mean(axis=0)
         rng = np.random.default_rng(bootstrap_seed)

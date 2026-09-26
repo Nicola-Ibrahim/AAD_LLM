@@ -16,6 +16,9 @@ class EvaluationTraceReader(ABC):
     def get_run_count(self, solver_dir: Path) -> int: ...
 
     @abstractmethod
+    def load_provenance_records(self) -> list[dict[str, object]]: ...
+
+    @abstractmethod
     def load_evaluation_traces(
         self,
         dims: list[int] | None = None,

@@ -3,7 +3,9 @@
 Defines the strongly-typed configuration parameter object for EvaluationService.
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from shared.domain.bbob import BBOBFunction
 
 
 class ReliabilityConfig(BaseModel):
@@ -64,6 +66,16 @@ class EvaluationConfig(BaseModel):
         default=True,
         description="Whether to evaluate clean champions under noisy conditions.",
     )
+    cross_function_enabled: bool = False
+    cross_function_problem_ids: list[int] = Field(default_factory=lambda: [1, 8, 11, 15, 21])
+
+    @field_validator("cross_function_problem_ids")
+    @classmethod
+    def validate_transfer_targets(cls, targets: list[int]) -> list[int]:
+        if not targets or any(BBOBFunction.from_id(target) is None for target in targets):
+            raise ValueError("Cross-function targets must be nonempty BBOB IDs (1–24).")
+        return sorted(set(targets))
+
     target_noise_stds: list[float] = Field(
         default_factory=list,
         description="Optional filtered noise levels for evaluation.",

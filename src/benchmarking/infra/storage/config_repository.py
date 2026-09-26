@@ -79,6 +79,10 @@ class EvaluationConfigRepository:
             classical_baselines=classical_baselines,
             baseline_labels=baseline_labels,
             cross_eval_clean_champions=bool(bench_cfg.get("cross_eval_clean_champions", True)),
+            cross_function_enabled=bool(bench_cfg.get("cross_function_enabled", False)),
+            cross_function_problem_ids=bench_cfg.get(
+                "cross_function_problem_ids", [1, 8, 11, 15, 21]
+            ),
             target_noise_stds=target_noise_stds,
             reliability=reliability,
         )

@@ -55,3 +55,12 @@ def test_incomplete_conditions_are_excluded_from_aggregate_not_counted_as_failur
     table = engine.compute_reliability_table(_dataset(), expected_trials=3)
     aggregate = engine.compute_aggregate_reliability(table, bootstrap_samples=100)
     assert aggregate.empty
+
+
+def test_attainment_uses_observed_hit_times_and_counts_executed_failures():
+    engine = ReliabilityEngine()
+    success = RunTrace(evaluations=np.array([10, 100]), raw_objectives=np.array([1.0, 0.0]))
+    failed = RunTrace(evaluations=np.array([]), raw_objectives=np.array([]))
+    grid = np.array([1, 10, 99, 100])
+    curve, _, _ = engine.compute_attainment_band([success, failed], grid, threshold=0.1)
+    assert curve.tolist() == [0.0, 0.0, 0.0, 0.5]

@@ -287,7 +287,7 @@ def test_nb04_audit_pipeline():
 
 
 def test_nb05_analysis_pipeline(tmp_path):
-    """Verify Notebook 05 (05_analysis.ipynb: Statistical Hypothesis Testing, Reports & Figures)."""
+    """Verify shared analysis engines and report IO used by the analysis notebooks."""
     print("\nTesting NB05 logic with AnalysisData...")
     from benchmarking.infra.io.trace_repository import IOHTraceReader
     from benchmarking.infra.storage import SQLiteSynthesisReadRepository
