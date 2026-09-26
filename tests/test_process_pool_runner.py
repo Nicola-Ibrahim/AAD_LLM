@@ -1,6 +1,7 @@
 """Unit tests for ProcessPoolRunner concurrency infrastructure."""
 
 import pytest
+
 from evolution.application.exceptions import OrchestrationError
 from evolution.infra.concurrency.runner import ProcessPoolRunner
 

@@ -1,8 +1,8 @@
 """Pure scoring rules for synthesized optimization candidates."""
 
+import math
 from dataclasses import dataclass
 from enum import Enum
-import math
 
 from shared.domain.scoring import objective_gap
 

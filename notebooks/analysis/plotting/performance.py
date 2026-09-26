@@ -1,28 +1,29 @@
 """Exploratory AUC and strategy-ablation figure exports."""
 
-from benchmarking.domain.services.performance import PerformanceMetricsEngine
-
 import re
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from benchmarking.application.analysis.view_data import AnalysisInputs
+
 from benchmarking.application.analysis.performance import PerformanceMetrics
+from benchmarking.application.analysis.view_data import AnalysisInputs
 from benchmarking.domain.enums import BBOBFunction
+from benchmarking.domain.services.performance import PerformanceMetricsEngine
+from shared.config import RESULTS_DIR
+
 from .cache import FigureCache
 from .style import (
     FONT_FAMILY,
     get_model_scale_color,
-    get_solver_line_style,
     get_solver_color,
+    get_solver_line_style,
 )
-from shared.config import RESULTS_DIR
 
 REPORTS_DIR = RESULTS_DIR / "reports"
 THESIS_SUMMARY_DIR = RESULTS_DIR / "figures" / "06_thesis_summary"
 EXPLICIT_DIR = RESULTS_DIR / "figures" / "02_explicit"
-
 
 
 def export_performance_matrix(

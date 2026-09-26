@@ -30,6 +30,7 @@ def default_test_llm_env(monkeypatch):
 def pytest_sessionfinish(session, exitstatus):
     """Clean up any dummy test artifacts left in data directory."""
     import shutil
+
     from shared.config import DATA_DIR
 
     for d in DATA_DIR.glob("**/llamea_dummy*"):

@@ -1,13 +1,12 @@
 """Backend preparation of exploratory performance metrics; no presentation or IO."""
 
-from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
-
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
 from benchmarking.application.analysis.view_data import AnalysisInputs
+from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
 
 
 @dataclass(frozen=True)

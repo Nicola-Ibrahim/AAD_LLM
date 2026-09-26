@@ -1,12 +1,12 @@
 """Pure validity and completion rules shared by readiness, audit, and resumption."""
 
-from dataclasses import dataclass
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Literal
 
 from benchmarking.domain.evaluation import (
-    EVALUATION_SCHEMA_VERSION,
     ERROR_DEFINITION,
+    EVALUATION_SCHEMA_VERSION,
     executed_trial_count,
 )
 

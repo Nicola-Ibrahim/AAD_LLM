@@ -1,8 +1,8 @@
 """IOH-backed factory for concrete BBOB problem adapters."""
 
-from shared.domain.noise_model import NoiseModelEnum
 from shared.application.interfaces.problem_factory import ProblemFactory
 from shared.domain.noise import NoiseStrategyFactory
+from shared.domain.noise_model import NoiseModelEnum
 from shared.infra.problems.bbob import BBOBProblem
 
 

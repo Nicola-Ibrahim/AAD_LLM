@@ -5,13 +5,10 @@ for evolutionary synthesis search spaces and execution parameters.
 """
 
 import os
+import tomllib
 from pathlib import Path
 from typing import cast
-import tomllib
 
-from shared.config import CONFIGS_DIR
-from shared.domain.noise_model import NoiseModelEnum
-from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.application.synthesis_config import (
     MatrixCondition,
     NoiseConditionConfig,
@@ -19,6 +16,9 @@ from evolution.application.synthesis_config import (
     SynthesisConfig,
     SynthesisModeConfig,
 )
+from evolution.domain.enums import PromptStrategy, SynthesisMode
+from shared.config import CONFIGS_DIR
+from shared.domain.noise_model import NoiseModelEnum
 
 
 def _table(value: object) -> dict[str, object]:

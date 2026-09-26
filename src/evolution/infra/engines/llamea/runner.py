@@ -12,27 +12,27 @@ from types import SimpleNamespace
 
 from llamea import LLaMEA
 
-from shared.config import DATA_DIR
-from evolution.domain.entities import ExperimentSummary
-from evolution.domain.enums import PromptStrategy, SynthesisMode
-from shared.domain.problem import BaseProblem
-from evolution.domain.vos import ProblemProfile
 from evolution.application.interfaces.code_store import SynthesisCodeStore
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
+from evolution.application.interfaces.synthesis_repository import SynthesisRepository
+from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.application.synthesis.models import SessionConfig, SessionResult
-from evolution.infra.llm.client import LLMClient
-from evolution.infra.logging import SynthesisLogger
+from evolution.domain.entities import ExperimentSummary
+from evolution.domain.enums import PromptStrategy, SynthesisMode
+from evolution.domain.vos import ProblemProfile
+from evolution.infra.engines.llamea.checkpoint import load_synthesis_checkpoint
+from evolution.infra.engines.llamea.evaluator import Evaluator
 from evolution.infra.engines.llamea.prompts import (
     SynthesisPrompts,
     build_synthesis_prompts,
 )
-from evolution.application.interfaces.synthesis_repository import SynthesisRepository
-from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
-from shared.infra.execution.candidate_executor import AlgorithmExecutorAdapter
-from evolution.infra.engines.llamea.evaluator import Evaluator
-from evolution.infra.engines.llamea.checkpoint import load_synthesis_checkpoint
+from evolution.infra.llm.client import LLMClient
+from evolution.infra.logging import SynthesisLogger
+from shared.config import DATA_DIR
+from shared.domain.problem import BaseProblem
 from shared.infra.execution import AlgorithmExecutor
+from shared.infra.execution.candidate_executor import AlgorithmExecutorAdapter
 
 # Suppress joblib warning when LLaMEA passes timeout to SequentialBackend
 warnings.filterwarnings(

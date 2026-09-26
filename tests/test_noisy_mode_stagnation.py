@@ -1,17 +1,17 @@
 from llamea import Solution
 
-from shared.domain.noise_model import NoiseModelEnum
-from evolution.domain.enums import SynthesisMode
-from shared.domain.noise import HeteroscedasticNoiseStrategy
-from evolution.domain.vos import ProblemProfile
 from evolution.application import SessionConfig
 from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
-from shared.infra.execution.candidate_executor import create_candidate_executor
-from shared.infra.problems.bbob import BBOBProblem
+from evolution.domain.enums import SynthesisMode
+from evolution.domain.vos import ProblemProfile
+from evolution.infra.engines.llamea import Evaluator
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
-from evolution.infra.engines.llamea import Evaluator
+from shared.domain.noise import HeteroscedasticNoiseStrategy
+from shared.domain.noise_model import NoiseModelEnum
 from shared.infra.execution import AlgorithmExecutor, CodeCompiler
+from shared.infra.execution.candidate_executor import create_candidate_executor
+from shared.infra.problems.bbob import BBOBProblem
 
 
 def build_candidate_evaluation_service(*, problem, **kwargs):
@@ -24,8 +24,14 @@ def build_candidate_evaluation_service(*, problem, **kwargs):
 
 def test_failure_tiers_and_is_failure():
     assert CandidateEvaluationService.is_failure(CandidateEvaluationService.FAILURE_FITNESS) is True
-    assert CandidateEvaluationService.is_failure(CandidateEvaluationService.RUNTIME_FAILURE_FITNESS) is True
-    assert CandidateEvaluationService.is_failure(CandidateEvaluationService.TIMEOUT_FAILURE_FITNESS) is True
+    assert (
+        CandidateEvaluationService.is_failure(CandidateEvaluationService.RUNTIME_FAILURE_FITNESS)
+        is True
+    )
+    assert (
+        CandidateEvaluationService.is_failure(CandidateEvaluationService.TIMEOUT_FAILURE_FITNESS)
+        is True
+    )
     assert CandidateEvaluationService.is_failure(float("-inf")) is True
     assert CandidateEvaluationService.is_failure(float("nan")) is True
 

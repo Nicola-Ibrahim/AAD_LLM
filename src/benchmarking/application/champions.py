@@ -1,7 +1,7 @@
 """Typed champion records shared by champion selection and persistence."""
 
-from typing import TypedDict
 from enum import StrEnum
+from typing import TypedDict
 
 
 class GenerationMode(StrEnum):

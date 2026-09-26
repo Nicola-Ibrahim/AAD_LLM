@@ -1,12 +1,12 @@
 from evolution.application.campaign.audit import CampaignAuditor
 from evolution.application.campaign.models import CampaignTask
-from shared.application.interfaces.problem_factory import ProblemFactory
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
 from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.application.synthesis.models import SessionConfig
 from evolution.application.synthesis_config import MatrixCondition, SynthesisConfig
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.vos.problem_profile import ProblemProfile
+from shared.application.interfaces.problem_factory import ProblemFactory
 
 
 class CampaignPlanner:

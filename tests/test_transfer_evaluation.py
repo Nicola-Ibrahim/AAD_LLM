@@ -1,5 +1,6 @@
 """Transfer workflows tested without databases, IOH, generated subprocesses or LLMs."""
 
+import json
 from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -7,18 +8,17 @@ from unittest.mock import MagicMock
 import numpy as np
 import pandas as pd
 import pytest
-import json
 
+from benchmarking.application.evaluation.audit import EvaluationAuditService, SynthesisConditionSpec
 from benchmarking.application.evaluation.run import EvaluationService
 from benchmarking.application.evaluation_config import EvaluationConfig
-from benchmarking.domain.services.transfer import TransferAnalysisEngine
-from benchmarking.infra.storage.model_registry import configured_model_names
-from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.domain.evaluation import (
-    EVALUATION_SCHEMA_VERSION,
     ERROR_DEFINITION,
+    EVALUATION_SCHEMA_VERSION,
 )
-from benchmarking.application.evaluation.audit import EvaluationAuditService, SynthesisConditionSpec
+from benchmarking.domain.services.transfer import TransferAnalysisEngine
+from benchmarking.infra.io.trace_repository import IOHTraceReader
+from benchmarking.infra.storage.model_registry import configured_model_names
 
 
 def audit_for(service: EvaluationService) -> EvaluationAuditService:
@@ -100,9 +100,10 @@ def test_audit_notebook_runs_without_campaign(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import plotly.graph_objects as go
+
     import bootstrap.audit
     import shared.config
-    import plotly.graph_objects as go
 
     monkeypatch.setattr(bootstrap.audit, "build_audit_service", lambda: audit_for(transfer_service))
     monkeypatch.setattr(shared.config, "RESULTS_DIR", tmp_path)

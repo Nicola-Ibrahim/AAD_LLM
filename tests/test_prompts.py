@@ -2,14 +2,14 @@ import numpy as np
 import pytest
 
 from evolution.domain.enums import NoiseEnvironment, PromptStrategy, SynthesisMode
-from shared.domain.noise import HeteroscedasticNoiseStrategy, NoNoiseStrategy
-from shared.infra.problems.bbob import BBOBProblem
 from evolution.infra.engines.llamea.prompts import (
     SynthesisPrompts,
     assemble_full_prompt,
     build_synthesis_prompts,
     build_task_prompt,
 )
+from shared.domain.noise import HeteroscedasticNoiseStrategy, NoNoiseStrategy
+from shared.infra.problems.bbob import BBOBProblem
 
 BANNED_KEYWORDS = [
     "cma-es",

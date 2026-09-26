@@ -1,17 +1,19 @@
 """Secondary frozen-champion noise and cross-function figure exports."""
 
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+
 from benchmarking.application.analysis.view_data import AnalysisInputs
 from benchmarking.domain.services.transfer import TransferAnalysisEngine
-from .cache import FigureCache
-from .style import FONT_FAMILY, get_solver_line_style
-from shared.config import RESULTS_DIR
 from benchmarking.domain.vos import EvaluationDataset
+from shared.config import RESULTS_DIR
+
+from .cache import FigureCache
 from .profiles import ProfileCurve, build_profile
-from .style import CLASSICAL_BASELINES, clean_solver_name
+from .style import CLASSICAL_BASELINES, FONT_FAMILY, clean_solver_name, get_solver_line_style
 
 REPORTS_DIR = RESULTS_DIR / "reports"
 TRANSFER_FIGURES_DIR = RESULTS_DIR / "figures" / "07_cross_function"

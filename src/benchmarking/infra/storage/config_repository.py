@@ -4,9 +4,9 @@ Encapsulates reading, parsing, and resolving configs/benchmark.toml and configs/
 for multi-trial benchmark evaluations and classical baselines.
 """
 
+import tomllib
 from pathlib import Path
 from typing import cast
-import tomllib
 
 from benchmarking.application.evaluation_config import EvaluationConfig
 from shared.config import CONFIGS_DIR

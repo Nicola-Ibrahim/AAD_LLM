@@ -1,16 +1,15 @@
-from pathlib import Path
 import hashlib
+from pathlib import Path
 
 import pandas as pd
 
-from benchmarking.domain.services.condition_status import ConditionStatus, inspect_condition
+from benchmarking.application.champions import Champion, GenerationMode
+from benchmarking.application.evaluation_config import EvaluationConfig
 from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
 from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
 from benchmarking.application.interfaces.synthesis_read_repository import SynthesisReadRepository
-from benchmarking.application.champions import Champion
-from benchmarking.application.evaluation_config import EvaluationConfig
 from benchmarking.application.select_champions import ChampionSelectionService
-from benchmarking.application.champions import GenerationMode
+from benchmarking.domain.services.condition_status import ConditionStatus, inspect_condition
 from benchmarking.domain.services.resolvers import ModelNames
 
 

@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import pandas as pd
 
 from benchmarking.application.interfaces.markdown_report_writer import MarkdownReportWriter

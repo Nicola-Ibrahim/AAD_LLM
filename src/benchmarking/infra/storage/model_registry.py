@@ -1,9 +1,9 @@
 """Read the configured model registry and construct pure naming rules."""
 
-from functools import lru_cache
-from pathlib import Path
 import re
 import tomllib
+from functools import lru_cache
+from pathlib import Path
 from typing import Optional
 
 from benchmarking.domain.services.resolvers import LLMModelSpec, ModelNames

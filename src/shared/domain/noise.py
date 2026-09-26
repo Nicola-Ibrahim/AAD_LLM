@@ -3,7 +3,6 @@ from collections.abc import Sequence
 
 import numpy as np
 
-
 from shared.domain.noise_model import NoiseModelEnum
 
 

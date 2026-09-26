@@ -7,18 +7,18 @@ Provides high-level application services orchestrating domain logic and infrastr
 - `AnalysisData`: Load traces and synthesis data for domain analysis engines.
 """
 
+from benchmarking.application.analysis import (
+    AnalysisData,
+    generate_markdown_report,
+)
 from benchmarking.application.evaluation.audit import (
     AuditCoverageSummary,
     AuditSnapshot,
     EvaluationAuditService,
 )
-from benchmarking.application.evaluation_config import EvaluationConfig
 from benchmarking.application.evaluation.run import EvaluationService
+from benchmarking.application.evaluation_config import EvaluationConfig
 from benchmarking.application.select_champions import ChampionSelectionService
-from benchmarking.application.analysis import (
-    AnalysisData,
-    generate_markdown_report,
-)
 
 __all__ = [
     "AuditCoverageSummary",

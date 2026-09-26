@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from shared.domain.problem import BaseProblem
+from evolution.domain.services.algorithm_scoring import AlgorithmScoringService, FailureKind
 from evolution.domain.vos.evaluation_result import AlgorithmEvaluationResult
 from evolution.domain.vos.iteration import IterationMetadata
 from evolution.domain.vos.metrics import (
@@ -23,8 +23,8 @@ from evolution.domain.vos.metrics import (
     Execution,
     Fitness,
 )
-from evolution.domain.services.algorithm_scoring import AlgorithmScoringService, FailureKind
 from shared.application.interfaces.candidate_executor import CandidateExecutor, CandidateTimeout
+from shared.domain.problem import BaseProblem
 
 
 @dataclass

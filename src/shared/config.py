@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Root directory of the project (2 levels up from src/shared/config.py)

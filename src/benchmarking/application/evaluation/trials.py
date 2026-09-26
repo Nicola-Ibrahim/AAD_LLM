@@ -1,27 +1,27 @@
-from datetime import datetime, timezone
-from pathlib import Path
 import hashlib
 import random
 import time
 from collections.abc import Callable
+from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
 
-from benchmarking.domain.evaluation import (
-    EVALUATION_SCHEMA_VERSION,
-    ERROR_DEFINITION,
-)
-from benchmarking.domain.services.condition_status import inspect_condition
+from benchmarking.application.champions import Champion
+from benchmarking.application.evaluation.types import BaselineRunnerResolver, ExecutorBuilder
 from benchmarking.application.evaluation_config import EvaluationConfig
 from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
 from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
 from benchmarking.application.interfaces.logger import EvaluationLoggerInterface
-from shared.application.interfaces.problem_factory import ProblemFactory
-from benchmarking.application.champions import Champion
-from benchmarking.application.evaluation.types import BaselineRunnerResolver, ExecutorBuilder
+from benchmarking.domain.evaluation import (
+    ERROR_DEFINITION,
+    EVALUATION_SCHEMA_VERSION,
+)
+from benchmarking.domain.services.condition_status import inspect_condition
 from benchmarking.domain.services.resolvers import ModelNames
-from shared.domain.problem import BaseProblem
+from shared.application.interfaces.problem_factory import ProblemFactory
 from shared.domain.noise_model import NoiseModelEnum
+from shared.domain.problem import BaseProblem
 from shared.domain.scoring import objective_gap
 
 
@@ -163,9 +163,7 @@ class EvaluationTrialRunner:
                         best_objective = float("inf")
                         best_error = float("inf")
                     else:
-                        best_error = objective_gap(
-                            best_objective, true_optimum
-                        )
+                        best_error = objective_gap(best_objective, true_optimum)
                 except Exception:
                     best_objective, best_error = float("inf"), float("inf")
                     rt = time.perf_counter() - trial_started

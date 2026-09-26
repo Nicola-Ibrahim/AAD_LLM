@@ -1,8 +1,8 @@
 """Workflow-specific source signatures and per-figure successful export records."""
 
-from dataclasses import dataclass, field
 import hashlib
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 

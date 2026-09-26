@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="system-overview-title system-overview-desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="system-overview-title system-overview-desc">
   <title id="system-overview-title">AAD LLM research workflows</title>
   <desc id="system-overview-desc">Notebook researchers coordinate synthesis, benchmarking, audit and analysis, supported by candidate execution, an LLM provider and experiment persistence; these are workflow groups, not separate services.</desc>
   <defs>

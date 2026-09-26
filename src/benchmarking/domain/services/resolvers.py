@@ -1,8 +1,8 @@
 """Pure solver and model naming rules over an injected model registry."""
 
-from dataclasses import dataclass
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from benchmarking.domain.enums.benchmark_strategy import EvaluationStrategy
 from benchmarking.domain.enums.classical_solver import ClassicalSolver
@@ -80,7 +80,9 @@ class ModelNames:
                 re.sub(r"[^a-z0-9]", "", identifier.lower().removesuffix(".gguf"))
                 for identifier in (spec.model, spec.file)
             )
-            if any(identifier and identifier in normalized_s for identifier in normalized_identifiers):
+            if any(
+                identifier and identifier in normalized_s for identifier in normalized_identifiers
+            ):
                 return spec.name
 
         # 3. Family + Parameter Size matching (e.g. "qwen_14b" -> matches Qwen family with 14B size)

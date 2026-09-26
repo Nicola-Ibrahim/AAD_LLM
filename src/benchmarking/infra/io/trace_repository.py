@@ -1,23 +1,22 @@
 """Trace reader for parsing and scanning empirical IOHprofiler benchmark logs."""
 
-from collections.abc import Callable
-from contextlib import contextmanager
-from collections.abc import Iterator
 import json
-from pathlib import Path
 import re
 import shutil
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from pathlib import Path
 
 import ioh
 import numpy as np
 
 from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
 from benchmarking.application.interfaces.evaluation_trace_reader import EvaluationTraceReader
-from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
 from benchmarking.domain.evaluation import (
     executed_trial_count,
 )
 from benchmarking.domain.services.condition_status import inspect_condition
+from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
 from shared.config import RESULTS_DIR
 
 
@@ -128,8 +127,11 @@ class IOHTraceReader(EvaluationTraceReader):
             if not isinstance(record, dict):
                 continue
             inspection = inspect_condition(
-                code_available=True, directory_exists=True, provenance=record,
-                expected_code_hash=None, expected_trials=1,
+                code_available=True,
+                directory_exists=True,
+                provenance=record,
+                expected_code_hash=None,
+                expected_trials=1,
             )
             if inspection.reason not in {"complete", "partial", "not_started"}:
                 continue
@@ -139,8 +141,8 @@ class IOHTraceReader(EvaluationTraceReader):
                     **record,
                     "clean_errors": record.get("clean_errors", record.get("errors", []))[:count],
                     "n_runs": count,
-                "solver_folder": path.parent.name,
-                "trace_directory": str(path.parent),
+                    "solver_folder": path.parent.name,
+                    "trace_directory": str(path.parent),
                 }
             )
         return records

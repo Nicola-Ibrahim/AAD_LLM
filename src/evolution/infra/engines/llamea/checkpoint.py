@@ -1,7 +1,7 @@
 """Read trusted synthesis checkpoints without retaining obsolete import modules."""
 
-from pathlib import Path
 import pickle
+from pathlib import Path
 
 from llamea import LLaMEA
 

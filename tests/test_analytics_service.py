@@ -4,25 +4,25 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from benchmarking.application.evaluation.audit import AuditCoverageSummary
-from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.application.analysis import (
     AnalysisData,
     generate_markdown_report,
 )
-from benchmarking.infra.storage.model_registry import configured_model_names
-from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
-from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
-from benchmarking.domain.services.performance import PerformanceMetricsEngine
+from benchmarking.application.evaluation.audit import AuditCoverageSummary
+from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.enums import (
     BBOB_CLASSES_ORDER,
     BBOBFunction,
 )
+from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
+from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
+from benchmarking.domain.services.performance import PerformanceMetricsEngine
 from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
+from benchmarking.infra.io.markdown_report_writer import MarkdownFileWriter
 from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
+from benchmarking.infra.storage.model_registry import configured_model_names
 from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
-from benchmarking.infra.io.markdown_report_writer import MarkdownFileWriter
 from shared.config import DATA_DIR, RESULTS_DIR
 from shared.infra.database import Database
 
@@ -78,8 +78,7 @@ class TestDomainResolvers:
             == "DeepSeek-R1-Distill-Qwen-70B"
         )
         assert (
-            self.get_clean_model_label("meta-llama-3-8b-instruct")
-            == "Meta-Llama-3.1-8B-Instruct"
+            self.get_clean_model_label("meta-llama-3-8b-instruct") == "Meta-Llama-3.1-8B-Instruct"
         )
         assert (
             self.get_clean_model_label("Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf")
@@ -118,9 +117,7 @@ class TestDomainResolvers:
             == "Qwen2.5-Coder-14B-Instruct / baseline"
         )
         assert (
-            self.resolve_folder_solver_name(
-                "deepseek_coder_v2_lite_instruct_q4_k_m_baseline_noisy"
-            )
+            self.resolve_folder_solver_name("deepseek_coder_v2_lite_instruct_q4_k_m_baseline_noisy")
             == "DeepSeek-Coder-V2-Lite-Instruct / baseline (noise-adapted)"
         )
         assert (
@@ -245,13 +242,16 @@ class TestDomainEngines:
             solver="CMA-ES",
             eval_grid=eval_grid,
         ) == pytest.approx(curve)
-        assert ecdf_engine.get_aggregate_convergence(
-            benchmark_data,
-            dim=2,
-            noise_std=0.0,
-            solver="missing solver",
-            eval_grid=eval_grid,
-        ) is None
+        assert (
+            ecdf_engine.get_aggregate_convergence(
+                benchmark_data,
+                dim=2,
+                noise_std=0.0,
+                solver="missing solver",
+                eval_grid=eval_grid,
+            )
+            is None
+        )
 
     def test_compute_auc_ecdf_matrix(self, ecdf_engine):
         bench_data = EvaluationDataset()
@@ -341,6 +341,7 @@ class TestApplicationServicesIntegration:
 
     def test_audit_service(self):
         from bootstrap.audit import build_audit_service
+
         snapshot = build_audit_service().get_audit_data()
         assert isinstance(snapshot.evaluations, pd.DataFrame)
         assert isinstance(snapshot.synthesis_gaps, pd.DataFrame)

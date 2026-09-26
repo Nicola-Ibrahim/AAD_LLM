@@ -43,8 +43,16 @@ def test_noise_level_preserves_configured_precision_without_repeated_noise_label
     stream = StringIO()
     logger = EvaluationLogger(stream=stream)
     logger.condition_start(
-        1, 2, "champion", "Model", 3, 0.05, 8,
-        problem_name="Sphere", mode="explicit", strategy="guided",
+        1,
+        2,
+        "champion",
+        "Model",
+        3,
+        0.05,
+        8,
+        problem_name="Sphere",
+        mode="explicit",
+        strategy="guided",
     )
 
     output = stream.getvalue()

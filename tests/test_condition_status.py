@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from benchmarking.application.select_champions import ChampionSelectionService
-from benchmarking.domain.evaluation import EVALUATION_SCHEMA_VERSION, ERROR_DEFINITION
+from benchmarking.domain.evaluation import ERROR_DEFINITION, EVALUATION_SCHEMA_VERSION
 from benchmarking.domain.services.condition_status import inspect_condition
 
 

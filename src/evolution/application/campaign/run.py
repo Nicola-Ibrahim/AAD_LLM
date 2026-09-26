@@ -1,15 +1,15 @@
 from collections.abc import Callable
 
-from evolution.application.campaign.models import CampaignResults, CampaignTask
 from evolution.application.campaign.audit import CampaignAuditor
+from evolution.application.campaign.models import CampaignResults, CampaignTask
 from evolution.application.campaign.plan import CampaignPlanner
 from evolution.application.interfaces.logger import BaseLogger
-from shared.application.interfaces.problem_factory import ProblemFactory
-from evolution.application.interfaces.task_dispatcher import TaskDispatcher
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
 from evolution.application.interfaces.synthesis_repository import SynthesisRepository
+from evolution.application.interfaces.task_dispatcher import TaskDispatcher
 from evolution.application.synthesis.models import SessionResult
 from evolution.application.synthesis_config import SynthesisConfig
+from shared.application.interfaces.problem_factory import ProblemFactory
 
 
 class SynthesisCampaignCoordinator:

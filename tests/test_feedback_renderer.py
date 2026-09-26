@@ -3,7 +3,6 @@
 import numpy as np
 
 from evolution.domain.enums import SynthesisMode
-from shared.domain.problem import BaseProblem
 from evolution.domain.vos.evaluation_result import AlgorithmEvaluationResult
 from evolution.domain.vos.iteration import IterationMetadata
 from evolution.domain.vos.metrics import (
@@ -16,6 +15,7 @@ from evolution.domain.vos.metrics import (
 from evolution.infra.engines.llamea.prompts.feedback import (
     FeedbackRenderer,
 )
+from shared.domain.problem import BaseProblem
 
 
 class DummyProblem(BaseProblem):

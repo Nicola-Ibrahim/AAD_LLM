@@ -2,6 +2,7 @@
 
 from collections.abc import ItemsView, Iterator, KeysView, Mapping, ValuesView
 from typing import Any, Self
+
 import numpy as np
 from pydantic import Field
 

@@ -20,18 +20,18 @@ the standard C4 system-context/container levels.
 
 The compact view introduces the main workflows and supporting capabilities.
 
-[![Workflow overview: synthesis, benchmarking, audit and analysis with supporting runtime and persistence](docs/architecture/system_overview.svg)](docs/architecture/system_overview.svg)
+[![Workflow overview: synthesis, benchmarking, audit and analysis with supporting runtime and persistence](docs/architecture/system_overview.svg)](docs/architecture/system_overview.svg?raw=true)
 
-[Open full-size overview](docs/architecture/system_overview.svg)
+[Open full-size overview](docs/architecture/system_overview.svg?raw=true)
 
 ### Level 1 — Detailed system view
 
 The detailed view expands the workflows into their components, relationships,
 and code links for an in-depth understanding of the project.
 
-[![Detailed system diagram: synthesis, benchmarking and audit, analysis and transfer, candidate execution, and experiment persistence](docs/architecture/system_diagram.svg)](docs/architecture/system_diagram.svg)
+[![Detailed system diagram: synthesis, benchmarking and audit, analysis and transfer, candidate execution, and experiment persistence](docs/architecture/system_diagram.svg)](docs/architecture/system_diagram.svg?raw=true)
 
-[Open full-size detailed diagram](docs/architecture/system_diagram.svg) ·
+[Open full-size detailed diagram](docs/architecture/system_diagram.svg?raw=true) ·
 [Editable Mermaid source](docs/architecture/system_diagram.mmd) ·
 [Context ownership and dependency rules](docs/architecture/system_architecture.md)
 

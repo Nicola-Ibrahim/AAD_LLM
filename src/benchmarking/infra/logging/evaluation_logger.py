@@ -10,8 +10,8 @@ import sys
 from collections.abc import Mapping
 from typing import TextIO
 
-from benchmarking.application.interfaces.logger import EvaluationLoggerInterface
 from benchmarking.application.champions import GenerationMode
+from benchmarking.application.interfaces.logger import EvaluationLoggerInterface
 
 
 class Colors:

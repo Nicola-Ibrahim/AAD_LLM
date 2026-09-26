@@ -1,6 +1,7 @@
 """Evaluation condition Value Object representing a single (dim, noise_std, problem_id) configuration."""
 
 from pydantic import Field
+
 from benchmarking.domain.base import ValueObject
 
 

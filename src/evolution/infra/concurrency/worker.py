@@ -5,10 +5,10 @@ from evolution.application.synthesis.models import SessionResult
 
 
 def run_synthesis_worker(item: CampaignTask) -> SessionResult:
-    from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
-    from shared.infra.database import Database
     from evolution.application.synthesis.run import SingleSynthesisUseCase
     from evolution.infra.logging import SynthesisLogger
+    from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
+    from shared.infra.database import Database
 
     database = Database()
     repository = SQLiteSynthesisRepository(database.session_factory)

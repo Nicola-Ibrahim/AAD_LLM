@@ -1,7 +1,5 @@
 """Reusable convergence/ECDF panels and separately runnable performance exports."""
 
-from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
-
 from dataclasses import dataclass
 from math import ceil
 from typing import Literal
@@ -12,17 +10,19 @@ from plotly.subplots import make_subplots
 
 from benchmarking.application.analysis.view_data import AnalysisInputs
 from benchmarking.domain.enums import BBOBFunction
+from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
 from benchmarking.domain.vos import EvaluationDataset
+from shared.config import RESULTS_DIR
+
 from .cache import FigureCache
 from .style import (
-    FONT_FAMILY,
     CLASSICAL_BASELINES,
+    FONT_FAMILY,
     clean_solver_name,
+    get_rgba_fill,
     get_solver_color,
     get_solver_line_style,
-    get_rgba_fill,
 )
-from shared.config import RESULTS_DIR
 
 
 @dataclass(frozen=True)

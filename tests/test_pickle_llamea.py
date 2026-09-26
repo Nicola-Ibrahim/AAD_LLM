@@ -3,22 +3,22 @@ import pickle
 import numpy as np
 import pytest
 from llamea import LLaMEA
-from evolution.application import SessionConfig
-from evolution.infra.engines.llamea import Evaluator, LLaMEASession
-from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
-from shared.infra.execution.candidate_executor import create_candidate_executor
-from shared.domain.noise import NoNoiseStrategy
-from evolution.domain.vos import ProblemProfile
-from evolution.infra.llm.client import LLMClient, Provider
-from shared.infra.problems.bbob import BBOBProblem
-from evolution.infra.engines.llamea.checkpoint import SynthesisCheckpointUnpickler
-from evolution.domain.enums import SynthesisMode
 
+from evolution.application import SessionConfig
+from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
+from evolution.domain.enums import SynthesisMode
+from evolution.domain.vos import ProblemProfile
+from evolution.infra.engines.llamea import Evaluator, LLaMEASession
+from evolution.infra.engines.llamea.checkpoint import SynthesisCheckpointUnpickler
 from evolution.infra.engines.llamea.prompts import SynthesisPrompts
+from evolution.infra.llm.client import LLMClient, Provider
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
+from shared.domain.noise import NoNoiseStrategy
 from shared.infra.database import Database
 from shared.infra.database.tables import Base
+from shared.infra.execution.candidate_executor import create_candidate_executor
+from shared.infra.problems.bbob import BBOBProblem
 
 
 def build_candidate_evaluation_service(*, problem, **kwargs):

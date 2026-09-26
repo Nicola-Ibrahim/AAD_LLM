@@ -1,4 +1,5 @@
 from collections.abc import Callable
+
 import pandas as pd
 
 from benchmarking.application.interfaces.evaluation_trace_reader import EvaluationTraceReader

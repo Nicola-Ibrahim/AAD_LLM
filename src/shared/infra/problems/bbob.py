@@ -3,8 +3,8 @@ import warnings
 import numpy as np
 from ioh import ProblemClass, get_problem
 
-from shared.domain.problem import BaseProblem
 from shared.domain.noise import BaseNoiseStrategy, HomoscedasticAdditiveNoiseStrategy
+from shared.domain.problem import BaseProblem
 
 
 class BBOBProblem(BaseProblem):

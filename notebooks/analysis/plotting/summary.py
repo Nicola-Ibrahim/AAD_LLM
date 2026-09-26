@@ -1,18 +1,19 @@
 """Three cached primary thesis PNGs; no detailed profile sweeps."""
 
-from benchmarking.domain.services.reliability import ReliabilityEngine
-
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
 from benchmarking.application.analysis.view_data import AnalysisInputs
 from benchmarking.domain.enums import BBOBFunction
+from benchmarking.domain.services.reliability import ReliabilityEngine
 from benchmarking.domain.services.transfer import TransferAnalysisEngine
 from benchmarking.domain.vos import EvaluationCondition
+from shared.config import RESULTS_DIR
+
 from .cache import FigureCache
 from .style import FONT_FAMILY
-from shared.config import RESULTS_DIR
 
 REPORTS_DIR = RESULTS_DIR / "reports"
 THESIS_SUMMARY_DIR = RESULTS_DIR / "figures" / "06_thesis_summary"
@@ -263,9 +264,7 @@ def _noise_summary(
         if not noise_terminal.empty
         else primary.iloc[:0].copy()
     )
-    noise_primary["Model"] = noise_primary["Model"].map(
-        inputs.model_names.get_clean_model_label
-    )
+    noise_primary["Model"] = noise_primary["Model"].map(inputs.model_names.get_clean_model_label)
     dims = sorted(primary["Dim"].unique())
     fig10c = make_subplots(
         rows=2,

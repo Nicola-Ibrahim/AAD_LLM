@@ -8,7 +8,16 @@ from types import SimpleNamespace
 
 import pytest
 from llamea import Solution
+
+from evolution.application import (
+    SessionConfig,
+    SingleSynthesisUseCase,
+    SynthesisEngine,
+)
+from evolution.application.exceptions import OrchestrationError
+from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.domain.entities import ExperimentSummary
+from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.vos import (
     Code,
     Convergence,
@@ -18,25 +27,17 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
-from shared.domain.noise_model import NoiseModelEnum
-from evolution.domain.enums import SynthesisMode, PromptStrategy
-from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
-from shared.infra.execution.candidate_executor import create_candidate_executor
-from shared.domain.noise import HeteroscedasticNoiseStrategy, NoNoiseStrategy
-from shared.infra.problems.bbob import BBOBProblem
-from evolution.application import (
-    SessionConfig,
-    SingleSynthesisUseCase,
-    SynthesisEngine,
-)
 from evolution.infra.concurrency.runner import ProcessPoolRunner
+from evolution.infra.concurrency.worker import run_synthesis_worker
+from evolution.infra.engines.llamea import Evaluator, LLaMEAEngine, LLaMEASession
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
+from shared.domain.noise import HeteroscedasticNoiseStrategy, NoNoiseStrategy
+from shared.domain.noise_model import NoiseModelEnum
 from shared.infra.database import Database
 from shared.infra.database.tables import Base, ExperimentORM
-from evolution.infra.engines.llamea import Evaluator, LLaMEAEngine, LLaMEASession
-from evolution.application.exceptions import OrchestrationError
-from evolution.infra.concurrency.worker import run_synthesis_worker
+from shared.infra.execution.candidate_executor import create_candidate_executor
+from shared.infra.problems.bbob import BBOBProblem
 
 
 def build_candidate_evaluation_service(*, problem, **kwargs):
@@ -1129,9 +1130,10 @@ def test_experiment_summary_domain_aggregate(db_session_factory):
 def test_synthesis_engine_lsp_contract():
     """Verify that a SynthesisEngine receives a complete session request."""
     from unittest.mock import MagicMock
+
     from evolution.application.interfaces.synthesis_engine import SynthesisEngine
-    from evolution.application.synthesis.models import SessionResult
     from evolution.application.interfaces.synthesis_repository import SynthesisRepository
+    from evolution.application.synthesis.models import SessionResult
     from evolution.domain.enums import SynthesisMode
     from shared.domain.problem import BaseProblem
 
@@ -1177,11 +1179,11 @@ def test_synthesis_engine_lsp_contract():
 def test_llamea_engine_init_and_run(temp_dir, db_session_factory):
     """Verify LLaMEAEngine accepts collaborators in __init__ and executes via run()."""
     from evolution.domain.enums import PromptStrategy, SynthesisMode
-    from shared.infra.problems.bbob import BBOBProblem
-    from shared.domain.noise import NoNoiseStrategy
+    from evolution.infra.engines.llamea import LLaMEAEngine
     from evolution.infra.storage.code.repository import CodeRepository
     from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
-    from evolution.infra.engines.llamea import LLaMEAEngine
+    from shared.domain.noise import NoNoiseStrategy
+    from shared.infra.problems.bbob import BBOBProblem
 
     repo = SQLiteSynthesisRepository(db_session_factory)
     code_repo = CodeRepository(base_dir=temp_dir)
@@ -1217,9 +1219,10 @@ def test_llamea_engine_init_and_run(temp_dir, db_session_factory):
 def test_campaign_item_and_engine_pickling(temp_dir):
     """Verify campaign work item with LLaMEAEngine pickles and unpickles without error."""
     import pickle
+
     from evolution.infra.engines.llamea import LLaMEAEngine
-    from shared.infra.problems.bbob import BBOBProblem
     from shared.domain.noise import NoNoiseStrategy
+    from shared.infra.problems.bbob import BBOBProblem
 
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
@@ -1241,6 +1244,7 @@ def test_campaign_item_and_engine_pickling(temp_dir):
 def test_problem_factory_seed_produces_reproducible_noise_streams():
     """Verify the BBOB adapter uses its seed for reproducible noise streams."""
     import numpy as np
+
     from shared.domain.noise_model import NoiseModelEnum
     from shared.infra.problems.factory import BBOBProblemFactory
 

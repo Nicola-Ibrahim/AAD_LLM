@@ -1,8 +1,8 @@
 """Independent, database-synchronized inputs for analysis notebooks."""
 
+import hashlib
 from collections import defaultdict
 from dataclasses import dataclass
-import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -10,10 +10,10 @@ from benchmarking.application.champions import ChampionCatalog
 from benchmarking.application.evaluation_config import EvaluationConfig
 from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
 from benchmarking.application.interfaces.evaluation_trace_reader import EvaluationTraceReader
+from benchmarking.domain.services.condition_status import inspect_condition
+from benchmarking.domain.services.resolvers import ModelNames
 from benchmarking.domain.services.transfer import TransferAnalysisEngine
 from benchmarking.domain.vos import EvaluationDataset
-from benchmarking.domain.services.resolvers import ModelNames
-from benchmarking.domain.services.condition_status import inspect_condition
 
 if TYPE_CHECKING:
     from benchmarking.application.analysis.data import AnalysisData

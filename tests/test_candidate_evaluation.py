@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
+from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.domain.enums import SynthesisMode
 from shared.domain.problem import BaseProblem
-from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from shared.infra.execution.candidate_executor import create_candidate_executor
 
 
@@ -74,8 +74,14 @@ class DummyProblem(BaseProblem):
 def test_is_failure_classification():
     """Verify classification of failure score tiers vs valid fitness scores."""
     assert CandidateEvaluationService.is_failure(CandidateEvaluationService.FAILURE_FITNESS) is True
-    assert CandidateEvaluationService.is_failure(CandidateEvaluationService.RUNTIME_FAILURE_FITNESS) is True
-    assert CandidateEvaluationService.is_failure(CandidateEvaluationService.TIMEOUT_FAILURE_FITNESS) is True
+    assert (
+        CandidateEvaluationService.is_failure(CandidateEvaluationService.RUNTIME_FAILURE_FITNESS)
+        is True
+    )
+    assert (
+        CandidateEvaluationService.is_failure(CandidateEvaluationService.TIMEOUT_FAILURE_FITNESS)
+        is True
+    )
     assert CandidateEvaluationService.is_failure(float("-inf")) is True
     assert CandidateEvaluationService.is_failure(float("nan")) is True
 
@@ -178,7 +184,9 @@ class CrashingSearch:
 def test_stagnation_detection_and_meta_feedback():
     """Verify that consecutive failures trigger stagnation detection."""
     problem = DummyProblem()
-    evaluator = build_candidate_evaluation_service(problem=problem, budget=100, stagnation_threshold=2)
+    evaluator = build_candidate_evaluation_service(
+        problem=problem, budget=100, stagnation_threshold=2
+    )
 
     crashing_code = """
 class CrashingSearch:

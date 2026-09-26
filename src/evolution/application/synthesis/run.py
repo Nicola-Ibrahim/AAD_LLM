@@ -6,10 +6,10 @@ isolated from multiprocessing orchestration.
 
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
+from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.application.synthesis.models import SessionConfig, SessionResult
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from shared.domain.problem import BaseProblem
-from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 
 
 class SingleSynthesisUseCase:

@@ -15,10 +15,10 @@ from benchmarking.infra.storage import (
     SQLiteSynthesisReadRepository,
 )
 from benchmarking.infra.storage.model_registry import configured_model_names
-from shared.infra.execution.candidate_executor import create_candidate_executor
-from shared.infra.problems.factory import BBOBProblemFactory
 from shared.config import PROJECT_ROOT
 from shared.infra.database import Database
+from shared.infra.execution.candidate_executor import create_candidate_executor
+from shared.infra.problems.factory import BBOBProblemFactory
 
 
 @dataclass(frozen=True)

@@ -6,6 +6,7 @@ from typing import cast
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
+from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.vos import (
@@ -18,7 +19,6 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
-from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from shared.infra.database.tables import ErrorLogORM, ExperimentORM, IterationORM
 
 

@@ -1,8 +1,8 @@
 """Independent analysis notebooks and cached PNG exports on synthetic data."""
 
-from dataclasses import replace
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -10,13 +10,13 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import pytest
+from notebooks.analysis.plotting.cache import FigureCache, build_figure_cache
 
 from benchmarking.application.analysis.data import AnalysisData
 from benchmarking.application.analysis.view_data import AnalysisInputs, load_analysis_inputs
 from benchmarking.application.evaluation_config import EvaluationConfig
-from benchmarking.domain.evaluation import EVALUATION_SCHEMA_VERSION, ERROR_DEFINITION
+from benchmarking.domain.evaluation import ERROR_DEFINITION, EVALUATION_SCHEMA_VERSION
 from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
-from notebooks.analysis.plotting.cache import FigureCache, build_figure_cache
 from benchmarking.infra.storage.model_registry import configured_model_names
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -115,7 +115,7 @@ def inputs(tmp_path: Path) -> AnalysisInputs:
 
 @pytest.fixture
 def png_exports(tmp_path: Path, monkeypatch) -> list[tuple[go.Figure, str]]:
-    from notebooks.analysis.plotting import cache, generalization, summary, performance, profiles
+    from notebooks.analysis.plotting import cache, generalization, performance, profiles, summary
 
     for module in [cache, generalization, summary, performance, profiles]:
         monkeypatch.setattr(module, "RESULTS_DIR", tmp_path)

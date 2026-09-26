@@ -1,16 +1,16 @@
 """Construct the synthesis campaign from concrete adapters."""
 
 from evolution.application.campaign.run import SynthesisCampaignCoordinator
-from evolution.infra.llm.client import LLMClient
 from evolution.infra.concurrency.runner import ProcessPoolRunner
 from evolution.infra.concurrency.worker import run_synthesis_worker
 from evolution.infra.engines.llamea import LLaMEAEngine
+from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
-from shared.infra.problems.factory import BBOBProblemFactory
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from evolution.infra.storage.synthesis_config.repository import SynthesisConfigRepository
 from shared.infra.database import Database
+from shared.infra.problems.factory import BBOBProblemFactory
 
 
 def build_synthesis_campaign(llm_client: LLMClient) -> SynthesisCampaignCoordinator:

@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from typing import Self
+
 import numpy as np
 from pydantic import Field, model_validator
 

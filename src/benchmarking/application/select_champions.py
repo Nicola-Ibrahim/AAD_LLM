@@ -1,6 +1,7 @@
 """Select champion candidates using application-owned ranking policy."""
 
 from pathlib import Path
+
 import pandas as pd
 
 from benchmarking.application.champions import Champion, ChampionCatalog

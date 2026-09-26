@@ -4,8 +4,8 @@ from typing import Any, Callable
 import numpy as np
 from func_timeout import FunctionTimedOut, func_timeout
 
-from shared.infra.execution.exceptions import AlgorithmTimeoutException
 from shared.infra.execution.compiler import CodeCompiler
+from shared.infra.execution.exceptions import AlgorithmTimeoutException
 
 
 class AlgorithmExecutor:

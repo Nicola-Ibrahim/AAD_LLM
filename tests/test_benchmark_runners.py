@@ -6,23 +6,22 @@ from pathlib import Path
 import pandas as pd
 
 from benchmarking.application.evaluation.run import EvaluationService
-from benchmarking.infra.solvers.baselines import run_cmaes, run_de, run_pso
+from benchmarking.infra.io.code_reader import FilesystemCodeReader
 from benchmarking.infra.io.trace_repository import EvaluationStateRepository, IOHTraceReader
 from benchmarking.infra.logging import EvaluationLogger
+from benchmarking.infra.solvers.baselines import get_baseline_runner, run_cmaes, run_de, run_pso
 from benchmarking.infra.storage import (
     ChampionsReadRepository,
     EvaluationConfigRepository,
     SQLiteSynthesisReadRepository,
 )
-from benchmarking.infra.io.code_reader import FilesystemCodeReader
-from benchmarking.infra.solvers.baselines import get_baseline_runner
+from benchmarking.infra.storage.model_registry import configured_model_names
+from shared.config import PROJECT_ROOT
 from shared.domain.noise import NoNoiseStrategy
+from shared.infra.database import Database
+from shared.infra.execution.candidate_executor import create_candidate_executor
 from shared.infra.problems.bbob import BBOBProblem
 from shared.infra.problems.factory import BBOBProblemFactory
-from shared.infra.execution.candidate_executor import create_candidate_executor
-from shared.infra.database import Database
-from shared.config import PROJECT_ROOT
-from benchmarking.infra.storage.model_registry import configured_model_names
 
 
 def build_evaluation_service(**kwargs):
@@ -399,6 +398,7 @@ def test_evaluation_config_repository_edge_cases(tmp_path: Path):
 def test_evaluation_logger(tmp_path: Path):
     """Verify EvaluationLogger formatting and verbosity controls."""
     import io
+
     from benchmarking.infra.logging import EvaluationLogger
 
     # 1. EvaluationLogger capturing output
@@ -446,6 +446,7 @@ def test_evaluation_logger(tmp_path: Path):
 def test_evaluation_service_run_verbose_control(tmp_path: Path):
     """Verify that verbose flag on EvaluationService.run_* methods controls output dynamically."""
     import io
+
     from benchmarking.infra.logging import EvaluationLogger
 
     buf = io.StringIO()

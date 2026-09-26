@@ -1,6 +1,11 @@
 import numpy as np
 
-from shared.domain.noise import AWGNStrategy, HomoscedasticAdditiveNoiseStrategy, HeteroscedasticNoiseStrategy, NoNoiseStrategy
+from shared.domain.noise import (
+    AWGNStrategy,
+    HeteroscedasticNoiseStrategy,
+    HomoscedasticAdditiveNoiseStrategy,
+    NoNoiseStrategy,
+)
 from shared.infra.problems.bbob import BBOBProblem
 
 
@@ -91,8 +96,10 @@ def test_bbob_is_in_bounds_and_clip():
 
 
 def test_ioh_logger_records_clean_distance(tmp_path):
-    import ioh
     from pathlib import Path
+
+    import ioh
+
     from evolution.infra.problems import ProblemAnalyzer
 
     log_dir = tmp_path / "ioh_test"
@@ -130,6 +137,7 @@ def test_ioh_logger_records_clean_distance(tmp_path):
 
 def test_ioh_logger_noisy_problem_does_not_corrupt_trajectory(tmp_path):
     from pathlib import Path
+
     from evolution.infra.problems import ProblemAnalyzer
 
     x_test = np.array([1.5, -2.0])

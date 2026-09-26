@@ -5,8 +5,8 @@ Provides structured templates and a FeedbackRenderer that formats evaluation res
 into actionable diagnostic prompts for LLM-driven algorithm generation.
 """
 
-from shared.domain.problem import BaseProblem
 from evolution.domain.vos.evaluation_result import AlgorithmEvaluationResult
+from shared.domain.problem import BaseProblem
 
 META_FEEDBACK_DIVERSITY_INJECTION = (
     "\n\n[META-FEEDBACK]\n\n"

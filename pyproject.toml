@@ -52,7 +52,10 @@ packages = ["src"]
 target-version = "py311"
 line-length = 100
 src = ["src"]
-extend-exclude = ["notebooks"]
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+extend-select = ["I"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
@@ -98,10 +101,17 @@ cmd = "ruff check . --fix"
 help = "LINT FIX: Automatically fix linting issues. Usage: poe lint-fix"
 
 [tool.poe.tasks.format]
-cmd = "ruff format ."
-help = "FORMAT: Automatically format code using ruff. Usage: poe format"
+sequence = [
+    { cmd = "ruff check . --select I --fix" },
+    { cmd = "ruff format ." },
+]
+help = "FORMAT: Sort imports and format code. Usage: poe format"
+
+[tool.poe.tasks.format-check]
+cmd = "ruff format . --check"
+help = "FORMAT CHECK: Check formatting without changing files. Usage: poe format-check"
 
 [tool.poe.tasks.check]
-sequence = ["lint", "format"]
+sequence = ["lint", "format-check"]
 ignore_fail = false
-help = "CHECK: Run linting and formatting checks. Usage: poe check"
+help = "CHECK: Run read-only linting and formatting checks. Usage: poe check"

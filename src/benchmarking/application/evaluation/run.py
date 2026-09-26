@@ -1,20 +1,19 @@
+import numpy as np
+import pandas as pd
+
+from benchmarking.application.evaluation.trials import EvaluationTrialRunner
+from benchmarking.application.evaluation.types import BaselineRunnerResolver, ExecutorBuilder
+from benchmarking.application.evaluation.workload import EvaluationWorkload
+from benchmarking.application.evaluation_config import EvaluationConfig
 from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
 from benchmarking.application.interfaces.champion_repository import ChampionRepository
 from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
 from benchmarking.application.interfaces.logger import EvaluationLoggerInterface
 from benchmarking.application.interfaces.synthesis_read_repository import SynthesisReadRepository
-from shared.application.interfaces.problem_factory import ProblemFactory
-from benchmarking.application.evaluation.types import BaselineRunnerResolver, ExecutorBuilder
-
-import numpy as np
-import pandas as pd
-
-from benchmarking.application.evaluation.trials import EvaluationTrialRunner
-from benchmarking.application.evaluation.workload import EvaluationWorkload
-from benchmarking.application.evaluation_config import EvaluationConfig
 from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.enums import BBOBFunction
 from benchmarking.domain.services.resolvers import ModelNames
+from shared.application.interfaces.problem_factory import ProblemFactory
 
 
 class EvaluationService:

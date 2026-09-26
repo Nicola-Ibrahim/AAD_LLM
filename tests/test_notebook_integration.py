@@ -1,27 +1,25 @@
 """Test execution of consolidated 5-notebook pipeline to ensure zero errors and data integrity."""
 
-from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
-from benchmarking.domain.services.performance import PerformanceMetricsEngine
-
 import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pandas as pd
 
+from benchmarking.application.analysis import AnalysisData, generate_markdown_report
 from benchmarking.application.evaluation.run import EvaluationService
 from benchmarking.application.select_champions import ChampionSelectionService
-from benchmarking.application.analysis import AnalysisData, generate_markdown_report
-from shared.config import RESULTS_DIR
-from shared.infra.problems.factory import BBOBProblemFactory
-from shared.infra.execution.candidate_executor import create_candidate_executor
+from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
+from benchmarking.domain.services.performance import PerformanceMetricsEngine
 from benchmarking.infra.io.code_reader import FilesystemCodeReader
-from benchmarking.infra.solvers.baselines import get_baseline_runner
 from benchmarking.infra.io.markdown_report_writer import MarkdownFileWriter
-from shared.config import PROJECT_ROOT
+from benchmarking.infra.solvers.baselines import get_baseline_runner
 from benchmarking.infra.storage.model_registry import configured_model_names
 from evolution.infra.concurrency.runner import ProcessPoolRunner
 from evolution.infra.concurrency.worker import run_synthesis_worker
+from shared.config import PROJECT_ROOT, RESULTS_DIR
+from shared.infra.execution.candidate_executor import create_candidate_executor
+from shared.infra.problems.factory import BBOBProblemFactory
 
 
 def build_evaluation_service(**kwargs):
@@ -40,16 +38,16 @@ def build_evaluation_service(**kwargs):
 
 def test_nb00_prompts_pipeline():
     """Verify Notebook 00 (00_prompts.ipynb: Prompts & Diagnostic Feedback Inspection)."""
-    from evolution.domain.enums import PromptStrategy, SynthesisMode
     from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
-    from shared.domain.noise import HeteroscedasticNoiseStrategy, NoNoiseStrategy
+    from evolution.domain.enums import PromptStrategy, SynthesisMode
     from evolution.infra.engines.llamea.prompts import (
-        FeedbackRenderer,
         META_FEEDBACK_DIVERSITY_INJECTION,
+        FeedbackRenderer,
         build_example_prompt,
         build_format_prompt,
         build_task_prompt,
     )
+    from shared.domain.noise import HeteroscedasticNoiseStrategy, NoNoiseStrategy
     from shared.infra.problems.bbob import BBOBProblem
 
     # 1. Prompt generation
@@ -111,8 +109,8 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
     from evolution.infra.llm.client import LLMClient
     from evolution.infra.logging import SynthesisLogger
     from evolution.infra.storage.code.repository import CodeRepository
-    from evolution.infra.storage.synthesis_config.repository import SynthesisConfigRepository
     from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
+    from evolution.infra.storage.synthesis_config.repository import SynthesisConfigRepository
     from shared.infra.database import Database
     from shared.infra.database.tables import Base
 
@@ -253,6 +251,7 @@ def test_nb03_import_order_isolation():
 def test_nb04_audit_pipeline():
     """Verify Notebook 04 (04_audit.ipynb: Experimental Matrix Audit)."""
     from bootstrap.audit import build_audit_service
+
     snapshot = build_audit_service().get_audit_data()
     assert isinstance(snapshot.evaluations, pd.DataFrame)
     assert isinstance(snapshot.synthesis_gaps, pd.DataFrame)
@@ -563,6 +562,7 @@ def test_custom_minimal_base_logger():
 def test_campaign_usecase_run_worker_and_campaign():
     """Verify SynthesisCampaignCoordinator run_worker and run_campaign methods."""
     from unittest.mock import MagicMock, patch
+
     from evolution.application import SessionResult, SynthesisCampaignCoordinator
     from evolution.domain.enums import SynthesisMode
     from evolution.infra.concurrency.worker import run_synthesis_worker
@@ -684,6 +684,7 @@ def test_campaign_usecase_run_worker_and_campaign():
 def test_campaign_usecase_audit_matrix_standalone():
     """Verify CampaignAuditor audits coverage for an explicitly selected model."""
     from unittest.mock import MagicMock
+
     from evolution.application.campaign.audit import CampaignAuditor
     from evolution.application.synthesis_config import SynthesisConfig
 
