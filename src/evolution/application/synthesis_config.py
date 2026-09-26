@@ -2,12 +2,8 @@
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from evolution.domain.enums import (
-    NoiseEnvironment,
-    NoiseModelEnum,
-    PromptStrategy,
-    SynthesisMode,
-)
+from evolution.domain.enums import NoiseEnvironment, PromptStrategy, SynthesisMode
+from shared.domain.noise_model import NoiseModelEnum
 
 
 class ProblemTarget(BaseModel):

@@ -6,7 +6,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from evolution.domain.enums import NoiseEnvironment, PromptStrategy, SynthesisMode
-from evolution.domain.interfaces import BaseProblem
+from shared.domain.problem import BaseProblem
 
 
 class ModeTemplate(StrEnum):

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from evolution.domain.interfaces.problem import BaseProblem
+from shared.domain.problem import BaseProblem
 from evolution.domain.vos.evaluation_result import AlgorithmEvaluationResult
 from evolution.domain.vos.iteration import IterationMetadata
 from evolution.domain.vos.metrics import (

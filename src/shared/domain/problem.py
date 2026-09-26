@@ -2,8 +2,6 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
-from evolution.domain.enums import SynthesisMode
-
 
 class BaseProblem(ABC):
     """Abstract base class interface for any callable optimization problem."""
@@ -14,12 +12,6 @@ class BaseProblem(ABC):
     noise_std: float
     noise_model: str
     true_optimum: float
-
-    @property
-    @abstractmethod
-    def mode(self) -> SynthesisMode:
-        """Return default SynthesisMode (NOISY or CLEAN) for this problem landscape."""
-        ...
 
     @property
     @abstractmethod
@@ -36,6 +28,11 @@ class BaseProblem(ABC):
     @abstractmethod
     def __call__(self, x: np.ndarray) -> float:
         """Evaluate objective function at x."""
+        ...
+
+    @abstractmethod
+    def set_budget(self, budget: int) -> None:
+        """Set the objective evaluation budget."""
         ...
 
     @abstractmethod

@@ -9,7 +9,7 @@ Provides high-level application services orchestrating domain logic and infrastr
 
 from benchmarking.application.evaluation.audit import (
     AuditCoverageSummary,
-    AuditMatrixData,
+    AuditSnapshot,
     EvaluationAuditService,
 )
 from benchmarking.application.evaluation_config import EvaluationConfig
@@ -22,7 +22,7 @@ from benchmarking.application.analysis import (
 
 __all__ = [
     "AuditCoverageSummary",
-    "AuditMatrixData",
+    "AuditSnapshot",
     "ChampionSelectionService",
     "EvaluationAuditService",
     "EvaluationConfig",

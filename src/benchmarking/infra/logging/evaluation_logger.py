@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from typing import TextIO
 
 from benchmarking.application.interfaces.logger import EvaluationLoggerInterface
-from evolution.domain.enums import SynthesisMode
+from benchmarking.application.champions import GenerationMode
 
 
 class Colors:
@@ -93,7 +93,7 @@ class EvaluationLogger(EvaluationLoggerInterface):
         noise_std: float,
         problem_id: int,
         problem_name: str = "",
-        mode: SynthesisMode | str | None = None,
+        mode: GenerationMode | str | None = None,
         strategy: str | None = None,
     ) -> None:
         """Logs the start of an evaluation condition."""

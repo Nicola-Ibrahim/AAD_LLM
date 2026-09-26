@@ -1,19 +1,10 @@
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 
 import numpy as np
 
 
-from evolution.domain.enums import NoiseModelEnum
-
-
-class CleanObjective(ABC):
-    """Clean objective capability used to calibrate noise strategies."""
-
-    @abstractmethod
-    def __call__(self, x: list[float]) -> float: ...
-
-    @abstractmethod
-    def reset(self) -> None: ...
+from shared.domain.noise_model import NoiseModelEnum
 
 
 class BaseNoiseStrategy(ABC):
@@ -27,13 +18,10 @@ class BaseNoiseStrategy(ABC):
 
     def setup(
         self,
-        clean_problem: CleanObjective,
-        lb: np.ndarray,
-        ub: np.ndarray,
         true_optimum: float,
         seed: int = 42,
     ) -> None:
-        """Optional lifecycle hook called during problem initialization for calibration/setup."""
+        """Initialize the scientific random stream; no problem lifecycle operations."""
         self._rng = np.random.default_rng(seed)
 
     @abstractmethod
@@ -65,14 +53,11 @@ class HeteroscedasticNoiseStrategy(BaseNoiseStrategy):
 
     def setup(
         self,
-        clean_problem: CleanObjective,
-        lb: np.ndarray,
-        ub: np.ndarray,
         true_optimum: float,
         seed: int = 42,
     ) -> None:
         """Store the target global optimum to calculate the optimality gap."""
-        super().setup(clean_problem, lb, ub, true_optimum, seed=seed)
+        super().setup(true_optimum, seed=seed)
         self.true_optimum = true_optimum
 
     def add_noise(self, true_value: float) -> float:
@@ -92,22 +77,13 @@ class HomoscedasticAdditiveNoiseStrategy(BaseNoiseStrategy):
         self.landscape_scale: float = 1.0
         self.n_samples: int = n_samples
 
-    def setup(
-        self,
-        clean_problem: CleanObjective,
-        lb: np.ndarray,
-        ub: np.ndarray,
-        true_optimum: float,
-        seed: int = 42,
-        n_samples: int | None = None,
-    ) -> None:
-        """Calibrate landscape scale by sampling clean points across search space bounds."""
-        super().setup(clean_problem, lb, ub, true_optimum, seed=seed)
-        samples_count = n_samples if n_samples is not None else self.n_samples
-        sample_points = self._rng.uniform(lb, ub, (samples_count, len(lb)))
-        sample_y = [clean_problem(x.tolist()) for x in sample_points]
-        self.landscape_scale = float(np.mean([abs(y - true_optimum) for y in sample_y]))
-        clean_problem.reset()
+    def calibration_points(self, lb: np.ndarray, ub: np.ndarray) -> np.ndarray:
+        """Sample calibration points using the same stream as subsequent noise."""
+        return self._rng.uniform(lb, ub, (self.n_samples, len(lb)))
+
+    def calibrate(self, observed_values: Sequence[float], true_optimum: float) -> None:
+        """Calculate landscape scale from already evaluated clean observations."""
+        self.landscape_scale = float(np.mean([abs(y - true_optimum) for y in observed_values]))
 
     def add_noise(self, true_value: float) -> float:
         if self.noise_std <= 0.0:

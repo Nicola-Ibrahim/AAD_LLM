@@ -32,6 +32,7 @@ class EvaluationService:
         baseline_resolver: BaselineRunnerResolver,
         code_reader: CandidateCodeReader,
         model_names: ModelNames,
+        planned_target_conditions: tuple[tuple[int, float, int], ...] = (),
     ) -> None:
         self.champion_selection = ChampionSelectionService(champions_repo=champions_repo)
         self.logger = logger
@@ -44,6 +45,7 @@ class EvaluationService:
             code_reader=code_reader,
             model_names=model_names,
             config=self.config,
+            planned_target_conditions=planned_target_conditions,
         )
         self.trials = EvaluationTrialRunner(
             state_repo=state_repo,

@@ -28,15 +28,17 @@ flowchart LR
 
 | Layer | Components | Responsibility |
 |---|---|---|
-| Domain | `ExperimentSummary`, value objects, `NoiseStrategy`, `AlgorithmScoringService` | Scientific state and scoring policy: objective gap, fitness, failure tiers, and noise calculations. |
-| Application | `campaign/` audit, plan, and run; `synthesis/` session and candidate evaluation; `ports/` | Reconcile campaign state, plan work, coordinate candidate execution, and construct evaluation results. |
-| Infrastructure | `LLaMEAEngine`, `Evaluator`, BBOB and SQLite adapters, executor, process dispatcher, logger | Adapt IOH, LLaMEA, SQLite/files, generated-code execution, and worker processes to application contracts. |
+| Evolution domain | `ExperimentSummary`, value objects, `AlgorithmScoringService` | Synthesis state, fitness, and failure tiers; uses shared objective-gap math. |
+| Evolution application | `campaign/` audit, plan, and run; `synthesis/` session and candidate evaluation; `interfaces/` | Reconcile campaign state, plan work, coordinate candidate execution, and construct evaluation results. |
+| Evolution infrastructure | `LLaMEAEngine`, `Evaluator`, SQLite adapters, process dispatcher, logger | Adapt LLaMEA, SQLite/files, synthesis telemetry, and worker processes to application contracts. |
+| Shared foundation | Objective problem, noise rules, BBOB adapter, guarded executor | Scientific/runtime capabilities used by both contexts without importing either. |
 | Entry points | `notebooks/02_synthesis.ipynb` and bootstrap code | Construct the infrastructure adapters and inject them into application use cases. |
 
 Generated candidate execution, timing, and traceback capture happen in the
 application evaluation workflow through the `CandidateExecutor` port. Objective-gap
-and fitness policy live in `AlgorithmScoringService`, and synthesis plus benchmark
-evaluation use that same scoring rule. The LLaMEA `Evaluator` is an infrastructure
+math lives in shared domain code; fitness policy stays in `AlgorithmScoringService`.
+Benchmarking uses the common objective gap, not synthesis failure penalties.
+The LLaMEA `Evaluator` is an infrastructure
 adapter: it translates LLaMEA solutions to application calls and persists iteration
 telemetry through the repository port.
 

@@ -15,13 +15,13 @@ from llamea import Solution
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.synthesis.models import SessionConfig
 from evolution.domain.entities import ExperimentSummary
-from evolution.domain.interfaces import BaseProblem
+from shared.domain.problem import BaseProblem
 from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.domain.vos import IterationMetadata, ProblemProfile
 from evolution.infra.engines.llamea.prompts import FeedbackRenderer
 from evolution.infra.logging import SynthesisLogger
 from evolution.application.interfaces.synthesis_repository import SynthesisRepository
-from evolution.infra.execution.candidate_executor import AlgorithmExecutorAdapter
+from shared.infra.execution.candidate_executor import AlgorithmExecutorAdapter
 from evolution.infra.storage.code.repository import CodeRepository
 from shared.infra.execution import AlgorithmExecutor
 

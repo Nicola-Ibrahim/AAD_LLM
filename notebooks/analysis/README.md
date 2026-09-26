@@ -20,6 +20,11 @@ helpers handle visual layout, styling, CSV exports, PNG saving, and figure cachi
 The helper modules are grouped by workflow: `summary.py`, `performance.py`,
 `profiles.py`, and `generalization.py`, with shared `style.py` and `cache.py`.
 
+Analysis inputs are data snapshots: no live database repository or engine service
+is carried into plotting. Helpers call domain engines directly. Profiles exclude
+stale champion identities; completed terminal trials do not imply that all their
+convergence traces are available.
+
 Outputs remain under the established `results/figures/` and `results/reports/`
 locations. Images are PNG-only, high-resolution, and never rendered inline.
 Classical baseline profiles are solid; LLM profiles are dashed. The explicit-versus-

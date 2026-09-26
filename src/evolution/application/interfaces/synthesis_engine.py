@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from evolution.application.synthesis.models import SessionConfig, SessionResult
 from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.enums import PromptStrategy, SynthesisMode
-from evolution.domain.interfaces import BaseProblem
+from shared.domain.problem import BaseProblem
 
 
 class SynthesisEngine(ABC):

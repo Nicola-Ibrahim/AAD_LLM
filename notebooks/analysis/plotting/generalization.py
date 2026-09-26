@@ -44,7 +44,7 @@ def export_cross_function(inputs: AnalysisInputs, cache: FigureCache) -> pd.Data
             targets = sorted(
                 set(inputs.config.cross_function_problem_ids) | set(group["Source Problem"])
             )
-            model_slug = inputs.service.model_names.get_model_slug(model)
+            model_slug = inputs.model_names.get_model_slug(model)
             target_path = TRANSFER_FIGURES_DIR / f"{model_slug}_{dim}D_transfer_matrix.png"
             if not cache.needs_export(target_path):
                 continue
@@ -97,7 +97,7 @@ def export_cross_function(inputs: AnalysisInputs, cache: FigureCache) -> pd.Data
             fig.update_layout(
                 template="plotly_white",
                 font=dict(family=FONT_FAMILY, size=15),
-                title=f"Frozen-Champion Cross-Function Generalization — {inputs.service.model_names.get_clean_model_label(model)} ({dim}D)",
+                title=f"Frozen-Champion Cross-Function Generalization — {inputs.model_names.get_clean_model_label(model)} ({dim}D)",
                 xaxis_title="Evaluation function",
                 yaxis_title="Synthesis function",
                 plot_bgcolor="#D1D5DB",
@@ -116,7 +116,7 @@ def export_cross_function(inputs: AnalysisInputs, cache: FigureCache) -> pd.Data
                 + f"<br>Fixed returned-point target: Δf ≤ {rel.primary_target:g}; diagonal = native function.",
                 font=dict(size=12),
             )
-            model_slug = inputs.service.model_names.get_model_slug(model)
+            model_slug = inputs.model_names.get_model_slug(model)
             cache.export(fig, TRANSFER_FIGURES_DIR / f"{model_slug}_{dim}D_transfer_matrix.png")
         print("Cross-function tables and PNG matrices exported; native rankings are unchanged.")
     return transfer_table
@@ -125,7 +125,7 @@ def export_cross_function(inputs: AnalysisInputs, cache: FigureCache) -> pd.Data
 def export_noise_robustness(inputs: AnalysisInputs, cache: FigureCache) -> None:
     noise_data = EvaluationDataset()
     for record in inputs.noise_records:
-        label = inputs.service.model_names.resolve_folder_solver_name(str(record["solver_folder"]))
+        label = inputs.model_names.resolve_folder_solver_name(str(record["solver_folder"]))
         for condition, solvers in inputs.dataset.items():
             if (condition.dim, condition.noise_std, condition.problem_id) == (
                 record["dim"],

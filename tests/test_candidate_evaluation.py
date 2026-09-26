@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 
 from evolution.domain.enums import SynthesisMode
-from evolution.domain.interfaces.problem import BaseProblem
+from shared.domain.problem import BaseProblem
 from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
-from evolution.infra.execution.candidate_executor import create_candidate_executor
+from shared.infra.execution.candidate_executor import create_candidate_executor
 
 
 def build_candidate_evaluation_service(*, problem, **kwargs):
@@ -48,6 +48,9 @@ class DummyProblem(BaseProblem):
         if self.noise_std > 0.0:
             val += float(np.random.normal(0, self.noise_std))
         return val
+
+    def set_budget(self, budget: int) -> None:
+        self.budget = budget
 
     def reset(self) -> None:
         self._evals = 0

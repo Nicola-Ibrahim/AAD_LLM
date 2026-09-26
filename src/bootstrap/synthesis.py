@@ -6,7 +6,7 @@ from evolution.infra.concurrency.runner import ProcessPoolRunner
 from evolution.infra.concurrency.worker import run_synthesis_worker
 from evolution.infra.engines.llamea import LLaMEAEngine
 from evolution.infra.logging import SynthesisLogger
-from evolution.infra.problems.factory import BBOBProblemFactory
+from shared.infra.problems.factory import BBOBProblemFactory
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from evolution.infra.storage.synthesis_config.repository import SynthesisConfigRepository

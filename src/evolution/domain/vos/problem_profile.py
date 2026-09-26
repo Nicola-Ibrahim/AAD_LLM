@@ -1,7 +1,7 @@
 from pydantic import Field
 
 from evolution.domain.base import ValueObject
-from evolution.domain.enums import NoiseModelEnum
+from shared.domain.noise_model import NoiseModelEnum
 
 
 class ProblemProfile(ValueObject):

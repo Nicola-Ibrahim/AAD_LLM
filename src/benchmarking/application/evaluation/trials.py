@@ -7,11 +7,11 @@ from collections.abc import Callable
 
 import numpy as np
 
-from benchmarking.application.evaluation.constants import (
+from benchmarking.domain.evaluation import (
     EVALUATION_SCHEMA_VERSION,
     ERROR_DEFINITION,
-    executed_trial_count,
 )
+from benchmarking.domain.services.condition_status import inspect_condition
 from benchmarking.application.evaluation_config import EvaluationConfig
 from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
 from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
@@ -20,9 +20,9 @@ from shared.application.interfaces.problem_factory import ProblemFactory
 from benchmarking.application.champions import Champion
 from benchmarking.application.evaluation.types import BaselineRunnerResolver, ExecutorBuilder
 from benchmarking.domain.services.resolvers import ModelNames
-from evolution.domain.interfaces import BaseProblem
-from evolution.domain.enums import NoiseModelEnum
-from evolution.domain.services.algorithm_scoring import AlgorithmScoringService
+from shared.domain.problem import BaseProblem
+from shared.domain.noise_model import NoiseModelEnum
+from shared.domain.scoring import objective_gap
 
 
 class EvaluationTrialRunner:
@@ -78,13 +78,14 @@ class EvaluationTrialRunner:
 
         if not self.force_rerun and self.state_repo.solver_directory_exists(target_dir):
             prov = self.state_repo.read_provenance(target_dir)
-            provenance_is_current = (
-                prov is not None
-                and prov.get("evaluation_schema_version") == EVALUATION_SCHEMA_VERSION
-                and prov.get("error_definition") == ERROR_DEFINITION
-                and (not expected_code_hash or prov.get("code_hash") == expected_code_hash)
+            inspection = inspect_condition(
+                code_available=True,
+                directory_exists=True,
+                provenance=prov,
+                expected_code_hash=expected_code_hash,
+                expected_trials=self.n_runs,
             )
-            if provenance_is_current:
+            if inspection.reason in {"complete", "partial", "not_started"}:
                 clean_errors = prov.get("clean_errors", [])
                 best_objectives = prov.get("best_objectives", [])
                 true_optima = prov.get("true_optima", [])
@@ -92,7 +93,7 @@ class EvaluationTrialRunner:
                 trial_seeds = prov.get("trial_seeds", [])
                 runtimes = prov.get("runtimes", [])
                 evals_list = prov.get("evaluations_used", [])
-                existing_runs = executed_trial_count(prov)
+                existing_runs = inspection.reusable_trials
                 clean_errors = clean_errors[:existing_runs]
                 best_objectives = best_objectives[:existing_runs]
                 true_optima = true_optima[:existing_runs]
@@ -162,7 +163,7 @@ class EvaluationTrialRunner:
                         best_objective = float("inf")
                         best_error = float("inf")
                     else:
-                        best_error = AlgorithmScoringService.objective_gap(
+                        best_error = objective_gap(
                             best_objective, true_optimum
                         )
                 except Exception:

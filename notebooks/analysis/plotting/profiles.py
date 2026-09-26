@@ -1,5 +1,7 @@
 """Reusable convergence/ECDF panels and separately runnable performance exports."""
 
+from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
+
 from dataclasses import dataclass
 from math import ceil
 from typing import Literal
@@ -58,7 +60,7 @@ def build_profile(
         vertical_spacing=0.22 if rows > 1 else 0.0,
     )
     grid = np.logspace(0, 6, 300)
-    engine = inputs.service.ecdf_engine
+    engine = EcdfConvergenceEngine()
     for index, problem in enumerate(problems + [0]):
         row, col = divmod(index, 3)
         for curve in curves:

@@ -1,5 +1,7 @@
 """Three cached primary thesis PNGs; no detailed profile sweeps."""
 
+from benchmarking.domain.services.reliability import ReliabilityEngine
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -127,7 +129,7 @@ def _attainment_profile(
             runs.extend(inputs.dataset.get(condition, {}).get(row["Solver"], []))
         if not runs:
             continue
-        curve, lower, upper = inputs.service.reliability_engine.compute_attainment_band(
+        curve, lower, upper = ReliabilityEngine().compute_attainment_band(
             runs,
             eval_grid_reliability,
             inputs.config.reliability.primary_target,
@@ -181,7 +183,7 @@ def _attainment_profile(
             )
         if not baseline_runs:
             continue
-        curve, _, _ = inputs.service.reliability_engine.compute_attainment_band(
+        curve, _, _ = ReliabilityEngine().compute_attainment_band(
             baseline_runs,
             eval_grid_reliability,
             inputs.config.reliability.primary_target,
@@ -262,7 +264,7 @@ def _noise_summary(
         else primary.iloc[:0].copy()
     )
     noise_primary["Model"] = noise_primary["Model"].map(
-        inputs.service.model_names.get_clean_model_label
+        inputs.model_names.get_clean_model_label
     )
     dims = sorted(primary["Dim"].unique())
     fig10c = make_subplots(
@@ -371,8 +373,8 @@ def export_summary(inputs: AnalysisInputs, cache: FigureCache) -> pd.DataFrame:
     if native.empty:
         print("No current native terminal results; check readiness in notebook 03.")
         return native
-    native["Model"] = native["Model"].map(inputs.service.model_names.get_clean_model_label)
-    native["Solver"] = native["Solver"].map(inputs.service.model_names.resolve_folder_solver_name)
+    native["Model"] = native["Model"].map(inputs.model_names.get_clean_model_label)
+    native["Solver"] = native["Solver"].map(inputs.model_names.resolve_folder_solver_name)
     primary = native[
         (native["Strategy"] == config.primary_prompt_strategy) & native["Complete"]
     ].copy()

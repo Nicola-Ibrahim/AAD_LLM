@@ -135,13 +135,13 @@ bash scripts/clean.sh
 ```text
 src/
   evolution/       LLM-driven algorithm synthesis: domain rules, campaigns,
-                   LLaMEA adapter, BBOB/noise adapter, prompt construction,
+                   LLaMEA adapter, prompt construction,
                    and synthesis persistence
   benchmarking/    champion/baseline evaluation, trace processing, ECDF and
                    statistical analysis services
-  shared/          configuration, SQLite infrastructure, and guarded dynamic
-                   algorithm execution
-notebooks/         interactive research workflow
+  shared/          shared BBOB/noise mathematics, objective capabilities, SQLite,
+                   IOH adapters, and guarded algorithm execution
+notebooks/         interactive research workflow and figure/report presentation
 configs/           synthesis, benchmark, problem, and LLM settings
 data/              SQLite database, generated code, and checkpoints
 results/           benchmark traces, tables, and figures
@@ -175,9 +175,7 @@ subgraph group_synthesis["Algorithm synthesis"]
   node_campaign["Campaign use case"]
   node_single_synthesis["Single synthesis"]
   node_synth_config["Synthesis config<br/>[repository.py]"]
-  node_problem["Noisy BBOB<br/>[bbob.py]"]
   node_problem_analysis["Problem analysis<br/>[analyzer.py]"]
-  node_noise["Noise strategy<br/>[noise_strategy.py]"]
   node_engine_port["Synthesis engine port<br/>[engine.py]"]
 end
 
@@ -186,7 +184,12 @@ subgraph group_runtime["Candidate runtime"]
   node_prompt_builder["Prompt builder<br/>[builder.py]"]
   node_llm_client["LLM client<br/>[client.py]"]
   node_candidate_eval["Candidate evaluator<br/>[evaluator.py]"]
-  node_executor["Sandbox executor<br/>[executor.py]"]
+end
+
+subgraph group_shared["Shared scientific/runtime foundation"]
+  node_problem["Noisy BBOB<br/>[bbob.py]"]
+  node_noise["Noise mathematics<br/>[noise.py]"]
+  node_executor["Guarded executor<br/>[executor.py]"]
 end
 
 subgraph group_benchmark["Benchmark evaluation"]
@@ -194,8 +197,8 @@ subgraph group_benchmark["Benchmark evaluation"]
   node_champions["Champion selection"]
 end
 
-subgraph group_analysis["Audit and analysis"]
-  node_audit["Coverage audit<br/>[audit_service.py]"]
+subgraph group_analysis["Benchmark audit and analysis workflows"]
+  node_audit["Coverage audit<br/>[audit.py]"]
   node_trace_repo["Trace ingestion"]
   node_statistics["Statistical analysis"]
   node_stats_engines["Analysis engines"]
@@ -241,26 +244,26 @@ node_statistics -->|"loads synthesis data"| node_synthesis_repo
 node_statistics -->|"loads evaluation traces"| node_trace_repo
 node_statistics -->|"computes analyses"| node_stats_engines
 
-click node_campaign "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign_usecase.py"
-click node_single_synthesis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/single_synthesis_usecase.py"
+click node_campaign "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/run.py"
+click node_single_synthesis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/synthesis/run.py"
 click node_synth_config "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis_config/repository.py"
-click node_problem "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/problems/bbob.py"
+click node_problem "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/problems/bbob.py"
 click node_problem_analysis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/problems/analyzer.py"
-click node_noise "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/domain/services/noise_strategy.py"
-click node_engine_port "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/interfaces/engine.py"
+click node_noise "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/domain/noise.py"
+click node_engine_port "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/interfaces/synthesis_engine.py"
 click node_llamea_runner "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/runner.py"
 click node_prompt_builder "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/prompts/builder.py"
 click node_llm_client "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/llm/client.py"
 click node_candidate_eval "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/evaluator.py"
-click node_executor "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/execution/executor.py"
+click node_executor "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/execution/executor.py"
 click node_code_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/code/repository.py"
 click node_synthesis_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis/repository.py"
 click node_database "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/database/engine.py"
-click node_evaluation "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation_service.py"
+click node_evaluation "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation/run.py"
 click node_champions "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/storage/champions_repository.py"
-click node_audit "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/audit_service.py"
+click node_audit "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation/audit.py"
 click node_trace_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/io/trace_repository.py"
-click node_statistics "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/statistical_service.py"
+click node_statistics "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/analysis/data.py"
 click node_stats_engines "https://github.com/nicola-ibrahim/aad_llm/tree/main/src/benchmarking/domain/services"
 
 classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a

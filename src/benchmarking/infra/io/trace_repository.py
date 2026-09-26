@@ -14,11 +14,10 @@ import numpy as np
 from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
 from benchmarking.application.interfaces.evaluation_trace_reader import EvaluationTraceReader
 from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
-from benchmarking.application.evaluation.constants import (
-    EVALUATION_SCHEMA_VERSION,
-    ERROR_DEFINITION,
+from benchmarking.domain.evaluation import (
     executed_trial_count,
 )
+from benchmarking.domain.services.condition_status import inspect_condition
 from shared.config import RESULTS_DIR
 
 
@@ -126,13 +125,15 @@ class IOHTraceReader(EvaluationTraceReader):
                 record = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 continue
-            if (
-                not isinstance(record, dict)
-                or record.get("evaluation_schema_version") != EVALUATION_SCHEMA_VERSION
-                or record.get("error_definition") != ERROR_DEFINITION
-            ):
+            if not isinstance(record, dict):
                 continue
-            count = executed_trial_count(record)
+            inspection = inspect_condition(
+                code_available=True, directory_exists=True, provenance=record,
+                expected_code_hash=None, expected_trials=1,
+            )
+            if inspection.reason not in {"complete", "partial", "not_started"}:
+                continue
+            count = inspection.reusable_trials
             records.append(
                 {
                     **record,

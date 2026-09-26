@@ -18,11 +18,12 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
-from evolution.domain.enums import NoiseModelEnum, SynthesisMode, PromptStrategy
+from shared.domain.noise_model import NoiseModelEnum
+from evolution.domain.enums import SynthesisMode, PromptStrategy
 from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
-from evolution.infra.execution.candidate_executor import create_candidate_executor
-from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy, NoNoiseStrategy
-from evolution.infra.problems.bbob import BBOBProblem
+from shared.infra.execution.candidate_executor import create_candidate_executor
+from shared.domain.noise import HeteroscedasticNoiseStrategy, NoNoiseStrategy
+from shared.infra.problems.bbob import BBOBProblem
 from evolution.application import (
     SessionConfig,
     SingleSynthesisUseCase,
@@ -457,7 +458,7 @@ def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
         problem=ProblemProfile(
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
-        mode=problem.mode,
+        mode=SynthesisMode.EXPLICIT,
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
@@ -496,7 +497,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
         problem=ProblemProfile(
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
-        mode=problem.mode,
+        mode=SynthesisMode.EXPLICIT,
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
@@ -518,7 +519,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
         problem=ProblemProfile(
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
-        mode=problem.mode,
+        mode=SynthesisMode.EXPLICIT,
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
@@ -559,7 +560,7 @@ def test_session_mark_failed_on_error(temp_dir, db_session_factory):
         problem=ProblemProfile(
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
-        mode=problem.mode,
+        mode=SynthesisMode.EXPLICIT,
         llm_name=llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
@@ -732,7 +733,7 @@ def test_all_executions_failed_session_handling(db_session_factory, tmp_path):
         problem=ProblemProfile(
             problem_id=24, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
-        mode=problem.mode,
+        mode=SynthesisMode.EXPLICIT,
         llm_name=mock_llm.model.name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=10,
@@ -1132,7 +1133,7 @@ def test_synthesis_engine_lsp_contract():
     from evolution.application.synthesis.models import SessionResult
     from evolution.application.interfaces.synthesis_repository import SynthesisRepository
     from evolution.domain.enums import SynthesisMode
-    from evolution.domain.interfaces import BaseProblem
+    from shared.domain.problem import BaseProblem
 
     class CustomEngine(SynthesisEngine):
         def __init__(self, tag: str, score: float):
@@ -1176,8 +1177,8 @@ def test_synthesis_engine_lsp_contract():
 def test_llamea_engine_init_and_run(temp_dir, db_session_factory):
     """Verify LLaMEAEngine accepts collaborators in __init__ and executes via run()."""
     from evolution.domain.enums import PromptStrategy, SynthesisMode
-    from evolution.infra.problems.bbob import BBOBProblem
-    from evolution.domain.services.noise_strategy import NoNoiseStrategy
+    from shared.infra.problems.bbob import BBOBProblem
+    from shared.domain.noise import NoNoiseStrategy
     from evolution.infra.storage.code.repository import CodeRepository
     from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
     from evolution.infra.engines.llamea import LLaMEAEngine
@@ -1217,8 +1218,8 @@ def test_campaign_item_and_engine_pickling(temp_dir):
     """Verify campaign work item with LLaMEAEngine pickles and unpickles without error."""
     import pickle
     from evolution.infra.engines.llamea import LLaMEAEngine
-    from evolution.infra.problems.bbob import BBOBProblem
-    from evolution.domain.services.noise_strategy import NoNoiseStrategy
+    from shared.infra.problems.bbob import BBOBProblem
+    from shared.domain.noise import NoNoiseStrategy
 
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
@@ -1240,8 +1241,8 @@ def test_campaign_item_and_engine_pickling(temp_dir):
 def test_problem_factory_seed_produces_reproducible_noise_streams():
     """Verify the BBOB adapter uses its seed for reproducible noise streams."""
     import numpy as np
-    from evolution.domain.enums import NoiseModelEnum
-    from evolution.infra.problems.factory import BBOBProblemFactory
+    from shared.domain.noise_model import NoiseModelEnum
+    from shared.infra.problems.factory import BBOBProblemFactory
 
     factory = BBOBProblemFactory()
     prob1 = factory.create(

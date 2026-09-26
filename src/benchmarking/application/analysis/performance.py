@@ -1,5 +1,7 @@
 """Backend preparation of exploratory performance metrics; no presentation or IO."""
 
+from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -17,14 +19,12 @@ class PerformanceMetrics:
 
 def compute_performance_metrics(inputs: AnalysisInputs) -> PerformanceMetrics:
     targets = {
-        noise: inputs.service.ecdf_engine.compute_adaptive_targets(inputs.dataset, noise_std=noise)
+        noise: EcdfConvergenceEngine().compute_adaptive_targets(inputs.dataset, noise_std=noise)
         for noise in inputs.dataset.noise_stds
     }
-    table = inputs.service.ecdf_engine.compute_auc_ecdf_matrix(
+    table = EcdfConvergenceEngine().compute_auc_ecdf_matrix(
         inputs.dataset, inputs.solver_order, targets=targets, group_by="condition"
     )
     table["Canonical Solver"] = table["Solver"].str.replace(r" \(noise-adapted\)", "", regex=True)
     rankings = table.groupby("Canonical Solver")["AUC-ECDF (%)"].mean().sort_values(ascending=False)
     return PerformanceMetrics(targets, table, rankings)
-
-

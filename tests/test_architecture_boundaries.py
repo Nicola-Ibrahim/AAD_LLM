@@ -7,6 +7,30 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1] / "src"
 
 
+def test_contexts_and_shared_foundation_are_independent() -> None:
+    violations: list[str] = []
+    for context in ("evolution", "benchmarking", "shared"):
+        roots = (
+            [ROOT / context]
+            if context == "shared"
+            else [ROOT / context / "domain", ROOT / context / "application"]
+        )
+        forbidden = {"evolution", "benchmarking"} - {context}
+        for root in roots:
+            for path in root.rglob("*.py"):
+                tree = ast.parse(path.read_text(encoding="utf-8"))
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        names = [alias.name for alias in node.names]
+                    elif isinstance(node, ast.ImportFrom) and node.module:
+                        names = [node.module]
+                    else:
+                        continue
+                    if any(name.split(".")[0] in forbidden for name in names):
+                        violations.append(str(path.relative_to(ROOT)))
+    assert not violations, "Context ownership leaks: " + ", ".join(violations)
+
+
 def test_benchmarking_backend_does_not_depend_on_presentation() -> None:
     """Figures belong to notebook-owned helpers, not any backend layer."""
     violations: list[str] = []

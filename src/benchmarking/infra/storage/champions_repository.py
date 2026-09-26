@@ -52,8 +52,6 @@ class ChampionsReadRepository(ChampionRepository):
                 ExperimentORM.prompt_strategy,
                 ExperimentORM.mode,
                 ExperimentORM.noise_std,
-                IterationORM.final_error.asc(),
-                IterationORM.evaluations_used.asc(),
             )
         )
         with self.SessionLocal() as session:

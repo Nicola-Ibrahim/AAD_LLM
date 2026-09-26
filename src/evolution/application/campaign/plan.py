@@ -6,6 +6,7 @@ from evolution.application.interfaces.synthesis_repository import SynthesisRepos
 from evolution.application.synthesis.models import SessionConfig
 from evolution.application.synthesis_config import MatrixCondition, SynthesisConfig
 from evolution.domain.entities import ExperimentSummary
+from evolution.domain.vos.problem_profile import ProblemProfile
 
 
 class CampaignPlanner:
@@ -135,7 +136,14 @@ class CampaignPlanner:
         )
         fresh_cfg = self._build_session_config()
         exp_id = self.sqlite_repo.create_experiment(
-            problem=problem.profile,
+            problem=ProblemProfile(
+                problem_id=problem.problem_id,
+                dim=problem.dim,
+                noise_std=problem.noise_std,
+                noise_model=problem.noise_model,
+                instance_id=problem.instance_id,
+                true_optimum=problem.true_optimum,
+            ),
             mode=condition.mode,
             llm_name=self.model_name,
             prompt_strategy=condition.strategy,

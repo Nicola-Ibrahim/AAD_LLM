@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from enum import Enum
 import math
 
+from shared.domain.scoring import objective_gap
+
 
 class FailureKind(str, Enum):
     """Failure categories that receive fixed fitness penalties."""
@@ -35,7 +37,7 @@ class AlgorithmScoringService:
     @staticmethod
     def objective_gap(clean_objective: float, true_optimum: float) -> float:
         """Return the nonnegative minimization gap, clamped at zero for roundoff."""
-        return max(0.0, float(clean_objective) - float(true_optimum))
+        return objective_gap(clean_objective, true_optimum)
 
     @staticmethod
     def success(clean_objective: float, true_optimum: float) -> ScoringResult:

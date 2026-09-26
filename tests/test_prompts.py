@@ -2,11 +2,8 @@ import numpy as np
 import pytest
 
 from evolution.domain.enums import NoiseEnvironment, PromptStrategy, SynthesisMode
-from evolution.domain.services.noise_strategy import (
-    HeteroscedasticNoiseStrategy,
-    NoNoiseStrategy,
-)
-from evolution.infra.problems.bbob import BBOBProblem
+from shared.domain.noise import HeteroscedasticNoiseStrategy, NoNoiseStrategy
+from shared.infra.problems.bbob import BBOBProblem
 from evolution.infra.engines.llamea.prompts import (
     SynthesisPrompts,
     assemble_full_prompt,

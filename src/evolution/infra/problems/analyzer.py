@@ -7,7 +7,7 @@ from typing import Any
 import ioh
 
 from shared.config import DATA_DIR
-from evolution.domain.interfaces import BaseProblem
+from shared.domain.problem import BaseProblem
 
 
 class ProblemAnalyzer:

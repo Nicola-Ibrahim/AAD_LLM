@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 
-from evolution.domain.enums import SynthesisMode
+from benchmarking.application.champions import GenerationMode
 
 
 class EvaluationLoggerInterface(ABC):
@@ -29,7 +29,7 @@ class EvaluationLoggerInterface(ABC):
         noise_std: float,
         problem_id: int,
         problem_name: str,
-        mode: SynthesisMode | str | None = None,
+        mode: GenerationMode | str | None = None,
         strategy: str | None = None,
     ) -> None: ...
 

@@ -22,6 +22,10 @@ class ChampionSelectionService:
         if rows.empty:
             return champions
 
+        rows = rows.sort_values(
+            ["final_error", "evaluations_used"], ascending=True, na_position="first", kind="stable"
+        )
+
         grouped = rows.groupby(["llm_name", "problem_id", "dim", "prompt_strategy"])
         for (model, problem_id, dim, strategy), group in grouped:
             model_name = str(model)

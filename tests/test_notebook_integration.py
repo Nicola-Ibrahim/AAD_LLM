@@ -1,18 +1,20 @@
 """Test execution of consolidated 5-notebook pipeline to ensure zero errors and data integrity."""
 
+from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
+from benchmarking.domain.services.performance import PerformanceMetricsEngine
+
 import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pandas as pd
 
-from benchmarking.application.evaluation.audit import EvaluationAuditService
 from benchmarking.application.evaluation.run import EvaluationService
 from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.application.analysis import AnalysisData, generate_markdown_report
 from shared.config import RESULTS_DIR
-from evolution.infra.problems.factory import BBOBProblemFactory
-from evolution.infra.execution.candidate_executor import create_candidate_executor
+from shared.infra.problems.factory import BBOBProblemFactory
+from shared.infra.execution.candidate_executor import create_candidate_executor
 from benchmarking.infra.io.code_reader import FilesystemCodeReader
 from benchmarking.infra.solvers.baselines import get_baseline_runner
 from benchmarking.infra.io.markdown_report_writer import MarkdownFileWriter
@@ -40,10 +42,7 @@ def test_nb00_prompts_pipeline():
     """Verify Notebook 00 (00_prompts.ipynb: Prompts & Diagnostic Feedback Inspection)."""
     from evolution.domain.enums import PromptStrategy, SynthesisMode
     from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
-    from evolution.domain.services.noise_strategy import (
-        HeteroscedasticNoiseStrategy,
-        NoNoiseStrategy,
-    )
+    from shared.domain.noise import HeteroscedasticNoiseStrategy, NoNoiseStrategy
     from evolution.infra.engines.llamea.prompts import (
         FeedbackRenderer,
         META_FEEDBACK_DIVERSITY_INJECTION,
@@ -51,7 +50,7 @@ def test_nb00_prompts_pipeline():
         build_format_prompt,
         build_task_prompt,
     )
-    from evolution.infra.problems.bbob import BBOBProblem
+    from shared.infra.problems.bbob import BBOBProblem
 
     # 1. Prompt generation
     prob_clean = BBOBProblem(1, 2, NoNoiseStrategy(), 1)
@@ -95,8 +94,8 @@ def test_nb00_prompts_pipeline():
 
 def test_nb01_noise_pipeline():
     """Verify Notebook 01 (01_noise.ipynb: Noise Landscape & Problem Evaluation)."""
-    from evolution.domain.services.noise_strategy import HeteroscedasticNoiseStrategy
-    from evolution.infra.problems.bbob import BBOBProblem
+    from shared.domain.noise import HeteroscedasticNoiseStrategy
+    from shared.infra.problems.bbob import BBOBProblem
 
     p = BBOBProblem(problem_id=1, dim=2, noise_strategy=HeteroscedasticNoiseStrategy(0.05))
     val = p([0.0, 0.0])
@@ -253,37 +252,12 @@ def test_nb03_import_order_isolation():
 
 def test_nb04_audit_pipeline():
     """Verify Notebook 04 (04_audit.ipynb: Experimental Matrix Audit)."""
-    print("\nTesting NB04 logic with EvaluationAuditService...")
-    from benchmarking.infra.io.trace_repository import IOHTraceReader
-    from benchmarking.infra.storage import EvaluationConfigRepository, SQLiteSynthesisReadRepository
-    from shared.infra.database import Database
-
-    session_factory = Database().session_factory
-    sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
-    trace_repo = IOHTraceReader()
-    config_repo = EvaluationConfigRepository()
-
-    service = EvaluationAuditService(
-        sqlite_repo=sqlite_repo,
-        trace_repo=trace_repo,
-        config=config_repo.load_config(),
-        model_names=configured_model_names(),
-    )
-    audit_data = service.get_global_audit_matrix()
-    assert hasattr(audit_data, "dims")
-    assert hasattr(audit_data, "all_solvers")
-    assert hasattr(audit_data, "coverage_summary")
-    if len(audit_data.dims) > 0:
-        assert len(audit_data.all_solvers) > 0
-        print(f"  • Dimensions: {audit_data.dims}")
-        print(f"  • Noise levels: {audit_data.noise_levels}")
-        print(f"  • Problem IDs: {audit_data.problem_ids}")
-        print(f"  • Solvers: {len(audit_data.all_solvers)}")
-    else:
-        print(
-            "  • Database in fresh/running state: audit matrix initialized with default empty grid."
-        )
-    print("✅ NB04 experimental matrix audit pipeline verified.")
+    from bootstrap.audit import build_audit_service
+    snapshot = build_audit_service().get_audit_data()
+    assert isinstance(snapshot.evaluations, pd.DataFrame)
+    assert isinstance(snapshot.synthesis_gaps, pd.DataFrame)
+    assert snapshot.coverage_summary.total_cells >= 0
+    assert isinstance(snapshot.completed_models, tuple)
 
 
 def test_nb05_analysis_pipeline(tmp_path):
@@ -307,12 +281,12 @@ def test_nb05_analysis_pipeline(tmp_path):
     assert len(all_benchmark_data) > 0
     print(f"  • Problem conditions loaded: {len(all_benchmark_data)}")
 
-    df_omnibus = service.hypothesis_engine.run_omnibus_kruskal(all_benchmark_data)
-    df_pairwise = service.hypothesis_engine.run_pairwise_fdr(all_benchmark_data, alpha=0.05)
+    df_omnibus = HypothesisTestingEngine().run_omnibus_kruskal(all_benchmark_data)
+    df_pairwise = HypothesisTestingEngine().run_pairwise_fdr(all_benchmark_data, alpha=0.05)
     print(f"  • Omnibus tests: {len(df_omnibus)} rows")
     print(f"  • Pairwise tests (FDR-corrected): {len(df_pairwise)} rows")
 
-    r_val, p_val = service.hypothesis_engine.compute_synthesis_transfer_correlation(df_exp)
+    r_val, p_val = HypothesisTestingEngine().compute_synthesis_transfer_correlation(df_exp)
     print(f"  • Synthesis transfer correlation: r = {r_val:.3f} (p = {p_val:.3e})")
 
     # Verify figure computing methods
@@ -320,17 +294,17 @@ def test_nb05_analysis_pipeline(tmp_path):
     p_ids = all_benchmark_data.problem_ids
     dim = all_benchmark_data.dims[0]
 
-    matrix, labels = service.performance_engine.compute_fragility_matrix(
+    matrix, labels = PerformanceMetricsEngine().compute_fragility_matrix(
         all_benchmark_data, dim, solvers, p_ids
     )
     assert matrix.shape == (len(p_ids), len(solvers))
 
-    c_meds, n_meds, _ = service.performance_engine.compute_validation_medians(
+    c_meds, n_meds, _ = PerformanceMetricsEngine().compute_validation_medians(
         all_benchmark_data, dim, p_ids
     )
     assert len(c_meds) == len(p_ids)
 
-    valid_s, c_rates, n_rates, deltas = service.performance_engine.compute_robustness_profile(
+    valid_s, c_rates, n_rates, deltas = PerformanceMetricsEngine().compute_robustness_profile(
         all_benchmark_data, dim, solvers, p_ids
     )
     assert len(valid_s) == len(c_rates) == len(n_rates) == len(deltas)

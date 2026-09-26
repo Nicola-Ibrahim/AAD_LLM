@@ -14,6 +14,7 @@ import pytest
 from benchmarking.application.analysis.data import AnalysisData
 from benchmarking.application.analysis.view_data import AnalysisInputs, load_analysis_inputs
 from benchmarking.application.evaluation_config import EvaluationConfig
+from benchmarking.domain.evaluation import EVALUATION_SCHEMA_VERSION, ERROR_DEFINITION
 from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
 from notebooks.analysis.plotting.cache import FigureCache, build_figure_cache
 from benchmarking.infra.storage.model_registry import configured_model_names
@@ -47,6 +48,8 @@ def inputs(tmp_path: Path) -> AnalysisInputs:
     code = "frozen optimizer"
     code_hash = hashlib.sha256(code.encode()).hexdigest()
     native = dict(
+        evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
+        error_definition=ERROR_DEFINITION,
         model=model,
         strategy="baseline",
         source_problem_id=1,
@@ -61,6 +64,8 @@ def inputs(tmp_path: Path) -> AnalysisInputs:
     )
     noise_record = dict(native, noise_std=0.05, evaluation_kind="noise_robustness")
     baseline = dict(
+        evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
+        error_definition=ERROR_DEFINITION,
         baseline="pso",
         problem_id=1,
         dim=2,

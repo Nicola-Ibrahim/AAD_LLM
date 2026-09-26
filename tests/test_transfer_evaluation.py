@@ -14,10 +14,110 @@ from benchmarking.application.evaluation_config import EvaluationConfig
 from benchmarking.domain.services.transfer import TransferAnalysisEngine
 from benchmarking.infra.storage.model_registry import configured_model_names
 from benchmarking.infra.io.trace_repository import IOHTraceReader
-from benchmarking.application.evaluation.constants import (
+from benchmarking.domain.evaluation import (
     EVALUATION_SCHEMA_VERSION,
     ERROR_DEFINITION,
 )
+from benchmarking.application.evaluation.audit import EvaluationAuditService, SynthesisConditionSpec
+
+
+def audit_for(service: EvaluationService) -> EvaluationAuditService:
+    service.workload.sqlite_repo.get_synthesis_dataframes.return_value = (
+        pd.DataFrame(
+            [
+                {"status": "completed", "llm_name": "new-model"},
+                {"status": "running", "llm_name": "not-completed"},
+            ]
+        ),
+        pd.DataFrame(),
+    )
+    return EvaluationAuditService(
+        service.workload,
+        service.workload.sqlite_repo,
+        (
+            SynthesisConditionSpec(1, 2, 0.0, "explicit", "baseline"),
+            SynthesisConditionSpec(1, 2, 0.0, "implicit", "baseline"),
+        ),
+    )
+
+
+def test_audit_does_not_substitute_implicit_counts_or_count_synthesis_gaps(
+    transfer_service: EvaluationService,
+) -> None:
+    service = transfer_service
+    row = service.workload.audit_champions_workload().iloc[0]
+    path = Path(row["target_dir"])
+    service.trials.state_repo.records[path] = {
+        "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
+        "error_definition": ERROR_DEFINITION,
+        "code_hash": "obsolete",
+        "clean_errors": [0.0] * 20,
+    }
+    service.trials.state_repo.records[path.with_name(path.name + "_implicit")] = {
+        "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
+        "error_definition": ERROR_DEFINITION,
+        "code_hash": row["code_hash"],
+        "clean_errors": [0.0] * 20,
+    }
+    original = dict(service.trials.state_repo.records)
+    snapshot = audit_for(service).get_audit_data()
+    stale = snapshot.evaluations.loc[snapshot.evaluations["key"] == row["key"]].iloc[0]
+    assert stale["status"] == "NEEDS_RERUN"
+    assert stale["runs_found"] == 0
+    assert stale["recorded_trials"] == 20
+    assert snapshot.coverage_summary.completed_cells == 0
+    assert snapshot.coverage_summary.synthesis_gap_cells == 1
+    assert snapshot.coverage_summary.total_cells == len(snapshot.evaluations)
+    assert snapshot.completed_models == ("new-model",)
+    assert service.trials.state_repo.records == original
+
+
+def test_audit_excludes_missing_code_and_keeps_baselines_without_models(
+    transfer_service: EvaluationService,
+) -> None:
+    service = transfer_service
+    audit = audit_for(service)
+    service.workload.code_reader.exists.return_value = False
+    snapshot = audit.get_audit_data()
+    assert snapshot.coverage_summary.missing_code_cells > 0
+    assert snapshot.coverage_summary.total_cells == int(snapshot.evaluations["eligible"].sum())
+    service.workload.sqlite_repo.get_synthesis_dataframes.return_value = (
+        pd.DataFrame(),
+        pd.DataFrame(),
+    )
+    service.workload.sqlite_repo.get_target_conditions.return_value = []
+    repo = service.workload.champion_selection.champions_repo
+    repo.query_candidates.return_value = repo.query_candidates.return_value.iloc[:0]
+    service.workload.planned_target_conditions = ((2, 0.0, 1),)
+    snapshot = audit.get_audit_data()
+    assert snapshot.completed_models == ()
+    assert not snapshot.evaluations.empty
+    assert set(snapshot.evaluations["solver_type"]) == {"baseline"}
+
+
+def test_audit_notebook_runs_without_campaign(
+    transfer_service: EvaluationService,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import bootstrap.audit
+    import shared.config
+    import plotly.graph_objects as go
+
+    monkeypatch.setattr(bootstrap.audit, "build_audit_service", lambda: audit_for(transfer_service))
+    monkeypatch.setattr(shared.config, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(go.Figure, "show", lambda self: None)
+    notebook = json.loads(
+        (Path(__file__).resolve().parents[1] / "notebooks/04_audit.ipynb").read_text()
+    )
+    namespace = {"display": lambda value: None}
+    for cell in notebook["cells"]:
+        if cell["cell_type"] == "code":
+            code = "".join(cell["source"])
+            exec(compile(code, "04_audit.ipynb", "exec"), namespace)
+    assert (tmp_path / "reports/evaluation_coverage_v2.csv").is_file()
+    assert (tmp_path / "reports/synthesis_gaps_v1.csv").is_file()
+    assert transfer_service.trials.state_repo.records == {}
 
 
 class MemoryState:

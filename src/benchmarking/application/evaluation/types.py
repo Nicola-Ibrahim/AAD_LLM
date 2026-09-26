@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 
-from evolution.domain.interfaces import BaseProblem
+from shared.domain.problem import BaseProblem
 from shared.application.interfaces.candidate_executor import CandidateExecutor
 
 BaselineRunner = Callable[[BaseProblem, int], tuple[float, float, int]]

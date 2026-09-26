@@ -3,7 +3,7 @@
 import numpy as np
 
 from evolution.domain.enums import SynthesisMode
-from evolution.domain.interfaces.problem import BaseProblem
+from shared.domain.problem import BaseProblem
 from evolution.domain.vos.evaluation_result import AlgorithmEvaluationResult
 from evolution.domain.vos.iteration import IterationMetadata
 from evolution.domain.vos.metrics import (
@@ -47,6 +47,9 @@ class DummyProblem(BaseProblem):
     def __call__(self, x: np.ndarray) -> float:
         self._evals += 1
         return float(np.sum(np.asarray(x) ** 2)) + self.true_optimum
+
+    def set_budget(self, budget: int) -> None:
+        self.budget = budget
 
     def reset(self) -> None:
         self._evals = 0

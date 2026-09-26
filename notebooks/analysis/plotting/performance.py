@@ -1,5 +1,7 @@
 """Exploratory AUC and strategy-ablation figure exports."""
 
+from benchmarking.domain.services.performance import PerformanceMetricsEngine
+
 import re
 import numpy as np
 import pandas as pd
@@ -303,7 +305,7 @@ def export_hardness_ablation(
             return
         has_model_data = False
         for noise_level in [inputs.clean_std, inputs.noisy_std]:
-            df_hard = inputs.service.performance_engine.compute_hardness_success_rates(
+            df_hard = PerformanceMetricsEngine().compute_hardness_success_rates(
                 inputs.dataset, dim, solvers_list, noise_level=noise_level
             )
             if not df_hard.empty and any((" / " in s for s in df_hard["Solver"].unique())):
@@ -321,7 +323,7 @@ def export_hardness_ablation(
             horizontal_spacing=0.1,
         )
         for c_idx, noise_level in enumerate([inputs.clean_std, inputs.noisy_std], start=1):
-            df_hard = inputs.service.performance_engine.compute_hardness_success_rates(
+            df_hard = PerformanceMetricsEngine().compute_hardness_success_rates(
                 inputs.dataset, dim, solvers_list, noise_level=noise_level
             )
             for solver in solvers_list:

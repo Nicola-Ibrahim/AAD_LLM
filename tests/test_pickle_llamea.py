@@ -1,15 +1,19 @@
 import pickle
 
+import numpy as np
 import pytest
 from llamea import LLaMEA
 from evolution.application import SessionConfig
 from evolution.infra.engines.llamea import Evaluator, LLaMEASession
 from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
-from evolution.infra.execution.candidate_executor import create_candidate_executor
-from evolution.domain.services.noise_strategy import NoNoiseStrategy
+from shared.infra.execution.candidate_executor import create_candidate_executor
+from shared.domain.noise import NoNoiseStrategy
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.llm.client import LLMClient, Provider
-from evolution.infra.problems.bbob import BBOBProblem
+from shared.infra.problems.bbob import BBOBProblem
+from evolution.infra.engines.llamea.checkpoint import SynthesisCheckpointUnpickler
+from evolution.domain.enums import SynthesisMode
+
 from evolution.infra.engines.llamea.prompts import SynthesisPrompts
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
@@ -108,7 +112,7 @@ def test_warm_start_rehydration(tmp_path, test_repos):
     )
     exp_id = db_repo.create_experiment(
         problem=problem_profile,
-        mode=problem.mode,
+        mode=SynthesisMode.EXPLICIT,
         llm_name=llm.model.name,
         prompt_strategy="baseline",
         budget=1000000,
@@ -153,3 +157,20 @@ def test_llm_client_raises_when_server_not_running(monkeypatch):
     monkeypatch.setenv("LOCAL_LLM_BASE_URL", "http://127.0.0.1:59999/v1")
     with pytest.raises(ConnectionError, match="Could not connect to the local LLM server"):
         LLMClient(Provider.LOCAL)
+
+
+def test_legacy_problem_checkpoint_survives_module_relocation():
+    import io
+    import pickle
+    import sys
+
+    original = BBOBProblem(1, 2, NoNoiseStrategy())
+    legacy = pickle.dumps(original, protocol=0)
+    for old, new in SynthesisCheckpointUnpickler.MODULE_RELOCATIONS.items():
+        legacy = legacy.replace(new.encode(), old.encode())
+    restored = SynthesisCheckpointUnpickler(io.BytesIO(legacy)).load()
+    assert isinstance(restored, BBOBProblem)
+    assert restored.true_optimum == original.true_optimum
+    np.testing.assert_array_equal(restored.lower_bound, original.lower_bound)
+    assert restored.eval_clean(np.array([1.0, -1.0])) == original.eval_clean(np.array([1.0, -1.0]))
+    assert "evolution.infra.problems.bbob" not in sys.modules

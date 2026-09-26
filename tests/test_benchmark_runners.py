@@ -16,10 +16,10 @@ from benchmarking.infra.storage import (
 )
 from benchmarking.infra.io.code_reader import FilesystemCodeReader
 from benchmarking.infra.solvers.baselines import get_baseline_runner
-from evolution.domain.services.noise_strategy import NoNoiseStrategy
-from evolution.infra.problems.bbob import BBOBProblem
-from evolution.infra.problems.factory import BBOBProblemFactory
-from evolution.infra.execution.candidate_executor import create_candidate_executor
+from shared.domain.noise import NoNoiseStrategy
+from shared.infra.problems.bbob import BBOBProblem
+from shared.infra.problems.factory import BBOBProblemFactory
+from shared.infra.execution.candidate_executor import create_candidate_executor
 from shared.infra.database import Database
 from shared.config import PROJECT_ROOT
 from benchmarking.infra.storage.model_registry import configured_model_names

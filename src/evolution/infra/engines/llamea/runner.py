@@ -15,7 +15,7 @@ from llamea import LLaMEA
 from shared.config import DATA_DIR
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
-from evolution.domain.interfaces import BaseProblem
+from shared.domain.problem import BaseProblem
 from evolution.domain.vos import ProblemProfile
 from evolution.application.interfaces.code_store import SynthesisCodeStore
 from evolution.application.interfaces.logger import BaseLogger
@@ -29,8 +29,9 @@ from evolution.infra.engines.llamea.prompts import (
 )
 from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
-from evolution.infra.execution.candidate_executor import AlgorithmExecutorAdapter
+from shared.infra.execution.candidate_executor import AlgorithmExecutorAdapter
 from evolution.infra.engines.llamea.evaluator import Evaluator
+from evolution.infra.engines.llamea.checkpoint import load_synthesis_checkpoint
 from shared.infra.execution import AlgorithmExecutor
 
 # Suppress joblib warning when LLaMEA passes timeout to SequentialBackend
@@ -117,7 +118,7 @@ class LLaMEASession:
     @property
     def _experiment_name(self) -> str:
         """Derived name string for the experiment context."""
-        return f"bbob_{self._problem.problem_id}_dim{self._problem.dim}_{self._problem.mode}"
+        return f"bbob_{self._problem.problem_id}_dim{self._problem.dim}_{self._synthesis_mode}"
 
     def _print_start_banner(self) -> None:
         """Prints the initialization banner for the evolution run."""
@@ -204,7 +205,7 @@ class LLaMEASession:
 
         if state_file.exists():
             try:
-                synthesis_engine = LLaMEA.warm_start(str(self._archive_dir))
+                synthesis_engine = load_synthesis_checkpoint(state_file)
                 if synthesis_engine is not None:
                     synthesis_engine.f = evaluator
                     synthesis_engine.llm = self._llm_client

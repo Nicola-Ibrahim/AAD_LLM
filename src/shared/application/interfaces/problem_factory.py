@@ -2,8 +2,8 @@
 
 from abc import ABC, abstractmethod
 
-from evolution.domain.enums import NoiseModelEnum
-from evolution.domain.interfaces import BaseProblem
+from shared.domain.noise_model import NoiseModelEnum
+from shared.domain.problem import BaseProblem
 
 
 class ProblemFactory(ABC):

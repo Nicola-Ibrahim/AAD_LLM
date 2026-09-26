@@ -1,9 +1,9 @@
 """IOH-backed factory for concrete BBOB problem adapters."""
 
-from evolution.domain.enums import NoiseModelEnum
+from shared.domain.noise_model import NoiseModelEnum
 from shared.application.interfaces.problem_factory import ProblemFactory
-from evolution.domain.services.noise_strategy import NoiseStrategyFactory
-from evolution.infra.problems.bbob import BBOBProblem
+from shared.domain.noise import NoiseStrategyFactory
+from shared.infra.problems.bbob import BBOBProblem
 
 
 class BBOBProblemFactory(ProblemFactory):

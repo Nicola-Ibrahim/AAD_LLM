@@ -1,6 +1,14 @@
 """Typed champion records shared by champion selection and persistence."""
 
 from typing import TypedDict
+from enum import StrEnum
+
+
+class GenerationMode(StrEnum):
+    """Recorded candidate origin; not a synthesis prompting policy."""
+
+    EXPLICIT = "explicit"
+    IMPLICIT = "implicit"
 
 
 class Champion(TypedDict, total=False):

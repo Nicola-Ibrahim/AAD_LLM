@@ -12,6 +12,8 @@ from benchmarking.application.interfaces.candidate_code_reader import CandidateC
 from benchmarking.application.interfaces.evaluation_trace_reader import EvaluationTraceReader
 from benchmarking.domain.services.transfer import TransferAnalysisEngine
 from benchmarking.domain.vos import EvaluationDataset
+from benchmarking.domain.services.resolvers import ModelNames
+from benchmarking.domain.services.condition_status import inspect_condition
 
 if TYPE_CHECKING:
     from benchmarking.application.analysis.data import AnalysisData
@@ -21,7 +23,7 @@ ChampionIdentity = tuple[str, int, int, str]
 
 @dataclass(frozen=True)
 class AnalysisInputs:
-    service: "AnalysisData"
+    model_names: ModelNames
     config: EvaluationConfig
     dataset: EvaluationDataset
     models_to_solvers: dict[str, list[str]]
@@ -70,13 +72,6 @@ def load_analysis_inputs(
         s for s in traces.solvers if " / " not in s or s.split(" / ", 1)[0] in model_labels.values()
     ]
     dataset = traces.filter(solvers=solvers)
-    models: dict[str, list[str]] = defaultdict(list)
-    for solver in dataset.solvers:
-        if " / " in solver:
-            models[solver.split(" / ", 1)[0]].append(solver)
-    classical = [s for s in dataset.solvers if " / " not in s]
-    llms = [s for s in dataset.solvers if " / " in s]
-
     active: set[ChampionIdentity] = set()
     clean_baseline: set[ChampionIdentity] = set()
     for conditions in champions.values():
@@ -104,7 +99,16 @@ def load_analysis_inputs(
     records = [
         r
         for r in service.trace_repo.load_provenance_records()
-        if selected(r) and ("baseline" in r or r.get("model") in model_labels)
+        if selected(r)
+        and ("baseline" in r or r.get("model") in model_labels)
+        and inspect_condition(
+            code_available=True,
+            directory_exists=True,
+            provenance=r,
+            expected_code_hash=None,
+            expected_trials=config.target_eval_runs,
+        ).reason
+        in {"complete", "partial", "not_started"}
     ]
     references = [r for r in records if "baseline" in r]
     native = [
@@ -148,8 +152,44 @@ def load_analysis_inputs(
             )
             in clean_baseline
         ]
+    profile_records: list[dict[str, object]] = []
+    for record in native + noise + references:
+        if record not in profile_records:
+            profile_records.append(record)
+    valid_traces = {
+        (
+            int(r["dim"]),
+            float(r["noise_std"]),
+            int(r["problem_id"]),
+            names.resolve_folder_solver_name(str(r["solver_folder"])),
+        )
+        for r in profile_records
+    }
+    # Current terminal provenance controls identity validity, not the availability
+    # or completeness of convergence traces. Never manufacture missing traces.
+    dataset = EvaluationDataset(
+        conditions_data={
+            condition: {
+                solver: runs
+                for solver, runs in by_solver.items()
+                if (condition.dim, condition.noise_std, condition.problem_id, solver)
+                in valid_traces
+            }
+            for condition, by_solver in dataset.items()
+            if any(
+                (condition.dim, condition.noise_std, condition.problem_id, solver) in valid_traces
+                for solver in by_solver
+            )
+        }
+    )
+    models: dict[str, list[str]] = defaultdict(list)
+    for solver in dataset.solvers:
+        if " / " in solver:
+            models[solver.split(" / ", 1)[0]].append(solver)
+    classical = [s for s in dataset.solvers if " / " not in s]
+    llms = [s for s in dataset.solvers if " / " in s]
     return AnalysisInputs(
-        service=service,
+        model_names=ModelNames(names.registry),
         config=config,
         dataset=dataset,
         models_to_solvers=dict(models),
@@ -160,6 +200,6 @@ def load_analysis_inputs(
         noise_records=noise,
         transfer_records=transfer,
         reference_records=references,
-        profile_records=records,
+        profile_records=profile_records,
         filters={"dims": dims, "problems": problems, "noise_stds": noise_stds},
     )

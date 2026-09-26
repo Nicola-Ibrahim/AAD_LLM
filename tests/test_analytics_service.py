@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from benchmarking.application.evaluation.audit import AuditCoverageSummary, EvaluationAuditService
+from benchmarking.application.evaluation.audit import AuditCoverageSummary
 from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.application.analysis import (
     AnalysisData,
@@ -21,7 +21,6 @@ from benchmarking.domain.enums import (
 from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
 from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
-from benchmarking.infra.storage.config_repository import EvaluationConfigRepository
 from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
 from benchmarking.infra.io.markdown_report_writer import MarkdownFileWriter
 from shared.config import DATA_DIR, RESULTS_DIR
@@ -341,29 +340,12 @@ class TestApplicationServicesIntegration:
             assert count >= 0
 
     def test_audit_service(self):
-        session_factory = Database().session_factory
-        sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
-        config_repo = EvaluationConfigRepository()
-        service = EvaluationAuditService(
-            sqlite_repo=sqlite_repo,
-            trace_repo=IOHTraceReader(RESULTS_DIR / "ioh_traces"),
-            config=config_repo.load_config(),
-            model_names=configured_model_names(),
-        )
-        if (DATA_DIR / "db.sqlite3").exists():
-            matrix_df, summary = service.get_audit_matrix()
-            assert isinstance(matrix_df, pd.DataFrame)
-            assert isinstance(summary, dict)
-            assert "coverage_pct" in summary
-            audit_data = service.get_global_audit_matrix()
-            assert isinstance(audit_data.df, pd.DataFrame)
-            coverage = audit_data.coverage_summary
-            cov_pct = (
-                coverage.coverage_pct
-                if isinstance(coverage, AuditCoverageSummary)
-                else coverage["coverage_pct"]
-            )
-            assert cov_pct >= 0.0
+        from bootstrap.audit import build_audit_service
+        snapshot = build_audit_service().get_audit_data()
+        assert isinstance(snapshot.evaluations, pd.DataFrame)
+        assert isinstance(snapshot.synthesis_gaps, pd.DataFrame)
+        assert isinstance(snapshot.coverage_summary, AuditCoverageSummary)
+        assert snapshot.coverage_summary.coverage_pct >= 0.0
 
     def test_statistical_service(self):
         session_factory = Database().session_factory

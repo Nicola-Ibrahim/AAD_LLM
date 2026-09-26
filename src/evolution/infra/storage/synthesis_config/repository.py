@@ -10,7 +10,8 @@ from typing import cast
 import tomllib
 
 from shared.config import CONFIGS_DIR
-from evolution.domain.enums import NoiseModelEnum, PromptStrategy, SynthesisMode
+from shared.domain.noise_model import NoiseModelEnum
+from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.application.synthesis_config import (
     MatrixCondition,
     NoiseConditionConfig,

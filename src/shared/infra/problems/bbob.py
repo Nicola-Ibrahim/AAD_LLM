@@ -3,10 +3,8 @@ import warnings
 import numpy as np
 from ioh import ProblemClass, get_problem
 
-from evolution.domain.enums import SynthesisMode
-from evolution.domain.interfaces import BaseProblem
-from evolution.domain.services.noise_strategy import BaseNoiseStrategy
-from evolution.domain.vos import ProblemProfile
+from shared.domain.problem import BaseProblem
+from shared.domain.noise import BaseNoiseStrategy, HomoscedasticAdditiveNoiseStrategy
 
 
 class BBOBProblem(BaseProblem):
@@ -47,25 +45,16 @@ class BBOBProblem(BaseProblem):
 
         # Explicit Noise Strategy injection
         self.noise_strategy: BaseNoiseStrategy = noise_strategy
-        self.noise_strategy.setup(
-            self._clean_problem, self._lb, self._ub, self.true_optimum, seed=seed
-        )
+        self.noise_strategy.setup(self.true_optimum, seed=seed)
+        if isinstance(self.noise_strategy, HomoscedasticAdditiveNoiseStrategy):
+            points = self.noise_strategy.calibration_points(self._lb, self._ub)
+            observations = [self._clean_problem(x.tolist()) for x in points]
+            self.noise_strategy.calibrate(observations, self.true_optimum)
+            self._clean_problem.reset()
         self.noise_std: float = self.noise_strategy.noise_std
         self.noise_model: str = self.noise_strategy.name
         self._budget: int | None = None
         self._last_f: float = float("inf")
-
-    @property
-    def profile(self) -> ProblemProfile:
-        """Returns the immutable ProblemProfile value object for this problem."""
-        return ProblemProfile(
-            problem_id=self.problem_id,
-            dim=self.dim,
-            noise_std=self.noise_std,
-            noise_model=self.noise_model,
-            instance_id=self.instance_id,
-            true_optimum=self.true_optimum,
-        )
 
     def set_budget(self, budget: int) -> None:
         """Set maximum evaluation budget for the problem instance."""
@@ -97,11 +86,6 @@ class BBOBProblem(BaseProblem):
 
         self._last_f = val
         return val
-
-    @property
-    def mode(self) -> SynthesisMode:
-        """BBOBProblem always runs in explicit environment (noise level known to physics, not to LLM)."""
-        return SynthesisMode.EXPLICIT
 
     def eval_scalar(self, x: np.ndarray) -> float:
         """Evaluate the objective function at point `x` and return a single scalar float."""
