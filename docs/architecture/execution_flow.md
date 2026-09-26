@@ -1,81 +1,70 @@
-# Execution Sequence & Concurrency Lifecycle
+# Synthesis execution and recovery
 
-This document illustrates the execution lifecycle, process concurrency, and warm-start resumption mechanisms in the `AAD_LLM` system.
+[Documentation map](../README.md) · [Project README](../../README.md)
 
----
+## Campaign planning
 
-## 1. Multi-Process Synthesis Execution Flow
+[build_synthesis_campaign](../../src/bootstrap/synthesis.py) loads synthesis
+configuration, creates the database/repositories and runtime adapters, and returns
+a `SynthesisCampaignCoordinator`. The notebook calls `run_campaign()`.
 
-The following sequence diagram captures the end-to-end flow from experiment campaign invocation down to isolated worker execution and result aggregation:
+The coordinator delegates task construction to
+[CampaignPlanner](../../src/evolution/application/campaign/plan.py).
+The planner reads experiments and uses `CampaignAuditor` to group their state.
+It respects targeted IDs, `auto_resume`, `skip_completed`, repeat count and the
+other configured recovery gates. Fresh tasks create experiment records before
+dispatch; resume tasks retain the experiment ID and recorded iteration count.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as Notebook / CLI Runner
-    participant Service as Campaign audit / plan / run
-    participant Runner as TaskDispatcher / ProcessPoolRunner adapter
-    participant Single as SingleSynthesisUseCase (Worker)
-    participant Engine as LLaMEAEngine
-    participant Session as LLaMEASession
-    participant LLaMEA as LLaMEA Optimizer
-    participant Eval as Evaluator
-    participant Candidate as CandidateEvaluationService
-    participant Scoring as AlgorithmScoringService
-    participant DB as SQLite DB (WAL)
+The process dispatcher calls the module-level
+[run_synthesis_worker](../../src/evolution/infra/concurrency/worker.py).
+Each worker creates its own database/repository, invokes
+`SingleSynthesisUseCase.execute()`, and disposes the database in a `finally` block.
 
-    User->>Service: run_campaign() (or SingleSynthesisUseCase.execute())
-    Service->>Service: audit_matrix() (DB reconciliation)
-    Service->>Service: build_tasks() (fresh, resume, targeted)
-    Service->>Runner: run(tasks)
-    
-    par Parallel Work Units Across Workers
-        Runner->>Single: run_synthesis_worker(item)
-        Single->>DB: Database().session_factory
-        Single->>Engine: engine.run(...)
-        Engine->>Session: LLaMEASession(...) & session.run()
+## Session execution
 
-        alt Warm-Start Checkpoint Exists (Resumption)
-            Session->>Session: LLaMEA.warm_start(archive_dir)
-            Note over Session: Resumes generation count and history
-        else Fresh Experiment
-            Session->>Session: Instantiate LLaMEA(...)
-        end
+`SingleSynthesisUseCase` invokes `LLaMEAEngine`, which constructs a
+[LLaMEASession](../../src/evolution/infra/engines/llamea/runner.py).
+The session builds prompts and an evaluator and runs LLaMEA with one parent,
+one offspring, elitism, and sequential candidate evaluation within that session.
+Campaign sessions can run concurrently in different workers.
 
-        Session->>Eval: setup_evaluator()
-        Session->>LLaMEA: run()
+The infrastructure evaluator calls the application candidate-evaluation use case.
+The shared executor runs generated code; evolution's domain scoring policy
+constructs fitness. Iteration telemetry is persisted through the synthesis
+repository. See [evaluation protocol](../evaluation_protocol.md) for the
+actual return, timeout, budget and scoring behavior.
 
-        loop Generations (Budget Iterations)
-            LLaMEA->>Eval: __call__(solution)
-            Eval->>Candidate: evaluate(candidate code)
-            Candidate->>Candidate: CandidateExecutor.execute()
-            Candidate->>Scoring: score clean objective gap
-            Eval->>DB: append_iteration_log()
-            Eval-->>LLaMEA: solution with fitness/feedback
-        end
+## Checkpoint recovery
 
-        LLaMEA-->>Session: Champion Solution
-        Session->>DB: save_experiment_summary(COMPLETED)
-        Session->>Session: cleanup_archive_dir()
-        Session-->>Engine: SessionResult
-        Engine-->>Single: SessionResult
-        Single-->>Runner: SessionResult
-    end
+Session checkpoints use:
 
-    Runner-->>Service: dict[str, SessionResult]
-    Service-->>User: Campaign Results Summary
+```text
+data/evolution_state/{dim}D/std_{noise}/f{problem_id}/experiment_{id}/llamea_config.pkl
 ```
 
----
+If this checkpoint exists, the session loads it through
+[load_synthesis_checkpoint](../../src/evolution/infra/engines/llamea/checkpoint.py),
+reattaches the current evaluator and LLM client, and restores the archive logger
+path. This reader also handles historical relocated type names. It does not invoke
+`LLaMEA.warm_start()`. Checkpoints are trusted local pickle files, not safe input
+from arbitrary sources.
 
-## 2. Crash Recovery & Resumption Lifecycle
+If loading fails, the session logs a warning and initializes a fresh LLaMEA engine.
+Therefore a database resume task alone does not guarantee restoration of the
+previous population; a usable checkpoint is required.
 
-1. **State Persistence**:
-   During active evolution runs, checkpoints (`llamea_config.pkl`) are maintained in `data/evolution_state/{dim}D/std_{noise}/f{problem_id}/experiment_{id}/`.
-2. **Crash Interruption Detection**:
-   When `SynthesisCampaignCoordinator.audit_matrix()` inspects the database, any experiment whose status remains `running` is earmarked for resumption.
-3. **Resumption Dispatch**:
-   `SynthesisCampaignCoordinator._build_resume_task()` creates a resume work item with `initial_iteration` set to the number of existing iterations already recorded in the database.
-4. **Warm Start**:
-   `LLaMEASession._create_synthesis_engine()` invokes `LLaMEA.warm_start()`, restores the existing population and generation count, attaches fresh `Evaluator` and `LLMClient` instances, and proceeds to complete the remaining iterations.
-5. **Post-Run Cleanup**:
-   Upon successful experiment completion (`experiment.complete()`), `_cleanup_archive_dir()` silently purges the checkpoint state files to prevent disk bloating.
+A successful loop marks the experiment completed and saves its summary, then
+removes the temporary session archive before processing the session result.
+A loop exception marks the experiment failed, records the exception and re-raises.
+Recovery decisions subsequently depend on configured retry/resumption gates.
+Candidate code, champion exports and benchmark traces have separate lifecycles;
+session checkpoint cleanup does not remove them.
+
+## Independent benchmark resumption
+
+Benchmark recovery is separate from synthesis checkpoints. Workload discovery,
+trial resumption and read-only coverage audit consume the shared benchmark
+condition-status policy, including schema/hash validity and historical skipped
+tails. Partial valid trials resume; stale results do not count as reusable coverage.
+See [system architecture](system_architecture.md) and
+[evaluation protocol](../evaluation_protocol.md).

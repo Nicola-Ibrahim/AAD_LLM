@@ -1,22 +1,61 @@
-# System Architecture
+# System architecture
 
-`AAD_LLM` uses a practical hexagonal architecture: application use cases coordinate
-work through ports, domain modules own scientific rules, and infrastructure adapters
-perform database, filesystem, process, and third-party-library work. It is not a
-strictly pure DDD model.
+[Documentation map](../README.md) · [Project README](../../README.md)
 
-The README displays both complementary, C4-inspired views: **Level 0 — Workflow
-overview** ([SVG](system_overview.svg)) and **Level 1 — Detailed system view**
-([SVG](system_diagram.svg)). These are project-specific overview/detail labels,
-not standard C4 system-context/container levels. The detailed view's
-[editable Mermaid source](system_diagram.mmd) retains the original components,
-relationships, and code links. The overview preserves the palette and adds explicit
-context labels for quick orientation. It
-collapses each workflow/supporting group into one node (25 components become 7);
-internal links and per-file labels remain in the detailed view. Arrows describe
-workflow/data access, not import dependencies. Analysis belongs to benchmarking;
-its figure construction belongs to notebooks. Runtime and persistence are supporting
-capabilities, not additional bounded contexts.
+A modular monolith with two workflow contexts: **evolution** and **benchmarking**.
+Audit is a capability within those contexts; notebooks own presentation.
+
+## Workflow overview
+
+[![Research workflows, context ownership and supporting capabilities](system_overview.svg)](system_overview.svg?raw=true)
+
+[Detailed system diagram](system_diagram.svg?raw=true) ·
+[Editable detailed source](system_diagram.mmd)
+
+## Synthesis collaboration
+
+[![Synthesis campaign wiring, worker sessions, LLaMEA evaluator, executor and scoring collaborations](synthesis_collaboration.svg)](synthesis_collaboration.svg?raw=true)
+
+This restores the LLaMEA collaboration view here, alongside the system diagrams.
+Arrows show runtime calls/delegation, not permission for core modules to import adapters.
+Configuration, repositories, problem factory and LLM client are injected collaborators;
+they remain visible in the detailed system diagram rather than repeated as separate
+nodes in this focused view.
+
+## Dependency direction
+
+```mermaid
+flowchart LR
+    Entry[Notebooks] --> Bootstrap[Composition functions]
+    Bootstrap --> App[Application workflows]
+    App --> Ports[Application ports]
+    App --> Domain[Domain rules and entities]
+    Infra[Infrastructure adapters] -. implements .-> Ports
+    Infra --> Domain
+    Infra --> External[(SQLite, files, IOH, LLaMEA, solvers, processes)]
+```
+
+Solid arrows describe dependencies/composition; the dashed edge means an adapter
+implements an interface. Application code does not import its concrete adapter.
+
+| Owner | Responsibilities |
+| --- | --- |
+| Evolution | Prompts, campaigns, iterations, feedback, fitness penalties and synthesis recovery. |
+| Benchmarking | Champion selection, trial validity/resumption, audit, reliability, ECDF and transfer. |
+| Shared foundation | BBOB/noise definitions, objective gap, problem capabilities, execution and database adapters. |
+| Notebooks / bootstrap | Composition, labels, Plotly figures, caching and exports. |
+
+Neither context's application/domain imports the other context. Shared code imports
+neither context. Benchmarking infrastructure may read synthesis records through
+read-only adapters; evolution owns synthesis writes. Database sessions are short-lived,
+with worker-local engines and the existing SQLite WAL configuration.
+
+[Execution and recovery](execution_flow.md) ·
+[Evaluation protocol](../evaluation_protocol.md) ·
+[Analysis workflows](../../notebooks/analysis/README.md)
+
+<details>
+<summary>Module ownership, persistence and implementation notes</summary>
 
 ## Context map and ownership
 
@@ -47,19 +86,9 @@ benchmarking. No database/schema migration is required.
 
 ## Dependency direction
 
-```mermaid
-flowchart LR
-    Entry[Notebooks] --> Bootstrap[Composition functions]
-    Bootstrap --> App[Application workflows]
-    App --> Ports[Application ports]
-    App --> Domain[Domain rules and entities]
-    Infra[Infrastructure adapters] -. implements .-> Ports
-    Infra --> Domain
-    Infra --> External[(SQLite, files, IOH, LLaMEA, solvers, processes)]
-```
-
-The dependency rule for new core code is inward: domain code depends only on domain
-and standard-library concepts; application code depends on domain and application
+The dependency rule for core code is inward: domain code owns scientific rules
+and may use numerical/data-model libraries, but does not depend on infrastructure
+or application workflows; application code depends on domain and application
 ports; infrastructure depends inward on those contracts and outward on external
 libraries. Notebook/bootstrap code constructs concrete adapters. The dotted adapter
 relationship is runtime wiring, not an import from a port to its implementation.
@@ -88,8 +117,22 @@ session. Synthesis workers create their own `Database` inside the worker process
   (fitness and failure classification using the shared objective gap).
 - `infra/` adapts SQLite/files, LLaMEA, logging, synthesis telemetry, and multiprocessing.
 
-Candidate execution (running generated Python, timing, and capturing tracebacks) is
-an application workflow implemented by an infrastructure executor. Scoring is a
+`bootstrap.synthesis.build_synthesis_campaign()` composes the coordinator,
+configuration data, repositories, problem factory, engine and dispatcher.
+The module-level worker calls `SingleSynthesisUseCase`; `LLaMEAEngine` implements
+the synthesis engine interface and delegates a session to `LLaMEASession`.
+Its infrastructure `Evaluator` translates LLaMEA solutions into calls to
+`CandidateEvaluationService` and persists iteration telemetry. The shared
+`AlgorithmExecutorAdapter` implements the candidate executor interface;
+`BBOBProblemFactory` implements the problem factory interface. These are runtime
+collaborations, not imports from application code into infrastructure.
+
+For dispatch and checkpoint steps, see [execution and recovery](execution_flow.md).
+For scoring and execution limitations, see [evaluation protocol](../evaluation_protocol.md).
+
+Candidate execution is coordinated by the application: shared infrastructure runs
+generated Python and captures warnings, while the application measures runtime
+and assembles exception diagnostics. Scoring is a
 domain policy specific to synthesis; both workflows use the shared objective-gap
 calculation without sharing fitness penalties. Use the application
 candidate-evaluation service and executor port directly; the domain contains no
@@ -145,3 +188,5 @@ the six relocated scientific/runtime type module names during deserialization.
 It preserves pickle state and normal rehydration hooks without restoring obsolete
 Python modules or rewriting archives. As before, only trusted local pickle archives
 may be loaded; this is not a security sandbox for checkpoint files.
+
+</details>

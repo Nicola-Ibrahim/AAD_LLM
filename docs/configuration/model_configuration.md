@@ -1,84 +1,66 @@
-# Custom Model Configuration Guide
+# Model configuration
 
-Our scripts and environment templates are fully decoupled from hardcoded models. This guide details how local models are served and consumed dynamically without static configuration files.
+[Documentation map](../README.md) · [Project README](../../README.md)
 
----
+Provider connections, server settings, model presets and experimental settings
+have different owners; model selection is not entirely configuration-free.
 
-## 🛠️ Environment Configuration & Dynamic Selection
+## Provider connections
 
-1. **Connection & Runtime Settings** are defined statically in the project root `.env` file.
-2. **Server Model Selection** happens dynamically when launching the model server.
-3. **Python client discovery** queries the running local server endpoint `/v1/models` to discover which model is active.
+[LLMClient](../../src/evolution/infra/llm/client.py) supports `local`, `lmstudio`
+and `gemini`. The notebook supplies the provider and optional client arguments.
+Environment variables provide defaults:
 
-### `.env` Variables
+| Provider | URL | Model | API key |
+| --- | --- | --- | --- |
+| Local | `LOCAL_LLM_BASE_URL` | `LOCAL_LLM_MODEL` | `LOCAL_LLM_API_KEY` |
+| LM Studio | `LLM_STUDIO_BASE_URL` | `LLM_STUDIO_MODEL` | `LLM_STUDIO_API_KEY` |
+| Gemini | Provider-managed | `GEMINI_MODEL` | `GOOGLE_API_KEY` |
 
-| Variable | Description | Example |
-| :--- | :--- | :--- |
-| `LLM_PROVIDER` | The LLM provider type (e.g. `local` or `gemini`). | `local` |
-| `LLM_SERVER_HOST` | Local server network interface host IP. | `0.0.0.0` |
-| `LLM_SERVER_PORT` | Local server network port. | `1234` |
-| `LLM_SERVER_N_CTX` | Context window token size for candidate algorithm evolution. | `8192` |
-| `LLM_SERVER_N_THREADS` | Number of CPU threads assigned to model inference. | `8` |
+Local and LM Studio default to `http://localhost:1234/v1`.
+An explicit `model=` argument takes precedence over the model environment variable.
+With connection validation enabled and no configured model, the client discovers
+the first model returned by the endpoint's `/models` response. With validation
+disabled, a model must be supplied. `SKIP_LLM_VALIDATION=True` disables the
+connection probe; it is not a substitute for configuring the model.
+Keep API keys in local environment configuration, not committed documents.
 
----
+## Local GGUF server
 
-## 📋 Serving a Model
-
-To start the model server, run the LLM management script:
+The existing management script supports:
 
 ```bash
 bash scripts/llm.sh start
-```
-
-If multiple GGUF models are found in your `~/models` directory or Hugging Face cache, the script will show an interactive selection menu allowing you to choose which model to start:
-
-```
-Select a GGUF model to serve:
-1) qwen2.5-coder-7b-instruct-q4_k_m.gguf
-2) deepseek-coder-1.5b-instruct-q4_k_m.gguf
-3) Cancel
-```
-
-Once running, the active model name can be verified dynamically using:
-
-```bash
 bash scripts/llm.sh status
-```
-
----
-
-## 💾 Downloading and Managing Models
-
-To download or clean up GGUF model files, use the interactive LLM CLI:
-
-```bash
-bash scripts/llm.sh
-```
-
-or directly invoke download/cleanup commands:
-
-```bash
+bash scripts/llm.sh stop
 bash scripts/llm.sh download
 bash scripts/llm.sh list
 bash scripts/llm.sh cleanup
 ```
 
-This interactive tool lets you:
-1. **Select and download a model preset**: Shows a categorised list of optimized models (from `configs/llms.toml`) and downloads the selection to `~/models`.
-2. **Download from custom Hugging Face repo & file**: Prompts for repository ID and GGUF file name, and downloads it to `~/models`.
-3. **Delete downloaded models**: Clean up cache disk space.
-4. **List local cached models**: View cached GGUF models.
+Running `bash scripts/llm.sh` opens its interactive menu. Starting the server
+selects an available GGUF file; downloading offers presets or a custom repository
+and file. `cleanup` deletes selected model files and should be used deliberately.
 
----
+Server settings include `LLM_SERVER_HOST`, `LLM_SERVER_PORT`,
+`LLM_SERVER_N_CTX`, `LLM_SERVER_N_THREADS`, `LLM_SERVER_N_GPU_LAYERS`
+and `LLM_SERVER_VERBOSE`. `MODELS_DIR` overrides the default model directory
+`~/models`. Server bind settings and Python client URLs are separate: if the
+port changes, update the corresponding client base URL too. A bind address such
+as `0.0.0.0` is not the client connection URL.
 
-## ⚡ Quantization Guide (Which file to download?)
+## Presets and experiments
 
-GGUF models come in different quantization levels (bits), marked in the filename (e.g. `q4_k_m`, `q5_k_m`). Selecting the correct quantization is key to preventing out-of-memory crashes:
+[configs/llms.toml](../../configs/llms.toml) stores model presets/registry metadata;
+it is used by the management tooling and infrastructure name registry.
+It does not declare which models have completed experiments.
 
-*   **`Q4_K_M` (4-bit, Medium) - *Recommended Default***:
-    *   **RAM Required**: ~1.5x model size.
-    *   **Trade-off**: Fast inference, low resource consumption, and minimal quality loss.
-*   **`Q5_K_M` (5-bit, Medium)**:
-    *   **Trade-off**: Slightly slower than 4-bit, but has marginally better reasoning accuracy.
-*   **`Q8_0` (8-bit, High)**:
-    *   **Trade-off**: Lossless quality, but slower and double the memory requirement. Not recommended for quick testing on normal CPU nodes.
+[configs/synthesis.toml](../../configs/synthesis.toml) controls problem conditions,
+prompt strategies, synthesis modes, iterations and future repeat counts.
+[configs/benchmark.toml](../../configs/benchmark.toml) controls evaluation and
+reliability settings. Audit and analysis discover completed models from the
+database rather than treating every registry preset as an evaluated model.
+
+Quantization labels identify model artifacts; they do not establish guaranteed
+memory requirements, runtime or optimization quality. Report the exact model
+artifact and actual experimental settings when comparing results.

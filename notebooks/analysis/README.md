@@ -1,5 +1,8 @@
 # Independent analysis workflows
 
+[Project README](../../README.md) · [Documentation map](../../docs/README.md) ·
+[Evaluation protocol](../../docs/evaluation_protocol.md)
+
 Run any of these notebooks without running the others first:
 
 | Notebook | Workload |

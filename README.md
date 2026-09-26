@@ -220,7 +220,7 @@ sections you need, use condition filters for smaller sweeps, and set
 Noise robustness and cross-function generalization are separate secondary
 analyses, outside the native champion ranking. Cross-function evaluation is
 opt-in, uses frozen clean champions, and writes isolated transfer traces.
-See [the evaluation protocol](docs/transfer_evaluation.md) for execution switches,
+See [the evaluation protocol](docs/evaluation_protocol.md) for execution switches,
 scoring, storage, and thesis interpretation.
 
 ## Configuration
@@ -305,7 +305,6 @@ If Poe the Poet is installed, the equivalent project tasks are `poe test`,
 
 ## Further documentation
 
-- [System architecture](docs/architecture/system_architecture.md)
-- [Execution and recovery flow](docs/architecture/execution_flow.md)
-- [LLaMEA adapter architecture](docs/architecture/llamea_architecture.md)
-- [Evaluator methodology](docs/evaluator_methodology.md)
+Start with the [documentation map](docs/README.md) for architecture, recovery,
+evaluation and model configuration. For notebook selection and figure exports,
+see the [analysis workflow guide](notebooks/analysis/README.md).
