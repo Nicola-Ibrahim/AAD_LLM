@@ -1,6 +1,6 @@
 """Typed synthesis matrix and campaign configuration models owned by the application."""
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from evolution.domain.enums import NoiseEnvironment, PromptStrategy, SynthesisMode
 from shared.domain.noise_model import NoiseModelEnum
@@ -91,21 +91,10 @@ class SynthesisConfig(BaseModel):
     skip_completed: bool = True
     retry_failed_synthesis: bool = True
     only_incomplete: bool = False
-    target_exp_ids: list[int] = Field(default_factory=list)
-    rerun_experiment_ids: list[int] = Field(default_factory=list)
-    rerun_repeats: int = Field(default=1, ge=1)
     name: str = "bbob_comprehensive_matrix"
     noise_model: NoiseModelEnum = NoiseModelEnum.HETEROSCEDASTIC
 
     model_config = ConfigDict(frozen=True)
-
-    @model_validator(mode="after")
-    def validate_rerun_selection(self) -> "SynthesisConfig":
-        if any(identifier <= 0 for identifier in self.rerun_experiment_ids):
-            raise ValueError("rerun_experiment_ids must contain positive database IDs")
-        if self.rerun_experiment_ids and self.target_exp_ids:
-            raise ValueError("Fresh selective reruns cannot also resume target_experiment_ids")
-        return self
 
     # Derived dot-access properties:
     @property

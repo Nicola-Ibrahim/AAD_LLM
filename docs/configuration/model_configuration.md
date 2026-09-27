@@ -63,20 +63,43 @@ database rather than treating every registry preset as an evaluated model.
 
 ### Selective synthesis reruns
 
-Add experiment IDs to the `[execution]` section of `synthesis.toml`:
+Keep protocol settings in `synthesis.toml`; pass selections to each campaign call:
 
-```toml
-rerun_experiment_ids = [2091, 2737, 2147] # Example: current DeepSeek database IDs
-rerun_repeats = 1
+```python
+# Automatic recovery only, for the active LLM:
+campaign_usecase.run_campaign(recover=True)
+
+# Recovery plus manually selected conditions (review IDs for the current DB):
+campaign_usecase.run_campaign(
+    recover=True,
+    rerun_experiment_ids=[2091, 2737, 2147],
+    rerun_repeats=1,
+)
+
+# Resume specific running sessions, without scheduling other work:
+campaign_usecase.run_campaign(resume_experiment_ids=[123])
+
+# Fill the full configured matrix to its replicate target:
+campaign_usecase.run_campaign()
 ```
 
-Then restart Notebook 02's kernel and use the matching model server. The planner
-creates fresh experiment records for only the selected conditions belonging to
-the active model; historical records remain unchanged. Multiple selected IDs
-for one condition are deduplicated. `rerun_repeats`, not `runs_per_config`, sets
-the number of additional runs. Unknown IDs are rejected;
-`target_experiment_ids` cannot be combined with fresh selective reruns.
-Set `rerun_experiment_ids = []` to return to normal matrix scheduling. No audit workflow is required.
+Use the matching model server. These options are invocation-scoped: changing IDs
+does not require editing TOML or restarting the kernel. After updating Python
+code, restart Notebook 02's kernel. The planner
+combines manual conditions with configured-matrix recovery for the active model:
+interrupted sessions are resumed when `auto_resume` is enabled, and unresolved
+synthesis failures receive one fresh attempt when `retry_failed_synthesis` is
+enabled. A later successful synthesis resolves older failures. Historical records
+remain unchanged. Multiple selected IDs for one condition are deduplicated, and
+pending sessions fill manual repair slots rather than creating duplicate runs.
+`rerun_repeats`, not `runs_per_config`, sets the manual slots. This recovery path
+does not fill unrelated conditions to five repeats. Unknown IDs are rejected;
+`resume_experiment_ids` cannot be combined with recovery or fresh reruns, and only
+running records belonging to the active LLM are resumed. No audit workflow is required.
+Each call rediscovers database state. Automatic recovery needs no manual IDs.
+Omit manual IDs after successful repairs: explicitly passing them again requests
+another fresh repeat, unless interrupted sessions already fill the slots. The
+matrix audit still measures the full replicate target, not recovery tasks.
 
 Imported databases can use different IDs. Review and refresh the selection after
 an import. New synthesis does not guarantee that champion selection will change:

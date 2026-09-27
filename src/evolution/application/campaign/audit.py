@@ -156,7 +156,6 @@ class CampaignAuditor:
             "noise_stds": self.config.noise_stds,
             "synthesis_modes": self.config.synthesis_mode_names,
             "prompt_strategies": [s.value for s in self.config.prompt_strategies],
-            "target_exp_ids": self.config.target_exp_ids,
         }
 
         self.logger.audit_summary(

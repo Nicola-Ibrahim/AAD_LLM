@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 from evolution.application.campaign.audit import CampaignAuditor
 from evolution.application.campaign.models import CampaignTask
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
@@ -28,13 +30,28 @@ class CampaignPlanner:
         self.problem_factory = problem_factory
         self.auditor = auditor
 
-    def build_tasks(self) -> list[CampaignTask]:
-        """Constructs the list of work item parameter dictionaries to execute based on configuration."""
-        if self.config.rerun_experiment_ids:
-            return self._build_selected_reruns()
-        # Fast path: targeted experiment IDs
-        if self.config.target_exp_ids:
-            return self._build_targeted_tasks(target_ids=self.config.target_exp_ids)
+    def build_tasks(
+        self,
+        *,
+        recover: bool = False,
+        rerun_experiment_ids: Sequence[int] = (),
+        rerun_repeats: int = 1,
+        resume_experiment_ids: Sequence[int] = (),
+    ) -> list[CampaignTask]:
+        """Plan one invocation without storing its selection in protocol configuration."""
+        if any(
+            type(identifier) is not int or identifier <= 0
+            for identifier in (*rerun_experiment_ids, *resume_experiment_ids)
+        ):
+            raise ValueError("Experiment IDs must be positive integers")
+        if type(rerun_repeats) is not int or rerun_repeats < 1:
+            raise ValueError("rerun_repeats must be a positive integer")
+        if resume_experiment_ids and (recover or rerun_experiment_ids):
+            raise ValueError("Explicit resume IDs cannot be combined with recovery or fresh reruns")
+        if recover or rerun_experiment_ids:
+            return self._build_recovery_tasks(rerun_experiment_ids, rerun_repeats)
+        if resume_experiment_ids:
+            return self._build_targeted_tasks(target_ids=list(dict.fromkeys(resume_experiment_ids)))
 
         all_db_exps = self.sqlite_repo.load(llm_name=self.model_name)
         db_comp, db_run, _ = self.auditor.group_experiments_by_condition(
@@ -69,24 +86,56 @@ class CampaignPlanner:
                     )
         return tasks
 
-    def _build_selected_reruns(self) -> list[CampaignTask]:
-        """Create fresh runs for selected conditions, preserving historical records."""
-        requested = set(self.config.rerun_experiment_ids)
-        selected = self.sqlite_repo.load_by_ids(sorted(requested))
+    def _build_recovery_tasks(
+        self, rerun_experiment_ids: Sequence[int], rerun_repeats: int
+    ) -> list[CampaignTask]:
+        """Combine explicit repeats with active-model recovery, not matrix expansion."""
+        requested = set(rerun_experiment_ids)
+        selected = self.sqlite_repo.load_by_ids(sorted(requested)) if requested else []
         found = {experiment.id for experiment in selected}
         if missing := requested - found:
             raise ValueError(f"Unknown rerun experiment IDs: {sorted(missing)}")
         # Validate every ID before creating any database records. A campaign
         # for another active model must never dispatch these experiments.
         selected = [experiment for experiment in selected if experiment.llm_name == self.model_name]
-        if not selected:
-            return []
         existing = self.sqlite_repo.load(llm_name=self.model_name)
-        conditions = dict.fromkeys(self.auditor._condition_from_summary(exp) for exp in selected)
-        tasks = []
-        for condition in conditions:
+        manual_conditions = dict.fromkeys(
+            self.auditor._condition_from_summary(exp) for exp in selected
+        )
+        eligible = set(self.config.matrix_conditions) | set(manual_conditions)
+        completed, running, failed = self.auditor.group_experiments_by_condition(
+            experiments=existing,
+            retry_failed_synthesis=self.config.retry_failed_synthesis,
+        )
+        tasks: list[CampaignTask] = []
+        resumed: dict[MatrixCondition, int] = {}
+        if self.config.auto_resume:
+            for condition, experiments in running.items():
+                if condition in eligible:
+                    for experiment in experiments:
+                        tasks.append(self._build_task_from_summary(experiment, tag="resume"))
+                    resumed[condition] = len(experiments)
+
+        # A later successful attempt resolves old failures. Do not continuously
+        # retry every historical failed record or expand to runs_per_config.
+        requested_repeats = dict.fromkeys(manual_conditions, rerun_repeats)
+        if self.config.retry_failed_synthesis and not self.config.only_incomplete:
+            for condition, experiments in failed.items():
+                if condition not in eligible:
+                    continue
+                latest_failure = max(experiment.id or 0 for experiment in experiments)
+                latest_success = max(
+                    (experiment.id or 0 for experiment in completed.get(condition, [])),
+                    default=0,
+                )
+                if latest_failure > latest_success:
+                    requested_repeats.setdefault(condition, 1)
+
+        for condition, repeats in requested_repeats.items():
+            # Existing interrupted sessions satisfy the requested repair slots.
+            remaining = max(0, repeats - resumed.get(condition, 0))
             count = sum(self.auditor._condition_from_summary(exp) == condition for exp in existing)
-            for repeat in range(1, self.config.rerun_repeats + 1):
+            for repeat in range(1, remaining + 1):
                 tasks.append(self._build_fresh_task(condition, count + repeat, key_prefix="rerun_"))
         return tasks
 
@@ -136,10 +185,13 @@ class CampaignPlanner:
         target_ids: list[int],
     ) -> list[CampaignTask]:
         targeted_experiments = self.sqlite_repo.load_by_ids(target_ids)
+        found = {experiment.id for experiment in targeted_experiments}
+        if missing := set(target_ids) - found:
+            raise ValueError(f"Unknown resume experiment IDs: {sorted(missing)}")
         return [
             self._build_task_from_summary(exp, tag="target")
             for exp in targeted_experiments
-            if exp.id is not None
+            if exp.id is not None and exp.llm_name == self.model_name and exp.status == "running"
         ]
 
     def _build_fresh_task(
@@ -175,7 +227,7 @@ class CampaignPlanner:
             synthesis_seed=42 + run_idx,
         )
         key = (
-            f"{key_prefix}f{condition.problem_id}_{condition.dim}D_{condition.task_mode_label}_{condition.strategy}"
+            f"{key_prefix}f{condition.problem_id}_{condition.dim}D_{condition.task_mode_label}_{condition.strategy}_run{run_idx}_exp{exp_id}"
             if key_prefix
             else f"f{condition.problem_id}_{condition.dim}D_{condition.task_mode_label}_{condition.strategy}_run{run_idx}"
         )

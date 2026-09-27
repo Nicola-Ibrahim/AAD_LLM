@@ -60,6 +60,19 @@ class SynthesisConfigRepository:
         matrix_cfg = _table(cfg.get("matrix", {}))
         evolution_cfg = _table(cfg.get("evolution", {}))
         exec_meta = _table(cfg.get("execution", {}))
+        dynamic_keys = {
+            "recover",
+            "resume_experiment_ids",
+            "rerun_experiment_ids",
+            "rerun_repeats",
+            "target_experiment_ids",
+            "target_exp_ids",
+        }
+        if misplaced := dynamic_keys.intersection(exec_meta):
+            raise ValueError(
+                f"Move dynamic campaign options {sorted(misplaced)} out of synthesis.toml "
+                "and into run_campaign(...); use resume_experiment_ids for targeted resumption."
+            )
 
         # 1. Parse prompt strategies & synthesis modes
         default_strats_raw = _items(
@@ -219,11 +232,6 @@ class SynthesisConfigRepository:
 
         # 5. Assemble SynthesisConfig
         num_workers = int(_number(exec_meta.get("max_workers"), 0)) or os.cpu_count() or 8
-        target_ids_raw = exec_meta.get("target_experiment_ids")
-        target_ids: list[int] = (
-            [int(_number(i, 0)) for i in target_ids_raw] if isinstance(target_ids_raw, list) else []
-        )
-
         timeout_sec = float(
             _number(
                 evolution_cfg.get(
@@ -250,12 +258,6 @@ class SynthesisConfigRepository:
             skip_completed=bool(exec_meta.get("skip_completed", True)),
             retry_failed_synthesis=bool(exec_meta.get("retry_failed_synthesis", True)),
             only_incomplete=bool(exec_meta.get("only_incomplete", False)),
-            target_exp_ids=target_ids,
-            rerun_experiment_ids=[
-                int(_number(identifier, 0))
-                for identifier in _items(exec_meta.get("rerun_experiment_ids"), [])
-            ],
-            rerun_repeats=int(_number(exec_meta.get("rerun_repeats"), 1)),
             name=_text(evolution_cfg.get("name"), "bbob_comprehensive_matrix"),
             noise_model=default_model,
         )

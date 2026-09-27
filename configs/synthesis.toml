@@ -73,13 +73,5 @@ auto_resume = true
 skip_completed = true
 retry_failed_synthesis = true
 
-# Fresh synthesis for selected problematic champion conditions only.
-# This does NOT resume a completed experiment, delete old runs, or select
-# candidates using benchmark scores. IDs are local to the current database.
-# A non-empty list schedules only these conditions. Use [] for normal scheduling.
-# Current audit: all 20 trials failed for these selected champions.
-# Recheck IDs after importing a different database; do not enable blindly.
-rerun_experiment_ids = [249, 544, 671, 692, 724, 1068, 1401, 2091, 2147, 2663, 2737]
-rerun_repeats = 1
-# With a non-empty list, rerun_repeats replaces runs_per_config for these conditions;
-# unrelated conditions are never scheduled. Match the active LLM to the IDs.
+# Per-invocation selections belong in run_campaign(...), not this protocol file.
+# Notebook 02 controls recovery, manual reruns, and targeted resumption.

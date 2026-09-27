@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from evolution.application.campaign.audit import CampaignAuditor
 from evolution.application.campaign.models import CampaignResults, CampaignTask
@@ -52,17 +52,32 @@ class SynthesisCampaignCoordinator:
     def run_campaign(
         self,
         verbose: bool = True,
+        *,
+        recover: bool = False,
+        rerun_experiment_ids: Sequence[int] = (),
+        rerun_repeats: int = 1,
+        resume_experiment_ids: Sequence[int] = (),
     ) -> CampaignResults:
-        """Build tasks, dispatch them through the configured worker adapter, and aggregate results."""
+        """Run an invocation-scoped request using the unchanged protocol configuration.
+
+        No selections means full-matrix scheduling. ``recover`` discovers pending
+        and failed synthesis; manual rerun IDs add repair slots. Explicit resume
+        IDs select running sessions only and cannot be combined with recovery.
+        """
         self.logger.verbose = verbose
         workers = self.config.num_processes
 
-        tasks = self.planner.build_tasks()
+        tasks = self.planner.build_tasks(
+            recover=recover,
+            rerun_experiment_ids=rerun_experiment_ids,
+            rerun_repeats=rerun_repeats,
+            resume_experiment_ids=resume_experiment_ids,
+        )
         model_name = self.model_name
 
         if not tasks:
             self.logger.success(
-                f"All requested experiments are already completed with valid champions for '{model_name}'! Nothing to run."
+                f"No eligible tasks for this request and active model '{model_name}'. Nothing to run."
             )
             return CampaignResults()
 
