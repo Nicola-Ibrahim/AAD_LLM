@@ -95,6 +95,37 @@ class TransferAnalysisEngine:
         )
 
     @staticmethod
+    def aggregate_noise(
+        table: pd.DataFrame,
+        primary_strategy: str = "baseline",
+        bootstrap_samples: int = 1000,
+        bootstrap_seed: int = 20260923,
+    ) -> pd.DataFrame:
+        """Equal-weight complete function conditions at each noise level and dimension."""
+        columns = [
+            "Model",
+            "Dim",
+            "Noise Std",
+            "Conditions",
+            "Trials",
+            "Primary Success Rate",
+            "Bootstrap CI Lower",
+            "Bootstrap CI Upper",
+        ]
+        rows = []
+        if table.empty:
+            return pd.DataFrame(columns=columns)
+        for (dim, noise), group in table.groupby(["Dim", "Noise Std"], sort=True):
+            rates = group.rename(columns={"Success Rate": "Primary Success Rate"}).copy()
+            rates.loc[rates["Strategy"] == "classical", "Strategy"] = primary_strategy
+            aggregate = ReliabilityEngine().compute_aggregate_reliability(
+                rates, primary_strategy, bootstrap_samples, bootstrap_seed
+            )
+            for row in aggregate.to_dict("records"):
+                rows.append({**row, "Dim": dim, "Noise Std": noise})
+        return pd.DataFrame(rows, columns=columns)
+
+    @staticmethod
     def aggregate_transfer(
         table: pd.DataFrame,
         bootstrap_samples: int = 1000,

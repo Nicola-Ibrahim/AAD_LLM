@@ -21,9 +21,9 @@ from benchmarking.infra.storage.model_registry import configured_model_names
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOKS = [
-    "analysis/05_analysis.ipynb",
-    "analysis/06_performance_profiles.ipynb",
-    "analysis/07_generalization.ipynb",
+    "analysis/05_reliability_summary.ipynb",
+    "analysis/06_convergence_ecdf_and_ablations.ipynb",
+    "analysis/07_noise_robustness.ipynb",
 ]
 
 
@@ -123,7 +123,6 @@ def png_exports(tmp_path: Path, monkeypatch) -> list[tuple[go.Figure, str]]:
             ("REPORTS_DIR", tmp_path / "reports"),
             ("THESIS_SUMMARY_DIR", tmp_path / "figures" / "06_thesis_summary"),
             ("EXPLICIT_DIR", tmp_path / "figures" / "02_explicit"),
-            ("TRANSFER_FIGURES_DIR", tmp_path / "figures" / "07_cross_function"),
         ]:
             if hasattr(module, attribute):
                 monkeypatch.setattr(module, attribute, path)
@@ -147,39 +146,28 @@ def test_modified_notebook_cells_compile() -> None:
                 compile(source, f"{name}:cell{index}", "exec")
 
 
-def test_transfer_png_matrix_and_versioned_csvs(
-    inputs: AnalysisInputs, png_exports, tmp_path: Path
-) -> None:
-    from notebooks.analysis.plotting.generalization import export_cross_function
+def test_cross_function_figure_export_removed() -> None:
+    from notebooks.analysis.plotting import generalization
 
-    table = export_cross_function(inputs, build_figure_cache(inputs, "transfer"))
-    assert len(png_exports) == 1
-    figure, output = png_exports[0]
-    assert output.endswith(".png")
-    assert figure.data[0].z[0, 0] == 1.0
-    assert np.isnan(figure.data[0].z[0, 1])
-    assert np.isnan(figure.data[0].z[1, 0])
-    assert figure.layout.plot_bgcolor == "#D1D5DB"
-    assert table.set_index("Target Problem")["Trials"].to_dict() == {1: 20, 8: 2}
-    assert (tmp_path / "reports" / "cross_function_reliability_v1.csv").is_file()
-    assert not list(tmp_path.rglob("*.html"))
-    export_cross_function(inputs, build_figure_cache(inputs, "transfer"))
-    assert len(png_exports) == 1
+    assert not hasattr(generalization, "export_cross_function")
 
 
-def test_summary_exports_exactly_three_pngs_and_skips_cached_builders(
+def test_summary_exports_only_attainment_png_and_skips_cached_builder(
     inputs: AnalysisInputs, png_exports, monkeypatch
 ) -> None:
     from notebooks.analysis.plotting import summary
 
     summary.export_summary(inputs, build_figure_cache(inputs, "summary"))
-    assert len(png_exports) == 3
-    for name in ["_reliability_matrix", "_attainment_profile", "_noise_summary"]:
+    assert len(png_exports) == 1
+    figure, path = png_exports[0]
+    assert path.endswith("fig_10b_fixed_target_attainment.png")
+    assert max(figure.data[0].x) == pytest.approx(2 * inputs.config.budget_multiplier)
+    for name in ["_attainment_profile"]:
         monkeypatch.setattr(
             summary, name, MagicMock(side_effect=AssertionError("Cached builder executed"))
         )
     summary.export_summary(inputs, build_figure_cache(inputs, "summary"))
-    assert len(png_exports) == 3
+    assert len(png_exports) == 1
 
 
 def test_transfer_changes_do_not_invalidate_other_workflows(
@@ -232,13 +220,23 @@ def test_notebooks_run_independently(
     assert all(path.endswith(".png") for _, path in png_exports)
 
 
-def test_profile_line_styles(inputs: AnalysisInputs, png_exports) -> None:
-    from notebooks.analysis.plotting.generalization import export_noise_robustness
+def test_noise_success_rates_export(inputs: AnalysisInputs, png_exports) -> None:
+    from notebooks.analysis.plotting.generalization import export_noise_success_rates
 
-    export_noise_robustness(inputs, build_figure_cache(inputs, "noise"))
-    assert len(png_exports) == 4
-    for figure, path in png_exports:
-        curves = [trace for trace in figure.data if trace.showlegend]
-        assert curves
-        expected = "solid" if "classical_baselines" in path else "dash"
-        assert all(trace.line.dash == expected for trace in curves)
+    table = export_noise_success_rates(inputs, build_figure_cache(inputs, "noise"))
+    assert len(png_exports) == 1
+    figure, path = png_exports[0]
+    assert path.endswith("success_rate_vs_noise.png")
+    assert {trace.line.dash for trace in figure.data} == {"dash", "solid"}
+    assert set(table["Noise Std"]) == {0.0, 0.05}
+    assert all(trace.error_y.symmetric is False for trace in figure.data)
+
+
+def test_noise_success_rates_do_not_plot_clean_only(inputs: AnalysisInputs, png_exports) -> None:
+    from notebooks.analysis.plotting.generalization import export_noise_success_rates
+
+    clean = replace(
+        inputs, noise_records=[r for r in inputs.noise_records if r["noise_std"] == 0.0]
+    )
+    export_noise_success_rates(clean, build_figure_cache(clean, "noise"))
+    assert not png_exports

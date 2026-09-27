@@ -9,7 +9,6 @@ from plotly.subplots import make_subplots
 
 from benchmarking.application.analysis.performance import PerformanceMetrics
 from benchmarking.application.analysis.view_data import AnalysisInputs
-from benchmarking.domain.enums import BBOBFunction
 from benchmarking.domain.services.performance import PerformanceMetricsEngine
 from shared.config import RESULTS_DIR
 
@@ -24,123 +23,6 @@ from .style import (
 REPORTS_DIR = RESULTS_DIR / "reports"
 THESIS_SUMMARY_DIR = RESULTS_DIR / "figures" / "06_thesis_summary"
 EXPLICIT_DIR = RESULTS_DIR / "figures" / "02_explicit"
-
-
-def export_performance_matrix(
-    inputs: AnalysisInputs, metrics: PerformanceMetrics, cache: FigureCache
-) -> None:
-    if not cache.needs_export(THESIS_SUMMARY_DIR / "fig_09d_auc_ecdf_by_problem.png"):
-        return
-    prob_ids = [p for p in [1, 8, 11, 15, 21] if p in inputs.dataset.problem_ids]
-    prob_labels = [f"{BBOBFunction.get_name(p)} (f{p})" for p in prob_ids]
-    solvers_y = list(metrics.rankings.index)
-    matrix_clean = np.zeros((len(solvers_y), len(prob_ids)))
-    matrix_noisy = np.zeros((len(solvers_y), len(prob_ids)))
-    for r_idx, s in enumerate(solvers_y):
-        for c_idx, p in enumerate(prob_ids):
-            c_sub = metrics.table[
-                (metrics.table["Canonical Solver"] == s)
-                & (metrics.table["Problem ID"] == p)
-                & (metrics.table["Noise Std"] == inputs.clean_std)
-            ]
-            n_sub = metrics.table[
-                (metrics.table["Canonical Solver"] == s)
-                & (metrics.table["Problem ID"] == p)
-                & (metrics.table["Noise Std"] == inputs.noisy_std)
-            ]
-            matrix_clean[r_idx, c_idx] = c_sub["AUC-ECDF (%)"].mean() if not c_sub.empty else 0.0
-            matrix_noisy[r_idx, c_idx] = n_sub["AUC-ECDF (%)"].mean() if not n_sub.empty else 0.0
-    fig9d = make_subplots(
-        rows=1,
-        cols=2,
-        subplot_titles=[
-            f"<b>(A) Clean (σ={inputs.clean_std})</b>",
-            f"<b>(B) Noisy (σ={inputs.noisy_std})</b>",
-        ],
-        horizontal_spacing=0.1,
-        shared_yaxes=True,
-    )
-    fig9d.add_trace(
-        go.Heatmap(
-            z=matrix_clean,
-            x=prob_labels,
-            y=solvers_y,
-            colorscale=[
-                [0.0, "#F8FAFC"],
-                [0.25, "#E0F2FE"],
-                [0.5, "#BAE6FD"],
-                [0.75, "#7DD3FC"],
-                [1.0, "#38BDF8"],
-            ],
-            zmin=0,
-            zmax=70,
-            text=[[f"{v:.1f}%" if v > 0 else "" for v in row] for row in matrix_clean],
-            texttemplate="%{text}",
-            textfont=dict(size=12, family=FONT_FAMILY),
-            showscale=False,
-        ),
-        row=1,
-        col=1,
-    )
-    fig9d.add_trace(
-        go.Heatmap(
-            z=matrix_noisy,
-            x=prob_labels,
-            y=solvers_y,
-            colorscale=[
-                [0.0, "#F8FAFC"],
-                [0.25, "#E0F2FE"],
-                [0.5, "#BAE6FD"],
-                [0.75, "#7DD3FC"],
-                [1.0, "#38BDF8"],
-            ],
-            zmin=0,
-            zmax=70,
-            text=[[f"{v:.1f}%" if v > 0 else "" for v in row] for row in matrix_noisy],
-            texttemplate="%{text}",
-            textfont=dict(size=12, family=FONT_FAMILY),
-            colorbar=dict(
-                title="<b>AUC-ECDF (%)</b>",
-                title_font=dict(size=14, family=FONT_FAMILY),
-                title_side="top",
-                tickfont=dict(size=12, family=FONT_FAMILY),
-                len=0.85,
-            ),
-        ),
-        row=1,
-        col=2,
-    )
-    for anno in fig9d.layout.annotations:
-        anno.update(font=dict(size=16, color="#0F172A", family=FONT_FAMILY))
-    plot_h = max(700, len(solvers_y) * 32 + 180)
-    fig9d.update_layout(
-        template="plotly_white",
-        title=dict(
-            text="<b>Figure 9D: Solver Performance Matrix Across BBOB Problem Landscapes</b><br><span style='font-size:13px;color:#475569;font-weight:normal;'>Area Under Runtime ECDF (AUC-ECDF %) Across Canonical Function Classes in Clean vs. Noisy Regimes</span>",
-            font=dict(size=20, color="#0F172A", family=FONT_FAMILY),
-            x=0.02,
-            y=0.97,
-        ),
-        width=1420,
-        height=plot_h,
-        margin=dict(l=220, r=40, t=110, b=90),
-    )
-    fig9d.update_xaxes(
-        tickangle=-25, tickfont=dict(size=13, family=FONT_FAMILY, color="#1E293B"), row=1, col=1
-    )
-    fig9d.update_xaxes(
-        tickangle=-25, tickfont=dict(size=13, family=FONT_FAMILY, color="#1E293B"), row=1, col=2
-    )
-    fig9d.update_yaxes(
-        tickfont=dict(size=13, family=FONT_FAMILY, color="#1E293B"),
-        autorange="reversed",
-        row=1,
-        col=1,
-    )
-    out_9d = THESIS_SUMMARY_DIR / "fig_09d_auc_ecdf_by_problem.png"
-    if cache.needs_export(out_9d):
-        cache.export(fig9d, out_9d)
-    print("✅ Figure 9D (By Problem Heatmap) generated in results/figures/06_thesis_summary/.")
 
 
 def export_model_scale(
@@ -231,7 +113,7 @@ def export_model_scale(
     fig9e.update_layout(
         template="plotly_white",
         title=dict(
-            text="<b>Figure 9E: LLM Parameter Scale Ablation Across Dimensions</b><br><span style='font-size:13px;color:#475569;font-weight:normal;'>Mean Area Under Runtime ECDF (AUC-ECDF %) Across Synthesized Model Scales vs. Classical Baselines in Clean and Noisy Regimes</span>",
+            text="<b>Figure 9E: LLM Model Comparison Across Dimensions</b><br><span style='font-size:13px;color:#475569;font-weight:normal;'>Mean Area Under Runtime ECDF (AUC-ECDF %) Across Synthesized Models vs. Classical Baselines in Clean and Noisy Regimes</span>",
             font=dict(size=20, color="#0F172A", family=FONT_FAMILY),
             x=0.02,
             y=0.97,
@@ -287,7 +169,7 @@ def export_model_scale(
     out_9e = THESIS_SUMMARY_DIR / "fig_09e_auc_ecdf_model_scale.png"
     if cache.needs_export(out_9e):
         cache.export(fig9e, out_9e)
-    print("✅ Figure 9E (Model Scale Ablation) generated from currently discovered models.")
+    print("✅ Figure 9E (Model Comparison) generated from currently discovered models.")
 
 
 def export_hardness_ablation(

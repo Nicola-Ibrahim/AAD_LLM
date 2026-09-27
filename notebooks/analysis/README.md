@@ -7,9 +7,9 @@ Run any of these notebooks without running the others first:
 
 | Notebook | Workload |
 | --- | --- |
-| [05_analysis.ipynb](05_analysis.ipynb) | Native reliability tables and three primary thesis PNGs. No adaptive AUC or cross-function loading. |
-| [06_performance_profiles.ipynb](06_performance_profiles.ipynb) | Exploratory AUC summaries, strategy ablations, explicit/implicit convergence and ECDF profiles. Run selected sections; PNG sweeps can be slow. |
-| [07_generalization.ipynb](07_generalization.ipynb) | Frozen-champion noise overlays and separate cross-function transfer matrices/CSVs. Run either export section independently. |
+| [05_reliability_summary.ipynb](05_reliability_summary.ipynb) | Native reliability tables and the fixed-target attainment PNG. No adaptive AUC or cross-function loading. |
+| [06_convergence_ecdf_and_ablations.ipynb](06_convergence_ecdf_and_ablations.ipynb) | Exploratory AUC summaries, strategy ablations, explicit/implicit convergence and ECDF profiles. Run selected sections; PNG sweeps can be slow. |
+| [07_noise_robustness.ipynb](07_noise_robustness.ipynb) | Success rate versus noise with condition-bootstrap intervals. No ECDF or cross-function exports. |
 
 Each notebook discovers the project root, reads completed DB models and current
 champion identities, and loads its own inputs. No evaluation or synthesis campaign
@@ -40,5 +40,5 @@ checkpointed immediately in its workflow's manifest under
 include relevant source data, configuration, filters and plotting/scientific code.
 Transfer-result changes do not invalidate the primary/profile/noise caches.
 
-The original combined `notebooks/05_analysis.ipynb` has been replaced by this folder;
+The former combined analysis notebook has been replaced by this folder;
 there is no forwarding notebook or duplicated plotting code.

@@ -45,32 +45,31 @@ def build_profile(
     title: str,
 ) -> go.Figure:
     """Construct the same condition panels without duplicating two Plotly loops."""
-    problems = inputs.dataset.problem_ids
+    problems = dataset.problem_ids
     titles = [
         f"<b>{BBOBFunction.get_name(p)}</b><br><sup>{BBOBFunction.get_class(p)}</sup>"
         for p in problems
     ]
-    titles.append("<b>Overall Aggregate Profile</b><br><sup>Mean across available functions</sup>")
     rows = ceil(len(titles) / 3)
     figure = make_subplots(
         rows=rows,
         cols=3,
+        specs=[
+            [{} if row * 3 + col < len(problems) else None for col in range(3)]
+            for row in range(rows)
+        ],
         subplot_titles=titles,
         horizontal_spacing=0.08,
         vertical_spacing=0.22 if rows > 1 else 0.0,
     )
     grid = np.logspace(0, 6, 300)
     engine = EcdfConvergenceEngine()
-    for index, problem in enumerate(problems + [0]):
+    for index, problem in enumerate(problems):
         row, col = divmod(index, 3)
         for curve in curves:
             query = dict(dim=dim, noise_std=curve.noise_std, solver=curve.solver, eval_grid=grid)
             if kind == "convergence":
-                data = (
-                    engine.get_convergence_trajectory(dataset, problem_id=problem, **query)
-                    if problem
-                    else engine.get_aggregate_convergence(dataset, **query)
-                )
+                data = engine.get_convergence_trajectory(dataset, problem_id=problem, **query)
                 if data is None or np.isnan(data["median"]).all():
                     continue
                 values = np.maximum(data["median"], 1e-12)
@@ -90,14 +89,8 @@ def build_profile(
                         col=col + 1,
                     )
             else:
-                values = (
-                    engine.get_target_ecdf_curve(
-                        dataset, targets[curve.noise_std], problem_id=problem, **query
-                    )
-                    if problem
-                    else engine.get_aggregate_target_ecdf_curve(
-                        dataset, targets[curve.noise_std], **query
-                    )
+                values = engine.get_target_ecdf_curve(
+                    dataset, targets[curve.noise_std], problem_id=problem, **query
                 )
                 if values is None or np.isnan(values).all():
                     continue

@@ -251,6 +251,11 @@ class SynthesisConfigRepository:
             retry_failed_synthesis=bool(exec_meta.get("retry_failed_synthesis", True)),
             only_incomplete=bool(exec_meta.get("only_incomplete", False)),
             target_exp_ids=target_ids,
+            rerun_experiment_ids=[
+                int(_number(identifier, 0))
+                for identifier in _items(exec_meta.get("rerun_experiment_ids"), [])
+            ],
+            rerun_repeats=int(_number(exec_meta.get("rerun_repeats"), 1)),
             name=_text(evolution_cfg.get("name"), "bbob_comprehensive_matrix"),
             noise_model=default_model,
         )

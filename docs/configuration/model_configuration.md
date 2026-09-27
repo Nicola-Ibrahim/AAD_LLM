@@ -61,6 +61,30 @@ prompt strategies, synthesis modes, iterations and future repeat counts.
 reliability settings. Audit and analysis discover completed models from the
 database rather than treating every registry preset as an evaluated model.
 
+### Selective synthesis reruns
+
+Add experiment IDs to the `[execution]` section of `synthesis.toml`:
+
+```toml
+rerun_experiment_ids = [2091, 2737, 2147] # Example: current DeepSeek database IDs
+rerun_repeats = 1
+```
+
+Then restart Notebook 02's kernel and use the matching model server. The planner
+creates fresh experiment records for only the selected conditions belonging to
+the active model; historical records remain unchanged. Multiple selected IDs
+for one condition are deduplicated. `rerun_repeats`, not `runs_per_config`, sets
+the number of additional runs. Unknown IDs are rejected;
+`target_experiment_ids` cannot be combined with fresh selective reruns.
+Set `rerun_experiment_ids = []` to return to normal matrix scheduling. No audit workflow is required.
+
+Imported databases can use different IDs. Review and refresh the selection after
+an import. New synthesis does not guarantee that champion selection will change:
+the existing synthesis-error/evaluation-count ranking remains unchanged, and
+benchmark outcomes are not used to rank candidates. Additional search motivated
+by benchmark feedback must be documented as a follow-up campaign, not silently
+substituted into the original thesis results.
+
 Quantization labels identify model artifacts; they do not establish guaranteed
 memory requirements, runtime or optimization quality. Report the exact model
 artifact and actual experimental settings when comparing results.

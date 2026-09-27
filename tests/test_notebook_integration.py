@@ -125,7 +125,8 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
 
     campaign_usecase = SynthesisCampaignCoordinator(
         sqlite_repo=sqlite_repo,
-        config=config_repo.load_config(),
+        # Local historical rerun IDs do not exist in this fresh test database.
+        config=config_repo.load_config().model_copy(update={"rerun_experiment_ids": []}),
         model_name=llm.model.name,
         logger=logger,
         engine=engine,

@@ -30,6 +30,8 @@ class CampaignPlanner:
 
     def build_tasks(self) -> list[CampaignTask]:
         """Constructs the list of work item parameter dictionaries to execute based on configuration."""
+        if self.config.rerun_experiment_ids:
+            return self._build_selected_reruns()
         # Fast path: targeted experiment IDs
         if self.config.target_exp_ids:
             return self._build_targeted_tasks(target_ids=self.config.target_exp_ids)
@@ -65,6 +67,27 @@ class CampaignPlanner:
                             run_idx=run_idx,
                         )
                     )
+        return tasks
+
+    def _build_selected_reruns(self) -> list[CampaignTask]:
+        """Create fresh runs for selected conditions, preserving historical records."""
+        requested = set(self.config.rerun_experiment_ids)
+        selected = self.sqlite_repo.load_by_ids(sorted(requested))
+        found = {experiment.id for experiment in selected}
+        if missing := requested - found:
+            raise ValueError(f"Unknown rerun experiment IDs: {sorted(missing)}")
+        # Validate every ID before creating any database records. A campaign
+        # for another active model must never dispatch these experiments.
+        selected = [experiment for experiment in selected if experiment.llm_name == self.model_name]
+        if not selected:
+            return []
+        existing = self.sqlite_repo.load(llm_name=self.model_name)
+        conditions = dict.fromkeys(self.auditor._condition_from_summary(exp) for exp in selected)
+        tasks = []
+        for condition in conditions:
+            count = sum(self.auditor._condition_from_summary(exp) == condition for exp in existing)
+            for repeat in range(1, self.config.rerun_repeats + 1):
+                tasks.append(self._build_fresh_task(condition, count + repeat, key_prefix="rerun_"))
         return tasks
 
     # -------------------------------------------------------------------------

@@ -218,7 +218,7 @@ added noise on its original function and dimension. The existing
 Historical storage remains `results/ioh_traces/`; it is not moved or deleted.
 Notebook 07 requires matching clean-champion code hashes across noise levels and
 excludes separately synthesized noisy and implicit champions from these overlays.
-Its robustness ECDFs use the same fixed target set across noise levels; adaptive
+Noise-robustness ECDF exports have been removed; adaptive
 targets remain exploratory elsewhere. Figures use `results/figures/05_noise_robustness/`.
 
 ## Cross-function generalization
@@ -243,14 +243,7 @@ and iteration, code hash, instances, seeds, budgets and returned-point errors.
 Resumption requires the current code hash and error schema. Noise/native folders
 and transfer folders cannot overwrite each other.
 
-Notebook 07 (`notebooks/analysis/07_generalization.ipynb`) reads transfer results
-matching current database-selected champions. It runs independently of the primary
-analysis notebook and the detailed performance-profile notebook.
-It exports source–target PNG matrices to `results/figures/07_cross_function/` and
-versioned condition/aggregate CSVs to `results/reports/`, without displaying PNGs
-inline or writing HTML figures. Missing and incomplete cells are grey and excluded
-from aggregate estimates. Aggregate scores weight complete off-diagonal conditions
-equally; deterministic bootstrap intervals resample conditions, not pooled trials.
+Notebook 07 exports returned-point success rate versus noise, with separate dimension panels and 95% condition-bootstrap intervals only (no convergence or ECDF exports). Complete available functions receive equal weight; exported counts expose unequal coverage. Missing conditions are not failures. No success-rate figure is exported when only clean trials exist. Cross-function figure exports have been removed; the opt-in evaluation backend and existing transfer records remain available.
 
 ## Interpretation and historical trials
 

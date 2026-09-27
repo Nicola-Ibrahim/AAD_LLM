@@ -277,12 +277,12 @@ adjust `configs/synthesis.toml` before running a quick experiment.
    champions and classical baselines over repeated trials.
 4. [04_audit.ipynb](notebooks/04_audit.ipynb) — audit matrix coverage, pending
    work, failures, and resumable runs.
-5. [05_analysis.ipynb](notebooks/analysis/05_analysis.ipynb) — native reliability
-   tables and the three primary thesis PNGs.
-6. [06_performance_profiles.ipynb](notebooks/analysis/06_performance_profiles.ipynb)
+5. [05_reliability_summary.ipynb](notebooks/analysis/05_reliability_summary.ipynb) — native reliability
+   tables and the fixed-target attainment PNG.
+6. [06_convergence_ecdf_and_ablations.ipynb](notebooks/analysis/06_convergence_ecdf_and_ablations.ipynb)
    — exploratory performance, strategy ablations, and detailed convergence/ECDF sweeps.
-7. [07_generalization.ipynb](notebooks/analysis/07_generalization.ipynb) — frozen-champion
-   noise robustness and cross-function transfer.
+7. [07_noise_robustness.ipynb](notebooks/analysis/07_noise_robustness.ipynb) — frozen-champion
+   noise robustness only.
 
 The three analysis notebooks run independently. Their shared Plotly builders live
 in `notebooks/analysis/plotting/`; calculations remain in the domain engines.
