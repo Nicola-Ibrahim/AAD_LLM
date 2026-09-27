@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from benchmarking.application.evaluation.summary import summarize_evaluations
 from benchmarking.application.evaluation.trials import EvaluationTrialRunner
 from benchmarking.application.evaluation.types import BaselineRunnerResolver, ExecutorBuilder
 from benchmarking.application.evaluation.workload import EvaluationWorkload
@@ -55,6 +56,12 @@ class EvaluationService:
             code_reader=code_reader,
             model_names=model_names,
             config=self.config,
+        )
+
+    def summarize_results(self) -> pd.DataFrame:
+        """Inspect current saved outcomes without running or modifying experiments."""
+        return summarize_evaluations(
+            self.workload, self.champion_selection, self.trials.state_repo, self.config
         )
 
     def run_evaluations(

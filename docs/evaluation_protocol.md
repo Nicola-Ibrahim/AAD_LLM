@@ -247,6 +247,17 @@ Notebook 07 exports returned-point success rate versus noise, with separate dime
 
 ## Interpretation and historical trials
 
+Notebook 03 ends with a read-only outcome summary for current native champions
+and baselines. It shows owning LLM and experiment ID, executed/valid/expected
+trial counts, failed trials, fixed-target success rates, median errors and the
+best baseline median error for the same condition. More than half the expected
+trials failing is labelled `mostly_failed`; all failing is `all_failed`.
+Only complete, current champion conditions in these categories are suggested
+for synthesis review. Missing/stale results and historical skipped tails require
+benchmark completion first. Large finite errors above the secondary target are
+performance-review flags, not automatic rerun requests. The summary neither
+launches experiments nor writes or deletes result files.
+
 All workflows retain the existing dimension-scaled budgets, timeout, trial count,
 paired instance IDs 1–20 and seeds derived from the configured base seed. Because
 the synthesis instance is included, this is not exclusively held-out-instance

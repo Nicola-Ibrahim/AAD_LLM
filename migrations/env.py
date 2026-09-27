@@ -8,9 +8,8 @@ from sqlalchemy import engine_from_config, pool
 # Add src to python path to import storage models
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from shared.database.tables import Base
-
 from shared.config import DATABASE_URL
+from shared.infra.database.tables import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

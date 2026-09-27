@@ -3,8 +3,8 @@
 from datetime import datetime, timezone
 from typing import cast
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload, sessionmaker
+from sqlalchemy import func, insert, inspect, select
+from sqlalchemy.orm import Load, Session, defer, selectinload, sessionmaker
 
 from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.entities import ExperimentSummary
@@ -27,6 +27,15 @@ class SQLiteSynthesisRepository(SynthesisRepository):
 
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self.SessionLocal = session_factory
+        with session_factory() as session:
+            columns = inspect(session.get_bind()).get_columns("experiments")
+        self._stores_synthesis_seed = any(column["name"] == "synthesis_seed" for column in columns)
+        # Optional replicate metadata must not require changing an imported DB.
+        self._experiment_options: tuple[Load, ...] = (
+            ()
+            if self._stores_synthesis_seed
+            else (defer(ExperimentORM.synthesis_seed, raiseload=True),)
+        )
 
     def __getstate__(self) -> dict[str, object]:
         """Strip non-picklable SQLAlchemy session_factory before serialization."""
@@ -50,7 +59,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
         synthesis_seed: int | None = None,
     ) -> int:
         with self.SessionLocal() as session:
-            experiment = ExperimentORM(
+            values = dict(
                 problem_id=problem.problem_id,
                 instance_id=problem.instance_id,
                 dim=problem.dim,
@@ -61,20 +70,21 @@ class SQLiteSynthesisRepository(SynthesisRepository):
                 noise_model=problem.noise_model,
                 budget=budget,
                 max_iterations=max_iterations,
-                synthesis_seed=synthesis_seed,
                 true_optimum=problem.true_optimum,
                 status="running",
                 started_at=datetime.now(timezone.utc).isoformat(),
             )
-            session.add(experiment)
+            if self._stores_synthesis_seed:
+                values["synthesis_seed"] = synthesis_seed
+            # Explicit columns keep INSERT valid when optional seed metadata is absent.
+            result = session.execute(insert(ExperimentORM.__table__).values(**values))
             session.commit()
-            session.refresh(experiment)
-            return experiment.id
+            return int(result.inserted_primary_key[0])
 
     def get_experiment_status(self, experiment_id: int) -> tuple[str | None, int]:
         """Returns tuple of (status_string, max_iteration_number) for a synthesis run, or (None, 0) if not found."""
         with self.SessionLocal() as session:
-            exp = session.get(ExperimentORM, experiment_id)
+            exp = session.get(ExperimentORM, experiment_id, options=self._experiment_options)
             if not exp:
                 return None, 0
             stmt = select(func.count(IterationORM.id)).where(
@@ -135,7 +145,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
     def save_experiment_summary(self, exp: ExperimentSummary) -> None:
         """Persists the domain-calculated summary and champion fields to the experiments table."""
         with self.SessionLocal() as session:
-            row = session.get(ExperimentORM, exp.id)
+            row = session.get(ExperimentORM, exp.id, options=self._experiment_options)
             if not row:
                 print(f"[WARN] save_experiment_summary: no experiment row for id={exp.id}")
                 return
@@ -152,7 +162,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
     def mark_failed(self, experiment_id: int, reason: str = "") -> None:
         """Marks a synthesis session as failed so it is not left as 'running' forever."""
         with self.SessionLocal() as session:
-            exp = session.get(ExperimentORM, experiment_id)
+            exp = session.get(ExperimentORM, experiment_id, options=self._experiment_options)
             if exp:
                 exp.status = "failed"
                 exp.finished_at = datetime.now(timezone.utc).isoformat()
@@ -215,7 +225,8 @@ class SQLiteSynthesisRepository(SynthesisRepository):
             )
 
         stmt = select(ExperimentORM).options(
-            selectinload(ExperimentORM.iterations).selectinload(IterationORM.error_log)
+            selectinload(ExperimentORM.iterations).selectinload(IterationORM.error_log),
+            *self._experiment_options,
         )
 
         raw_filters = {
@@ -244,7 +255,10 @@ class SQLiteSynthesisRepository(SynthesisRepository):
             return []
         stmt = (
             select(ExperimentORM)
-            .options(selectinload(ExperimentORM.iterations).selectinload(IterationORM.error_log))
+            .options(
+                selectinload(ExperimentORM.iterations).selectinload(IterationORM.error_log),
+                *self._experiment_options,
+            )
             .where(ExperimentORM.id.in_(experiment_ids))
             .order_by(ExperimentORM.id.asc())
         )
@@ -275,7 +289,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
             else PromptStrategy.BASELINE,
             budget=exp.budget,
             max_iterations=exp.max_iterations,
-            synthesis_seed=exp.synthesis_seed,
+            synthesis_seed=exp.synthesis_seed if self._stores_synthesis_seed else None,
             id=exp.id,
             status=exp.status,
             started_at=exp.started_at,
