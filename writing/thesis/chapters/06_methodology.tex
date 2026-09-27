@@ -57,7 +57,7 @@ loop.
         \input{figures/methodology_architecture}
     }
     \caption{High-level architecture of the methodology used in this thesis.
-    The problem and evaluation setup, together with the selected prompt
+    The Problem and Fitness Setup, together with the selected prompt
     configuration, define the environment supplied to the LLaMEA synthesis
     stage. LLaMEA produces executable optimization algorithms, which are
     subsequently evaluated independently under clean and stochastic fitness
@@ -79,7 +79,7 @@ specified in Chapter~\ref{chap:experiments}.
 
 
 %==============================================================================
-\section{Problem and Evaluation Setup}
+\section{Problem and Fitness Setup}
 \label{sec:problem_evaluation_setup}
 %==============================================================================
 
@@ -108,7 +108,7 @@ objective observation.
 
 
 %------------------------------------------------------------------------------
-\subsection{Deterministic and Stochastic Fitness}
+\subsection{Fitness Models}
 \label{subsec:deterministic_stochastic}
 %------------------------------------------------------------------------------
 
@@ -410,7 +410,7 @@ preserving a stochastic search environment for the generated optimizer.
 
 
 %------------------------------------------------------------------------------
-\subsection{Illustration of the Noise Models}
+\subsection{Noise Model Examples}
 \label{subsec:noise_model_illustration}
 %------------------------------------------------------------------------------
 
@@ -595,7 +595,7 @@ used for subsequent generations.
 
 
 %------------------------------------------------------------------------------
-\subsection{Synthesis Context and Candidate Generation}
+\subsection{Synthesis Context}
 \label{subsec:synthesis_context}
 %------------------------------------------------------------------------------
 
@@ -771,7 +771,7 @@ Let $T_{\mathrm{exec}}$ denote the maximum permitted execution time for one cand
 
 Generated algorithms may fail because of invalid numerical operations, incompatible array dimensions, incorrect use of the objective interface, undefined variables, or other implementation errors. These failures are captured during candidate evaluation and recorded with diagnostic information. They are handled as candidate failures rather than being allowed to terminate the complete synthesis process.
 
-For the standard return format \texttt{(best\_x, best\_y)}, the evaluation environment checks that \texttt{best\_x} has the expected dimension and lies within the problem bounds, allowing a small numerical tolerance. Non-finite coordinates fail this bounds check. The environment then evaluates \texttt{best\_x} on the clean objective and rejects a non-finite objective value. The execution interface also accepts a scalar-only return; in that case, there is no coordinate vector to validate, and the scalar is checked for finiteness.
+For the standard return format \texttt{(best\_x, best\_y)}, the evaluation environment checks that \texttt{best\_x} has the expected dimension and lies within the problem bounds, allowing a small numerical tolerance. Non-finite coordinates fail this bounds check. The environment then evaluates \texttt{best\_x} on the clean objective and rejects a non-finite objective value.
 
 Let $B$ denote the configured objective-evaluation budget and let $N_{\mathrm{eval}}$ denote the number of objective evaluations. The intended protocol is
 
@@ -788,7 +788,7 @@ For the standard return format, \texttt{best\_x} is the coordinate vector select
 
 
 %==============================================================================
-\section{Evolutionary Selection and Feedback}
+\section{Selection and Feedback}
 \label{sec:candidate_selection}
 %==============================================================================
 
@@ -864,12 +864,19 @@ f_{\mathrm{clean}}(x_{\mathrm{best}}) - f^*
 \label{eq:clean_optimality_gap_selection}
 \end{equation}
 
+Here, $f^*$ is the known global minimum value of the clean benchmark
+objective, as defined in Equation~\ref{eq:true_optimum}. It is available to
+the outer evaluator but not to the generated optimizer during its search.
+
 The error is converted into the fitness score used by LLaMEA,
 
 \begin{equation}
 S = -\Delta f.
 \label{eq:synthesis_fitness_score}
 \end{equation}
+
+The minus sign is used because the outer controller selects larger fitness
+scores, whereas a smaller clean error is better.
 
 Smaller clean optimality gaps therefore correspond to larger fitness scores.
 A candidate with zero clean error receives the maximum possible score of
@@ -893,7 +900,9 @@ clean diagnostic score remains the reference used for elitist selection.
 
 Each generated child is executed once during synthesis. Its returned solution
 therefore still depends on the search trajectory produced during that
-particular execution.
+particular execution. Here, the search trajectory means the sequence of
+points evaluated by the generated optimizer and the decisions it makes from
+the observed objective values.
 
 Under stochastic evaluation, a different sequence of stochastic observations
 could cause the same generated algorithm to return a different solution. The
@@ -905,9 +914,8 @@ Robustness across repeated random seeds is therefore assessed during the
 independent benchmark evaluation rather than by repeatedly executing every
 candidate during synthesis.
 
-
 %------------------------------------------------------------------------------
-\subsection{Feedback and Evolutionary Context Update}
+\subsection{Feedback and Context Update}
 \label{subsec:feedback_update}
 %------------------------------------------------------------------------------
 
@@ -1087,8 +1095,8 @@ After a successful candidate, the consecutive-failure counter is reset. The
 activation of the meta-feedback therefore depends on the observed execution
 sequence rather than on the candidate's optimization score.
 
-The exact value of $K_{\mathrm{fail}}$ used in the experiments is reported in
-Chapter~\ref{chap:experiments}.
+In this implementation, meta-feedback is activated after
+$K_{\mathrm{fail}} = \text{3}$ consecutive candidate failures.
 
 The meta-feedback deliberately does not recommend a particular optimization
 algorithm. This keeps the synthesis process separate from the external
@@ -1108,22 +1116,12 @@ is supplied to the LLM together with the current task prompt.
 
 
 %==============================================================================
-\section{Prompt Design and Synthesis Conditions}
+\section{Prompt Design}
 \label{sec:prompt_design}
 %==============================================================================
 
-The prompt supplied to the LLM is assembled from three main components:
-\texttt{TASK}, \texttt{EXAMPLE}, and \texttt{FORMAT}.
-
-This separation allows the information describing the optimization setting to
-be changed without changing the common program interface or the expected code
-structure.
-
-The \texttt{EXAMPLE} and \texttt{FORMAT} components remain fixed across
-synthesis conditions, whereas the \texttt{TASK} component contains the
-variable experimental information.
-
-The complete prompt is constructed in the following order:
+The prompt sent to the LLM has three components: \texttt{TASK},
+\texttt{EXAMPLE}, and \texttt{FORMAT}. They are assembled in this order:
 
 \begin{verbatim}
 TASK
@@ -1131,8 +1129,11 @@ EXAMPLE
 FORMAT
 \end{verbatim}
 
-The \texttt{TASK} component consists of a common problem layout, an
-environment-information component, and a strategy scaffold.
+The \texttt{EXAMPLE} and \texttt{FORMAT} components remain fixed across
+synthesis conditions. The \texttt{TASK} component is assembled for each
+condition from a common task layout, one selected environment-information
+block, and one selected strategy scaffold. Thus, the environment and strategy
+variants form the variable content within \texttt{TASK}.
 
 The environment-information design is organized hierarchically. At the first
 level, a condition is either \textsc{Implicit} or \textsc{Explicit}.
@@ -1172,15 +1173,15 @@ Figure~\ref{fig:prompt_architecture} summarizes the prompt architecture.
         \input{figures/prompt_architecture}
     }
 
-    \caption{Modular prompt architecture used for synthesis. The invariant
-    components consist of the common \texttt{FORMAT}, \texttt{EXAMPLE}, and
-    problem layout. The variable task information first distinguishes between
-    implicit and explicit environment information. The explicit branch is
-    further separated into clean and noisy settings. Each resulting
-    environment-information condition is combined with the four strategy
-    scaffolds \textsc{Baseline}, \textsc{Vectorization},
-    \textsc{Guided}, and \textsc{Thinking}, resulting in twelve synthesis
-    conditions.}
+    \caption{Prompt composition used for synthesis. The \texttt{EXAMPLE} and
+    \texttt{FORMAT} components are invariant. For each synthesis condition,
+    the \texttt{TASK} prompt combines the common task layout with one selected
+    environment-information block and one strategy scaffold. The environment
+    choices are \textsc{Implicit}, \textsc{Explicit--Clean}, and
+    \textsc{Explicit--Noisy}; the strategy choices are \textsc{Baseline},
+    \textsc{Thinking}, \textsc{Vectorization}, and \textsc{Guided}. Their
+    combinations produce twelve \texttt{TASK} variants, each assembled with
+    the same \texttt{EXAMPLE} and \texttt{FORMAT}.}
 
     \label{fig:prompt_architecture}
 \end{figure}
@@ -1626,110 +1627,21 @@ configuration reported in the experimental chapter.
 \label{sec:independent_benchmark}
 %==============================================================================
 
-The synthesis procedure and the subsequent benchmark evaluation serve
-different purposes and are therefore separated.
+Independent benchmarking begins after all planned synthesis runs for the
+selected LLMs and synthesis conditions are complete. The incumbent retained
+from each run is frozen, and the resulting algorithms are evaluated alongside
+the selected reference optimizers. No further LLM generation, algorithm
+modification, or synthesis feedback occurs during benchmarking.
 
-During synthesis, the objective is to generate and refine executable
-optimization algorithms. Evaluation results affect evolutionary selection and
-therefore influence which generated program becomes the current incumbent.
+The benchmark applies the configured functions, dimensions, evaluation
+budgets, environments, and random seeds to each fixed optimizer. It includes
+clean and stochastic conditions, allowing algorithms to be assessed across
+the environments specified in the experimental design. Repeated seeded runs
+provide measurements of solution quality and performance variability.
 
-Under stochastic synthesis, the generated optimizer experiences stochastic
-objective observations, while the outer synthesis framework deliberately uses
-the clean quality of the returned solution to assess the generated algorithm.
-
-Once a synthesis run terminates, the current incumbent is frozen. This final
-incumbent is the synthesized algorithm retained from that run. No further LLM
-generation, evolutionary modification, or synthesis feedback is applied to
-that algorithm during independent benchmarking.
-
-The independent evaluation executes these fixed synthesized optimizers using a
-common benchmark protocol. The selected established optimization methods are
-evaluated under the corresponding benchmark conditions as reference methods.
-
-Independent benchmarking also enables cross-environment evaluation. An
-algorithm synthesized using
-deterministic objective observations can subsequently be evaluated under
-stochastic fitness. Likewise, an algorithm synthesized under stochastic
-fitness can be evaluated on the corresponding clean objective.
-
-No information from the independent benchmark stage is returned to the
-completed synthesis process. The benchmark results therefore cannot modify
-the algorithms whose performance is being measured.
-
-%------------------------------------------------------------------------------
-\subsection{Benchmark Evaluation Protocol}
-\label{subsec:benchmark_protocol}
-%------------------------------------------------------------------------------
-
-The independent benchmark evaluation applies the same general resource and
-interface conventions to the synthesized algorithms and selected reference
-optimizers.
-
-Each algorithm is executed independently for the relevant benchmark
-condition using predefined random seeds and an objective-function evaluation
-budget.
-
-These repeated runs provide the performance measurements used to examine
-convergence behavior, final solution quality, and robustness.
-
-The evaluation budget is defined in terms of objective-function evaluations,
-providing a common resource measure for algorithms with different internal
-search procedures.
-
-Under stochastic conditions, a synthesized optimizer interacts with the
-stochastic objective through the same type of objective interface used during
-synthesis. Final solution quality is subsequently assessed using the
-corresponding clean objective.
-
-The evaluated optimizer receives only the observations permitted by the
-configured benchmark environment. The surrounding benchmark framework
-evaluates the returned solution separately using the clean objective.
-
-Unlike during synthesis, however, this post-execution clean evaluation is not
-used to modify the algorithm. Its purpose is solely to produce comparable
-benchmark measurements.
-
-A benchmark run is determined by the following configuration:
-
-\begin{itemize}
-\item the optimizer being evaluated,
-\item the benchmark function,
-\item the problem dimension,
-\item the objective evaluation budget,
-\item the clean or stochastic evaluation environment,
-\item the random seed.
-\end{itemize}
-
-The evaluated optimizer can be either a fixed synthesized algorithm or a
-reference optimizer.
-
-Repeated independent runs are particularly important for interpreting the
-stochastic synthesis setting. During LLaMEA synthesis, a generated child is
-executed once before the clean quality of its returned solution is used for
-evolutionary comparison.
-
-The independent benchmark stage instead evaluates each retained fixed
-algorithm using the configured collection of random seeds. This separates the
-algorithm-generation procedure from the later assessment of robustness across
-repeated executions.
-
-The exact benchmark functions, dimensions, noise levels, evaluation budgets,
-number of repetitions, synthesized model variants, reference algorithms,
-evaluation targets, random seeds, and statistical procedures are defined in
-Chapter~\ref{chap:experiments}.
-
-Keeping these experimental parameters separate from the present methodology
-distinguishes the general evaluation procedure from the particular
-configurations used to answer the research questions.
-
-The same implementation contract described earlier remains active during
-independent evaluation. A synthesized optimizer is executed through the same
-optimizer interface, every objective call counts against the configured
-evaluation budget, and an optimizer operating under stochastic evaluation
-cannot directly access the clean objective or known optimum.
-
-The independent benchmark stage therefore measures the behavior of fixed
-generated programs rather than the behavior of a continued synthesis process.
-Differences observed during this stage reflect differences between the
-algorithms produced by the synthesis conditions and their interaction with the
-benchmark environment rather than further adaptation by the LLM.
+Under stochastic evaluation, an optimizer receives observations from the
+configured stochastic objective. The benchmark framework evaluates its
+returned solution using the corresponding clean objective. This clean
+measurement is used for reporting and does not modify the optimizer or feed
+back into synthesis. The exact benchmark settings and statistical procedures
+are reported in Chapter~\ref{chap:experiments}.
