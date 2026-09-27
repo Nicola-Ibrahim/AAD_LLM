@@ -3,11 +3,13 @@
 \label{chap:experiments}
 %==============================================================================
 
-For each synthesis run, we retain the final incumbent as its champion. The
-three language models are first run under the planned prompt and problem
-conditions. Once all planned runs have finished, the champions are fixed and
-evaluated alongside the reference optimizers. Independent benchmark results
-do not affect which algorithms are retained.
+This chapter reports the available synthesis and benchmark snapshot.
+Three model families have completed synthesis records. Champions are selected
+from recorded synthesis candidates by ascending clean error, then evaluation
+count, within each model--function--dimension--prompt--noise condition.
+They are fixed before independent benchmarking; benchmark results do not
+affect selection. Configuration defaults for future campaigns are distinguished
+from settings recoverable from historical experiment records.
 
 %==============================================================================
 \section{Experimental Design}
@@ -56,9 +58,11 @@ Each selected function is evaluated at
     D \in \{2,3,5,10\}.
 \label{eq:experiment_dimensions}
 \end{equation}
-The number of instances used for each function and dimension is
-\textbf{1}. Their identifiers and synthesis seeds are
-recorded in Table~\ref{tab:run_matrix}.
+Synthesis uses BBOB instance 1 for each function and dimension.
+Independent benchmarking uses instance IDs 1--20, with one trial per instance.
+Thus instance 1 is not held out; instances 2--20 provide additional landscape
+realizations. Historical synthesis seeds are not stored in the supplied
+database schema and cannot be recovered from its run IDs alone.
 
 \subsection{Objective Noise}
 \label{subsec:experiment_noise}
@@ -86,6 +90,8 @@ The noise levels considered are
 with $\sigma=0$ denoting clean evaluation. Each stochastic objective call
 uses a new noise realization. The random-seed policy for the optimizer and
 the noise generator is specified with the run matrix.
+This is a repository-defined noise model applied to noiseless BBOB
+functions through IOH; it is not the official COCO \texttt{bbob-noisy} suite.
 
 Where noise levels vary during both synthesis and benchmarking, we use
 $\sigma_{\mathrm{synth}}$ for synthesis and $\sigma_{\mathrm{eval}}$ for
@@ -95,8 +101,9 @@ Table~\ref{tab:cross_evaluation_matrix}.
 \subsection{Synthesis Conditions}
 \label{subsec:synthesis_conditions}
 
-Three LLM configurations are evaluated. Their model identifiers, versions,
-and inference settings are listed in Table~\ref{tab:llm_configurations}.
+Three LLM configurations are evaluated. Their model identifiers, quantization
+artifacts, and recoverable inference settings are listed in
+Table~\ref{tab:llm_configurations}.
 These settings are kept separate from the prompt conditions in the analysis.
 
 The variable content of the \texttt{TASK} prompt combines a common task
@@ -120,6 +127,9 @@ The scaffolds are \emph{Baseline}, \emph{Thinking},
 has four variants, and the two explicit conditions have eight. The
 Methodology chapter gives the prompt text; Table~\ref{tab:run_matrix}
 records which variants were run with each model and problem setting.
+The common example already requests NumPy vectorization. The Vectorization
+condition therefore adds more specific guidance; it does not introduce
+vectorization into an otherwise non-vectorized prompt.
 
 \begin{table}[htbp]
     \centering
@@ -139,7 +149,9 @@ records which variants were run with each model and problem setting.
         Dimension & $D\in\{2,3,5,10\}$. \\
         Noise level & $\sigma\in\{0,0.05,0.1,0.2\}$, assigned to synthesis
         or evaluation as indicated in the run matrix. \\
-        Repetitions & [Insert synthesis run count and seed policy.] \\
+        Repetitions & Historical run counts in Table~\ref{tab:run_matrix}; future
+        campaigns plan five repeats with seeds $42+k$, $k=0,\ldots,4$.
+        Benchmark trials use instances $r=1,\ldots,20$ and seeds $42+r$. \\
         \hline
     \end{tabular}
 \end{table}
@@ -150,36 +162,48 @@ records which variants were run with each model and problem setting.
     \label{tab:llm_configurations}
     \scriptsize
     \setlength{\tabcolsep}{3pt}
-    \begin{tabular}{clll}
+    \begin{tabular}{p{0.07\textwidth}p{0.37\textwidth}p{0.22\textwidth}p{0.25\textwidth}}
         \hline
-        ID & Model and version & Inference settings & Local/runtime details \\
+        ID & Model / artifact & Inference settings & Runtime evidence \\
         \hline
-        LLM-1 & \textbf{[INSERT]} & \textbf{[INSERT]} & \textbf{[INSERT]} \\
-        LLM-2 & \textbf{[INSERT]} & \textbf{[INSERT]} & \textbf{[INSERT]} \\
-        LLM-3 & \textbf{[INSERT]} & \textbf{[INSERT]} & \textbf{[INSERT]} \\
+        LLM-1 & Qwen2.5-Coder-14B-Instruct; Q4\_K\_M GGUF &
+        Current client default: temperature 0.8; historical settings not persisted &
+        Local OpenAI-compatible client; exact hardware/server version not recorded \\
+        LLM-2 & Qwen2.5-Coder-32B-Instruct; Q4\_K\_M GGUF &
+        Same current default; historical settings not persisted &
+        Same client interface; exact hardware/server version not recorded \\
+        LLM-3 & DeepSeek-Coder-V2-Lite-Instruct; Q4\_K\_M GGUF &
+        Same current default; historical settings not persisted &
+        Same client interface; exact hardware/server version not recorded \\
         \hline
     \end{tabular}
 \end{table}
 
-Each row of Table~\ref{tab:run_matrix}
-identifies a run by its model, prompt variant, BBOB function and instance,
-dimension, synthesis noise level, and random seed.
+Table~\ref{tab:run_matrix} summarizes recorded runs rather than claiming
+a balanced number of independent synthesis repeats. Each model covers
+$5\times4\times2\times4\times4=640$ distinct synthesis conditions:
+five functions, four dimensions, two modes, four strategies and four noise
+levels. The implicit prompt text is reused across noise levels; explicit
+prompt text distinguishes clean from noisy observations. Model identifiers
+are the artifact names recorded in SQLite, not an inferred checkpoint revision.
 
 \begin{table}[htbp]
     \centering
-    \caption{Synthesis run matrix. Replace the placeholder row with the
-    experiment-log entries.}
+    \caption{Synthesis snapshot from SQLite. Completed run counts can exceed
+    distinct conditions because historical campaigns contain repeated records.}
     \label{tab:run_matrix}
     \scriptsize
     \setlength{\tabcolsep}{3pt}
-    \begin{tabular}{p{0.07\textwidth}p{0.08\textwidth}p{0.14\textwidth}p{0.15\textwidth}p{0.04\textwidth}p{0.12\textwidth}p{0.08\textwidth}}
+    \begin{tabular}{lrrrr}
         \hline
-        Run & LLM & TASK variant & Func./instance & $D$ &
-        $\sigma_{\mathrm{synth}}$ & Seed \\
+        Model & Conditions & Completed runs & Running runs & Instance \\
         \hline
-        -- & -- & -- & -- & -- & -- & -- \\
+        LLM-1 & 640 & 759 & 0 & 1 \\
+        LLM-2 & 640 & 663 & 0 & 1 \\
+        LLM-3 & 640 & 708 & 0 & 1 \\
+        DeepSeek-Coder-33B (excluded) & 640 & 0 & 640 & 1 \\
         \hline
-    \end{tabular}
+        \end{tabular}
 \end{table}
 
 \subsection{Synthesis Runs and Champion Selection}
@@ -198,44 +222,88 @@ which candidate is retained through their effect on the returned solution
 and its clean score; the outer parent--child comparison is not made using
 the noisy $\texttt{best\_y}$.
 
-The champion for a synthesis run is the incumbent present when that run
-terminates. If a synthesis condition is repeated with multiple seeds, each
-run contributes its own champion to the benchmark set. Champions are fixed
-before benchmark results are observed; no champion is selected by comparing
-independent benchmark scores. Synthesis run settings are
-\textbf{[Insert run settings; see Methodology implementation contract]}.
-Across the planned runs, \textbf{[INSERT COUNTS OF COMPLETED, FAILED, AND
-EXCLUDED RUNS, WITH REASONS]}.
+The export contains one selected candidate per synthesis condition, not one
+champion per historical run. The selector ranks recorded candidates by
+clean error and then evaluations used; exact ties retain input order.
+Consequently, repeated synthesis records must not be counted as independent
+champions in the benchmark. The three completed model families contribute
+1,920 condition-specific champions in total.
+
+Recorded synthesis budgets are 1,000,000 objective queries and maximum
+iteration counts are 10 for every completed run. The current candidate
+timeout is 30 seconds. The current configuration plans five future synthesis
+repeats; the supplied database has no replicate/seed columns, so it does not
+establish a five-repeat historical protocol. The snapshot contains 2,130
+completed runs and 640 running DeepSeek-Coder-33B runs; no failed-status rows
+are present. The unfinished model is excluded from the reported comparisons.
+A completed session is not evidence that every candidate executed successfully.
 
 %==============================================================================
 \section{Independent Benchmark Evaluation}
 \label{sec:independent_benchmark}
 %==============================================================================
 
-The benchmark set consists of the frozen champion from each completed
-synthesis run, together with the selected reference optimizers. No LLM
+The benchmark uses a custom, evaluation-budget-limited protocol based on
+IOH's implementation of selected BBOB functions. It follows COCO-inspired
+principles, including evaluation-count-based effort, multiple problem
+instances, and target-attainment analysis \cite{Hansen2021COCO}, but is not
+a full standard COCO experiment. In particular, champions are selected for
+specific synthesis conditions rather than applying one unchanged
+general-purpose algorithm across the entire suite. The custom noise model
+and terminal returned-point reliability analysis are study-specific.
+
+The benchmark set consists of the selected champion for each covered
+synthesis condition, together with the reference optimizers. No LLM
 generation, algorithm modification, or synthesis feedback occurs during
 this stage.
 
 Each benchmark run is specified by the algorithm, BBOB function and
-instance, dimension, evaluation noise level, objective-call budget, and
-random seed. The exact evaluation budget is
-$B_{\mathrm{eval}}=\textbf{[INSERT]}$, and the number and policy of
-independent evaluation repetitions are
-$N_{\mathrm{runs}}=\textbf{[INSERT]}$. The reference optimizers and their
+instance, dimension, evaluation noise level, objective-evaluation budget, and
+random seed. The evaluation budget is $B_{\mathrm{eval}}=10{,}000D$:
+20,000, 30,000, 50,000 and 100,000 clean objective evaluations for
+$D=2,3,5,10$, respectively. Each condition targets $N_{\mathrm{runs}}=20$
+trials, using instance $r$ and optimizer/noise seed $42+r$ for $r=1,\ldots,20$.
+The generated champions have a 30-second execution timeout; the classical
+baseline runners are called directly without an equivalent timeout wrapper.
+This asymmetric execution constraint can affect comparisons and must not
+be described as a uniform runtime limit. Solvers share the instance/seed schedule,
+but consume random numbers according to their own search logic. The reference optimizers and their
 implementation or parameter settings are listed in
 Table~\ref{tab:reference_optimizers}.
+
+The budget counts actual evaluations of the instrumented IOH objective,
+including repeated evaluations of the same point. Once the budget is
+exhausted, the wrapper returns the last observed value with a warning
+instead of evaluating a new point. Consequently, the number of Python
+objective-interface invocations can exceed $B_{\mathrm{eval}}$, even though
+the recorded IOH evaluation count cannot. The initial search evaluation
+consumes budget; the separate post-run clean assessment does not.
+The framework does not restart a solver to spend unused budget. A solver
+may stop early according to its own stopping rules or fail during execution;
+20 instance trials must not be interpreted as 20 independent restarts on
+one instance. Elapsed time is recorded separately, although timing boundaries
+differ between adapters, so it is not used as the primary efficiency measure.
 
 \begin{table}[htbp]
     \centering
     \caption{Reference optimizers used in independent benchmarking.}
     \label{tab:reference_optimizers}
-    \begin{tabular}{lll}
+    \scriptsize
+    \begin{tabular}{p{0.16\textwidth}p{0.22\textwidth}p{0.53\textwidth}}
         \hline
-        Optimizer & Implementation/version & Parameters or configuration \\
+        Optimizer & Current implementation & Parameters / configuration \\
         \hline
-        \textbf{[INSERT]} & \textbf{[INSERT]} & \textbf{[INSERT]} \\
-        \textbf{[INSERT]} & \textbf{[INSERT]} & \textbf{[INSERT]} \\
+        CMA-ES & \texttt{cma} 4.4.4 &
+        Uniform initial point; $\sigma_0=(u-l)/6$; bounds enforced;
+        default population/stopping rules; verbosity $-9$. \\
+        Differential Evolution & SciPy 1.18.0 &
+        Population multiplier 15; \texttt{polish=False};
+        $\mathrm{maxiter}=\max(1,\lfloor B/(15D)\rfloor)$;
+        other parameters use library defaults. \\
+        Particle Swarm & Repository NumPy implementation &
+        $n=\min(50,\max(10,5D))$; $w=0.729$;
+        $c_1=c_2=1.49445$; clipped positions;
+        uniform initial positions and velocities scaled by 0.1. \\
         \hline
     \end{tabular}
 \end{table}
@@ -246,7 +314,7 @@ After execution, the benchmark evaluator assesses the returned solution on
 the clean objective. For a run $r$, the final clean optimality gap is
 \begin{equation}
     \Delta f_r
-    = \left|f_{\mathrm{clean}}(\mathbf{x}_{r,\mathrm{best}})-f^*\right|,
+    = \max\!\left(0,f_{\mathrm{clean}}(\mathbf{x}_{r,\mathrm{best}})-f^*\right),
 \label{eq:benchmark_final_gap}
 \end{equation}
 where $\mathbf{x}_{r,\mathrm{best}}$ is the returned best point and $f^*$
@@ -261,15 +329,41 @@ support them. For any anytime curve, the plotted quantity, sampling points,
 and clean/noisy status of the trajectory are stated in its caption. A
 clean final evaluation of $\mathbf{x}_{r,\mathrm{best}}$ alone does not
 provide a clean trajectory; convergence plots based on clean gaps require
-the corresponding evaluated-point history or clean checkpoints. The data
-source and schedule for these curves are \textbf{[INSERT TRACE SOURCE AND
-EVALUATION SCHEDULE]}.
+the corresponding evaluated-point history or clean checkpoints. The source is the clean IOH problem's logged evaluated-point history in
+\path{results/ioh_traces}, with separate terminal measurements in
+\texttt{provenance.json}. Query points are clean-scored before observational
+noise is added. The separate returned-point evaluation is unlogged and does
+not consume the search budget. Irregular trace entries are aligned by
+last-observation carry-forward on a 300-point logarithmic grid from 1 to
+$10^6$ for the exploratory profile figures. Median and quartiles summarize
+the best clean queried gap, not necessarily the returned-point gap.
+The supplied profile exports carry the final trace value beyond
+$B_{\mathrm{eval}}$; this is visualization carry-forward, not additional
+search or evidence of additional budget.
 
-The target thresholds are \textbf{[INSERT $\Delta f$ TARGETS]}. The
-statistical tests, significance level, effect-size measure, and
-multiple-comparison procedure are \textbf{[INSERT ANALYSIS DETAILS]}. The
-unit of analysis is an independent benchmark run; state whether comparisons
-are paired and how repeated instances are handled: \textbf{[INSERT]}.
+The primary solved target is $\Delta f\leq10^{-8}$; the secondary meaningful
+convergence target is $\Delta f\leq10^{-2}$. Reliability is computed from
+terminal returned-point errors. Each condition has a 95\% Wilson interval;
+aggregate estimates average complete conditions with equal weight.
+The tables below use 1,000 condition-cluster bootstrap resamples, seed
+20260923, and percentile 95\% intervals. A condition, including all its 20
+trials, is resampled as one unit. Incomplete or stale conditions are excluded,
+not treated as failures; confirmed execution failures remain failures.
+Runtime exceptions and timeouts are recorded with infinite terminal error
+and therefore do not meet either success target. The current trial handler
+does not retain separate timeout and runtime-exception categories in the
+terminal provenance. This reliability measure thus includes execution
+failure under the implemented constraints, not only search performance.
+
+The available statistical engine implements condition-wise Kruskal--Wallis
+omnibus tests, two-sided Mann--Whitney $U$ comparisons, Vargha--Delaney
+$A_{12}$ for minimization, and Benjamini--Hochberg FDR correction at
+$\alpha=0.05$ over valid pairwise tests in one invocation.
+These are unpaired tests despite the shared instance/seed schedule.
+No pairwise or omnibus numerical report is present in the supplied outputs,
+so this chapter reports descriptive contrasts and bootstrap uncertainty,
+not unverified adjusted $p$-values. Current installed IOH and LLaMEA versions
+are 0.3.22 and 1.2.0; dependency versions are not persisted per historical run.
 
 Cross-evaluation changes one or more benchmark conditions relative to the
 conditions used for synthesis. The planned mappings are listed in
@@ -284,15 +378,24 @@ was excluded from the corresponding synthesis run.
     \label{tab:cross_evaluation_matrix}
     \scriptsize
     \setlength{\tabcolsep}{3pt}
-    \begin{tabular}{p{0.12\textwidth}p{0.12\textwidth}p{0.07\textwidth}p{0.12\textwidth}p{0.12\textwidth}p{0.07\textwidth}p{0.12\textwidth}}
+    \begin{tabular}{p{0.16\textwidth}p{0.23\textwidth}p{0.24\textwidth}p{0.27\textwidth}}
         \hline
-        Champion & Synth. func. & Synth. $D$ &
-        $\sigma_{\mathrm{synth}}$ & Eval. func. & Eval. $D$ &
-        $\sigma_{\mathrm{eval}}$ \\
+        Study & Synthesis origin & Evaluation mapping & Status / interpretation \\
         \hline
-        -- & -- & -- & -- & -- & -- & -- \\
+        Native & Each selected condition &
+        Same function, dimension and noise; instances 1--20 &
+        Primary comparisons; independent instance/seed schedule \\
+        Noise robustness & Explicit-Clean champion; $\sigma_{\mathrm{synth}}=0$ &
+        Same function and dimension; $\sigma_{\mathrm{eval}}=0,0.05,0.1,0.2$ &
+        Enabled; frozen code, no adaptation or reselection \\
+        Cross-function & Explicit-Clean Baseline champion &
+        Source $f_i$ to target $f_j$, same $D$, clean evaluation &
+        Currently disabled; stored optional transfer exports are not used here \\
+        Cross-dimension & No configured campaign &
+        No verified held-out dimension mapping &
+        Not part of this study; no transfer claim \\
         \hline
-    \end{tabular}
+        \end{tabular}
 \end{table}
 
 %==============================================================================
@@ -301,12 +404,22 @@ was excluded from the corresponding synthesis run.
 %==============================================================================
 
 The results below compare champions from implicit and explicit synthesis
-and then examine their performance when benchmark conditions change. The
-figures combine related conditions; the full results for individual
-functions and runs are available in
-\textbf{[Insert appendix or data location]}. Aggregation across functions
-uses \textbf{[Insert aggregation rule]}; raw optimality gaps from different
-functions are not averaged without normalization.
+and then examine their performance when benchmark conditions change. The full native condition table is
+\path{results/reports/native_reliability_v1.csv}; terminal trial records and
+clean query traces are under \path{results/ioh_traces}.
+The export contains 1,920 native condition rows, of which 1,890 have 20
+completed trials. One otherwise complete row has a stale code hash:
+LLM-3, Explicit-Noisy/vectorization, $f_{11}$, $D=3$, $\sigma=0.05$.
+After checking exported champions against code and provenance, 1,889 complete
+current conditions (37,780 trials) enter the descriptive summaries.
+No raw-gap mean is used for the headline comparison: fixed-target success
+probabilities are averaged equally across eligible conditions.
+The exploratory profile exports do contain an arithmetic mean of
+function-level convergence summaries in their overall panel. That raw-gap
+panel is scale-dependent and is not used for cross-function ranking.
+Adaptive-target ECDFs use 51 logarithmic targets derived from observed
+positive gaps separately at each noise level; they are exploratory and
+are not directly comparable to the fixed-target solved probability.
 
 \subsection{Implicit Synthesis}
 \label{subsec:implicit_results}
@@ -318,45 +431,60 @@ specified above.
 
 \begin{figure}[htbp]
     \centering
-    \fbox{\parbox{0.88\textwidth}{\centering
-    Insert the multi-panel convergence results for implicit-synthesis
-    champions. Show the evaluation conditions and identify whether the
-    trajectory is based on noisy observations or clean reevaluation.}}
-    \caption{Convergence results for champions generated with implicit
-    environment information. Panels compare the selected LLMs and strategy
-    scaffolds across the reported dimensions and evaluation noise levels.}
+    \includegraphics[width=\textwidth]{images/experiments/03_implicit/qwen_32b/2D/std_0.2/convergence_trajectories.png}
+    \caption{Representative implicit-synthesis convergence for LLM-2 at $D=2$ and
+$\sigma_{\mathrm{synth}}=\sigma_{\mathrm{eval}}=0.2$, comparing all four
+strategies with CMA-ES, DE and PSO. Curves show median best-queried clean gaps;
+ribbons show the interquartile range. The search budget is 20,000; the
+extended axis is carry-forward. The overall raw-gap panel is exploratory.}
     \label{fig:implicit_convergence}
 \end{figure}
 
 \begin{figure}[htbp]
     \centering
-    \fbox{\parbox{0.88\textwidth}{\centering
-    Insert the corresponding implicit-synthesis ECDF or target-attainment
-    results. State the target thresholds and evaluation-budget axis.}}
-    \caption{ECDF or target-attainment results for champions generated
-    with implicit environment information.}
+    \includegraphics[width=\textwidth]{images/experiments/03_implicit/qwen_32b/2D/std_0.2/target_precision_ecdf.png}
+    \caption{Exploratory adaptive-target ECDF for the same implicit LLM-2 condition.
+The ordinate is the proportion of run--target pairs attained by each query
+count, using 51 empirically selected targets. Values beyond 20,000 queries
+are carried forward; this is not the primary fixed-target ranking.}
     \label{fig:implicit_ecdf}
 \end{figure}
 
-\textbf{[Insert the observed differences among LLMs and scaffolds, including
-function- and dimension-specific exceptions that affect the interpretation.]}
+Under the common Baseline strategy, aggregate implicit solved rates are
+33.68\% for LLM-3, 25.19\% for LLM-1 and 20.91\% for LLM-2.
+These estimates have overlapping condition-bootstrap intervals and are
+descriptive, not evidence of statistically significant model ordering.
+Strategy effects are not uniform: Guided has the highest aggregate implicit
+rate for LLM-3, whereas Vectorization has the highest for LLM-1 and LLM-2.
+This does not establish that one strategy dominates every function or dimension.
 The corresponding summary values are reported in
 Table~\ref{tab:implicit_summary}.
 
 \begin{table}[htbp]
     \centering
-    \caption{Summary of independent benchmark results for implicit-synthesis
-    champions. Use the stated scale-aware metric and report uncertainty or
-    run counts.}
+    \caption{Implicit native terminal reliability at $\Delta f\leq10^{-8}$.
+    Complete current conditions only; each contributes 20 trials.
+    Intervals are condition-cluster bootstrap 95\% intervals in percentage points.
+    Only Baseline contributes to the headline model comparison; other rows are ablations.}
     \label{tab:implicit_summary}
     \scriptsize
     \setlength{\tabcolsep}{3pt}
-    \begin{tabular}{p{0.12\textwidth}p{0.15\textwidth}p{0.19\textwidth}p{0.19\textwidth}p{0.17\textwidth}}
+    \begin{tabular}{lllrlll}
         \hline
-        LLM & Strategy & Eval. condition & Metric &
-        Runs / CI \\
+        Model & Strategy & Origin & Conditions & Solved / trials & Rate (\%) & 95\% CI \\
         \hline
-        -- & -- & -- & -- & -- \\
+        LLM-1 & Baseline & All native noise levels & 79 & 398/1580 & 25.19 & [16.39, 34.69] \\
+        LLM-1 & Thinking & All native noise levels & 80 & 221/1600 & 13.81 & [7.25, 21.44] \\
+        LLM-1 & Vectorization & All native noise levels & 79 & 428/1580 & 27.09 & [18.54, 37.09] \\
+        LLM-1 & Guided & All native noise levels & 76 & 392/1520 & 25.79 & [17.11, 35.33] \\
+        LLM-2 & Baseline & All native noise levels & 77 & 322/1540 & 20.91 & [13.44, 29.81] \\
+        LLM-2 & Thinking & All native noise levels & 80 & 310/1600 & 19.37 & [12.25, 28.19] \\
+        LLM-2 & Vectorization & All native noise levels & 79 & 425/1580 & 26.90 & [18.60, 35.82] \\
+        LLM-2 & Guided & All native noise levels & 80 & 418/1600 & 26.13 & [18.31, 34.25] \\
+        LLM-3 & Baseline & All native noise levels & 76 & 512/1520 & 33.68 & [23.95, 43.55] \\
+        LLM-3 & Thinking & All native noise levels & 80 & 263/1600 & 16.44 & [9.87, 23.44] \\
+        LLM-3 & Vectorization & All native noise levels & 79 & 438/1580 & 27.72 & [18.60, 36.84] \\
+        LLM-3 & Guided & All native noise levels & 79 & 547/1580 & 34.62 & [25.44, 43.67] \\
         \hline
     \end{tabular}
 \end{table}
@@ -371,44 +499,71 @@ the model different information.
 
 \begin{figure}[htbp]
     \centering
-    \fbox{\parbox{0.88\textwidth}{\centering
-    Insert the multi-panel convergence results for Explicit-Clean and
-    Explicit-Noisy champions. Use shared axes and consistent encodings for
-    LLM, scaffold, dimension, and evaluation noise.}}
-    \caption{Convergence results for champions generated with explicit
-    environment information, separated into Explicit-Clean and
-    Explicit-Noisy synthesis conditions.}
+    \includegraphics[width=\textwidth]{images/experiments/02_explicit/qwen_32b/2D/std_0.2/convergence_trajectories.png}
+    \caption{Representative Explicit-Noisy convergence for LLM-2, $D=2$,
+$\sigma_{\mathrm{synth}}=\sigma_{\mathrm{eval}}=0.2$, with four strategies
+and classical baselines. Median best-queried clean gaps and IQR ribbons
+are shown. Search ends at 20,000 evaluations; later values are carried forward.
+Explicit-Clean results are reported separately in the summary table.}
     \label{fig:explicit_convergence}
 \end{figure}
 
 \begin{figure}[htbp]
     \centering
-    \fbox{\parbox{0.88\textwidth}{\centering
-    Insert the corresponding ECDF or target-attainment results for the two
-    explicit synthesis conditions.}}
-    \caption{ECDF or target-attainment results for champions generated with
-    explicit environment information.}
+    \includegraphics[width=\textwidth]{images/experiments/02_explicit/qwen_32b/2D/std_0.2/target_precision_ecdf.png}
+    \caption{Exploratory adaptive-target ECDF for the Explicit-Noisy LLM-2 example.
+Targets and query-axis carry-forward follow the implicit ECDF convention;
+this plot does not combine Explicit-Clean and Explicit-Noisy champions.}
     \label{fig:explicit_ecdf}
 \end{figure}
 
-\textbf{[Insert the measured contrast between Explicit-Clean and
-Explicit-Noisy under matching benchmark conditions, with relevant
-exceptions.]}
+Baseline solved rates under Explicit-Clean are 34.25\%, 37.50\% and
+36.00\% for LLM-1, LLM-2 and LLM-3, respectively.
+Under native Explicit-Noisy conditions they are 5.89\%, 13.50\% and 18.73\%.
+These are different synthesis and evaluation environments, not a controlled
+effect of adding prompt information alone. In particular, the noisy aggregate
+covers three positive noise levels, while the clean aggregate covers one.
+The strategy ablations also differ: Vectorization has the highest
+Explicit-Clean rate for LLM-1 and LLM-2, but Baseline leads LLM-3.
 Table~\ref{tab:explicit_summary} reports the results by LLM and scaffold.
 
 \begin{table}[htbp]
     \centering
-    \caption{Summary of independent benchmark results for
-    Explicit-Clean and Explicit-Noisy champions.}
+    \caption{Explicit native terminal reliability at $\Delta f\leq10^{-8}$.
+    Complete current conditions only; each contributes 20 trials.
+    Intervals are condition-cluster bootstrap 95\% intervals in percentage points.
+    Only Baseline contributes to the headline model comparison; other rows are ablations.}
     \label{tab:explicit_summary}
     \scriptsize
     \setlength{\tabcolsep}{3pt}
-    \begin{tabular}{p{0.11\textwidth}p{0.16\textwidth}p{0.12\textwidth}p{0.16\textwidth}p{0.15\textwidth}p{0.12\textwidth}}
+    \begin{tabular}{lllrlll}
         \hline
-        LLM & Environment prompt & Strategy & Eval. condition &
-        Metric & Runs / CI \\
+        Model & Strategy & Origin & Conditions & Solved / trials & Rate (\%) & 95\% CI \\
         \hline
-        -- & -- & -- & -- & -- & -- \\
+        LLM-1 & Baseline & Explicit-Clean & 20 & 137/400 & 34.25 & [17.99, 51.51] \\
+        LLM-1 & Baseline & Explicit-Noisy & 56 & 66/1120 & 5.89 & [1.43, 11.25] \\
+        LLM-1 & Thinking & Explicit-Clean & 19 & 141/380 & 37.11 & [18.16, 55.53] \\
+        LLM-1 & Thinking & Explicit-Noisy & 60 & 34/1200 & 2.83 & [0.17, 6.83] \\
+        LLM-1 & Vectorization & Explicit-Clean & 20 & 172/400 & 43.00 & [23.24, 62.02] \\
+        LLM-1 & Vectorization & Explicit-Noisy & 58 & 129/1160 & 11.12 & [4.74, 18.02] \\
+        LLM-1 & Guided & Explicit-Clean & 20 & 96/400 & 24.00 & [8.49, 42.75] \\
+        LLM-1 & Guided & Explicit-Noisy & 58 & 195/1160 & 16.81 & [8.53, 26.73] \\
+        LLM-2 & Baseline & Explicit-Clean & 20 & 150/400 & 37.50 & [15.99, 58.02] \\
+        LLM-2 & Baseline & Explicit-Noisy & 60 & 162/1200 & 13.50 & [6.33, 21.17] \\
+        LLM-2 & Thinking & Explicit-Clean & 20 & 185/400 & 46.25 & [24.75, 67.75] \\
+        LLM-2 & Thinking & Explicit-Noisy & 60 & 107/1200 & 8.92 & [3.75, 15.67] \\
+        LLM-2 & Vectorization & Explicit-Clean & 20 & 242/400 & 60.50 & [42.74, 79.52] \\
+        LLM-2 & Vectorization & Explicit-Noisy & 60 & 145/1200 & 12.08 & [5.50, 20.42] \\
+        LLM-2 & Guided & Explicit-Clean & 20 & 74/400 & 18.50 & [5.00, 36.25] \\
+        LLM-2 & Guided & Explicit-Noisy & 60 & 179/1200 & 14.92 & [7.33, 24.17] \\
+        LLM-3 & Baseline & Explicit-Clean & 20 & 144/400 & 36.00 & [18.00, 55.51] \\
+        LLM-3 & Baseline & Explicit-Noisy & 59 & 221/1180 & 18.73 & [10.17, 27.88] \\
+        LLM-3 & Thinking & Explicit-Clean & 20 & 79/400 & 19.75 & [5.25, 36.50] \\
+        LLM-3 & Thinking & Explicit-Noisy & 59 & 110/1180 & 9.32 & [3.30, 17.12] \\
+        LLM-3 & Vectorization & Explicit-Clean & 20 & 109/400 & 27.25 & [10.98, 46.75] \\
+        LLM-3 & Vectorization & Explicit-Noisy & 58 & 209/1160 & 18.02 & [9.48, 27.86] \\
+        LLM-3 & Guided & Explicit-Clean & 19 & 112/380 & 29.47 & [14.21, 45.53] \\
+        LLM-3 & Guided & Explicit-Noisy & 59 & 242/1180 & 20.51 & [11.61, 29.92] \\
         \hline
     \end{tabular}
 \end{table}
@@ -416,75 +571,108 @@ Table~\ref{tab:explicit_summary} reports the results by LLM and scaffold.
 \subsection{Cross-Evaluation}
 \label{subsec:cross_evaluation_results}
 
-Cross-evaluation tests the fixed champions under conditions that differ
-from those used during synthesis. We report changes in evaluation noise,
-dimension, and function separately.
+The enabled secondary study changes evaluation noise for a frozen
+Explicit-Clean champion while preserving function and dimension.
+It is distinct from native Explicit-Noisy synthesis: no new noisy champion
+is generated or selected for the robustness comparison. The figures below
+show the existing LLM-2 Baseline example. Cross-function evaluation is
+currently disabled, and no cross-dimension campaign is specified.
 
 \begin{figure}[htbp]
     \centering
-    \fbox{\parbox{0.88\textwidth}{\centering
-    Insert cross-evaluation convergence curves. Label synthesis and
-    evaluation conditions separately, and state whether the curve uses
-    noisy observations or clean reevaluation.}}
-    \caption{Convergence under cross-evaluation of fixed champions,
-    grouped by the synthesis-to-evaluation mappings in
-    Table~\ref{tab:cross_evaluation_matrix}.}
+    \includegraphics[width=\textwidth]{images/experiments/05_noise_robustness/2D/explicit/qwen2.5-coder-32b-instruct/baseline/convergence_noise_overlay.png}
+    \caption{Frozen Explicit-Clean Baseline champion from LLM-2 at $D=2$,
+evaluated on its original functions at $\sigma_{\mathrm{eval}}=0,0.05,0.1,0.2$.
+Median best-queried clean gaps and IQR ribbons compare added noise without
+changing code, dimension or function. The budget is 20,000 evaluations;
+the extended profile axis uses carry-forward.}
     \label{fig:cross_evaluation_convergence}
 \end{figure}
 
 \begin{figure}[htbp]
     \centering
-    \fbox{\parbox{0.88\textwidth}{\centering
-    Insert cross-evaluation ECDF or target-attainment curves. Use the same
-    target definitions across the compared synthesis and evaluation
-    conditions.}}
-    \caption{ECDF or target-attainment results for the cross-evaluation
-    mappings in Table~\ref{tab:cross_evaluation_matrix}.}
+    \includegraphics[width=\textwidth]{images/experiments/05_noise_robustness/2D/explicit/qwen2.5-coder-32b-instruct/baseline/ecdf_noise_overlay.png}
+    \caption{Fixed-target attainment ECDF for the frozen LLM-2 Explicit-Clean Baseline
+champion under added noise, using the shared targets $10^{-8}$ and $10^{-2}$.
+The curve summarizes attained run--target pairs, rather than terminal
+returned-point reliability. No function or dimension transfer is implied.}
     \label{fig:cross_evaluation_ecdf}
 \end{figure}
 
-\textbf{[Insert the observed effects of changing noise level, dimension,
-and function, citing the relevant panels and uncertainty.]}
-Claims about generalization are limited to the held-out mappings listed
-in Table~\ref{tab:cross_evaluation_matrix}.
+These noise-overlay figures are descriptive evidence about the same fixed
+program under changed observation noise. Terminal robustness rows are
+available in \path{results/reports/noise_robustness_terminal_v1.csv}.
+Their clean/noisy comparisons must match the same champion code hash and
+the same function/dimension before attributing a change to noise.
+The examples do not support claims of held-out function or dimension
+generalization, and are not used to rank model-generation reliability.
 
 \subsection{Comparison Across Models and Prompt Conditions}
 \label{subsec:model_prompt_comparison}
 
-Table~\ref{tab:planned_comparisons} reports the planned contrasts among
-the three LLMs, the Implicit, Explicit-Clean, and Explicit-Noisy conditions,
-and the four scaffolds. It includes adjusted statistical results for the
-contrasts specified in the analysis plan.
+Table~\ref{tab:planned_comparisons} records the analysis contrasts and the
+status of the available evidence. Bootstrap intervals above describe
+heterogeneity across conditions; they are not adjusted hypothesis-test results.
 
 \begin{table}[htbp]
     \centering
-    \caption{Planned comparisons across LLMs, environment-information
-    conditions, and strategy scaffolds.}
+    \caption{Comparison definitions and available evidence. No numerical
+    hypothesis-test export was supplied; unavailable results are not set to zero.}
     \label{tab:planned_comparisons}
     \scriptsize
-    \setlength{\tabcolsep}{3pt}
-    \begin{tabular}{p{0.12\textwidth}p{0.15\textwidth}p{0.19\textwidth}p{0.19\textwidth}p{0.17\textwidth}}
+    \begin{tabular}{p{0.18\textwidth}p{0.25\textwidth}p{0.27\textwidth}p{0.21\textwidth}}
         \hline
-        Contrast & Benchmark stratum & Test & Adjusted $p$-value &
-        Effect size \\
+        Contrast & Benchmark stratum & Implemented test / measure & Numerical status \\
         \hline
-        -- & -- & -- & -- & -- \\
+        Model vs.\ model & Same function, $D$, noise and Baseline origin &
+        Two-sided Mann--Whitney $U$; BH-FDR; $A_{12}$ &
+        Adjusted $p$ and $A_{12}$ not exported \\
+        Implicit vs.\ explicit & Matching function, $D$, strategy and noise &
+        Same pairwise procedure; do not pool clean/noisy origins &
+        Descriptive rates available; test results not exported \\
+        Strategy ablation & Within model, mode and condition &
+        Kruskal--Wallis omnibus; pairwise $U$, BH-FDR and $A_{12}$ &
+        Descriptive rates and bootstrap CIs available; tests not exported \\
+        Frozen-noise contrast & Same clean-origin champion hash and condition &
+        Terminal solved-rate change; clean query attainment &
+        Separate robustness export; no function/dimension transfer claim \\
         \hline
     \end{tabular}
 \end{table}
 
-\textbf{[Insert the main contrasts, uncertainty, and exceptions supported by
-Table~\ref{tab:planned_comparisons}.]}
+Differences across the tables should not be interpreted as causal effects of
+prompt wording: native clean/noisy contrasts also change the optimization
+environment. Baseline-only comparisons are kept separate from strategy
+ablations, and unequal condition coverage is reported explicitly.
 
 %==============================================================================
 \section{Discussion}
 \label{sec:experiment_discussion}
 %==============================================================================
 
-\textbf{[Discuss what the measured results support about prompt information,
-performance under stochastic evaluation, and transfer to the tested
-conditions. Relate each interpretation to its figure or table and to the
-observed uncertainty.]}
+The results show heterogeneous behavior rather than uniform improvement
+with model size or additional guidance. The common-strategy implicit comparison
+does not favor the largest Qwen model, while its Explicit-Clean strategy
+ablations include stronger solved rates. Explicit native noisy rates are
+generally lower than clean-origin rates, but those contrasts combine changes
+in synthesis and evaluation noise. Frozen-champion robustness is the more
+appropriate design for isolating an evaluation-noise change.
+
+The primary reliability statement is about repeatable performance of a
+selected program across benchmark instances, not the probability that an LLM
+will independently discover a successful program. Historical synthesis
+repeat counts are unbalanced and seeds are unrecorded. Incomplete conditions
+and the stale-hash exclusion limit coverage; descriptive rankings may change
+after those conditions are completed. No statistical-significance claim
+is made without exported tests. The illustrative profile figures show only
+LLM-2 at $D=2$; the condition tables cover all tested dimensions and models.
+
+The 30-second timeout on generated champions, without an equivalent
+baseline timeout, limits a purely evaluation-count-based comparison.
+Timeout failures cannot be distinguished from other execution exceptions
+in the current terminal export. The study therefore measures reliability
+under the implemented execution constraints, rather than an unrestricted
+COCO comparison. No timeout-policy change or reevaluation is assumed here.
 
 The interpretation of stochastic synthesis distinguishes the optimizer's
 internal search from evolutionary selection. Noisy observations affect the
@@ -494,6 +682,12 @@ of their returned solutions. The benchmark stage then measures the frozen
 champions under its own evaluation conditions without changing them. These
 stages should not be described as if noisy $\texttt{best\_y}$ values
 directly determined parent--child selection.
+
+% The six experiment PNGs are bundled in images/experiments/.
+% Upload that directory to Overleaf with its relative paths preserved.
+% Snapshot checked: 2026-09-27. Numerical sources: read-only SQLite queries,
+% champions.json, native_reliability_v1.csv and matching trace provenance.
+% Excluded stale SHA-256: 1732cb36ed2e1e3ecb03c335cdc56b46c1a46c27a12819a052a8fa67b15583a6.
 
 The conclusions are limited to the tested LLM configurations, prompt
 variants, benchmark functions and instances, dimensions, noise model,
