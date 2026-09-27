@@ -89,17 +89,28 @@ code, restart Notebook 02's kernel. The planner
 combines manual conditions with configured-matrix recovery for the active model:
 interrupted sessions are resumed when `auto_resume` is enabled, and unresolved
 synthesis failures receive one fresh attempt when `retry_failed_synthesis` is
-enabled. A later successful synthesis resolves older failures. Historical records
+enabled, but only when the condition has no completed valid champion. Any completed
+valid champion satisfies automatic recovery, even if individual candidate iterations,
+other sessions, or leftover queued records failed. Historical records
 remain unchanged. Multiple selected IDs for one condition are deduplicated, and
 pending sessions fill manual repair slots rather than creating duplicate runs.
 `rerun_repeats`, not `runs_per_config`, sets the manual slots. This recovery path
-does not fill unrelated conditions to five repeats. Unknown IDs are rejected;
+does not expand unrelated conditions into extra replicates. Unknown IDs are rejected;
 `resume_experiment_ids` cannot be combined with recovery or fresh reruns, and only
 running records belonging to the active LLM are resumed. No audit workflow is required.
 Each call rediscovers database state. Automatic recovery needs no manual IDs.
 Omit manual IDs after successful repairs: explicitly passing them again requests
 another fresh repeat, unless interrupted sessions already fill the slots. The
-matrix audit still measures the full replicate target, not recovery tasks.
+matrix audit measures conditions with a completed valid champion, not the fraction
+of successful candidate iterations. Running/failed record counts remain visible
+as history without making a covered condition incomplete. A valid champion means
+finite synthesis error, not guaranteed success on the independent benchmark.
+
+The standard protocol has `iterations = 10` candidate generations in one synthesis
+session and `runs_per_config = 1` session per condition. These are different counts.
+Only deliberately increase `runs_per_config` for a separate replicate campaign.
+Poor benchmark results may motivate explicit rerun IDs; they do not automatically
+invalidate a completed synthesis session or change champion-ranking mathematics.
 
 Imported databases can use different IDs. Review and refresh the selection after
 an import. New synthesis does not guarantee that champion selection will change:

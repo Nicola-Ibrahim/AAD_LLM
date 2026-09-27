@@ -54,9 +54,8 @@ class CampaignPlanner:
             return self._build_targeted_tasks(target_ids=list(dict.fromkeys(resume_experiment_ids)))
 
         all_db_exps = self.sqlite_repo.load(llm_name=self.model_name)
-        db_comp, db_run, _ = self.auditor.group_experiments_by_condition(
+        db_comp, db_run, db_failed = self.auditor.group_experiments_by_condition(
             experiments=all_db_exps,
-            retry_failed_synthesis=self.config.retry_failed_synthesis,
         )
 
         tasks: list[CampaignTask] = []
@@ -64,14 +63,19 @@ class CampaignPlanner:
             completed_list = db_comp.get(item, [])
             running_list = db_run.get(item, [])
 
+            if self.config.skip_completed and len(completed_list) >= self.config.runs_per_config:
+                continue
+
             # Step A: Resume interrupted/running runs from DB if AUTO_RESUME enabled
             if self.config.auto_resume:
                 for exp in running_list:
                     tasks.append(self._build_task_from_summary(exp, tag="resume"))
 
             # Step B: Calculate accounted count
-            accounted_runs = (len(completed_list) if self.config.skip_completed else 0) + (
-                len(running_list) if self.config.auto_resume else 0
+            accounted_runs = (
+                (len(completed_list) if self.config.skip_completed else 0)
+                + (len(running_list) if self.config.auto_resume else 0)
+                + (len(db_failed.get(item, [])) if not self.config.retry_failed_synthesis else 0)
             )
 
             # Step C: Schedule remaining fresh / retry runs
@@ -105,31 +109,26 @@ class CampaignPlanner:
         eligible = set(self.config.matrix_conditions) | set(manual_conditions)
         completed, running, failed = self.auditor.group_experiments_by_condition(
             experiments=existing,
-            retry_failed_synthesis=self.config.retry_failed_synthesis,
         )
         tasks: list[CampaignTask] = []
         resumed: dict[MatrixCondition, int] = {}
         if self.config.auto_resume:
             for condition, experiments in running.items():
-                if condition in eligible:
+                if condition in eligible and (
+                    condition in manual_conditions or not completed.get(condition)
+                ):
                     for experiment in experiments:
                         tasks.append(self._build_task_from_summary(experiment, tag="resume"))
                     resumed[condition] = len(experiments)
 
-        # A later successful attempt resolves old failures. Do not continuously
-        # retry every historical failed record or expand to runs_per_config.
+        # Any completed valid champion satisfies automatic recovery, regardless
+        # of failures in its candidate iterations or other historical sessions.
         requested_repeats = dict.fromkeys(manual_conditions, rerun_repeats)
         if self.config.retry_failed_synthesis and not self.config.only_incomplete:
             for condition, experiments in failed.items():
-                if condition not in eligible:
+                if condition not in eligible or completed.get(condition):
                     continue
-                latest_failure = max(experiment.id or 0 for experiment in experiments)
-                latest_success = max(
-                    (experiment.id or 0 for experiment in completed.get(condition, [])),
-                    default=0,
-                )
-                if latest_failure > latest_success:
-                    requested_repeats.setdefault(condition, 1)
+                requested_repeats.setdefault(condition, 1)
 
         for condition, repeats in requested_repeats.items():
             # Existing interrupted sessions satisfy the requested repair slots.

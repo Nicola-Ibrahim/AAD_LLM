@@ -221,11 +221,11 @@ class SynthesisLogger(BaseLogger):
             f"   • Completed (Champions):   {Colors.BRIGHT_GREEN}{completed}/{total_conditions}{Colors.RESET} ({progress_pct:.1f}%)"
         )
         self.logger.info(
-            f"   • Pending Workload:        {Colors.BRIGHT_YELLOW}{pending}{Colors.RESET}"
+            f"   • Without Champion:       {Colors.BRIGHT_YELLOW}{pending}{Colors.RESET}"
         )
         if retry > 0:
             self.logger.info(
-                f"   • Failed Runs (To Retry):  {Colors.BRIGHT_RED}{retry}{Colors.RESET}"
+                f"   • Conditions To Retry:    {Colors.BRIGHT_RED}{retry}{Colors.RESET}"
             )
 
     def summary(

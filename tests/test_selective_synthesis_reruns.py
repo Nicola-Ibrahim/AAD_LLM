@@ -245,3 +245,48 @@ def test_campaign_forwards_runtime_request_without_changing_protocol() -> None:
     )
     assert config.model_dump() == original
     service.dispatcher.run.assert_not_called()
+
+
+def test_champion_prevents_automatic_retry_of_newer_failures_and_queued_runs() -> None:
+    champion = experiment(1)
+    champion.iterations = [SimpleNamespace(timed_out=True)] * 9
+    condition = CampaignAuditor._condition_from_summary(champion)
+    campaign = planner(SynthesisConfig(matrix_conditions=[condition]), [])
+    campaign.sqlite_repo.load.return_value = [
+        champion,
+        experiment(2, status="failed", error=None),
+        experiment(3, status="running", error=None),
+    ]
+    campaign._build_task_from_summary = MagicMock(return_value="resume")
+    assert campaign.build_tasks(recover=True) == []
+    assert campaign.build_tasks() == []
+    campaign._build_task_from_summary.assert_not_called()
+    campaign._build_fresh_task.assert_not_called()
+    matrix, summary = campaign.auditor.audit_matrix()
+    assert summary["completed_conditions"] == 1
+    assert summary["retry_conditions"] == 0
+    assert matrix.iloc[0]["Status"] == "✅ Complete"
+    assert matrix.iloc[0]["Running Records"] == 1
+    assert matrix.iloc[0]["Failed Records"] == 1
+
+
+def test_coverage_is_champion_availability_not_replicate_quota() -> None:
+    champion = experiment(1)
+    condition = CampaignAuditor._condition_from_summary(champion)
+    campaign = planner(SynthesisConfig(matrix_conditions=[condition], runs_per_config=5), [])
+    campaign.sqlite_repo.load.return_value = [champion]
+    _, summary = campaign.auditor.audit_matrix()
+    assert summary["progress_pct"] == 100.0
+    assert campaign.build_tasks(recover=True) == []
+
+
+def test_failed_session_is_not_coverage_when_retry_is_disabled() -> None:
+    failed = experiment(1, status="failed", error=None)
+    condition = CampaignAuditor._condition_from_summary(failed)
+    campaign = planner(
+        SynthesisConfig(matrix_conditions=[condition], retry_failed_synthesis=False), []
+    )
+    campaign.sqlite_repo.load.return_value = [failed]
+    _, summary = campaign.auditor.audit_matrix()
+    assert summary["completed_conditions"] == 0
+    assert campaign.build_tasks(recover=True) == []

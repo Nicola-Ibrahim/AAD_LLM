@@ -40,7 +40,6 @@ class CampaignAuditor:
     def group_experiments_by_condition(
         self,
         experiments: list[ExperimentSummary],
-        retry_failed_synthesis: bool = False,
     ) -> tuple[
         dict[MatrixCondition, list[ExperimentSummary]],
         dict[MatrixCondition, list[ExperimentSummary]],
@@ -57,32 +56,28 @@ class CampaignAuditor:
                 exp.best_final_error
             )
             if exp.status == "completed":
-                if has_valid_champion or not retry_failed_synthesis:
+                if has_valid_champion:
                     completed[cond].append(exp)
                 else:
                     failed[cond].append(exp)
             elif exp.status == "failed":
-                if retry_failed_synthesis:
-                    failed[cond].append(exp)
-                else:
-                    completed[cond].append(exp)
+                failed[cond].append(exp)
             elif exp.status == "running":
                 running[cond].append(exp)
 
         return dict(completed), dict(running), dict(failed)
 
     def audit_matrix(self, model_name: str | None = None) -> tuple[pd.DataFrame, dict[str, object]]:
-        """Audits database records against configured matrix conditions.
+        """Report champion coverage independently of candidate failures or replicate quotas.
 
-        Reconciles completed experiments with valid champions against planned matrix targets,
-        producing a comprehensive MultiIndex audit DataFrame and coverage summary statistics.
+        Historical running/failed record counts remain visible, but do not make
+        a covered condition eligible for automatic recovery.
         """
         llm_name = self.model_name if model_name is None else model_name
         all_db_exps = self.sqlite_repo.load(llm_name=llm_name)
 
         db_completed, db_running, db_failed = self.group_experiments_by_condition(
             experiments=all_db_exps,
-            retry_failed_synthesis=self.config.retry_failed_synthesis,
         )
 
         matrix_rows = []
@@ -98,7 +93,9 @@ class CampaignAuditor:
             n_running = len(run_list)
             n_fail = len(fail_list)
 
-            if n_comp >= self.config.runs_per_config:
+            # Coverage is champion availability, not candidate-iteration success
+            # or a future independent-replicate quota.
+            if n_comp > 0:
                 status_label = "✅ Complete"
                 total_done += 1
             elif n_running > 0 and self.config.auto_resume:
@@ -117,6 +114,8 @@ class CampaignAuditor:
                     "Strategy": item.strategy.capitalize(),
                     "Target Runs": self.config.runs_per_config,
                     "Completed": n_comp,
+                    "Running Records": n_running,
+                    "Failed Records": n_fail,
                     "Status": status_label,
                 }
             )
@@ -134,6 +133,8 @@ class CampaignAuditor:
                     "Strategy",
                     "Target Runs",
                     "Completed",
+                    "Running Records",
+                    "Failed Records",
                     "Status",
                 ]
             ).set_index(["Problem", "Dimension", "Environment", "Strategy"])
