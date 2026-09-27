@@ -381,3 +381,7 @@ If Poe the Poet is installed, the equivalent project tasks are `poe test`,
 Start with the [documentation map](docs/README.md) for architecture, recovery,
 evaluation and model configuration. For notebook selection and figure exports,
 see the [analysis workflow guide](notebooks/analysis/README.md).
+
+For reviewed, backed-up removal of repeated synthesis records, use the
+[maintenance notebook](notebooks/maintenance/cleanup_synthesis_duplicates.ipynb).
+It defaults to preview-only; see the [maintenance guide](notebooks/maintenance/README.md).
