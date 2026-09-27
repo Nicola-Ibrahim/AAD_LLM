@@ -152,7 +152,7 @@ class SynthesisLogger(BaseLogger):
         """Logs an auto-resumption notice for an existing experiment."""
         self.logger.info(
             f"  🔄 {Colors.BRIGHT_YELLOW}[RESUMING]{Colors.RESET} Found {current_iter}/{total_iters} completed generations "
-            f"for Exp #{exp_id}. Continuing from Generation {current_iter + 1}..."
+            f"for Exp ID: #{exp_id}. Continuing from Generation {current_iter + 1}..."
         )
 
     def cached(self, exp_id: int, total_iters: int, best_error: float | None) -> None:
@@ -163,7 +163,7 @@ class SynthesisLogger(BaseLogger):
             else "N/A"
         )
         self.logger.info(
-            f"  📦 {Colors.DIM}[COMPLETED]{Colors.RESET} Exp #{exp_id} already has {total_iters} generations "
+            f"  📦 {Colors.DIM}[COMPLETED]{Colors.RESET} Exp ID: #{exp_id} already has {total_iters} generations "
             f"(Best Error: {err_str}). Skipping."
         )
 
@@ -191,13 +191,13 @@ class SynthesisLogger(BaseLogger):
                 else ""
             )
             self.logger.info(
-                f"  ✨ {Colors.BOLD}{Colors.BRIGHT_GREEN}[SYNTHESIS COMPLETE]{Colors.RESET} Exp #{exp_id} | "
+                f"  ✨ {Colors.BOLD}{Colors.BRIGHT_GREEN}[SYNTHESIS COMPLETE]{Colors.RESET} Exp ID: #{exp_id} | "
                 f"Best: {Colors.BOLD}{best_algo_name}{Colors.RESET} | "
                 f"Final Error: {err_str}{obj_str}"
             )
         else:
             self.logger.info(
-                f"  ⚠️  {Colors.BOLD}{Colors.BRIGHT_YELLOW}[SYNTHESIS INCOMPLETE]{Colors.RESET} Exp #{exp_id} | "
+                f"  ⚠️  {Colors.BOLD}{Colors.BRIGHT_YELLOW}[SYNTHESIS INCOMPLETE]{Colors.RESET} Exp ID: #{exp_id} | "
                 f"No valid candidate converged."
             )
 

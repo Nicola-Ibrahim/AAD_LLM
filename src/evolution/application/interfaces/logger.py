@@ -42,7 +42,7 @@ class BaseLogger(ABC):
             p_name = f" ({problem_name})" if problem_name else ""
             self.info(
                 f"[{index}/{total}] Task: {model_name} | {dim}D | noise={noise_std} | "
-                f"f{problem_id}{p_name} | {strategy} | Exp #{experiment_id}"
+                f"f{problem_id}{p_name} | {strategy} | Exp ID: #{experiment_id}"
             )
 
     def generation(
@@ -72,11 +72,11 @@ class BaseLogger(ABC):
                 )
 
     def resuming(self, exp_id: int, current_iter: int, total_iters: int) -> None:
-        self.info(f"Resuming Exp #{exp_id} from Gen {current_iter + 1}/{total_iters}...")
+        self.info(f"Resuming Exp ID: #{exp_id} from Gen {current_iter + 1}/{total_iters}...")
 
     def cached(self, exp_id: int, total_iters: int, best_error: float | None) -> None:
         err_str = f" (Best Error: {best_error:.4e})" if best_error is not None else ""
-        self.info(f"Exp #{exp_id} already completed {total_iters} generations{err_str}. Skipping.")
+        self.info(f"Exp ID: #{exp_id} already completed {total_iters} generations{err_str}. Skipping.")
 
     def stagnation_warning(self, consecutive_failures: int, threshold: int) -> None:
         self.warning(
@@ -94,11 +94,11 @@ class BaseLogger(ABC):
         if best_error is not None and best_error < float("inf"):
             obj_str = f" | Obj: {raw_obj:.6f}" if raw_obj is not None else ""
             self.info(
-                f"Exp #{exp_id} complete | Best: {best_algo_name} | "
+                f"Exp ID: #{exp_id} complete | Best: {best_algo_name} | "
                 f"Final Error: {best_error:.6e}{obj_str}"
             )
         else:
-            self.info(f"Exp #{exp_id} incomplete | No valid candidate converged.")
+            self.info(f"Exp ID: #{exp_id} incomplete | No valid candidate converged.")
 
     def audit_summary(
         self,

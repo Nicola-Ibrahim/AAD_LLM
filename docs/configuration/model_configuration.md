@@ -99,6 +99,9 @@ does not expand unrelated conditions into extra replicates. Unknown IDs are reje
 `resume_experiment_ids` cannot be combined with recovery or fresh reruns, and only
 running records belonging to the active LLM are resumed. No audit workflow is required.
 Each call rediscovers database state. Automatic recovery needs no manual IDs.
+Logs show only `Exp ID`, the actual executing database record: fresh attempts
+receive a new ID, while resuming retains its existing ID. Manual IDs identify
+source conditions and are not substituted for the executing record's ID.
 Omit manual IDs after successful repairs: explicitly passing them again requests
 another fresh repeat, unless interrupted sessions already fill the slots. The
 matrix audit measures conditions with a completed valid champion, not the fraction
