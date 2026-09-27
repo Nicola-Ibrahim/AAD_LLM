@@ -3,847 +3,499 @@
 \label{chap:experiments}
 %==============================================================================
 
-This chapter evaluates the proposed LLM-based algorithm synthesis approach on
-a selected set of continuous black-box optimization problems. The experiments
-are designed to examine two related aspects of the synthesis process. First,
-the experiments investigate whether providing the language model with
-information about the optimization environment affects the algorithms that it
-generates. Second, they examine whether the resulting algorithms remain
-effective when they are evaluated under conditions that differ from those
-encountered during synthesis.
-
-The experimental evaluation is divided into three main parts. The first part
-considers algorithms synthesized with explicit information about the
-optimization environment. The second part removes this information and
-evaluates algorithms generated under the implicit setting. The third part
-takes selected synthesized algorithms out of their original synthesis
-conditions and evaluates them on unseen benchmark functions, dimensions, or
-fitness environments. The results from these experiments are then brought
-together to identify the main findings and discuss their implications for
-LLM-based algorithm synthesis.
-
+For each synthesis run, we retain the final incumbent as its champion. The
+three language models are first run under the planned prompt and problem
+conditions. Once all planned runs have finished, the champions are fixed and
+evaluated alongside the reference optimizers. Independent benchmark results
+do not affect which algorithms are retained.
 
 %==============================================================================
-\section{Experimental Design and Evaluation Protocol}
+\section{Experimental Design}
 \label{sec:experimental_design}
 %==============================================================================
 
-The experiments are based on continuous black-box optimization problems.
-This setting is appropriate for the study because the optimizer has access to
-fitness evaluations but does not have access to the analytical form of the
-objective function or its derivatives. The generated algorithms must
-therefore determine their search behaviour from the fitness values returned
-by the objective.
+The labels \emph{implicit} and \emph{explicit} describe the information in
+the synthesis prompt. A benchmark noise level instead describes the
+objective observations received by an already generated optimizer during
+independent evaluation. We report the synthesis and evaluation conditions
+separately throughout the chapter.
 
-The experimental design distinguishes between the environment in which an
-algorithm is synthesized and the environment in which its final performance
-is measured. During synthesis, candidate algorithms are generated and
-evaluated as part of the evolutionary process described in
-Chapter~\ref{chap:methodology}. Once an algorithm has been retained from this
-process, its source code is fixed. It is then evaluated independently using a
-common benchmark protocol. This separation is important because the
-performance reported in this chapter should describe the behaviour of the
-synthesized algorithm rather than its ability to continue adapting during
-benchmark evaluation.
+\subsection{Benchmark Problems and Dimensions}
+\label{subsec:experiment_problems}
 
-
-%------------------------------------------------------------------------------
-% Benchmark Functions
-%------------------------------------------------------------------------------
-
-Five functions from the BBOB benchmark suite are used in the experiments:
-
-\begin{itemize}
-    \item Sphere (function 1),
-    \item Rosenbrock (function 8),
-    \item Discus (function 11),
-    \item Rastrigin (function 15), and
-    \item Gallagher 101 (function 21).
-\end{itemize}
-
-The functions were selected to expose the synthesized algorithms to
-substantially different optimization characteristics rather than evaluating
-them only on one type of objective. In particular, the selection covers
-separable and non-separable problems, different conditioning properties, and
-different levels of multimodality.
-
-The Sphere function serves as the simplest reference problem in the
-benchmark set. It is smooth, unimodal, and separable, which means that the
-variables can be optimized independently. Its relatively simple structure
-makes it useful for observing whether a synthesized algorithm can identify
-and exploit a straightforward search problem.
-
-The Rosenbrock function introduces a substantially different structure. It is
-non-separable and contains a curved valley leading towards the optimum.
-Although the function has a single global optimum, finding it efficiently
-requires the optimizer to follow the geometry of the valley. It therefore
-provides a test of whether an algorithm that performs well on a simple
-separable objective can also handle a more coupled search problem.
-
-The Discus function represents a strongly conditioned problem with an
-asymmetric structure. One direction has a substantially different scale from
-the remaining directions. This makes the function useful for examining the
-behaviour of synthesized algorithms when the objective geometry is poorly
-conditioned.
-
-Rastrigin introduces a different source of difficulty through strong
-multimodality. The objective contains many regularly distributed local
-optima, making premature convergence and insufficient exploration important
-concerns. Its inclusion allows the experiments to examine whether the
-generated algorithms can maintain exploration when a simple local
-improvement strategy is not sufficient to locate the global optimum.
-
-Finally, Gallagher 101 provides a more irregular multimodal problem. The
-function contains many Gaussian peaks with different characteristics and is
-therefore less regular than Rastrigin. Its inclusion extends the benchmark
-set beyond smooth unimodal and regularly multimodal functions and provides a
-test of the synthesized algorithms on a more deceptive objective structure.
-
-The resulting benchmark set covers the following progression:
+The experiments use five functions from the noiseless BBOB suite
+\cite{BBOB2009,Hansen2021COCO}. They were selected to cover different
+optimization structures; the selection is not intended to represent the
+entire suite.
 
 \begin{table}[htbp]
     \centering
-    \caption{BBOB benchmark functions selected for the experiments and their
-    main optimization characteristics.}
-    \label{tab:benchmark_functions}
+    \caption{Selected BBOB functions and the characteristics relevant to
+    this study.}
+    \label{tab:experiment_functions}
     \begin{tabular}{lll}
         \hline
         Function & Name & Main characteristic \\
         \hline
-        $f_1$  & Sphere & Separable, smooth, unimodal \\
-        $f_8$  & Rosenbrock & Curved valley, moderate conditioning \\
-        $f_{11}$ & Discus & Highly conditioned, asymmetric ridge \\
-        $f_{15}$ & Rastrigin & Strongly multimodal, rugged \\
-        $f_{21}$ & Gallagher 101 & Multimodal, deceptive Gaussian peaks \\
+        $f_1$  & Sphere & Separable and unimodal \\
+        $f_8$  & Rosenbrock original & Non-separable curved valley \\
+        $f_{11}$ & Discus & Unimodal and highly conditioned \\
+        $f_{15}$ & Rastrigin & Multimodal with global structure \\
+        $f_{21}$ & Gallagher 101 peaks & Multimodal with weak global structure \\
         \hline
     \end{tabular}
 \end{table}
 
-This selection is not intended to represent the complete range of
-continuous black-box optimization problems. Instead, it provides a compact
-set of qualitatively different objective structures that can be used to
-test whether the behaviour of synthesized algorithms changes with the
-difficulty and structure of the underlying function.
+In BBOB, $f_{11}$ is the highly conditioned Discus function, while the
+separate $f_{13}$ function is Sharp Ridge. The selected $f_{21}$ function
+contains 101 optima and belongs to the group with weak global structure
+\cite{BBOB2009}.
 
-
-%------------------------------------------------------------------------------
-% Problem Dimensions
-%------------------------------------------------------------------------------
-
-Each selected benchmark function is evaluated at the problem dimensions
-
+Each selected function is evaluated at
 \begin{equation}
-    D \in
-    \{\text{[TODO: exact dimensions]}\}.
-\label{eq:experimental_dimensions}
+    D \in \{2,3,5,10\}.
+\label{eq:experiment_dimensions}
 \end{equation}
+The number of instances used for each function and dimension is
+\textbf{1}. Their identifiers and synthesis seeds are
+recorded in Table~\ref{tab:run_matrix}.
 
-Varying the dimensionality is important because an algorithm that performs
-well with only a few decision variables does not necessarily retain the same
-behaviour as the search space becomes larger. The dimension is therefore
-treated as an experimental factor rather than as a fixed property of the
-benchmark functions.
+\subsection{Objective Noise}
+\label{subsec:experiment_noise}
 
-
-%------------------------------------------------------------------------------
-% Deterministic and Stochastic Fitness
-%------------------------------------------------------------------------------
-
-The experiments consider both deterministic and stochastic fitness
-evaluations. Under deterministic conditions, an objective query returns the
-clean objective value
-
+The benchmark includes a clean condition and stochastic conditions. In the
+clean condition, a query returns $f_{\mathrm{clean}}(x)$. For stochastic
+conditions, the optimizer receives
 \begin{equation}
-    f_{\mathrm{clean}}(x).
-\end{equation}
-
-Under stochastic conditions, the optimizer instead receives a perturbed
-fitness value. The stochastic objective follows the heteroscedastic Gaussian
-model introduced in Chapter~\ref{chap:methodology}:
-
-\begin{equation}
-    f_{\mathrm{noise}}(x)
-    =
-    f_{\mathrm{clean}}(x) + z,
+    f_{\mathrm{obs}}(x)
+    = f_{\mathrm{clean}}(x)+\epsilon(x),
     \qquad
-    z \sim
-    \mathcal{N}
-    \left(
-        0,
-        \left(
-            \sigma
-            \left|
-                f_{\mathrm{clean}}(x)-f^*
-            \right|
-        \right)^2
-    \right).
+    \epsilon(x) \sim
+    \mathcal{N}\!\left(0,
+    \left[\sigma\left|f_{\mathrm{clean}}(x)-f^*\right|\right]^2\right),
 \label{eq:experimental_noise_model}
 \end{equation}
-
-The noise magnitude therefore depends on the distance of the current
-fitness from the optimum. Far from the optimum, the stochastic variation can
-be larger, while it decreases as the clean objective approaches the optimum.
-
-The experiments use the following noise levels:
-
+where $f^*$ is the known global optimum value for the relevant BBOB
+instance. The noise standard deviation therefore depends on the clean
+optimality gap: it decreases as the evaluated point approaches the optimum.
+The noise levels considered are
 \begin{equation}
-    \sigma \in
-    \{\text{[TODO: exact noise levels]}\}.
-\label{eq:experimental_noise_levels}
+    \sigma \in \{0,\,0.05,\,0.1,\,0.2\},
+\label{eq:experiment_noise_levels}
 \end{equation}
-
-For a fixed benchmark function, dimension, and noise level, the same
-objective model is used throughout the corresponding experiment. Individual
-objective queries receive independent noise realizations. Consequently, the
-optimizer cannot rely on a fixed perturbation associated with a particular
-point in the search space.
-
-The distinction between the fitness observed by the optimizer and the
-fitness used to assess the final solution is important throughout the
-experiments. The synthesized optimizer operates on the noisy observations
-when stochastic fitness is enabled. The evaluation of its solution quality,
-however, uses the clean objective. The clean optimality gap is defined as
-
-\begin{equation}
-    \Delta f(x)
-    =
-    \left|
-        f_{\mathrm{clean}}(x)-f^*
-    \right|.
-\label{eq:experimental_optimality_gap}
-\end{equation}
-
-This measure is used consistently when comparing algorithms across
-deterministic and stochastic conditions.
-
-
-%------------------------------------------------------------------------------
-% Synthesis Configuration
-%------------------------------------------------------------------------------
-
-The algorithms are synthesized using the LLM-based evolutionary procedure
-described in Chapter~\ref{chap:methodology}. Candidate programs are
-generated by the language model, checked for the required interface,
-executed in isolation, and evaluated by the synthesis procedure. The
-retained candidate is then used as the parent for the next generation.
-
-The synthesis configuration consists of
-
-\begin{equation}
-    \mbox{[TODO: exact number of generations, synthesis budget,
-    execution timeout, and other fixed LLaMEA parameters]}.
-\end{equation}
-
-The language-model configurations considered in the experiments are
-
-\begin{itemize}
-    \item \mbox{[TODO: LLM configuration 1]},
-    \item \mbox{[TODO: LLM configuration 2]},
-    \item \mbox{[TODO: LLM configuration 3]},
-    \item \mbox{[TODO: LLM configuration 4]}, and
-    \item \mbox{[TODO: LLM configuration 5]}.
-\end{itemize}
-
-The exact model and inference settings are given here because they form part
-of the experimental conditions under which the results were obtained.
-
-
-%------------------------------------------------------------------------------
-% Explicit and Implicit Settings
-%------------------------------------------------------------------------------
-
-Two types of synthesis prompts are used.
-
-In the \emph{explicit} setting, the language model receives information about
-the optimization environment. Four prompt configurations are used to
-investigate different forms of explicit guidance:
-
-\begin{itemize}
-    \item \mbox{[TODO: explicit prompt 1]},
-    \item \mbox{[TODO: explicit prompt 2]},
-    \item \mbox{[TODO: explicit prompt 3]}, and
-    \item \mbox{[TODO: explicit prompt 4]}.
-\end{itemize}
-
-The important point is that these prompts make relevant information about
-the optimization setting available to the model during algorithm generation.
-
-In the \emph{implicit} setting, this information is removed. In particular,
-the language model is not explicitly told whether the objective is
-deterministic or stochastic. The resulting algorithms are generated without
-direct knowledge of the noise condition used during their evaluation.
-
-The explicit and implicit settings therefore differ in the information
-available during synthesis, while the subsequent benchmark evaluation can
-be performed under exactly the same conditions.
-
-
-%------------------------------------------------------------------------------
-% Independent Evaluation
-%------------------------------------------------------------------------------
-
-After synthesis, each retained algorithm is evaluated independently. The
-synthesized source code is not modified during this stage, and the
-benchmark results do not feed back into the synthesis process.
-
-The independent evaluation uses a common objective-function evaluation budget
-for all algorithms:
-
-\begin{equation}
-    B_{\mathrm{eval}} = \text{[TODO]}.
-\label{eq:evaluation_budget}
-\end{equation}
-
-Each algorithm is evaluated over
-
-\begin{equation}
-    N_{\mathrm{runs}} = \text{[TODO]}
-\label{eq:number_runs}
-\end{equation}
-
-independent runs using predefined random seeds.
-
-The same evaluation procedure is applied to the synthesized algorithms and
-the selected baseline optimizers:
-
-\begin{equation}
-    \mathcal{B}
-    =
-    \{\text{[TODO: exact baseline algorithms]}\}.
-\end{equation}
-
-The comparison is based on convergence behaviour, final clean optimality
-gap, and target attainment. ECDFs are used to summarize the fraction of runs
-that reach predefined optimality-gap targets over the evaluation budget.
-
-The target thresholds are
-
-\begin{equation}
-    \Delta f
-    \leq
-    \text{[TODO: exact target thresholds]}.
-\label{eq:target_thresholds}
-\end{equation}
-
-Statistical comparisons are performed using the independent runs as the
-statistical units. The statistical tests and effect-size measures are
-
-\begin{equation}
-    \mbox{[TODO: exact statistical procedure, significance level,
-    effect-size measure, and multiple-comparison correction]}.
-\end{equation}
-
-
-%==============================================================================
-\section{Explicit Algorithm Synthesis}
-\label{sec:explicit_results}
-%==============================================================================
-
-The first group of experiments considers algorithms synthesized with
-explicit information about the optimization environment. The purpose of
-this experiment is to determine how the generated algorithms behave when the
-language model is given information that can be directly relevant to the
-search strategy.
-
-The four explicit prompts are evaluated using the same general synthesis
-framework. The resulting algorithms are first examined under deterministic
-fitness. This provides a reference point before considering the additional
-difficulty introduced by stochastic fitness.
-
-Figure~\ref{fig:explicit_clean_convergence} shows the convergence behaviour
-of the algorithms synthesized with the explicit prompts and the selected
-baseline methods.
-
-\begin{figure}[htbp]
-    \centering
-    % \includegraphics[width=\textwidth]{figures/explicit_clean_convergence}
-    \caption{Convergence of algorithms synthesized using the explicit prompt
-    configurations under deterministic fitness.}
-    \label{fig:explicit_clean_convergence}
-\end{figure}
-
-The results are reported across the selected benchmark functions and problem
-dimensions. The differences between the functions are particularly relevant
-here because the benchmark set ranges from the simple separable Sphere
-function to highly multimodal functions such as Rastrigin and Gallagher 101.
-
-The corresponding ECDFs are shown in
-Figure~\ref{fig:explicit_clean_ecdf}. These curves show how quickly the
-different algorithms reach the predefined optimality-gap targets.
-
-\begin{figure}[htbp]
-    \centering
-    % \includegraphics[width=\textwidth]{figures/explicit_clean_ecdf}
-    \caption{ECDF of target attainment for explicitly synthesized algorithms
-    and baseline optimizers under deterministic fitness.}
-    \label{fig:explicit_clean_ecdf}
-\end{figure}
-
-The deterministic results establish the baseline performance of the
-explicitly synthesized algorithms. The same synthesized algorithms are then
-evaluated under stochastic fitness without modifying their source code.
-
-Figure~\ref{fig:explicit_noisy_convergence} presents the convergence
-behaviour under the different noise levels.
-
-\begin{figure}[htbp]
-    \centering
-    % \includegraphics[width=\textwidth]{figures/explicit_noisy_convergence}
-    \caption{Convergence of explicitly synthesized algorithms under
-    stochastic fitness conditions.}
-    \label{fig:explicit_noisy_convergence}
-\end{figure}
-
-Comparing these curves with the deterministic results makes it possible to
-observe how the synthesized search strategies respond when the fitness
-observations become stochastic. In particular, the comparison considers
-whether the algorithms continue to make progress, whether convergence slows
-down, and whether some synthesized strategies are affected more strongly
-than others.
-
-The corresponding ECDFs are presented in
-Figure~\ref{fig:explicit_noisy_ecdf}.
-
-\begin{figure}[htbp]
-    \centering
-    % \includegraphics[width=\textwidth]{figures/explicit_noisy_ecdf}
-    \caption{ECDF of target attainment for explicitly synthesized algorithms
-    under stochastic fitness conditions.}
-    \label{fig:explicit_noisy_ecdf}
-\end{figure}
-
-The numerical results are summarized in
-Table~\ref{tab:explicit_results}.
-
-\begin{table}[htbp]
-    \centering
-    \caption{Performance of algorithms synthesized using the explicit prompt
-    configurations.}
-    \label{tab:explicit_results}
-    \begin{tabular}{lccccc}
-        \hline
-        Method & Function & Dimension & $\sigma$ &
-        \mbox{[Metric 1]} & \mbox{[Metric 2]} \\
-        \hline
-        \mbox{[TODO]} & & & & & \\
-        \mbox{[TODO]} & & & & & \\
-        \hline
-    \end{tabular}
-\end{table}
-
-The statistical analysis is reported in
-Table~\ref{tab:explicit_statistics}.
-
-\begin{table}[htbp]
-    \centering
-    \caption{Statistical comparisons for explicitly synthesized algorithms.}
-    \label{tab:explicit_statistics}
-    \begin{tabular}{lcccc}
-        \hline
-        Comparison & Condition & $p$-value &
-        Effect Size & \mbox{[Adjusted $p$-value]} \\
-        \hline
-        \mbox{[TODO]} & & & & \\
-        \mbox{[TODO]} & & & & \\
-        \hline
-    \end{tabular}
-\end{table}
-
-The observations from the explicit setting are retained for comparison with
-the algorithms generated without explicit information about the optimization
-environment.
-
-
-%==============================================================================
-\section{Implicit Algorithm Synthesis}
-\label{sec:implicit_results}
-%==============================================================================
-
-The second group of experiments removes information about the optimization
-environment from the synthesis prompt. The language model is therefore not
-told whether the objective used during evaluation is deterministic or
-stochastic.
-
-The synthesis and evaluation procedures remain otherwise unchanged. This
-makes the comparison with the explicit setting more direct because the
-difference is primarily the information available to the language model
-during candidate generation.
-
-The synthesized algorithms are first evaluated under deterministic fitness.
-Figure~\ref{fig:implicit_clean_convergence} shows their convergence together
-with the baseline methods.
-
-\begin{figure}[htbp]
-    \centering
-    % \includegraphics[width=\textwidth]{figures/implicit_clean_convergence}
-    \caption{Convergence of implicitly synthesized algorithms under
-    deterministic fitness.}
-    \label{fig:implicit_clean_convergence}
-\end{figure}
-
-The corresponding target-attainment results are shown in
-Figure~\ref{fig:implicit_clean_ecdf}.
-
-\begin{figure}[htbp]
-    \centering
-    % \includegraphics[width=\textwidth]{figures/implicit_clean_ecdf}
-    \caption{ECDF of target attainment for implicitly synthesized algorithms
-    under deterministic fitness.}
-    \label{fig:implicit_clean_ecdf}
-\end{figure}
-
-The same synthesized algorithms are subsequently evaluated under stochastic
-fitness. Since no information about noise was provided during synthesis,
-these results show whether the generated search strategies can operate
-effectively when confronted with stochastic fitness without having been
-explicitly designed for it.
-
-Figure~\ref{fig:implicit_noisy_convergence} presents the corresponding
-convergence results.
-
-\begin{figure}[htbp]
-    \centering
-    % \includegraphics[width=\textwidth]{figures/implicit_noisy_convergence}
-    \caption{Convergence of implicitly synthesized algorithms under
-    stochastic fitness conditions.}
-    \label{fig:implicit_noisy_convergence}
-\end{figure}
-
-The ECDF results are shown in
-Figure~\ref{fig:implicit_noisy_ecdf}.
-
-\begin{figure}[htbp]
-    \centering
-    % \includegraphics[width=\textwidth]{figures/implicit_noisy_ecdf}
-    \caption{ECDF of target attainment for implicitly synthesized algorithms
-    under stochastic fitness conditions.}
-    \label{fig:implicit_noisy_ecdf}
-\end{figure}
-
-The numerical results are summarized in
-Table~\ref{tab:implicit_results}.
-
-\begin{table}[htbp]
-    \centering
-    \caption{Performance of algorithms synthesized without explicit
-    information about the optimization environment.}
-    \label{tab:implicit_results}
-    \begin{tabular}{lccccc}
-        \hline
-        Method & Function & Dimension & $\sigma$ &
-        \mbox{[Metric 1]} & \mbox{[Metric 2]} \\
-        \hline
-        \mbox{[TODO]} & & & & & \\
-        \mbox{[TODO]} & & & & & \\
-        \hline
-    \end{tabular}
-\end{table}
-
-The statistical comparisons are given in
-Table~\ref{tab:implicit_statistics}.
-
-\begin{table}[htbp]
-    \centering
-    \caption{Statistical comparisons for implicitly synthesized algorithms.}
-    \label{tab:implicit_statistics}
-    \begin{tabular}{lcccc}
-        \hline
-        Comparison & Condition & $p$-value &
-        Effect Size & \mbox{[Adjusted $p$-value]} \\
-        \hline
-        \mbox{[TODO]} & & & & \\
-        \mbox{[TODO]} & & & & \\
-        \hline
-    \end{tabular}
-\end{table}
-
-
-%==============================================================================
-\section{Cross-Evaluation and Generalization}
-\label{sec:cross_evaluation}
-%==============================================================================
-
-The previous experiments measure the performance of synthesized algorithms
-under the benchmark conditions considered during synthesis. The next
-experiment changes this relationship. Instead of evaluating an algorithm
-only in the environment from which it was generated, selected synthesized
-algorithms are transferred to conditions that were not encountered during
-synthesis.
-
-This experiment is important because good performance on the synthesis
-conditions alone does not show whether the generated search strategy captures
-behaviour that can be reused in another optimization problem. The
-cross-evaluation therefore treats the synthesized algorithm as a fixed
-artifact and changes the conditions under which it is evaluated.
-
-Three forms of transfer are considered. The first changes the problem
-dimension while keeping the benchmark function unchanged. The second changes
-the benchmark function while keeping the dimension fixed. Where included in
-the experimental matrix, the third changes both the benchmark function and
-the dimension.
-
-The synthesis-to-evaluation mappings are summarized in
+with $\sigma=0$ denoting clean evaluation. Each stochastic objective call
+uses a new noise realization. The random-seed policy for the optimizer and
+the noise generator is specified with the run matrix.
+
+Where noise levels vary during both synthesis and benchmarking, we use
+$\sigma_{\mathrm{synth}}$ for synthesis and $\sigma_{\mathrm{eval}}$ for
+independent evaluation. The cross-evaluation mappings are listed in
 Table~\ref{tab:cross_evaluation_matrix}.
 
+\subsection{Synthesis Conditions}
+\label{subsec:synthesis_conditions}
+
+Three LLM configurations are evaluated. Their model identifiers, versions,
+and inference settings are listed in Table~\ref{tab:llm_configurations}.
+These settings are kept separate from the prompt conditions in the analysis.
+
+The variable content of the \texttt{TASK} prompt combines a common task
+layout with one environment-information condition and one strategy
+scaffold. The \texttt{EXAMPLE} and \texttt{FORMAT} prompts remain fixed.
+The synthesis design therefore contains twelve \texttt{TASK} variants:
+four scaffolds for each of the following three environment-information
+conditions:
+
+\begin{itemize}
+    \item \emph{Implicit}: the prompt does not identify the objective as
+    deterministic or stochastic;
+    \item \emph{Explicit-Clean}: the prompt states that the objective is
+    deterministic;
+    \item \emph{Explicit-Noisy}: the prompt states that objective
+    observations are stochastic.
+\end{itemize}
+
+The scaffolds are \emph{Baseline}, \emph{Thinking},
+\emph{Vectorization}, and \emph{Guided}. The implicit condition therefore
+has four variants, and the two explicit conditions have eight. The
+Methodology chapter gives the prompt text; Table~\ref{tab:run_matrix}
+records which variants were run with each model and problem setting.
+
 \begin{table}[htbp]
     \centering
-    \caption{Synthesis and evaluation conditions used for cross-evaluation.}
+    \caption{Factors varied during synthesis and independent benchmarking.
+    The run matrix gives the actual combinations used; this table does not
+    imply that every factor was fully crossed.}
+    \label{tab:experiment_factors}
+    \begin{tabular}{p{0.24\textwidth}p{0.68\textwidth}}
+        \hline
+        Factor & Levels or definition \\
+        \hline
+        LLM & Three selected model configurations; exact identifiers in
+        Table~\ref{tab:llm_configurations}. \\
+        Environment prompt & Implicit, Explicit-Clean, Explicit-Noisy. \\
+        Strategy scaffold & Baseline, Thinking, Vectorization, Guided. \\
+        BBOB function & $f_1$, $f_8$, $f_{11}$, $f_{15}$, $f_{21}$. \\
+        Dimension & $D\in\{2,3,5,10\}$. \\
+        Noise level & $\sigma\in\{0,0.05,0.1,0.2\}$, assigned to synthesis
+        or evaluation as indicated in the run matrix. \\
+        Repetitions & [Insert synthesis run count and seed policy.] \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+    \centering
+    \caption{LLM configurations used in synthesis.}
+    \label{tab:llm_configurations}
+    \scriptsize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{clll}
+        \hline
+        ID & Model and version & Inference settings & Local/runtime details \\
+        \hline
+        LLM-1 & \textbf{[INSERT]} & \textbf{[INSERT]} & \textbf{[INSERT]} \\
+        LLM-2 & \textbf{[INSERT]} & \textbf{[INSERT]} & \textbf{[INSERT]} \\
+        LLM-3 & \textbf{[INSERT]} & \textbf{[INSERT]} & \textbf{[INSERT]} \\
+        \hline
+    \end{tabular}
+\end{table}
+
+Each row of Table~\ref{tab:run_matrix}
+identifies a run by its model, prompt variant, BBOB function and instance,
+dimension, synthesis noise level, and random seed.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Synthesis run matrix. Replace the placeholder row with the
+    experiment-log entries.}
+    \label{tab:run_matrix}
+    \scriptsize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{p{0.07\textwidth}p{0.08\textwidth}p{0.14\textwidth}p{0.15\textwidth}p{0.04\textwidth}p{0.12\textwidth}p{0.08\textwidth}}
+        \hline
+        Run & LLM & TASK variant & Func./instance & $D$ &
+        $\sigma_{\mathrm{synth}}$ & Seed \\
+        \hline
+        -- & -- & -- & -- & -- & -- & -- \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\subsection{Synthesis Runs and Champion Selection}
+\label{subsec:champion_selection}
+
+Each synthesis run follows the LLaMEA procedure described in
+Chapter~\ref{chap:methodology}. Candidate algorithms are generated and
+evaluated within the run, and the evolutionary process maintains an
+incumbent according to the clean evaluation rule defined there.
+
+Under stochastic synthesis, noisy objective observations guide the
+candidate optimizer's search and can affect the solution it returns. The
+outer synthesis evaluator then assesses the returned $\texttt{best\_x}$
+using the clean objective. Accordingly, stochastic observations can affect
+which candidate is retained through their effect on the returned solution
+and its clean score; the outer parent--child comparison is not made using
+the noisy $\texttt{best\_y}$.
+
+The champion for a synthesis run is the incumbent present when that run
+terminates. If a synthesis condition is repeated with multiple seeds, each
+run contributes its own champion to the benchmark set. Champions are fixed
+before benchmark results are observed; no champion is selected by comparing
+independent benchmark scores. Synthesis run settings are
+\textbf{[Insert run settings; see Methodology implementation contract]}.
+Across the planned runs, \textbf{[INSERT COUNTS OF COMPLETED, FAILED, AND
+EXCLUDED RUNS, WITH REASONS]}.
+
+%==============================================================================
+\section{Independent Benchmark Evaluation}
+\label{sec:independent_benchmark}
+%==============================================================================
+
+The benchmark set consists of the frozen champion from each completed
+synthesis run, together with the selected reference optimizers. No LLM
+generation, algorithm modification, or synthesis feedback occurs during
+this stage.
+
+Each benchmark run is specified by the algorithm, BBOB function and
+instance, dimension, evaluation noise level, objective-call budget, and
+random seed. The exact evaluation budget is
+$B_{\mathrm{eval}}=\textbf{[INSERT]}$, and the number and policy of
+independent evaluation repetitions are
+$N_{\mathrm{runs}}=\textbf{[INSERT]}$. The reference optimizers and their
+implementation or parameter settings are listed in
+Table~\ref{tab:reference_optimizers}.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Reference optimizers used in independent benchmarking.}
+    \label{tab:reference_optimizers}
+    \begin{tabular}{lll}
+        \hline
+        Optimizer & Implementation/version & Parameters or configuration \\
+        \hline
+        \textbf{[INSERT]} & \textbf{[INSERT]} & \textbf{[INSERT]} \\
+        \textbf{[INSERT]} & \textbf{[INSERT]} & \textbf{[INSERT]} \\
+        \hline
+    \end{tabular}
+\end{table}
+
+When $\sigma_{\mathrm{eval}}>0$, the optimizer receives only the
+stochastic objective observations allowed by the evaluation environment.
+After execution, the benchmark evaluator assesses the returned solution on
+the clean objective. For a run $r$, the final clean optimality gap is
+\begin{equation}
+    \Delta f_r
+    = \left|f_{\mathrm{clean}}(\mathbf{x}_{r,\mathrm{best}})-f^*\right|,
+\label{eq:benchmark_final_gap}
+\end{equation}
+where $\mathbf{x}_{r,\mathrm{best}}$ is the returned best point and $f^*$
+is the global optimum value for that function instance. The optimizer does
+not receive this post-run clean measurement. For $\sigma_{\mathrm{eval}}=0$,
+the benchmark objective itself is clean.
+
+The chapter reports final clean optimality gaps and target-attainment
+results. It also includes convergence and empirical cumulative
+distribution function (ECDF) plots where the recorded benchmark data
+support them. For any anytime curve, the plotted quantity, sampling points,
+and clean/noisy status of the trajectory are stated in its caption. A
+clean final evaluation of $\mathbf{x}_{r,\mathrm{best}}$ alone does not
+provide a clean trajectory; convergence plots based on clean gaps require
+the corresponding evaluated-point history or clean checkpoints. The data
+source and schedule for these curves are \textbf{[INSERT TRACE SOURCE AND
+EVALUATION SCHEDULE]}.
+
+The target thresholds are \textbf{[INSERT $\Delta f$ TARGETS]}. The
+statistical tests, significance level, effect-size measure, and
+multiple-comparison procedure are \textbf{[INSERT ANALYSIS DETAILS]}. The
+unit of analysis is an independent benchmark run; state whether comparisons
+are paired and how repeated instances are handled: \textbf{[INSERT]}.
+
+Cross-evaluation changes one or more benchmark conditions relative to the
+conditions used for synthesis. The planned mappings are listed in
+Table~\ref{tab:cross_evaluation_matrix}. A problem is described as
+\emph{unseen} only when its function, dimension, or evaluation environment
+was excluded from the corresponding synthesis run.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Mappings from synthesis conditions to independent benchmark
+    conditions.}
     \label{tab:cross_evaluation_matrix}
-    \begin{tabular}{llllll}
+    \scriptsize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{p{0.12\textwidth}p{0.12\textwidth}p{0.07\textwidth}p{0.12\textwidth}p{0.12\textwidth}p{0.07\textwidth}p{0.12\textwidth}}
         \hline
-        Synthesis Function & Synthesis $D$ &
-        Evaluation Function & Evaluation $D$ &
-        Synthesis $\sigma$ & Evaluation $\sigma$ \\
+        Champion & Synth. func. & Synth. $D$ &
+        $\sigma_{\mathrm{synth}}$ & Eval. func. & Eval. $D$ &
+        $\sigma_{\mathrm{eval}}$ \\
         \hline
-        \mbox{[TODO]} & & & & & \\
-        \mbox{[TODO]} & & & & & \\
-        \mbox{[TODO]} & & & & & \\
+        -- & -- & -- & -- & -- & -- & -- \\
         \hline
     \end{tabular}
 \end{table}
 
-The first transfer setting changes only the dimensionality of the problem.
-For example, an algorithm synthesized on a selected function at one
-dimension can be evaluated on the same function at another dimension. The
-algorithm itself remains unchanged.
-
-\begin{figure}[htbp]
-    \centering
-    % \includegraphics[width=\textwidth]{figures/cross_dimension}
-    \caption{Performance of synthesized algorithms transferred to unseen
-    problem dimensions.}
-    \label{fig:cross_dimension}
-\end{figure}
-
-The results show
-\mbox{[TODO: describe the observed change in performance]}.
-
-The second transfer setting changes the benchmark function while retaining
-the same problem dimension. This tests whether the search behaviour produced
-during synthesis can be reused for an objective with a different structure.
-
-\begin{figure}[htbp]
-    \centering
-    % \includegraphics[width=\textwidth]{figures/cross_function}
-    \caption{Performance of synthesized algorithms transferred to unseen
-    benchmark functions.}
-    \label{fig:cross_function}
-\end{figure}
-
-The observed results are
-\mbox{[TODO: describe the observed function-transfer behaviour]}.
-
-Where both the function and dimension are changed, the resulting evaluation
-represents a larger departure from the synthesis environment.
-
-\begin{figure}[htbp]
-    \centering
-    % \includegraphics[width=\textwidth]{figures/cross_function_dimension}
-    \caption{Performance of synthesized algorithms under simultaneous changes
-    in benchmark function and problem dimension.}
-    \label{fig:cross_function_dimension}
-\end{figure}
-
-The results for this setting are
-\mbox{[TODO: describe actual results]}.
-
-A further form of transfer can be obtained by changing the stochastic
-environment between synthesis and evaluation. For example, an algorithm
-synthesized under deterministic fitness can be evaluated under stochastic
-fitness, or an algorithm synthesized under one noise level can be evaluated
-under another.
-
-This type of transfer is referred to as \emph{environment transfer}. It is
-kept conceptually separate from function and dimension generalization
-because the underlying optimization problem may remain unchanged while only
-the fitness observations change.
-
-\begin{figure}[htbp]
-    \centering
-    % \includegraphics[width=\textwidth]{figures/cross_noise}
-    \caption{Performance of synthesized algorithms under fitness conditions
-    different from those used during synthesis.}
-    \label{fig:cross_noise}
-\end{figure}
-
-The cross-evaluation results are used to determine how strongly the
-performance of a synthesized algorithm depends on the particular environment
-in which it was generated.
-
-
 %==============================================================================
-\section{Comparison of Synthesis Settings}
-\label{sec:comparison_settings}
+\section{Benchmark Results}
+\label{sec:benchmark_results}
 %==============================================================================
 
-The explicit and implicit experiments can now be compared because the
-synthesized algorithms have been evaluated using the same benchmark
-conditions and performance measures.
+The results below compare champions from implicit and explicit synthesis
+and then examine their performance when benchmark conditions change. The
+figures combine related conditions; the full results for individual
+functions and runs are available in
+\textbf{[Insert appendix or data location]}. Aggregation across functions
+uses \textbf{[Insert aggregation rule]}; raw optimality gaps from different
+functions are not averaged without normalization.
 
-The first comparison considers deterministic fitness. This provides a
-common reference point for the two synthesis settings without the additional
-variation introduced by stochastic fitness.
+\subsection{Implicit Synthesis}
+\label{subsec:implicit_results}
 
-\begin{figure}[htbp]
-    \centering
-    % \includegraphics[width=\textwidth]{figures/explicit_vs_implicit_clean}
-    \caption{Comparison of explicitly and implicitly synthesized algorithms
-    under deterministic fitness.}
-    \label{fig:explicit_vs_implicit_clean}
-\end{figure}
-
-The second comparison considers stochastic fitness. Here, the main
-difference between the synthesis settings is whether the language model was
-given information about the stochastic nature of the objective during
-algorithm generation.
+The implicit prompt did not tell the LLM whether objective observations
+would be deterministic or stochastic. Here we compare champions from the
+three LLMs and four strategy scaffolds under the benchmark conditions
+specified above.
 
 \begin{figure}[htbp]
     \centering
-    % \includegraphics[width=\textwidth]{figures/explicit_vs_implicit_noise}
-    \caption{Comparison of explicitly and implicitly synthesized algorithms
-    under stochastic fitness.}
-    \label{fig:explicit_vs_implicit_noise}
+    \fbox{\parbox{0.88\textwidth}{\centering
+    Insert the multi-panel convergence results for implicit-synthesis
+    champions. Show the evaluation conditions and identify whether the
+    trajectory is based on noisy observations or clean reevaluation.}}
+    \caption{Convergence results for champions generated with implicit
+    environment information. Panels compare the selected LLMs and strategy
+    scaffolds across the reported dimensions and evaluation noise levels.}
+    \label{fig:implicit_convergence}
 \end{figure}
 
-The results are summarized in
-Table~\ref{tab:synthesis_comparison}.
+\begin{figure}[htbp]
+    \centering
+    \fbox{\parbox{0.88\textwidth}{\centering
+    Insert the corresponding implicit-synthesis ECDF or target-attainment
+    results. State the target thresholds and evaluation-budget axis.}}
+    \caption{ECDF or target-attainment results for champions generated
+    with implicit environment information.}
+    \label{fig:implicit_ecdf}
+\end{figure}
+
+\textbf{[Insert the observed differences among LLMs and scaffolds, including
+function- and dimension-specific exceptions that affect the interpretation.]}
+The corresponding summary values are reported in
+Table~\ref{tab:implicit_summary}.
 
 \begin{table}[htbp]
     \centering
-    \caption{Summary of synthesized algorithm performance across the main
-    evaluation settings.}
-    \label{tab:synthesis_comparison}
-    \begin{tabular}{lcccccc}
+    \caption{Summary of independent benchmark results for implicit-synthesis
+    champions. Use the stated scale-aware metric and report uncertainty or
+    run counts.}
+    \label{tab:implicit_summary}
+    \scriptsize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{p{0.12\textwidth}p{0.15\textwidth}p{0.19\textwidth}p{0.19\textwidth}p{0.17\textwidth}}
         \hline
-        Configuration &
-        Clean &
-        $\sigma_1$ &
-        $\sigma_2$ &
-        $\sigma_3$ &
-        Cross-Function &
-        Cross-Dimension \\
+        LLM & Strategy & Eval. condition & Metric &
+        Runs / CI \\
         \hline
-        Explicit 1 & & & & & & \\
-        Explicit 2 & & & & & & \\
-        Explicit 3 & & & & & & \\
-        Explicit 4 & & & & & & \\
-        Implicit   & & & & & & \\
+        -- & -- & -- & -- & -- \\
         \hline
     \end{tabular}
 \end{table}
 
-This comparison is used to identify whether the differences observed in the
-individual experiments are consistent across benchmark functions,
-dimensions, and noise conditions.
+\subsection{Explicit Synthesis}
+\label{subsec:explicit_results}
 
+The explicit prompts told the LLM whether objective observations were clean
+or stochastic. We compare Explicit-Clean and Explicit-Noisy champions
+separately across the four strategy scaffolds because these prompts gave
+the model different information.
+
+\begin{figure}[htbp]
+    \centering
+    \fbox{\parbox{0.88\textwidth}{\centering
+    Insert the multi-panel convergence results for Explicit-Clean and
+    Explicit-Noisy champions. Use shared axes and consistent encodings for
+    LLM, scaffold, dimension, and evaluation noise.}}
+    \caption{Convergence results for champions generated with explicit
+    environment information, separated into Explicit-Clean and
+    Explicit-Noisy synthesis conditions.}
+    \label{fig:explicit_convergence}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \fbox{\parbox{0.88\textwidth}{\centering
+    Insert the corresponding ECDF or target-attainment results for the two
+    explicit synthesis conditions.}}
+    \caption{ECDF or target-attainment results for champions generated with
+    explicit environment information.}
+    \label{fig:explicit_ecdf}
+\end{figure}
+
+\textbf{[Insert the measured contrast between Explicit-Clean and
+Explicit-Noisy under matching benchmark conditions, with relevant
+exceptions.]}
+Table~\ref{tab:explicit_summary} reports the results by LLM and scaffold.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Summary of independent benchmark results for
+    Explicit-Clean and Explicit-Noisy champions.}
+    \label{tab:explicit_summary}
+    \scriptsize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{p{0.11\textwidth}p{0.16\textwidth}p{0.12\textwidth}p{0.16\textwidth}p{0.15\textwidth}p{0.12\textwidth}}
+        \hline
+        LLM & Environment prompt & Strategy & Eval. condition &
+        Metric & Runs / CI \\
+        \hline
+        -- & -- & -- & -- & -- & -- \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\subsection{Cross-Evaluation}
+\label{subsec:cross_evaluation_results}
+
+Cross-evaluation tests the fixed champions under conditions that differ
+from those used during synthesis. We report changes in evaluation noise,
+dimension, and function separately.
+
+\begin{figure}[htbp]
+    \centering
+    \fbox{\parbox{0.88\textwidth}{\centering
+    Insert cross-evaluation convergence curves. Label synthesis and
+    evaluation conditions separately, and state whether the curve uses
+    noisy observations or clean reevaluation.}}
+    \caption{Convergence under cross-evaluation of fixed champions,
+    grouped by the synthesis-to-evaluation mappings in
+    Table~\ref{tab:cross_evaluation_matrix}.}
+    \label{fig:cross_evaluation_convergence}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \fbox{\parbox{0.88\textwidth}{\centering
+    Insert cross-evaluation ECDF or target-attainment curves. Use the same
+    target definitions across the compared synthesis and evaluation
+    conditions.}}
+    \caption{ECDF or target-attainment results for the cross-evaluation
+    mappings in Table~\ref{tab:cross_evaluation_matrix}.}
+    \label{fig:cross_evaluation_ecdf}
+\end{figure}
+
+\textbf{[Insert the observed effects of changing noise level, dimension,
+and function, citing the relevant panels and uncertainty.]}
+Claims about generalization are limited to the held-out mappings listed
+in Table~\ref{tab:cross_evaluation_matrix}.
+
+\subsection{Comparison Across Models and Prompt Conditions}
+\label{subsec:model_prompt_comparison}
+
+Table~\ref{tab:planned_comparisons} reports the planned contrasts among
+the three LLMs, the Implicit, Explicit-Clean, and Explicit-Noisy conditions,
+and the four scaffolds. It includes adjusted statistical results for the
+contrasts specified in the analysis plan.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Planned comparisons across LLMs, environment-information
+    conditions, and strategy scaffolds.}
+    \label{tab:planned_comparisons}
+    \scriptsize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{p{0.12\textwidth}p{0.15\textwidth}p{0.19\textwidth}p{0.19\textwidth}p{0.17\textwidth}}
+        \hline
+        Contrast & Benchmark stratum & Test & Adjusted $p$-value &
+        Effect size \\
+        \hline
+        -- & -- & -- & -- & -- \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\textbf{[Insert the main contrasts, uncertainty, and exceptions supported by
+Table~\ref{tab:planned_comparisons}.]}
 
 %==============================================================================
-\section{Findings and Discussion}
-\label{sec:findings_discussion}
+\section{Discussion}
+\label{sec:experiment_discussion}
 %==============================================================================
 
-The results presented above show how the synthesized algorithms behave under
-different synthesis and evaluation conditions. This section brings these
-observations together and discusses the main findings.
+\textbf{[Discuss what the measured results support about prompt information,
+performance under stochastic evaluation, and transfer to the tested
+conditions. Relate each interpretation to its figure or table and to the
+observed uncertainty.]}
 
-The first finding concerns the performance of explicitly synthesized
-algorithms. Under deterministic fitness, the results show
-\mbox{[TODO: main finding]}. The behaviour varies across the selected
-benchmark functions, with
-\mbox{[TODO: identify relevant differences between Sphere, Rosenbrock,
-Discus, Rastrigin, and Gallagher 101]}.
+The interpretation of stochastic synthesis distinguishes the optimizer's
+internal search from evolutionary selection. Noisy observations affect the
+candidate optimizer's trajectory and can change its returned solution. The
+outer synthesis procedure compares candidates using the clean evaluation
+of their returned solutions. The benchmark stage then measures the frozen
+champions under its own evaluation conditions without changing them. These
+stages should not be described as if noisy $\texttt{best\_y}$ values
+directly determined parent--child selection.
 
-The stochastic evaluations provide a different view of the synthesized
-algorithms. As the noise level increases, the results show
-\mbox{[TODO: main noise-related finding]}. In particular,
-\mbox{[TODO: identify whether convergence, target attainment, or final
-solution quality changes systematically]}.
-
-The implicit synthesis experiments provide a reference for determining
-whether these observations depend on explicit information about the
-optimization environment. The algorithms generated without this information
-show
-\mbox{[TODO: main implicit finding]}.
-
-A direct comparison between the explicit and implicit settings shows
-\mbox{[TODO: main comparison finding]}. The difference is most apparent
-under
-\mbox{[TODO: condition]}.
-
-The cross-evaluation experiments provide a further perspective on the
-generated algorithms. When the problem dimension changes, the synthesized
-algorithms
-\mbox{[TODO: dimension-transfer finding]}. When the benchmark function
-changes, their performance
-\mbox{[TODO: function-transfer finding]}.
-
-The results also show
-\mbox{[TODO: environment-transfer finding]}
-when the stochastic conditions differ between synthesis and evaluation.
-
-These observations are relevant because the stochastic synthesis process
-does not operate on the clean objective alone. When noise is present, the
-fitness values observed during candidate evaluation contain random
-perturbations. These observations can affect parent--child selection and
-therefore influence which algorithms are retained during the evolutionary
-synthesis process. The final synthesized algorithm is thus shaped by both
-the generated code and the fitness environment in which candidate
-algorithms were evaluated.
-
-The independent benchmark evaluation separates this effect from the final
-performance measurement. Once synthesis has finished, the generated
-algorithm is fixed and evaluated under predefined conditions. The benchmark
-results therefore provide a consistent basis for comparing algorithms
-generated under different synthesis settings.
-
-Taken together, the results provide evidence for the role of information
-available during algorithm synthesis, the behaviour of synthesized
-algorithms under stochastic fitness, and their transfer to conditions that
-were not encountered during generation. These findings are related to the
-research questions in the following discussion.
-
-The results concerning explicitly informed synthesis provide the evidence
-for assessing how effectively the LLM can generate optimization algorithms
-when relevant information about the optimization environment is available.
-The implicit experiments complement this by showing how the generated
-algorithms behave when that information is removed.
-
-The cross-evaluation results address the remaining question concerning the
-retention of algorithmic behaviour under changed conditions. The distinction
-between dimension transfer, function transfer, and environment transfer is
-important here because each represents a different type of change between
-synthesis and evaluation.
-
-The conclusions drawn from these experiments remain specific to the
-benchmark functions, problem dimensions, stochastic objective model,
-language-model configurations, prompts, and synthesis settings used in this
-study. The results therefore do not imply that the same behaviour will hold
-for arbitrary continuous black-box optimization problems or for other
-language models.
-
-
-%==============================================================================
-\section{Chapter Summary}
-\label{sec:experiments_summary}
-%==============================================================================
-
-This chapter evaluated algorithms synthesized by a local open-weight
-language model on five BBOB benchmark functions with different optimization
-characteristics. The benchmark set ranged from the simple separable Sphere
-function to conditioned, multimodal, and more irregular objectives such as
-Discus, Rastrigin, and Gallagher 101.
-
-The experiments first evaluated algorithms synthesized with explicit
-information about the optimization environment and then algorithms generated
-without this information. Both groups were evaluated under deterministic and
-stochastic fitness conditions using the same independent benchmark protocol.
-
-The cross-evaluation experiments subsequently transferred synthesized
-algorithms to benchmark functions, dimensions, and fitness conditions that
-differed from those used during synthesis. The resulting comparisons
-provided evidence about the dependence of synthesized search behaviour on
-the original synthesis environment.
-
-The main findings were
-\mbox{[TODO: two or three concise sentences containing the actual findings]}.
-These findings form the basis for the final conclusions of the thesis.
+The conclusions are limited to the tested LLM configurations, prompt
+variants, benchmark functions and instances, dimensions, noise model,
+budgets, and repetitions. They do not establish that the same performance
+will hold for other models, prompts, or optimization problems.
