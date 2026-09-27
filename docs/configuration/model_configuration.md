@@ -73,7 +73,6 @@ campaign_usecase.run_campaign(recover=True)
 campaign_usecase.run_campaign(
     recover=True,
     rerun_experiment_ids=[2091, 2737, 2147],
-    rerun_repeats=1,
 )
 
 # Resume specific running sessions, without scheduling other work:
@@ -86,24 +85,27 @@ campaign_usecase.run_campaign()
 Use the matching model server. These options are invocation-scoped: changing IDs
 does not require editing TOML or restarting the kernel. After updating Python
 code, restart Notebook 02's kernel. The planner
-combines manual conditions with configured-matrix recovery for the active model:
+combines explicit replacement requests with configured-matrix recovery for the active model:
 interrupted sessions are resumed when `auto_resume` is enabled, and unresolved
 synthesis failures receive one fresh attempt when `retry_failed_synthesis` is
 enabled, but only when the condition has no completed valid champion. Any completed
 valid champion satisfies automatic recovery, even if individual candidate iterations,
-other sessions, or leftover queued records failed. Historical records
-remain unchanged. Multiple selected IDs for one condition are deduplicated, and
-pending sessions fill manual repair slots rather than creating duplicate runs.
-`rerun_repeats`, not `runs_per_config`, sets the manual slots. This recovery path
-does not expand unrelated conditions into extra replicates. Unknown IDs are rejected;
-`resume_experiment_ids` cannot be combined with recovery or fresh reruns, and only
+other sessions, or leftover queued records failed. Manual rerun IDs restart those
+exact records from generation one: old iterations, diagnostics, champion fields,
+generated code and checkpoints are removed. No new experiment rows are inserted.
+Duplicate IDs run once; different explicitly selected IDs remain separate records.
+For an uncovered condition, automatic recovery resumes one pending record or
+replaces one existing failed record. This path does not expand unrelated conditions
+into extra replicates. Unknown IDs are rejected before work is dispatched;
+`resume_experiment_ids` cannot be combined with recovery or replacement, and only
 running records belonging to the active LLM are resumed. No audit workflow is required.
 Each call rediscovers database state. Automatic recovery needs no manual IDs.
-Logs show only `Exp ID`, the actual executing database record: fresh attempts
-receive a new ID, while resuming retains its existing ID. Manual IDs identify
-source conditions and are not substituted for the executing record's ID.
+Logs show only `Exp ID`, which remains the requested ID during replacement.
+Stop any campaign executing the same records before replacing them. Replacement
+is destructive and does not retain the old result history; merely auditing or
+planning does not reset records. Reset occurs when execution begins.
 Omit manual IDs after successful repairs: explicitly passing them again requests
-another fresh repeat, unless interrupted sessions already fill the slots. The
+another replacement. There is no `rerun_repeats` option for in-place replacement. The
 matrix audit measures conditions with a completed valid champion, not the fraction
 of successful candidate iterations. Running/failed record counts remain visible
 as history without making a covered condition incomplete. A valid champion means
@@ -116,9 +118,10 @@ Poor benchmark results may motivate explicit rerun IDs; they do not automaticall
 invalidate a completed synthesis session or change champion-ranking mathematics.
 
 Imported databases can use different IDs. Review and refresh the selection after
-an import. New synthesis does not guarantee that champion selection will change:
-the existing synthesis-error/evaluation-count ranking remains unchanged, and
-benchmark outcomes are not used to rank candidates. Additional search motivated
+an import. After replacement, reload champion selection and rerun affected benchmark
+evaluations; prior benchmark outputs describe the old code and are not regenerated
+by synthesis. The existing champion-ranking rules remain unchanged, and benchmark
+outcomes are not used to rank candidates. Additional search motivated
 by benchmark feedback must be documented as a follow-up campaign, not silently
 substituted into the original thesis results.
 

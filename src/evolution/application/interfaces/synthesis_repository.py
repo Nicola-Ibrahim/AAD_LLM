@@ -53,6 +53,10 @@ class SynthesisRepository(ABC):
     def mark_failed(self, experiment_id: int, reason: str = "") -> None: ...
 
     @abstractmethod
+    def reset_experiment(self, experiment_id: int) -> None:
+        """Discard iterations and champion state, retaining the experiment's ID and condition."""
+
+    @abstractmethod
     def checkpoint_wal(self) -> None: ...
 
     @abstractmethod

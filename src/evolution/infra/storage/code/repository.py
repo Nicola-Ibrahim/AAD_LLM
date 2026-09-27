@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 from evolution.application.interfaces.code_store import SynthesisCodeStore
@@ -42,3 +43,13 @@ class CodeRepository(SynthesisCodeStore):
         """Loads and returns the source code string from a stored code_path."""
         full_path = self.resolve_code_path(code_path)
         return full_path.read_text(encoding="utf-8")
+
+    def clear_experiment(self, experiment_id: int) -> None:
+        """Remove the exact per-experiment directory, refusing symbolic links."""
+        if experiment_id <= 0:
+            raise ValueError("Experiment ID must be positive")
+        code_dir = self.base_dir / f"experiment_{experiment_id}"
+        if code_dir.is_symlink():
+            raise ValueError(f"Refusing to remove symbolic-link code directory: {code_dir}")
+        if code_dir.exists():
+            shutil.rmtree(code_dir)

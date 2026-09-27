@@ -71,7 +71,8 @@ class SynthesisConfigRepository:
         if misplaced := dynamic_keys.intersection(exec_meta):
             raise ValueError(
                 f"Move dynamic campaign options {sorted(misplaced)} out of synthesis.toml "
-                "and into run_campaign(...); use resume_experiment_ids for targeted resumption."
+                "and into run_campaign(...); use resume_experiment_ids for targeted resumption. "
+                "Remove rerun_repeats: replacement restarts each selected ID once."
             )
 
         # 1. Parse prompt strategies & synthesis modes

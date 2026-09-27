@@ -46,6 +46,7 @@ class SingleSynthesisUseCase:
         initial_iteration: int = 0,
         key: str = "",
         verbose: bool = True,
+        restart: bool = False,
     ) -> SessionResult:
         """Executes a single algorithm synthesis session.
 
@@ -58,6 +59,7 @@ class SingleSynthesisUseCase:
             initial_iteration: Starting iteration index (for resumption).
             key: Descriptive task key for logging.
             verbose: Whether verbose telemetry is enabled.
+            restart: Replace this experiment's results and checkpoint before running.
 
         Returns:
             SessionResult: Final outcome of the synthesis run.
@@ -78,6 +80,7 @@ class SingleSynthesisUseCase:
             prompt_strategy=prompt_strategy,
             synthesis_mode=synthesis_mode,
             initial_iteration=initial_iteration,
+            restart=restart,
         )
 
         self.logger.summary(

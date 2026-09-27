@@ -55,13 +55,12 @@ class SynthesisCampaignCoordinator:
         *,
         recover: bool = False,
         rerun_experiment_ids: Sequence[int] = (),
-        rerun_repeats: int = 1,
         resume_experiment_ids: Sequence[int] = (),
     ) -> CampaignResults:
         """Run an invocation-scoped request using the unchanged protocol configuration.
 
         No selections means full-matrix scheduling. ``recover`` discovers pending
-        and failed synthesis; manual rerun IDs add repair slots. Explicit resume
+        and failed synthesis; manual rerun IDs replace those exact records. Explicit resume
         IDs select running sessions only and cannot be combined with recovery.
         """
         self.logger.verbose = verbose
@@ -70,7 +69,6 @@ class SynthesisCampaignCoordinator:
         tasks = self.planner.build_tasks(
             recover=recover,
             rerun_experiment_ids=rerun_experiment_ids,
-            rerun_repeats=rerun_repeats,
             resume_experiment_ids=resume_experiment_ids,
         )
         model_name = self.model_name

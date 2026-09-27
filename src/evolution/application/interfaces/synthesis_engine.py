@@ -21,5 +21,6 @@ class SynthesisEngine(ABC):
         prompt_strategy: PromptStrategy,
         synthesis_mode: SynthesisMode,
         initial_iteration: int = 0,
+        restart: bool = False,
     ) -> SessionResult:
         """Execute one synthesis session and return its result."""

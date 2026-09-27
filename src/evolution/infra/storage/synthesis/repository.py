@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import cast
 
-from sqlalchemy import func, insert, inspect, select
+from sqlalchemy import delete, func, insert, inspect, select
 from sqlalchemy.orm import Load, Session, defer, selectinload, sessionmaker
 
 from evolution.application.interfaces.synthesis_repository import SynthesisRepository
@@ -168,6 +168,25 @@ class SQLiteSynthesisRepository(SynthesisRepository):
                 exp.finished_at = datetime.now(timezone.utc).isoformat()
                 session.commit()
 
+        self.checkpoint_wal()
+
+    def reset_experiment(self, experiment_id: int) -> None:
+        """Atomically replace results without inserting a new experiment record."""
+        with self.SessionLocal.begin() as session:
+            experiment = session.get(ExperimentORM, experiment_id, options=self._experiment_options)
+            if experiment is None:
+                raise ValueError(f"Unknown experiment ID: {experiment_id}")
+            iteration_ids = select(IterationORM.id).where(
+                IterationORM.experiment_id == experiment_id
+            )
+            session.execute(delete(ErrorLogORM).where(ErrorLogORM.iteration_id.in_(iteration_ids)))
+            session.execute(delete(IterationORM).where(IterationORM.experiment_id == experiment_id))
+            experiment.best_iteration = None
+            experiment.best_algorithm = None
+            experiment.best_final_error = None
+            experiment.status = "running"
+            experiment.started_at = datetime.now(timezone.utc).isoformat()
+            experiment.finished_at = None
         self.checkpoint_wal()
 
     def checkpoint_wal(self) -> None:

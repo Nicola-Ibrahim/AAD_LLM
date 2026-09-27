@@ -1151,6 +1151,7 @@ def test_synthesis_engine_lsp_contract():
             prompt_strategy: PromptStrategy,
             synthesis_mode: SynthesisMode,
             initial_iteration: int = 0,
+            restart: bool = False,
         ) -> SessionResult:
             return SessionResult(
                 problem_id=1,

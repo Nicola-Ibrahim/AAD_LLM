@@ -14,3 +14,7 @@ class SynthesisCodeStore(ABC):
     @abstractmethod
     def load_code(self, code_path: str | Path) -> str:
         """Load generated source code from its stored path."""
+
+    @abstractmethod
+    def clear_experiment(self, experiment_id: int) -> None:
+        """Remove generated code belonging only to the selected experiment."""

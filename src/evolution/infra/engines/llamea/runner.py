@@ -65,6 +65,7 @@ class LLaMEASession:
         config: SessionConfig,
         initial_iteration: int = 0,
         synthesis_mode: SynthesisMode = SynthesisMode.EXPLICIT,
+        restart: bool = False,
     ) -> None:
         """Initializes the synthesis session with pre-resolved domain objects and execution configuration."""
         self._problem = problem
@@ -77,6 +78,7 @@ class LLaMEASession:
         self._initial_iteration = initial_iteration
         self._logger: BaseLogger = SynthesisLogger()
         self._synthesis_mode = SynthesisMode(synthesis_mode)
+        self._restart = restart
 
         problem_profile = ProblemProfile(
             problem_id=self._problem.problem_id,
@@ -193,6 +195,43 @@ class LLaMEASession:
 
     def run(self) -> SessionResult:
         """Runs the complete evolution loop for the problem."""
+        if self._restart:
+            records = self._db_repo.load_by_ids([self._experiment_id])
+            if not records or records[0].llm_name != self._llm_client.model.name:
+                raise ValueError(f"Cannot replace experiment #{self._experiment_id} for this model")
+            stored = records[0]
+            if (
+                stored.problem.problem_id,
+                stored.problem.dim,
+                stored.problem.instance_id,
+                stored.problem.noise_std,
+                stored.problem.noise_model,
+                stored.mode,
+                stored.prompt_strategy,
+            ) != (
+                self._problem.problem_id,
+                self._problem.dim,
+                self._problem.instance_id,
+                self._problem.noise_std,
+                self._problem.noise_model,
+                self._synthesis_mode,
+                self._prompt_strategy,
+            ):
+                raise ValueError("Replacement problem does not match the stored experiment")
+            archive_root = (DATA_DIR / "evolution_state").resolve()
+            if self._archive_dir.is_symlink() or not self._archive_dir.resolve().is_relative_to(
+                archive_root
+            ):
+                raise ValueError(f"Unsafe checkpoint directory: {self._archive_dir}")
+            self._logger.warning(
+                f"Replacing Exp ID: #{self._experiment_id}: old iterations, champion, code and checkpoint will be removed."
+            )
+            if self._archive_dir.exists():
+                shutil.rmtree(self._archive_dir)
+            self._code_repo.clear_experiment(self._experiment_id)
+            self._db_repo.reset_experiment(self._experiment_id)
+            self._archive_dir.mkdir(parents=True, exist_ok=True)
+            self._initial_iteration = 0
         self._print_start_banner()
         synthesis_engine, evaluator = self._execute_loop()
 
@@ -303,6 +342,7 @@ class LLaMEAEngine(SynthesisEngine):
         prompt_strategy: PromptStrategy,
         synthesis_mode: SynthesisMode,
         initial_iteration: int = 0,
+        restart: bool = False,
     ) -> SessionResult:
         """Executes a single algorithm synthesis run using LLaMEASession."""
         session = LLaMEASession(
@@ -315,5 +355,6 @@ class LLaMEAEngine(SynthesisEngine):
             config=config,
             initial_iteration=initial_iteration,
             synthesis_mode=synthesis_mode,
+            restart=restart,
         )
         return session.run()

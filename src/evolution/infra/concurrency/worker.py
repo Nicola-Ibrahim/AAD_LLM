@@ -27,6 +27,7 @@ def run_synthesis_worker(item: CampaignTask) -> SessionResult:
             initial_iteration=item["initial_iteration"],
             key=item["key"],
             verbose=False,
+            restart=item.get("restart", False),
         )
     finally:
         database.dispose()

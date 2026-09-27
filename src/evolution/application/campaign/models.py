@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
@@ -44,3 +44,4 @@ class CampaignTask(TypedDict):
     initial_iteration: int
     prompt_strategy: PromptStrategy
     synthesis_mode: SynthesisMode
+    restart: NotRequired[bool]
