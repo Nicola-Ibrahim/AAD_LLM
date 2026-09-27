@@ -7,17 +7,52 @@ Audit is a capability within those contexts; notebooks own presentation.
 
 ## Workflow overview
 
-[![Research workflows, context ownership and supporting capabilities](system_overview.svg)](system_overview.svg?raw=true)
-
-[Detailed system diagram](system_diagram.svg?raw=true) ·
-[Editable detailed source](system_diagram.mmd)
+[Workflow overview](../../README.md#level-0--workflow-overview) ·
+[Detailed system diagram](../../README.md#level-1--detailed-system-view) ·
+[Level 0 Mermaid source](system_overview.mmd) ·
+[Level 1 Mermaid source](system_diagram.mmd)
 
 ## Synthesis collaboration
 
-[![Synthesis campaign wiring, worker sessions, LLaMEA evaluator, executor and scoring collaborations](synthesis_collaboration.svg)](synthesis_collaboration.svg?raw=true)
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#f2e6ff","lineColor":"#333333","fontFamily":"Arial, Helvetica, sans-serif","clusterBkg":"#f7f7f7","clusterBorder":"#dedede"},"flowchart":{"curve":"stepAfter","nodeSpacing":32,"rankSpacing":48}}}%%
+flowchart TD
+    accTitle: Synthesis collaboration
+    accDescr: Campaign composition dispatches worker-local synthesis sessions; LLaMEA delegates candidate evaluation to shared execution and evolution scoring.
+    subgraph Campaign["Campaign composition and dispatch"]
+        direction LR
+        Bootstrap["build_synthesis_campaign<br/>BOOTSTRAP / NOTEBOOK ENTRY<br/>Construct adapters; load settings<br/>and wire interfaces"]
+        Coordinator["SynthesisCampaignCoordinator<br/>EVOLUTION APPLICATION<br/>CampaignAuditor + CampaignPlanner<br/>Reconcile state; build CampaignTask payloads"]
+        Dispatcher["ProcessPoolRunner<br/>EVOLUTION INFRASTRUCTURE<br/>Dispatch worker processes<br/>run_synthesis_worker"]
+        Bootstrap --> Coordinator --> Dispatcher
+    end
+    subgraph Session["Worker-local synthesis session"]
+        direction LR
+        UseCase["SingleSynthesisUseCase<br/>EVOLUTION APPLICATION<br/>Worker-local repository and database<br/>Execute one synthesis session"]
+        Engine["LLaMEAEngine / LLaMEASession<br/>EVOLUTION INFRASTRUCTURE<br/>Build prompts; restore trusted checkpoints<br/>Run LLaMEA with Evaluator callback"]
+        Evaluator["Evaluator<br/>EVOLUTION INFRASTRUCTURE<br/>Translate Solution into code evaluation<br/>Persist iterations; attach fitness / feedback"]
+        UseCase --> Engine --> Evaluator
+    end
+    subgraph Candidate["Candidate evaluation"]
+        direction TB
+        Evaluation["CandidateEvaluationService<br/>EVOLUTION APPLICATION<br/>Execute through CandidateExecutor interface<br/>Validate, clean-score and assemble diagnostics"]
+        Executor["AlgorithmExecutorAdapter<br/>SHARED INFRASTRUCTURE<br/>Compile, run and capture warnings<br/>func_timeout; require (best_x, best_y)"]
+        Scoring["AlgorithmScoringService<br/>EVOLUTION DOMAIN<br/>Shared objective_gap(clean_y, f_opt)<br/>Evolution fitness and failure penalties"]
+        Evaluation --> Executor
+        Evaluation --> Scoring
+    end
+    Dispatcher --> UseCase
+    Evaluator --> Evaluation
+    classDef application fill:#dbeafe,stroke:#2563eb,color:#172554;
+    classDef infrastructure fill:#fef3c7,stroke:#d97706,color:#78350f;
+    classDef composition fill:#e0e7ff,stroke:#4f46e5,color:#312e81;
+    class Bootstrap composition;
+    class Coordinator,UseCase,Evaluation,Scoring application;
+    class Dispatcher,Engine,Evaluator,Executor infrastructure;
+```
 
-This restores the LLaMEA collaboration view here, alongside the system diagrams.
 Arrows show runtime calls/delegation, not permission for core modules to import adapters.
+Fitness and feedback return through the Evaluator callback.
 Configuration, repositories, problem factory and LLM client are injected collaborators;
 they remain visible in the detailed system diagram rather than repeated as separate
 nodes in this focused view.

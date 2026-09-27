@@ -7,7 +7,34 @@ Stored experiment records and provenance—not today's defaults—identify past 
 
 ## Synthesis candidate scoring
 
-[![Synthesis candidate execution, return validation, clean scoring and failure classification](architecture/candidate_evaluation.svg)](architecture/candidate_evaluation.svg?raw=true)
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#f2e6ff","lineColor":"#333333","fontFamily":"Arial, Helvetica, sans-serif","edgeLabelBackground":"#f2e6ff"},"flowchart":{"curve":"stepAfter","nodeSpacing":32,"rankSpacing":40}}}%%
+flowchart TD
+    accTitle: Synthesis candidate scoring
+    accDescr: Candidate evaluation attempts execution and return validation, then clean-scores the returned point; caught exceptions produce diagnostic failure results instead.
+    Input["Candidate code + problem + budget<br/>SYNTHESIS CANDIDATE EVALUATION<br/>Reset problem; attempt steps inside try/except"]
+    Execute["Compile and execute<br/>SHARED EXECUTION<br/>Timeout guard and warning capture<br/>Require (best_x, finite best_y)"]
+    Validate["Validate point and clean-score<br/>SYNTHESIS APPLICATION<br/>Check dimension and bounds tolerance 1e-5<br/>Evaluate best_x; require finite clean_y"]
+    Caught{"Caught exception<br/>during these steps?"}
+    Failure["Failure result<br/>EVOLUTION FITNESS POLICY<br/>Timeout: -4.0e8; numerical/type errors: -4.5e8<br/>Other execution errors: -5.0e8<br/>Record diagnostics"]
+    Success["Successful execution result<br/>SHARED GAP / EVOLUTION FITNESS<br/>gap = max(0, clean_y - f_opt); fitness = -gap<br/>Valid execution does not necessarily mean solved"]
+    Input --> Execute --> Validate --> Caught
+    Caught -->|Yes| Failure
+    Caught -->|No| Success
+    classDef application fill:#dbeafe,stroke:#2563eb,color:#172554;
+    classDef infrastructure fill:#fef3c7,stroke:#d97706,color:#78350f;
+    classDef decision fill:#e0e7ff,stroke:#4f46e5,color:#312e81;
+    classDef failure fill:#ffe4e6,stroke:#e11d48,color:#881337;
+    classDef success fill:#dcfce7,stroke:#16a34a,color:#14532d;
+    class Input,Validate application;
+    class Execute infrastructure;
+    class Caught decision;
+    class Failure failure;
+    class Success success;
+```
+
+The decision summarizes the enclosing `try/except`: an exception skips any remaining
+steps and goes directly to the failure result.
 
 The diagram is specifically the synthesis workflow. Benchmark trials use the shared
 executor and clean-score the returned point, but do not use synthesis fitness penalties.

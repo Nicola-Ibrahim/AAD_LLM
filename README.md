@@ -20,27 +20,65 @@ the standard C4 system-context/container levels.
 
 The compact view introduces the main workflows and supporting capabilities.
 
-[![Workflow overview: synthesis, benchmarking, audit and analysis with supporting runtime and persistence](docs/architecture/system_overview.svg)](docs/architecture/system_overview.svg?raw=true)
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"background":"#f2e6ff","clusterBkg":"#faf9fc","clusterBorder":"#d8d2e3","lineColor":"#64748b","edgeLabelBackground":"#f2e6ff","fontFamily":"Arial, Helvetica, sans-serif","fontSize":"15px"},"flowchart":{"curve":"basis","htmlLabels":true,"nodeSpacing":40,"rankSpacing":32,"padding":20,"wrappingWidth":1000},"markdownAutoWrap":false,"themeCSS":".label, .nodeLabel, .edgeLabel, .cluster-label { font-family: Arial, Helvetica, sans-serif !important; } .cluster rect { filter: none !important; }"}}%%
+flowchart TD
+    accTitle: From generated algorithms to measured performance
+    accDescr: Two workflow contexts, evolution and benchmarking, share execution and persistence capabilities; notebook researchers orchestrate workflows and own figure presentation.
+    Researcher("<b>Notebook researcher</b><br/>Configuration · orchestration · figures · exports")
 
-[Open full-size overview](docs/architecture/system_overview.svg?raw=true)
+    subgraph Evolution["Evolution · synthesis context"]
+        Synthesis("<b>Algorithm synthesis</b><br/>Campaign planning · settings · sessions<br/>Generation feedback · candidate scoring")
+    end
+
+    subgraph Benchmarking["Benchmarking · evaluation and analysis context"]
+        Benchmark("<b>Benchmarking and audit</b><br/>Champion selection · classical optimizers<br/>Trial execution · coverage · run status")
+        Analysis("<b>Analysis and transfer</b><br/>ECDF · reliability · statistics · robustness<br/>Isolated transfer traces · notebook figures")
+    end
+
+    subgraph Support["Supporting capabilities · not separate bounded contexts"]
+        Runtime("<b>Candidate execution</b><br/>LLaMEA · prompts · provider client<br/>Evaluation · guarded execution · BBOB / noise")
+        Persistence("<b>Experiment persistence</b><br/>Candidate code · synthesis records · SQLite<br/>Benchmark traces · provenance")
+        Provider("<b>LLM provider</b><br/>External system")
+    end
+
+    Researcher -->|starts campaigns| Synthesis
+    Researcher -->|runs trials / audits| Benchmark
+    Researcher -->|analyses results| Analysis
+    Synthesis -->|runs synthesis| Runtime
+    Synthesis -->|saves candidates| Persistence
+    Benchmark -->|writes traces| Persistence
+    Benchmark -->|reads candidates| Persistence
+    Analysis -->|reads / transfer| Persistence
+    Runtime -->|requests generations| Provider
+
+    click Researcher "https://github.com/nicola-ibrahim/aad_llm/tree/main/notebooks"
+    click Synthesis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/run.py"
+    click Benchmark "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation/run.py"
+    click Analysis "https://github.com/nicola-ibrahim/aad_llm/tree/main/notebooks/analysis"
+    click Runtime "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/execution/executor.py"
+    click Persistence "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/database/engine.py"
+    click Provider "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/llm/client.py"
+    classDef blue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554;
+    classDef mint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d;
+    classDef rose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337;
+    classDef amber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f;
+    classDef indigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81;
+    class Synthesis blue;
+    class Benchmark mint;
+    class Analysis rose;
+    class Runtime amber;
+    class Researcher,Persistence,Provider indigo;
+    style Provider stroke-dasharray:4 3;
+    style Evolution fill:#f4f8ff,stroke:#bfdbfe,stroke-width:1px,color:#172554;
+    style Benchmarking fill:#f5fbf7,stroke:#bbdfc8,stroke-width:1px,color:#14532d;
+    style Support fill:#faf9fc,stroke:#d8d2e3,stroke-width:1px,color:#475569;
+```
 
 ### Level 1 — Detailed system view
 
 The detailed view expands the workflows into their components, relationships,
 and code links for an in-depth understanding of the project.
-
-[![Detailed system diagram: synthesis, benchmarking and audit, analysis and transfer, candidate execution, and experiment persistence](docs/architecture/system_diagram.svg)](docs/architecture/system_diagram.svg?raw=true)
-
-[Open full-size detailed diagram](docs/architecture/system_diagram.svg?raw=true) ·
-[Editable Mermaid source](docs/architecture/system_diagram.mmd) ·
-[Context ownership and dependency rules](docs/architecture/system_architecture.md)
-
-Both views preserve the original palette and background. Arrows describe workflow and
-data access, not Python imports; analysis is part of benchmarking, not a third
-bounded context. Both SVGs render independently of GitHub's theme.
-
-<details>
-<summary>View Mermaid diagram source</summary>
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#f2e6ff", "clusterBkg": "#f7f7f7", "clusterBorder": "#dedede", "lineColor": "#333333", "edgeLabelBackground": "#f2e6ff", "fontFamily": "Arial, Helvetica, sans-serif", "primaryTextColor": "#111111"}, "flowchart": {"curve": "basis", "htmlLabels": true, "wrappingWidth": 1000}, "look": "classic", "fontFamily": "Arial, Helvetica, sans-serif", "markdownAutoWrap": false, "themeCSS": ".label, .nodeLabel, .edgeLabel, .cluster-label { font-family: Arial, Helvetica, sans-serif !important; }"}}%%
@@ -150,6 +188,41 @@ class node_evaluation,node_baselines,node_champions,node_audit toneMint
 class node_analysis,node_analysis_services,node_transfer,node_figures toneRose
 class node_code_store,node_synthesis_store,node_database,node_trace_repo,node_researcher,node_llm_service toneIndigo
 ```
+
+Both views retain the original palette and component links. GitHub controls the
+rendered spacing and theme. Arrows describe workflow and data access, not Python
+imports; analysis belongs to benchmarking, not a third bounded context.
+
+[Level 0 Mermaid source](docs/architecture/system_overview.mmd) ·
+[Level 1 Mermaid source](docs/architecture/system_diagram.mmd) ·
+[Context ownership and dependency rules](docs/architecture/system_architecture.md)
+
+<details>
+<summary>Component links (also available when a viewer disables diagram links)</summary>
+
+- [campaign](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/run.py)
+- [campaign plan](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/plan.py)
+- [synth config](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis_config/repository.py)
+- [single synthesis](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/synthesis/run.py)
+- [llamea](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/runner.py)
+- [prompts](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/prompts/builder.py)
+- [llm client](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/llm/client.py)
+- [candidate evaluator](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/evaluator.py)
+- [guarded executor](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/execution/executor.py)
+- [problem factory](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/problems/factory.py)
+- [noise model](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/domain/noise_model.py)
+- [code store](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/code/repository.py)
+- [synthesis store](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis/repository.py)
+- [database](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/database/engine.py)
+- [evaluation](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation/run.py)
+- [baselines](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/solvers/baselines.py)
+- [champions](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/select_champions.py)
+- [trace repo](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/io/trace_repository.py)
+- [audit](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation/audit.py)
+- [analysis](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/analysis/report.py)
+- [analysis services](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/ecdf.py)
+- [transfer](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/transfer.py)
+- [figures](https://github.com/nicola-ibrahim/aad_llm/blob/main/notebooks/analysis/plotting/summary.py)
 
 </details>
 

@@ -17,11 +17,12 @@ Use these guides for deeper explanations; each topic has one primary home.
 
 ## Architecture views
 
-- [Compact workflow overview](architecture/system_overview.svg?raw=true): quick orientation.
-- [Detailed system diagram](architecture/system_diagram.svg?raw=true): components and relationships.
-- [Detailed Mermaid source](architecture/system_diagram.mmd): editable diagram content.
-- [Synthesis collaboration](architecture/synthesis_collaboration.svg?raw=true): LLaMEA, application workflows, execution and scoring.
-- [Candidate evaluation](architecture/candidate_evaluation.svg?raw=true): validation, clean scoring and failure classification.
+- [Compact workflow overview](../README.md#level-0--workflow-overview): quick orientation, rendered with Mermaid.
+- [Detailed system diagram](../README.md#level-1--detailed-system-view): components, relationships and code links, rendered with Mermaid.
+- [Level 0 Mermaid source](architecture/system_overview.mmd): editable workflow overview.
+- [Level 1 Mermaid source](architecture/system_diagram.mmd): editable detailed system diagram.
+- [Synthesis collaboration](architecture/system_architecture.md#synthesis-collaboration): editable Mermaid showing LLaMEA, application workflows, execution and scoring.
+- [Candidate evaluation](evaluation_protocol.md#synthesis-candidate-scoring): editable Mermaid showing validation, clean scoring and failure classification.
 
 The overview and detailed system diagrams appear directly in the project README;
 the focused diagrams appear in their architecture/protocol guides. They describe workflows and
