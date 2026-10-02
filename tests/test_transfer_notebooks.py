@@ -15,7 +15,11 @@ from notebooks.analysis.plotting.cache import FigureCache, build_figure_cache
 from benchmarking.application.analysis.data import AnalysisData
 from benchmarking.application.analysis.view_data import AnalysisInputs, load_analysis_inputs
 from benchmarking.application.evaluation_config import EvaluationConfig
-from benchmarking.domain.evaluation import ERROR_DEFINITION, EVALUATION_SCHEMA_VERSION
+from benchmarking.domain.evaluation import (
+    CHAMPION_RETURN_VALIDATION_VERSION,
+    ERROR_DEFINITION,
+    EVALUATION_SCHEMA_VERSION,
+)
 from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
 from benchmarking.infra.storage.model_registry import configured_model_names
 
@@ -49,6 +53,7 @@ def inputs(tmp_path: Path) -> AnalysisInputs:
     code_hash = hashlib.sha256(code.encode()).hexdigest()
     native = dict(
         evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
+        return_validation_version=CHAMPION_RETURN_VALIDATION_VERSION,
         error_definition=ERROR_DEFINITION,
         model=model,
         strategy="baseline",

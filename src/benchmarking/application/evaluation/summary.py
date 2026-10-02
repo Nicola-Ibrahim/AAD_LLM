@@ -78,12 +78,22 @@ def summarize_evaluations(
                 "Solver Type": condition["solver_type"],
                 "Recorded trials": outcome.recorded_trials,
                 "Executed trials": outcome.executed_trials,
-                "Valid trials": outcome.executed_trials if reusable else 0,
+                "Valid trials": outcome.executed_trials - outcome.failed_trials if reusable else 0,
                 "Expected trials": config.target_eval_runs,
                 "Failed trials": outcome.failed_trials if reusable else 0,
+                "Execution rate": (
+                    (outcome.executed_trials - outcome.failed_trials) / outcome.executed_trials
+                    if reusable and outcome.executed_trials
+                    else float("nan")
+                ),
+                "Failure rate": (
+                    outcome.failed_trials / outcome.executed_trials
+                    if reusable and outcome.executed_trials
+                    else float("nan")
+                ),
                 "Solved trials": outcome.solved_trials if reusable else 0,
                 "Meaningful trials": outcome.meaningful_trials if reusable else 0,
-                "Success rate": outcome.success_rate if reusable else float("nan"),
+                "Primary target rate": outcome.success_rate if reusable else float("nan"),
                 "Median error": outcome.median_error if reusable else float("nan"),
                 "Median finite error": outcome.median_finite_error if reusable else float("nan"),
                 "Category": category,
@@ -100,7 +110,8 @@ def summarize_evaluations(
     baseline_errors = (
         table[
             (table["Solver Type"] == "baseline")
-            & (table["Valid trials"] >= config.target_eval_runs)
+            & (table["Executed trials"] >= config.target_eval_runs)
+            & (table["Category"] != "missing_or_stale")
         ]
         .groupby(keys)["Median error"]
         .min()

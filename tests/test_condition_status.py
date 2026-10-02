@@ -4,7 +4,11 @@ import pandas as pd
 import pytest
 
 from benchmarking.application.select_champions import ChampionSelectionService
-from benchmarking.domain.evaluation import ERROR_DEFINITION, EVALUATION_SCHEMA_VERSION
+from benchmarking.domain.evaluation import (
+    CHAMPION_RETURN_VALIDATION_VERSION,
+    ERROR_DEFINITION,
+    EVALUATION_SCHEMA_VERSION,
+)
 from benchmarking.domain.services.condition_status import inspect_condition
 
 
@@ -64,6 +68,50 @@ def test_confirmed_failure_counts_but_historical_skipped_tail_does_not() -> None
     )
     assert result.reusable_trials == 2
     assert result.status == "PENDING"
+
+
+def test_old_champion_results_are_not_reused_after_return_validation_change() -> None:
+    provenance = {
+        "model": "model",
+        "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
+        "error_definition": ERROR_DEFINITION,
+        "code_hash": "current",
+        "clean_errors": [0.0] * 20,
+    }
+    old = inspect_condition(
+        code_available=True,
+        directory_exists=True,
+        provenance=provenance,
+        expected_code_hash="current",
+        expected_trials=20,
+    )
+    assert old.status == "NEEDS_RERUN"
+    assert old.reusable_trials == 0
+    assert old.reason == "stale_return_validation"
+
+    provenance["return_validation_version"] = CHAMPION_RETURN_VALIDATION_VERSION
+    current = inspect_condition(
+        code_available=True,
+        directory_exists=True,
+        provenance=provenance,
+        expected_code_hash="current",
+        expected_trials=20,
+    )
+    assert current.status == "COMPLETED"
+
+    baseline = dict(provenance, baseline="pso")
+    baseline.pop("model")
+    baseline.pop("return_validation_version")
+    assert (
+        inspect_condition(
+            code_available=True,
+            directory_exists=True,
+            provenance=baseline,
+            expected_code_hash=None,
+            expected_trials=20,
+        ).status
+        == "COMPLETED"
+    )
 
 
 def test_ranking_is_owned_by_selection_and_preserves_sqlite_null_order() -> None:

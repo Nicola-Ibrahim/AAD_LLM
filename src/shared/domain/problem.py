@@ -1,6 +1,12 @@
 from abc import ABC, abstractmethod
+from typing import NamedTuple
 
 import numpy as np
+
+
+class ObservationSample(NamedTuple):
+    evaluations: int
+    observed_y: float
 
 
 class BaseProblem(ABC):
@@ -68,3 +74,10 @@ class BaseProblem(ABC):
     def attach_logger(self, logger: object) -> None:
         """Hook to attach an external logger/analyzer to the problem."""
         pass
+
+    def configure_observation_checkpoints(self, budget: int, points: int) -> None:
+        """Optionally sample values returned to an optimizer, without extra queries."""
+
+    def observation_samples(self) -> tuple[ObservationSample, ...]:
+        """Return sampled observations; IOH traces remain separate clean data."""
+        return ()

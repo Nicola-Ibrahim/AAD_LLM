@@ -4,6 +4,7 @@ from collections.abc import Mapping
 
 EVALUATION_SCHEMA_VERSION = 2
 ERROR_DEFINITION = "max(0, best_clean_objective - true_optimum)"
+CHAMPION_RETURN_VALIDATION_VERSION = 1
 
 
 def executed_trial_count(provenance: Mapping[str, object]) -> int:

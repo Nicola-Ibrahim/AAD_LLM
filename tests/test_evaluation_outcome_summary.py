@@ -76,6 +76,46 @@ def test_stale_results_and_baselines_do_not_suggest_synthesis() -> None:
     table = summarize_evaluations(workload, selection, state, EvaluationConfig())
     assert table.loc[table["Rerun candidate"], "Experiment ID"].tolist() == [7]
     assert table.loc[table["Category"] == "missing_or_stale", "Valid trials"].tolist() == [0]
+    current = table.loc[table["Category"] == "all_failed"]
+    assert current["Executed trials"].tolist() == [20, 20]
+    assert current["Valid trials"].tolist() == [0, 0]
+    assert current["Execution rate"].tolist() == [0.0, 0.0]
+    assert current["Failure rate"].tolist() == [1.0, 1.0]
     state.write_provenance.assert_not_called()
     state.remove_solver_traces.assert_not_called()
     state.open_run_logger.assert_not_called()
+
+
+def test_partial_execution_failure_rates_include_all_executed_trials() -> None:
+    native = dict(
+        key="current",
+        raw_key="current",
+        solver_type="champion",
+        solver="llm",
+        model="model",
+        strategy="baseline",
+        problem_id=1,
+        dim=5,
+        noise_std=0.05,
+        target_dir="/traces/current",
+        reason="complete",
+    )
+    workload = MagicMock()
+    workload.audit_champions_workload.return_value = pd.DataFrame([native])
+    workload.audit_baselines_workload.return_value = pd.DataFrame()
+    selection = MagicMock()
+    selection.flatten_champions.return_value = {"current": {"experiment_id": 7}}
+    state = MagicMock()
+    state.eval_dir = Path("/traces")
+    state.read_provenance.return_value = {"clean_errors": [float("inf")] * 11 + [0.008] * 9}
+
+    table = summarize_evaluations(workload, selection, state, EvaluationConfig())
+
+    assert table.loc[0, "Executed trials"] == 20
+    assert table.loc[0, "Valid trials"] == 9
+    assert table.loc[0, "Failed trials"] == 11
+    assert table.loc[0, "Execution rate"] == pytest.approx(0.45)
+    assert table.loc[0, "Failure rate"] == pytest.approx(0.55)
+    assert table.loc[0, "Primary target rate"] == 0.0
+    assert table.loc[0, "Median error"] == float("inf")
+    assert table.loc[0, "Median finite error"] == pytest.approx(0.008)

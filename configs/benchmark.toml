@@ -17,6 +17,11 @@ budget_multiplier = 10000
 # Per-trial execution wall-clock timeout in seconds
 eval_timeout_seconds = 30.0
 
+# Sample the actual noisy objective values seen by each solver at up to this
+# many logarithmic evaluation checkpoints, plus its final real query.
+# IOH Analyzer logs remain clean-query traces; this diagnostic is separate.
+observation_trace_points = 64
+
 # Execution & Auto-Resume Control:
 #   • force_rerun = false: Automatically resumes from existing runs (e.g. runs 11..20) and skips completed
 #   • force_rerun = true:  Wipes existing traces and re-evaluates all 20 runs from scratch

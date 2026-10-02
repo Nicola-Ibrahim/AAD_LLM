@@ -37,7 +37,8 @@ The decision summarizes the enclosing `try/except`: an exception skips any remai
 steps and goes directly to the failure result.
 
 The diagram is specifically the synthesis workflow. Benchmark trials use the shared
-executor and clean-score the returned point, but do not use synthesis fitness penalties.
+executor, validate the returned point, and clean-score it, but do not use
+synthesis fitness penalties.
 A finite execution result is not necessarily a solved optimization problem.
 
 ## Benchmark readiness, resumption and analysis
@@ -50,10 +51,10 @@ flowchart TD
     Status -->|missing code| Missing["Report synthesis/code gap<br/>not an optimization failure"]
     Status -->|complete and valid| Cached["Reuse current trials"]
     Status -->|partial or not started| Resume["Retain valid prefix<br/>run remaining trials"]
-    Status -->|stale schema or hash| Restart["Restart this condition<br/>do not reuse stale trials"]
+    Status -->|stale schema, hash or champion validation| Restart["Restart this condition<br/>do not reuse stale trials"]
     Resume --> Trials["Execute scheduled trials<br/>instance r, seed base+r, budget D×multiplier"]
     Restart --> Trials
-    Trials --> Provenance["Persist terminal errors + provenance<br/>and available clean convergence traces"]
+    Trials --> Provenance["Persist terminal errors + provenance<br/>clean traces + sampled noisy observations"]
     Cached --> Analysis["Read-only audit and analysis<br/>terminal completeness ≠ trace availability"]
     Provenance --> Analysis
 ```
@@ -61,6 +62,8 @@ flowchart TD
 This is normal resumption with `force_rerun=false`. Force rerun deliberately
 bypasses cache reuse. Historical skipped tails are excluded from reusable trials;
 confirmed execution failures remain observations.
+Older champion results without the current returned-point validation marker are
+stale; classical baseline results remain reusable.
 
 ## Native and secondary studies
 
@@ -79,7 +82,9 @@ are not failures and are excluded from aggregates.
 | --- | --- |
 | Return contract | `(best_x, finite best_y)`; scalar-only returns are rejected. |
 | Terminal gap | `max(0, clean_objective(returned_x) - f_opt)`. |
+| Benchmark champion return | Require finite, correctly dimensioned coordinates within the search domain before clean scoring. |
 | Trace attainment | Best clean queried point; not proof that this point was returned. |
+| Noisy observations | Separately sample values actually returned to the optimizer at up to 64 logarithmic checkpoints plus its final query; IOH traces remain clean. |
 | Primary / secondary targets | `1e-8` / `1e-2`; baseline strategy for headline model comparisons. |
 | Uncertainty | Wilson condition intervals; deterministic condition-cluster aggregate bootstrap. |
 | Budget | Benchmark attaches `set_budget`; excess queries warn and return the last value. Synthesis does not itself attach that cap. |
@@ -100,8 +105,9 @@ Generated optimizers must return `(best_x, best_y)`. Scalar-only returns are rej
 The shared executor compiles the candidate, runs it with `func_timeout`, captures
 warnings, converts the returned coordinates to a NumPy array, and requires a finite
 scalar `best_y`. Synthesis candidate evaluation checks the returned dimension and
-bounds and evaluates the point on the clean objective. The bounds check currently
-uses a tolerance of `1e-5`.
+bounds and evaluates the point on the clean objective. Benchmark champion trials
+also check dimension, finite coordinates and bounds before clean scoring. The
+bounds check uses a tolerance of `1e-5`.
 
 Execution is guarded, but this is not a security sandbox. Synthesis campaigns use
 process-pool workers for sessions; individual candidate timeouts use
@@ -187,6 +193,17 @@ Native terminal reliability scores the returned point using the clean objective.
 Convergence traces describe the best clean point queried during search; these
 answer a different question. A target reached in a trace does not prove the
 optimizer returned that point.
+
+IOH logging is attached to the underlying clean problem: its `.dat` traces
+contain clean query values, not noisy observations delivered to the optimizer.
+New noisy trials also store bounded samples of actual observed values in
+`provenance.json` under `observed_objectives`. They are diagnostic samples, not
+a complete per-query noisy trace. The `observation_trace_points` benchmark
+setting controls their maximum count. Existing trials cannot gain these values
+retroactively. Older champion results without benchmark returned-point
+validation are flagged for reevaluation; baseline results remain reusable.
+Previously exported CSVs and figures are not automatically rewritten and should
+not be described as results under the new validation policy until refreshed.
 
 The headline model comparison uses the baseline prompt strategy and fixed gap
 threshold `1e-8`; `1e-2` is secondary. These are declared precision targets,

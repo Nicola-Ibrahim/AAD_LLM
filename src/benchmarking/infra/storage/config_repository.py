@@ -74,6 +74,7 @@ class EvaluationConfigRepository:
             random_seed=int(bench_cfg.get("random_seed", 42)),
             budget_multiplier=int(bench_cfg.get("budget_multiplier", 10000)),
             eval_timeout_seconds=float(bench_cfg.get("eval_timeout_seconds", 30.0)),
+            observation_trace_points=int(bench_cfg.get("observation_trace_points", 64)),
             force_rerun=bool(bench_cfg.get("force_rerun", False)),
             fill_missing_only=bool(bench_cfg.get("fill_missing_only", True)),
             classical_baselines=classical_baselines,

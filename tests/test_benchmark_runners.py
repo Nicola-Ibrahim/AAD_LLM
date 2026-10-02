@@ -694,3 +694,19 @@ target_noise_levels = [0.2]
     assert len(res["clean_errors"]) == 3
     # With distinct seeds under noisy evaluations, PSO trajectories should vary across runs
     assert len(set(res["clean_errors"])) > 1
+    provenance = json.loads(
+        (eval_dir / "2D/std_0.2/f1/pso/provenance.json").read_text(encoding="utf-8")
+    )
+    assert len(provenance["observed_objectives"]) == 3
+    assert all(samples for samples in provenance["observed_objectives"])
+    assert all(
+        samples[-1]["evaluations"] == count
+        for samples, count in zip(
+            provenance["observed_objectives"], provenance["evaluations_used"]
+        )
+    )
+    assert all(
+        "clean_y" not in sample
+        for samples in provenance["observed_objectives"]
+        for sample in samples
+    )

@@ -19,6 +19,7 @@ from benchmarking.domain.evaluation import (
 from benchmarking.domain.services.transfer import TransferAnalysisEngine
 from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage.model_registry import configured_model_names
+from shared.domain.problem import ObservationSample
 
 
 def audit_for(service: EvaluationService) -> EvaluationAuditService:
@@ -145,6 +146,7 @@ class MemoryState:
 class Problem:
     def __init__(self, problem_id: int) -> None:
         self.problem_id = problem_id
+        self.dim = 2
         self.true_optimum = 10.0 * problem_id
         self.evaluations = 0
 
@@ -156,6 +158,15 @@ class Problem:
 
     def eval_clean(self, x: np.ndarray) -> float:
         return self.true_optimum + float(x[0])
+
+    def is_in_bounds(self, x: np.ndarray, tol: float = 1e-5) -> bool:
+        return bool(np.all(x >= -5 - tol) and np.all(x <= 5 + tol))
+
+    def configure_observation_checkpoints(self, budget: int, points: int) -> None:
+        pass
+
+    def observation_samples(self) -> tuple[ObservationSample, ...]:
+        return ()
 
     def reset(self) -> None:
         pass
@@ -263,6 +274,19 @@ def test_failure_does_not_skip_later_instances(transfer_service: EvaluationServi
     result = service.trials.run_champion_trials(champion, target_problem_id=8, verbose=False)
     assert executor.execute_algorithm.call_count == 3
     assert result["clean_errors"] == [float("inf"), float("inf"), 0.0]
+
+
+@pytest.mark.parametrize("point", [np.array([6.0, 0.0]), np.array([np.nan, 0.0])])
+def test_invalid_champion_return_fails_each_trial(
+    transfer_service: EvaluationService, point: np.ndarray
+) -> None:
+    service = transfer_service
+    executor = service.trials.executor_factory(1)
+    executor.execute_algorithm.side_effect = lambda **kwargs: (point, 0.0)
+    champion = next(iter(service.champion_selection.flatten_champions().values()))
+    result = service.trials.run_champion_trials(champion, target_problem_id=8, verbose=False)
+    assert result["clean_errors"] == [float("inf")] * 3
+    assert executor.execute_algorithm.call_count == 3
 
 
 def test_native_diagonals_are_reused_without_reexecution(

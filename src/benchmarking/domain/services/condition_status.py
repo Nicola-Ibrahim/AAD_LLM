@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from benchmarking.domain.evaluation import (
+    CHAMPION_RETURN_VALIDATION_VERSION,
     ERROR_DEFINITION,
     EVALUATION_SCHEMA_VERSION,
     executed_trial_count,
@@ -31,7 +32,7 @@ def inspect_condition(
     expected_code_hash: str | None,
     expected_trials: int,
 ) -> ConditionStatus:
-    """Preserve existing cache validity without imposing new protocol requirements."""
+    """Reuse only results scored under the current champion-return policy."""
     recorded = executed_trial_count(provenance) if provenance is not None else 0
     median = (
         provenance.get("median_error", provenance.get("median_clean_error")) if provenance else None
@@ -46,6 +47,13 @@ def inspect_condition(
         or provenance.get("error_definition") != ERROR_DEFINITION
     ):
         return ConditionStatus("NEEDS_RERUN", recorded, 0, expected_trials, None, "stale_schema")
+    if (
+        provenance.get("model") is not None
+        and provenance.get("return_validation_version") != CHAMPION_RETURN_VALIDATION_VERSION
+    ):
+        return ConditionStatus(
+            "NEEDS_RERUN", recorded, 0, expected_trials, None, "stale_return_validation"
+        )
     if expected_code_hash and provenance.get("code_hash") != expected_code_hash:
         return ConditionStatus(
             "NEEDS_RERUN", recorded, 0, expected_trials, median_error, "stale_champion"

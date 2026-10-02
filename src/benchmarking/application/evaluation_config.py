@@ -46,6 +46,11 @@ class EvaluationConfig(BaseModel):
         gt=0.0,
         description="Timeout limit per benchmark trial execution in seconds.",
     )
+    observation_trace_points: int = Field(
+        default=64,
+        ge=1,
+        description="Maximum logarithmic checkpoints per noisy trial for actual observed values.",
+    )
     force_rerun: bool = Field(
         default=False,
         description="Whether to overwrite existing completed benchmark runs.",

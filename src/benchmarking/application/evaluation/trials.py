@@ -14,11 +14,13 @@ from benchmarking.application.interfaces.candidate_code_reader import CandidateC
 from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
 from benchmarking.application.interfaces.logger import EvaluationLoggerInterface
 from benchmarking.domain.evaluation import (
+    CHAMPION_RETURN_VALIDATION_VERSION,
     ERROR_DEFINITION,
     EVALUATION_SCHEMA_VERSION,
 )
 from benchmarking.domain.services.condition_status import inspect_condition
 from benchmarking.domain.services.resolvers import ModelNames
+from benchmarking.domain.services.returned_point import validate_returned_point
 from shared.application.interfaces.problem_factory import ProblemFactory
 from shared.domain.noise_model import NoiseModelEnum
 from shared.domain.problem import BaseProblem
@@ -49,6 +51,7 @@ class EvaluationTrialRunner:
         self.n_runs = config.target_eval_runs
         self.budget_multiplier = config.budget_multiplier
         self.trial_timeout_seconds = config.eval_timeout_seconds
+        self.observation_trace_points = config.observation_trace_points
         self.force_rerun = config.force_rerun
         self.random_seed = config.random_seed
 
@@ -74,6 +77,7 @@ class EvaluationTrialRunner:
         trial_seeds: list[int] = []
         runtimes: list[float] = []
         evals_list: list[int] = []
+        observed_objectives: list[list[dict[str, float | int]]] = []
         can_resume = False
 
         if not self.force_rerun and self.state_repo.solver_directory_exists(target_dir):
@@ -93,6 +97,7 @@ class EvaluationTrialRunner:
                 trial_seeds = prov.get("trial_seeds", [])
                 runtimes = prov.get("runtimes", [])
                 evals_list = prov.get("evaluations_used", [])
+                observed_objectives = prov.get("observed_objectives", [])
                 existing_runs = inspection.reusable_trials
                 clean_errors = clean_errors[:existing_runs]
                 best_objectives = best_objectives[:existing_runs]
@@ -101,6 +106,10 @@ class EvaluationTrialRunner:
                 trial_seeds = trial_seeds[:existing_runs]
                 runtimes = runtimes[:existing_runs]
                 evals_list = evals_list[:existing_runs]
+                observed_objectives = observed_objectives[:existing_runs]
+                # Historical trials have no observation sidecar; preserve their
+                # positions so resumed trial indices do not become misaligned.
+                observed_objectives += [[] for _ in range(existing_runs - len(observed_objectives))]
                 if existing_runs >= self.n_runs:
                     self.logger.cached(existing_runs, prov.get("median_error"))
                     return {
@@ -124,6 +133,7 @@ class EvaluationTrialRunner:
             clean_errors, best_objectives, true_optima = [], [], []
             instance_ids, trial_seeds = [], []
             runtimes, evals_list = [], []
+            observed_objectives = []
             start_run_idx = 1
             is_incremental = False
         else:
@@ -155,6 +165,8 @@ class EvaluationTrialRunner:
 
                 prob.attach_logger(logger_ioh)
                 prob.set_budget(budget)
+                if noise_std > 0.0:
+                    prob.configure_observation_checkpoints(budget, self.observation_trace_points)
                 trial_started = time.perf_counter()
                 try:
                     best_objective, rt, _reported_evals = runner_fn(prob, budget)
@@ -173,6 +185,15 @@ class EvaluationTrialRunner:
                 best_objectives.append(best_objective)
                 runtimes.append(rt)
                 evals_list.append(evals_used)
+                observed_objectives.append(
+                    [
+                        {
+                            "evaluations": sample.evaluations,
+                            "observed_y": sample.observed_y,
+                        }
+                        for sample in prob.observation_samples()
+                    ]
+                )
                 self.logger.trial(
                     trial_idx=run_idx,
                     total_trials=self.n_runs,
@@ -218,6 +239,8 @@ class EvaluationTrialRunner:
             ],
             "runtimes": runtimes,
             "evaluations_used": evals_list,
+            "observed_objectives": observed_objectives,
+            "observation_trace_points": self.observation_trace_points,
             "evaluated_at": datetime.now(timezone.utc).isoformat(),
         }
         self.state_repo.write_provenance(target_dir, prov_data)
@@ -288,11 +311,13 @@ class EvaluationTrialRunner:
                 budget=budget,
             )
             t1 = time.perf_counter()
+            validate_returned_point(prob, best_x)
             best_objective = prob.eval_clean(best_x)
             return best_objective, (t1 - t0), prob.evaluations
 
         prov_metadata = {
             "model": llm_name,
+            "return_validation_version": CHAMPION_RETURN_VALIDATION_VERSION,
             "model_slug": model_slug,
             "strategy": strat,
             "algorithm_name": algo_name,

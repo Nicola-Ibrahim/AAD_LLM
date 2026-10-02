@@ -4,7 +4,7 @@ import numpy as np
 from ioh import ProblemClass, get_problem
 
 from shared.domain.noise import BaseNoiseStrategy, HomoscedasticAdditiveNoiseStrategy
-from shared.domain.problem import BaseProblem
+from shared.domain.problem import BaseProblem, ObservationSample
 
 
 class BBOBProblem(BaseProblem):
@@ -55,10 +55,33 @@ class BBOBProblem(BaseProblem):
         self.noise_model: str = self.noise_strategy.name
         self._budget: int | None = None
         self._last_f: float = float("inf")
+        self._observation_checkpoints = np.array([], dtype=int)
+        self._next_observation_checkpoint = 0
+        self._observation_samples: list[ObservationSample] = []
+        self._last_observation: ObservationSample | None = None
 
     def set_budget(self, budget: int) -> None:
         """Set maximum evaluation budget for the problem instance."""
         self._budget = budget
+
+    def configure_observation_checkpoints(self, budget: int, points: int) -> None:
+        """Sample actual returned values on a bounded logarithmic evaluation grid."""
+        if budget < 1 or points < 1:
+            raise ValueError("Observation budget and checkpoint count must be positive")
+        self._observation_checkpoints = np.unique(
+            np.geomspace(1, budget, min(points, budget)).astype(int)
+        )
+        self._next_observation_checkpoint = 0
+        self._observation_samples = []
+        self._last_observation = None
+
+    def observation_samples(self) -> tuple[ObservationSample, ...]:
+        """Include the final real query even if it fell between checkpoints."""
+        samples = tuple(self._observation_samples)
+        last = self._last_observation
+        if last is not None and (not samples or samples[-1].evaluations != last.evaluations):
+            return (*samples, last)
+        return samples
 
     def __call__(self, x: np.ndarray) -> float:
         """Evaluate the objective function at point `x`.
@@ -85,6 +108,16 @@ class BBOBProblem(BaseProblem):
             val = self.noise_strategy.add_noise(f_clean)
 
         self._last_f = val
+        if self._observation_checkpoints.size:
+            sample = ObservationSample(self.evaluations, float(val))
+            self._last_observation = sample
+            if (
+                self._next_observation_checkpoint < len(self._observation_checkpoints)
+                and sample.evaluations
+                >= self._observation_checkpoints[self._next_observation_checkpoint]
+            ):
+                self._observation_samples.append(sample)
+                self._next_observation_checkpoint += 1
         return val
 
     def eval_scalar(self, x: np.ndarray) -> float:
@@ -100,6 +133,9 @@ class BBOBProblem(BaseProblem):
     def reset(self) -> None:
         """Reset the IOH problem state (call counter) for reuse across runs."""
         self._last_f = float("inf")
+        self._observation_samples = []
+        self._last_observation = None
+        self._next_observation_checkpoint = 0
         self._clean_problem.reset()
 
     @property
