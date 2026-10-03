@@ -16,11 +16,9 @@ changed observation noise while keeping their code fixed.
 \label{sec:experimental_design}
 %==============================================================================
 
-The synthesis experiments vary the LLM, prompt condition, benchmark
-function, dimension, and observation noise. After synthesis, one champion
-is selected for each condition and retained for independent benchmarking.
-The synthesis procedure and full prompt specifications are described in
-Chapter~\ref{chap:methodology}.
+The synthesis procedure and prompt specifications are defined in
+Chapter~\ref{chap:methodology}. The following settings determine the
+conditions used in the experiments.
 
 %------------------------------------------------------------------------------
 \subsection{Problems and Dimensions}
@@ -109,18 +107,12 @@ which LLaMEA queried to obtain candidate programs.
     \end{tabularx}
 \end{table}
 
-The prompt conditions follow the definitions in
-Chapter~\ref{chap:methodology}. Implicit prompts are used at every
-synthesis noise level. Explicit-Clean prompts are used at
-$\sigma_{\mathrm{synth}}=0$, and Explicit-Noisy prompts at positive
-noise levels. Each is combined with the Baseline, Thinking,
-Vectorization, or Guided scaffold.
-
-This gives twelve prompt variants. However, the explicit clean and noisy
-variants are assigned to their corresponding observation environments,
-rather than crossed independently with noise. The Vectorization scaffold
-provides additional guidance beyond the NumPy vectorization already
-requested in the common example.
+The synthesis experiments use two prompt modes, Implicit and Explicit,
+each combined with Baseline, Thinking, Vectorization, or Guided. In Explicit
+mode, clean problems use Explicit-Clean task information and noisy problems
+use Explicit-Noisy information. Implicit mode does not explicitly identify
+the observation environment. The full prompt definitions are given in
+Chapter~\ref{chap:methodology}.
 
 \begin{table}[htbp]
     \centering
@@ -133,8 +125,8 @@ requested in the common example.
         \hline
         LLM & Three models listed in
         Table~\ref{tab:llm_configurations}. \\
-        Prompt condition & Implicit, Explicit-Clean, or Explicit-Noisy,
-        assigned according to the synthesis noise level. \\
+        Prompt mode & Implicit or Explicit; the Explicit task description
+        follows the clean or noisy environment. \\
         Scaffold & Baseline, Thinking, Vectorization, or Guided. \\
         Function & $f_1$, $f_8$, $f_{11}$, $f_{15}$, or $f_{21}$. \\
         Dimension & $D\in\{2,3,5,10\}$. \\
@@ -211,10 +203,9 @@ configured objective-evaluation budget, problem instances, and noise
 conditions. Final solution quality, convergence, and target attainment
 provide complementary measures of performance.
 
-The benchmark protocol combines these established functions with the
-noise model and champion-selection procedure used in this study.
-Each champion remains fixed throughout benchmarking; no further LLM
-generation or synthesis feedback is applied.
+The selected champions remain fixed throughout benchmarking.
+Section~\ref{sec:independent_benchmark_method} describes this separation
+from synthesis.
 
 Each benchmark run is specified by the algorithm, BBOB function and
 instance, dimension, evaluation noise level, objective-evaluation budget, and
@@ -222,15 +213,14 @@ random seed. The evaluation budget is $B_{\mathrm{eval}}=10{,}000D$:
 20,000, 30,000, 50,000 and 100,000 instrumented objective evaluations for
 $D=2,3,5,10$, respectively. Each condition targets $N_{\mathrm{runs}}=20$
 trials, using instance $r$ and optimizer/noise seed $42+r$ for $r=1,\ldots,20$.
-The factor of 10,000 is a study-specific choice, not a budget prescribed by
-IOH or COCO. Scaling the budget with $D$ holds evaluations per dimension
-constant and makes comparisons among solvers at a given dimension use the
-same search allowance. It does not give different dimensions the same
+Dimension-proportional budgeting is described in the COCO experimental
+procedure \cite{Hansen2016Procedure}. This study selects the multiplier
+10,000, holding the permitted evaluations per dimension constant. Solvers
+at the same dimension receive the same objective-evaluation allowance. It does not give different dimensions the same
 absolute number of evaluations, nor guarantee comparable problem difficulty
 across functions. The independent benchmark budget is also deliberately
-smaller than the $10^6$-evaluation synthesis budget: the two stages answer
-different questions, namely candidate selection during generation and the
-repeatability of the selected program across instances. The resulting
+smaller than the $10^6$-evaluation synthesis budget: synthesis selects candidate programs, while benchmarking assesses the
+selected programs across instances under a smaller search allowance. The resulting
 curves should therefore be interpreted at the benchmark's stated budget,
 not as asymptotic performance or a full COCO restart experiment.
 The generated champions have a 30-second execution timeout; the classical
@@ -266,7 +256,7 @@ differ between adapters, so it is not used as the primary efficiency measure.
         \hline
         CMA-ES & \texttt{cma} 4.4.4 &
         Uniform initial point; $\sigma_0=(u-l)/6$; bounds enforced;
-        default population/stopping rules; verbosity $-9$. \\
+        default population/stopping rules. \\
         Differential Evolution & SciPy 1.18.0 &
         Population multiplier 15; \texttt{polish=False};
         $\mathrm{maxiter}=\max(1,\lfloor B/(15D)\rfloor)$;
@@ -282,90 +272,13 @@ differ between adapters, so it is not used as the primary efficiency measure.
 \subsection{Performance Measures}
 \label{subsec:experiment_performance_measures}
 
-When $\sigma_{\mathrm{eval}}>0$, the optimizer receives only the
-stochastic objective observations allowed by the evaluation environment.
-After execution, the benchmark evaluator assesses the returned solution on
-the clean objective. For a run $r$, the final clean optimality gap is
-\begin{equation}
-    \Delta f_r
-    = \max\!\left(0,f_{\mathrm{clean}}(\mathbf{x}_{r,\mathrm{best}})-f^*\right),
-\label{eq:benchmark_final_gap}
-\end{equation}
-where $\mathbf{x}_{r,\mathrm{best}}$ is the returned best point and $f^*$
-is the global optimum value for that function instance. The optimizer does
-not receive this post-run clean measurement. For $\sigma_{\mathrm{eval}}=0$,
-the benchmark objective itself is clean.
-
-The final gap measures the quality of the solution actually returned by an
-optimizer. To assess performance over the available evaluations, we also
-examine the best clean value among queried points and the evaluations needed
-to reach a target. The latter two views correspond to the fixed-budget and
-fixed-target perspectives used in COCO performance assessment
-\cite{Hansen2016Performance,Hansen2021COCO}. Our curves use the study's own
-clean query traces and target sets; they are not standard COCO output.
-
-The primary solved target for the returned point is $\tau=10^{-8}$.
-The less stringent $\tau=10^{-2}$ is also used in target-attainment
-analysis. Let $\mathcal R_c$ contain
-the eligible trials for a complete benchmark condition $c$. Its terminal
-reliability at target $\tau$ and the equally weighted aggregate over a set
-$\mathcal C$ of complete conditions are
-\begin{equation}
-    \widehat p_{c,\tau}^{\mathrm{return}}
-    =\frac{1}{|\mathcal R_c|}\sum_{r\in\mathcal R_c}
-      \mathbf{1}\{\Delta f_r\leq\tau\},
-    \qquad
-    \widehat p_{\mathcal C,\tau}^{\mathrm{return}}
-    =\frac{1}{|\mathcal C|}\sum_{c\in\mathcal C}
-      \widehat p_{c,\tau}^{\mathrm{return}}.
-\label{eq:benchmark_return_reliability}
-\end{equation}
-Here $\mathbf{1}\{\cdot\}$ equals one when the stated condition holds and
-zero otherwise. Each complete condition contributes 20 instance trials.
-The aggregate gives each complete condition the same weight, regardless of
-how many other conditions belong to its model or prompt group.
-
-Convergence describes what was found during the search. Let $n_r$ be the
-number of actual instrumented objective evaluations in trial $r$, and let
-$\mathbf{x}_{r,j}$ be its $j$-th queried point. For $n_r\geq1$, the best
-clean queried gap by evaluation count $b\geq1$ is
-\begin{equation}
-    g_r(b)=
-    \min_{1\leq j\leq\min(b,n_r)}
-    \max\!\left(0,
-      f_{\mathrm{clean}}^{(r)}(\mathbf{x}_{r,j})-f_r^*\right),
-\label{eq:benchmark_query_convergence}
-\end{equation}
-where $f_r^*$ is the optimum value for the trial's BBOB instance. The
-convergence figures plot the median of $g_r(b)$ across the displayed trials;
-the ribbons mark its 25th and 75th percentiles. These are diagnostic clean
-values of queried points. Under noisy evaluation, the optimizer receives
-noisy observations, and its final returned point need not be the point with
-the smallest clean queried gap.
-
-For target gap $\tau$, define the first attainment time as
-\begin{equation}
-    T_{r,\tau}
-    =\min\{j\in\{1,\ldots,n_r\}:g_r(j)\leq\tau\},
-    \qquad \min\varnothing=\infty.
-\label{eq:benchmark_target_hitting_time}
-\end{equation}
-For trials $\mathcal R$ and a common target set $\mathcal T$, the plotted
-target-attainment empirical cumulative distribution function (ECDF) is
-\begin{equation}
-    \widehat F_{\mathcal R,\mathcal T}(b)
-    =\frac{1}{|\mathcal R|\,|\mathcal T|}
-      \sum_{r\in\mathcal R}\sum_{\tau\in\mathcal T}
-      \mathbf{1}\{T_{r,\tau}\leq b\}.
-\label{eq:benchmark_target_ecdf}
-\end{equation}
-It gives the proportion of trial--target pairs reached within $b$ actual
-objective evaluations. An unachieved target remains in the denominator.
-This is the fixed-target ECDF construction adapted to clean queried gaps
-\cite{Hansen2016Performance,Doerr2018IOHprofiler}. The ECDF and terminal
-reliability answer different questions: the ECDF concerns points queried
-during the search, while Equation~\eqref{eq:benchmark_return_reliability}
-concerns the point returned at the end.
+The clean returned-point gap, convergence measure, and target-attainment
+ECDF are defined in Section~\ref{subsec:benchmark_performance_measures}.
+The primary success threshold is $\Delta f\leq10^{-8}$. The secondary
+threshold $10^{-2}$ is also reported in target-quality diagnostics.
+Each complete benchmark condition contributes 20 instance trials, and the
+summary tables weight complete conditions equally, as defined in
+Equation~\eqref{eq:benchmark_return_reliability}.
 
 The IOH query histories supply the clean values in
 Equation~\eqref{eq:benchmark_query_convergence}. The query histories and
@@ -482,8 +395,8 @@ probabilities are averaged equally across eligible conditions.
 The exploratory profiles display each function separately, without an
 overall raw-gap average. Function-specific scales must be considered when
 interpreting convergence; raw gaps are not used for cross-function ranking.
-The ECDF target sets and their relation to the primary returned-point rate
-are defined before the results in
+The relation between target attainment and returned-point success is defined
+in Section~\ref{subsec:benchmark_performance_measures}, particularly
 Equations~\eqref{eq:benchmark_return_reliability}--\eqref{eq:benchmark_target_ecdf}.
 
 \subsection{Implicit Synthesis}
@@ -737,7 +650,7 @@ trial records were checked for consistency. The complete selected programs
 are reproduced with line numbers in Appendix~\ref{app:generated_programs};
 the excerpts below identify the decisions examined in this section.
 
-\subsubsection{A Champion with Consistent Finite Returns}
+\subsubsection{Successful Clean Search}
 
 A DeepSeek-Coder-V2-Lite-Instruct Explicit-Clean Baseline champion for $f_1$ at $D=2$ is a generated
 particle-swarm optimizer (experiment 2063, iteration 2). It maintains
@@ -763,7 +676,7 @@ budget boundary, where the benchmark wrapper enforces the actual evaluation
 limit. The evidence here concerns its observed returned-point performance
 under the stated clean, two-dimensional condition.
 
-\subsubsection{An Instance-Dependent Failure in Parent Selection}
+\subsubsection{Offset-Sensitive Selection}
 
 In contrast, the DeepSeek-Coder-V2-Lite-Instruct Implicit Baseline champion for noisy $f_1$ at
 $D=5$ and $\sigma=0.05$ is \texttt{ImprovedSES} (experiment 2139,
@@ -862,7 +775,7 @@ failure at 150 calls. These bounded checks identify offset sensitivity in
 the early selection logic; they do not establish final convergence of the
 shifted runs or replace the archived benchmark measurements.
 
-\subsubsection{Budget Counting and Interpretation of the Failure}
+\subsubsection{Budget Counting}
 
 A second weakness appears in lines 22 and 39 of
 Listing~\ref{lst:generated_ses_complete}. If $P=50$ is the fixed nominal

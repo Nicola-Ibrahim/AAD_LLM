@@ -27,24 +27,10 @@ algorithm-level criterion for the outer LLaMEA process. The clean objective is
 therefore available to the synthesis framework but not to the generated
 optimizer while it performs its search.
 
-The complete methodology consists of a sequence of connected stages. A
-continuous black-box optimization problem is first defined together with its
-fitness evaluation setup and selected prompt configuration. The resulting
-optimization environment is supplied to the LLaMEA synthesis process, where
-the LLM generates executable optimization heuristics. The candidates are
-extracted, validated, executed, and evaluated by the surrounding framework.
-The outer synthesis controller compares the generated algorithms using the
-clean quality of the solutions they return and incorporates the evaluation
-outcome into the context used for subsequent generations.
-
-When a synthesis run terminates, its final incumbent is retained as the
-algorithm produced by that run. The retained algorithms are subsequently
-evaluated independently under the experimental conditions defined for the
-study. The independent evaluation includes both clean and stochastic fitness
-conditions so that the behavior of the generated algorithms can be examined
-under different evaluation environments. The resulting measurements are then
-used for statistical analysis and comparison with established optimization
-algorithms.
+The framework generates, validates, executes, and assesses candidate
+programs, then uses selection and feedback to guide subsequent generations.
+After synthesis, selected champions undergo independent benchmarking and
+comparison with established optimizers.
 
 Figure~\ref{fig:methodology_architecture} summarizes the complete methodology.
 It should be read as a high-level system overview rather than as a
@@ -401,8 +387,8 @@ that can influence the optimizer's search.
 The stochastic observations and the clean diagnostic value therefore have
 different roles. The stochastic objective determines the search trajectory of
 the generated optimizer and consequently affects which solution it returns.
-The clean diagnostic value is calculated only after execution and is used by
-the outer LLaMEA process to assess the quality of the returned solution.
+The clean diagnostic value of the returned solution is calculated after
+execution and used by the outer LLaMEA process to assess that solution.
 
 This deliberate separation prevents a favorable individual noise realization
 from being used directly as the algorithm-level selection criterion while
@@ -510,10 +496,9 @@ magnitude of the stochastic perturbation changes with the remaining objective
 error.
 
 The heteroscedastic formulation is selected for the stochastic experiments in
-this thesis because the intended experimental setup requires the reliability
-of observed fitness values to change with optimization progress. It provides a
-controlled stochastic model in which this dependency is explicitly defined
-through the clean optimality gap.
+this thesis because the intended experimental setup uses perturbations whose absolute scale
+decreases with the clean optimality gap. At a fixed positive $\sigma$, the
+standard deviation relative to a nonzero gap remains $\sigma$.
 
 The study does not assume that this formulation represents every possible
 real-world source of noise. It defines the stochastic evaluation environment
@@ -643,8 +628,8 @@ source code. The implementation therefore extracts the candidate source before
 execution. The resulting program is passed to the validation stage rather
 than being executed directly from the raw model response.
 
-The first valid candidate establishes the initial incumbent of the synthesis
-run. It is generated using the same task, prompt configuration, and program
+The first candidate that executes successfully and returns a valid solution
+establishes the initial incumbent of the synthesis run. It is generated using the same task, prompt configuration, and program
 interface as subsequent candidates. Once this candidate has been executed,
 its clean diagnostic evaluation establishes the reference against which later
 children are compared.
@@ -765,13 +750,13 @@ an externally supplied function that can be queried at candidate points. The
 optimizer must construct its search strategy from the values returned by these
 queries.
 
-The worker process provides an execution boundary between candidate evaluation and the rest of the synthesis framework. Candidate execution is subject to a maximum runtime, and runtime failures are recorded so that they do not normally terminate the complete synthesis process. Where appropriate, diagnostic information is included in the context supplied to later generations, allowing the model to use execution feedback when revising a program, consistent with the feedback-driven design of LLaMEA \cite{LLaMEA2024}.
+The worker process separates candidate execution from the rest of the synthesis framework. Execution is subject to a maximum runtime, and failures are recorded rather than allowed to stop the complete synthesis process.
 
 Let $T_{\mathrm{exec}}$ denote the maximum permitted execution time for one candidate. If execution exceeds this limit, the candidate is classified as a timeout. The execution time limit is treated as an implementation constraint rather than as an optimization objective; its experimental value is reported in Chapter~\ref{chap:experiments}.
 
-Generated algorithms may fail because of invalid numerical operations, incompatible array dimensions, incorrect use of the objective interface, undefined variables, or other implementation errors. These failures are captured during candidate evaluation and recorded with diagnostic information. They are handled as candidate failures rather than being allowed to terminate the complete synthesis process.
+Generated algorithms may fail because of invalid numerical operations, incompatible array dimensions, incorrect use of the objective interface, undefined variables, or other implementation errors. Where appropriate, the recorded diagnostic information is supplied to later generations so that the model can revise the program, consistent with the feedback-driven design of LLaMEA \cite{LLaMEA2024}.
 
-For the standard return format \texttt{(best\_x, best\_y)}, the evaluation environment checks that \texttt{best\_x} has the expected dimension and lies within the problem bounds, allowing a small numerical tolerance. Non-finite coordinates fail this bounds check. The environment then evaluates \texttt{best\_x} on the clean objective and rejects a non-finite objective value.
+For the required return format \texttt{(best\_x, best\_y)}, the evaluation environment checks that \texttt{best\_x} has the expected dimension and lies within the problem bounds, allowing a small numerical tolerance. Non-finite coordinates fail this bounds check. The environment then evaluates \texttt{best\_x} on the clean objective and rejects a non-finite objective value.
 
 Let $B$ denote the configured objective-evaluation budget and let $N_{\mathrm{eval}}$ denote the number of objective evaluations. The intended protocol is
 
@@ -784,7 +769,7 @@ Each actual evaluation through \texttt{problem(x)} counts, including repeated ev
 
 This inequality is an intended protocol, not a strict runtime guarantee in the current implementation. Although the BBOB wrapper can enforce a hard cap when a budget is set on the problem, the synthesis path does not currently set that cap. The executor records the observed evaluation count and warns about substantial overruns, but does not reject every over-budget candidate.
 
-For the standard return format, \texttt{best\_x} is the coordinate vector selected by the generated optimizer, and \texttt{best\_y} is the objective value it reports for that vector. Under stochastic evaluation, \texttt{best\_y} may reflect a noisy observation. The outer synthesis framework therefore uses a clean reevaluation of \texttt{best\_x} as the algorithm-level selection criterion, following the procedure described in Section~\ref{subsec:deterministic_stochastic}. For a scalar-only return, no \texttt{best\_x} is available for clean reevaluation, so the framework uses the returned scalar value instead.
+For the required return format, \texttt{best\_x} is the coordinate vector selected by the generated optimizer, and \texttt{best\_y} is the objective value it reports for that vector. Under stochastic evaluation, \texttt{best\_y} may reflect a noisy observation. The outer synthesis framework therefore uses a clean reevaluation of \texttt{best\_x} as the algorithm-level selection criterion, following the procedure described in Section~\ref{subsec:deterministic_stochastic}.
 
 
 %==============================================================================
@@ -799,23 +784,6 @@ incumbent.
 
 This is a deliberate part of the methodology rather than an information
 channel available to the generated optimizer.
-
-The distinction corresponds to two nested levels of optimization. The inner
-level is the search performed by the generated optimization program. Under
-stochastic conditions, this optimizer receives only noisy objective
-observations and does not know the clean optimum or clean objective values.
-
-The outer level is the LLaMEA algorithm-design process. Its task is not to
-optimize a solution vector directly, but to compare complete generated
-optimization algorithms. The clean diagnostic objective is therefore used at
-this outer level so that parent and child algorithms can be compared according
-to the quality of the solutions they produce.
-
-The outer synthesis process consequently has access to information that is
-intentionally unavailable to the generated optimizer. The generated algorithm
-must still discover its returned solution entirely through the objective
-interface supplied during execution.
-
 
 %------------------------------------------------------------------------------
 \subsection{Parent--Child Comparison}
@@ -898,9 +866,8 @@ If this condition is not satisfied, the current parent remains the incumbent.
 The parent is not re-executed before the comparison. Its previously recorded
 clean diagnostic score remains the reference used for elitist selection.
 
-Each generated child is executed once during synthesis. Its returned solution
-therefore still depends on the search trajectory produced during that
-particular execution. Here, the search trajectory means the sequence of
+The returned solution depends on the search trajectory produced during
+that execution. Here, the search trajectory means the sequence of
 points evaluated by the generated optimizer and the decisions it makes from
 the observed objective values.
 
@@ -1205,7 +1172,7 @@ Code:
 
 <your complete class and any required imports>
 
-````
+```
 
 STRICT Rules -- violating any rule will cause execution failure:
 
@@ -1214,14 +1181,14 @@ STRICT Rules -- violating any rule will cause execution failure:
 * The class MUST be named exactly one word
   (e.g., class MyOptimizer:).
 
-* **init**(self) MUST take NO extra arguments beyond self.
+* __init__(self) MUST take NO extra arguments beyond self.
 
-* **init**(self) MUST have a non-empty body
+* __init__(self) MUST have a non-empty body
   (use pass if nothing to initialize).
 
-* The class MUST have a **call**(self, problem, budget) method.
+* The class MUST have a __call__(self, problem, budget) method.
 
-* **call** MUST return (best_x, float(best_y)) -- a tuple of the
+* __call__ MUST return (best_x, float(best_y)) -- a tuple of the
   best search coordinates array and best scalar float value.
 
 * Do NOT import or call scipy.optimize
@@ -1232,10 +1199,10 @@ STRICT Rules -- violating any rule will cause execution failure:
 * Every variable you use MUST be defined before use.
   Never reference undefined names.
 
-* Do NOT store problem or budget in **init**.
-  They are provided to **call** directly.
+* Do NOT store problem or budget in __init__.
+  They are provided to __call__ directly.
 
-* Do NOT include if **name** == '**main**': blocks.
+* Do NOT include if __name__ == '__main__': blocks.
 \end{verbatim}
 
 The output requirements are common to every generated algorithm. In
@@ -1452,6 +1419,10 @@ for this stochasticity.
 The environment-information conditions therefore differ in what the model is
 told about the objective evaluation process. The optimizer interface itself
 remains unchanged.
+These labels describe the task prompt. They do not imply that stochasticity
+remains undisclosed throughout the synthesis history: the stochastic
+feedback examples in Section~\ref{subsec:feedback_update} explicitly
+identify it when those messages are used.
 
 %..............................................................................
 % Strategy scaffolds
@@ -1592,56 +1563,115 @@ budget for handling stochastic fitness. These choices remain part of the
 generated optimization procedure.
 
 %------------------------------------------------------------------------------
-\subsection{LLM Inference Configuration}
+\subsection{LLM Hosting}
 \label{subsec:llm_inference_configuration}
-%------------------------------------------------------------------------------
 
-The language model acts as the program-generation component of the synthesis
-framework. It receives the constructed prompt together with the current
-synthesis context and produces a candidate Python implementation.
+The LLM receives the assembled prompt and synthesis context and returns a
+candidate program. It is queried through a separate Python LLM server.
+The model identities and hosting arrangement used in the experiments are
+reported in Chapter~\ref{chap:experiments}.
 
-The model is not given direct access to the benchmark implementation, the
-clean objective used for post-execution assessment, the known optimum, or the
-internal synthesis controller except through information explicitly included
-in the prompt and evolutionary feedback.
+%==============================================================================
+\section{Independent Benchmarking}
+\label{sec:independent_benchmark_method}
+%==============================================================================
 
-The inference configuration is kept fixed within a synthesis condition so
-that differences between prompt configurations are not confounded by changes
-in the model-generation procedure.
+Independent benchmarking follows synthesis and champion selection. One
+champion is retained for each covered synthesis condition according to the
+selection procedure in Chapter~\ref{chap:experiments}. The selected
+programs are fixed and evaluated alongside the reference optimizers.
+Benchmark results do not feed back into synthesis.
 
-The model identity, model variant, inference backend, temperature, generation
-settings, and seed configuration are treated as experimental parameters and
-are therefore reported explicitly in
+The benchmark executes each optimizer on the configured function instances,
+dimensions, and observation environments. Under noise, the optimizer
+receives stochastic observations while the framework records clean query
+values and separately assesses the returned solution. Repeated trials
+measure solution quality and variation across the configured instances
+and seeds. The experimental settings are specified in
 Chapter~\ref{chap:experiments}.
 
-This separation is important for reproducibility because the prompt alone
-does not completely determine an LLM response. The generated candidate can
-also depend on the exact model and inference configuration.
+\subsection{Performance Measures}
+\label{subsec:benchmark_performance_measures}
 
-Reproducing the synthesis experiments therefore requires both the prompt
-specification defined in this section and the corresponding model
-configuration reported in the experimental chapter.
+When $\sigma_{\mathrm{eval}}>0$, the optimizer receives only the
+stochastic objective observations allowed by the evaluation environment.
+After execution, the benchmark evaluator assesses the returned solution on
+the clean objective. For a run $r$, the final clean optimality gap is
+\begin{equation}
+    \Delta f_r
+    = \max\!\left(0,f_{\mathrm{clean}}(\mathbf{x}_{r,\mathrm{best}})-f^*\right),
+\label{eq:benchmark_final_gap}
+\end{equation}
+where $\mathbf{x}_{r,\mathrm{best}}$ is the returned best point and $f^*$
+is the global optimum value for that function instance. The optimizer does
+not receive this post-run clean measurement. For $\sigma_{\mathrm{eval}}=0$,
+the benchmark objective itself is clean.
 
-%==============================================================================
-\section{Independent Benchmark Evaluation}
-\label{sec:independent_benchmark}
-%==============================================================================
+The final gap measures the quality of the solution actually returned by an
+optimizer. To assess performance over the available evaluations, we also
+examine the best clean value among queried points and the evaluations needed
+to reach a target. The latter two views correspond to the fixed-budget and
+fixed-target perspectives used in COCO performance assessment
+\cite{Hansen2016Performance,Hansen2021COCO}. The measures are applied to this study's clean query traces; the target
+sets and plotting settings are specified in Chapter~\ref{chap:experiments}.
 
-Independent benchmarking begins after all planned synthesis runs for the
-selected LLMs and synthesis conditions are complete. The incumbent retained
-from each run is frozen, and the resulting algorithms are evaluated alongside
-the selected reference optimizers. No further LLM generation, algorithm
-modification, or synthesis feedback occurs during benchmarking.
+Let $\tau>0$ be a target clean gap and let $\mathcal R_c$ contain
+the eligible trials for a complete benchmark condition $c$. Its terminal
+reliability at target $\tau$ and the equally weighted aggregate over a set
+$\mathcal C$ of complete conditions are
+\begin{equation}
+    \widehat p_{c,\tau}^{\mathrm{return}}
+    =\frac{1}{|\mathcal R_c|}\sum_{r\in\mathcal R_c}
+      \mathbf{1}\{\Delta f_r\leq\tau\},
+    \qquad
+    \widehat p_{\mathcal C,\tau}^{\mathrm{return}}
+    =\frac{1}{|\mathcal C|}\sum_{c\in\mathcal C}
+      \widehat p_{c,\tau}^{\mathrm{return}}.
+\label{eq:benchmark_return_reliability}
+\end{equation}
+Here $\mathbf{1}\{\cdot\}$ equals one when the stated condition holds and
+zero otherwise. The aggregate gives each complete condition the same weight, regardless of
+how many other conditions belong to its model or prompt group.
 
-The benchmark applies the configured functions, dimensions, evaluation
-budgets, environments, and random seeds to each fixed optimizer. It includes
-clean and stochastic conditions, allowing algorithms to be assessed across
-the environments specified in the experimental design. Repeated seeded runs
-provide measurements of solution quality and performance variability.
+Convergence describes what was found during the search. Let $n_r$ be the
+number of actual instrumented objective evaluations in trial $r$, and let
+$\mathbf{x}_{r,j}$ be its $j$-th queried point. For $n_r\geq1$, the best
+clean queried gap by integer evaluation count $b\geq1$ is
+\begin{equation}
+    g_r(b)=
+    \min_{1\leq j\leq\min(b,n_r)}
+    \max\!\left(0,
+      f_{\mathrm{clean}}^{(r)}(\mathbf{x}_{r,j})-f_r^*\right),
+\label{eq:benchmark_query_convergence}
+\end{equation}
+If no point is evaluated, define $g_r(b)=\infty$. Here $f_r^*$ is the
+optimum value for the trial's BBOB instance. The
+convergence figures plot the median of $g_r(b)$ across the displayed trials;
+the ribbons mark its 25th and 75th percentiles. These are diagnostic clean
+values of queried points. Under noisy evaluation, the optimizer receives
+noisy observations, and its final returned point need not be the point with
+the smallest clean queried gap.
 
-Under stochastic evaluation, an optimizer receives observations from the
-configured stochastic objective. The benchmark framework evaluates its
-returned solution using the corresponding clean objective. This clean
-measurement is used for reporting and does not modify the optimizer or feed
-back into synthesis. The exact benchmark settings and statistical procedures
-are reported in Chapter~\ref{chap:experiments}.
+For target gap $\tau$, define the first attainment time as
+\begin{equation}
+    T_{r,\tau}
+    =\min\{j\in\{1,\ldots,n_r\}:g_r(j)\leq\tau\},
+    \qquad \min\varnothing=\infty.
+\label{eq:benchmark_target_hitting_time}
+\end{equation}
+For trials $\mathcal R$ and a common target set $\mathcal T$, the plotted
+target-attainment empirical cumulative distribution function (ECDF) is
+\begin{equation}
+    \widehat F_{\mathcal R,\mathcal T}(b)
+    =\frac{1}{|\mathcal R|\,|\mathcal T|}
+      \sum_{r\in\mathcal R}\sum_{\tau\in\mathcal T}
+      \mathbf{1}\{T_{r,\tau}\leq b\}.
+\label{eq:benchmark_target_ecdf}
+\end{equation}
+It gives the proportion of trial--target pairs reached within $b$ actual
+objective evaluations. An unachieved target remains in the denominator.
+This is the fixed-target ECDF construction adapted to clean queried gaps
+\cite{Hansen2016Performance,Doerr2018IOHprofiler}. The ECDF and terminal
+reliability answer different questions: the ECDF concerns points queried
+during the search, while Equation~\eqref{eq:benchmark_return_reliability}
+concerns the point returned at the end.
