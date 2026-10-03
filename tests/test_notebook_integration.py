@@ -6,13 +6,10 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-from benchmarking.application.analysis import AnalysisData, generate_markdown_report
 from benchmarking.application.evaluation.run import EvaluationService
 from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
-from benchmarking.domain.services.performance import PerformanceMetricsEngine
 from benchmarking.infra.io.code_reader import FilesystemCodeReader
-from benchmarking.infra.io.markdown_report_writer import MarkdownFileWriter
 from benchmarking.infra.solvers.baselines import get_baseline_runner
 from benchmarking.infra.storage.model_registry import configured_model_names
 from evolution.infra.concurrency.runner import ProcessPoolRunner
@@ -259,9 +256,9 @@ def test_nb04_audit_pipeline():
     assert isinstance(snapshot.completed_models, tuple)
 
 
-def test_nb05_analysis_pipeline(tmp_path):
-    """Verify shared analysis engines and report IO used by the analysis notebooks."""
-    print("\nTesting NB05 logic with AnalysisData...")
+def test_statistical_analysis_pipeline():
+    """Verify shared statistical calculations and analysis data access."""
+    print("\nTesting statistical analysis data access...")
     from benchmarking.infra.io.trace_repository import IOHTraceReader
     from benchmarking.infra.storage import SQLiteSynthesisReadRepository
     from shared.infra.database import Database
@@ -270,13 +267,10 @@ def test_nb05_analysis_pipeline(tmp_path):
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     trace_repo = IOHTraceReader()
 
-    service = AnalysisData(
-        sqlite_repo=sqlite_repo,
-        trace_repo=trace_repo,
-        model_names=configured_model_names(),
+    df_exp, df_iter = sqlite_repo.get_synthesis_dataframes()
+    all_benchmark_data = trace_repo.load_evaluation_traces(
+        solver_resolver=configured_model_names().resolve_folder_solver_name
     )
-    df_exp, df_iter = service.get_synthesis_dataframes()
-    all_benchmark_data = service.load_evaluation_traces()
     assert len(all_benchmark_data) > 0
     print(f"  • Problem conditions loaded: {len(all_benchmark_data)}")
 
@@ -285,34 +279,7 @@ def test_nb05_analysis_pipeline(tmp_path):
     print(f"  • Omnibus tests: {len(df_omnibus)} rows")
     print(f"  • Pairwise tests (FDR-corrected): {len(df_pairwise)} rows")
 
-    r_val, p_val = HypothesisTestingEngine().compute_synthesis_transfer_correlation(df_exp)
-    print(f"  • Synthesis transfer correlation: r = {r_val:.3f} (p = {p_val:.3e})")
-
-    # Verify figure computing methods
-    solvers = all_benchmark_data.solvers
-    p_ids = all_benchmark_data.problem_ids
-    dim = all_benchmark_data.dims[0]
-
-    matrix, labels = PerformanceMetricsEngine().compute_fragility_matrix(
-        all_benchmark_data, dim, solvers, p_ids
-    )
-    assert matrix.shape == (len(p_ids), len(solvers))
-
-    c_meds, n_meds, _ = PerformanceMetricsEngine().compute_validation_medians(
-        all_benchmark_data, dim, p_ids
-    )
-    assert len(c_meds) == len(p_ids)
-
-    valid_s, c_rates, n_rates, deltas = PerformanceMetricsEngine().compute_robustness_profile(
-        all_benchmark_data, dim, solvers, p_ids
-    )
-    assert len(valid_s) == len(c_rates) == len(n_rates) == len(deltas)
-
-    report_path = tmp_path / "comprehensive_master_report.md"
-    generate_markdown_report(df_omnibus, df_pairwise, report_path, writer=MarkdownFileWriter())
-    assert report_path.exists()
-    print(f"  • Master report generated: {report_path}")
-    print("✅ NB05 statistical analysis & figures pipeline verified.")
+    print("✅ Statistical analysis calculations verified.")
 
 
 def test_synthesis_config_problem_targets_and_fallbacks(tmp_path):
@@ -716,7 +683,7 @@ if __name__ == "__main__":
     test_nb02_synthesis_pipeline()
     test_nb03_evaluation_pipeline()
     test_nb04_audit_pipeline()
-    test_nb05_analysis_pipeline()
+    test_statistical_analysis_pipeline()
     test_custom_minimal_base_logger()
     test_campaign_usecase_run_worker_and_campaign()
     test_campaign_usecase_audit_matrix_standalone()

@@ -2,15 +2,11 @@
 
 from math import ceil
 
-import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from benchmarking.application.analysis.view_data import AnalysisInputs
-from benchmarking.domain.services.transfer import TransferAnalysisEngine
-from shared.config import RESULTS_DIR
+from benchmarking.application.analysis.results import NoiseRobustnessResult
 
-from .cache import FigureCache
 from .style import (
     FONT_FAMILY,
     get_model_scale_color,
@@ -18,31 +14,14 @@ from .style import (
 )
 
 
-def export_noise_success_rates(inputs: AnalysisInputs, cache: FigureCache) -> pd.DataFrame:
-    """Export returned-point reliability versus noise, separately from convergence."""
-    rel = inputs.config.reliability
-    engine = TransferAnalysisEngine()
-    table = engine.condition_table(
-        engine.frozen_noise_records(inputs.noise_records),
-        rel.primary_target,
-        rel.secondary_target,
-        inputs.config.target_eval_runs,
-    )
-    aggregate = engine.aggregate_noise(
-        table, rel.primary_prompt_strategy, rel.bootstrap_samples, rel.bootstrap_seed
-    )
-    report = RESULTS_DIR / "reports" / "noise_success_rates_v1.csv"
-    report.parent.mkdir(parents=True, exist_ok=True)
-    aggregate.to_csv(report, index=False)
+def build_noise_success_figure(results: NoiseRobustnessResult) -> go.Figure:
+    """Present precomputed returned-point reliability and confidence intervals."""
+    table, aggregate = results.conditions, results.aggregate
     if aggregate.empty or not (aggregate["Noise Std"] > 0).any():
-        print("No complete frozen-champion noisy trials: success-rate plot not exported.")
-        return aggregate
-    target = RESULTS_DIR / "figures" / "05_noise_robustness" / "success_rate_vs_noise.png"
-    if not cache.needs_export(target):
-        return aggregate
+        raise ValueError("No complete frozen-champion noisy trials.")
     dims = sorted(aggregate["Dim"].unique())
     models = sorted(aggregate["Model"].unique())
-    labels = {model: inputs.model_names.get_clean_model_label(model) for model in models}
+    labels = {model: results.model_labels[model] for model in models}
     noises = sorted(table["Noise Std"].unique())
     rows = ceil(len(dims) / 2)
     figure = make_subplots(
@@ -99,11 +78,10 @@ def export_noise_success_rates(inputs: AnalysisInputs, cache: FigureCache) -> pd
     figure.update_layout(
         template="plotly_white",
         font=dict(family=FONT_FAMILY, size=14),
-        title=f"Frozen-Champion Noise Robustness — Δf ≤ {rel.primary_target:g}<br><sup>Baseline strategy; equal-weight available functions; 95% condition-bootstrap intervals; missing data unplotted.</sup>",
+        title=f"Frozen-Champion Noise Robustness — Δf ≤ {results.primary_target:g}<br><sup>Baseline strategy; equal-weight available functions; 95% condition-bootstrap intervals; missing data unplotted.</sup>",
         width=1400,
         height=rows * 380 + 200,
         margin=dict(t=110, b=130),
         legend=dict(orientation="h", y=-0.17),
     )
-    cache.export(figure, target)
-    return aggregate
+    return figure

@@ -4,10 +4,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from benchmarking.application.analysis import (
-    AnalysisData,
-    generate_markdown_report,
-)
 from benchmarking.application.evaluation.audit import AuditCoverageSummary
 from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.enums import (
@@ -18,7 +14,6 @@ from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
 from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
 from benchmarking.domain.services.performance import PerformanceMetricsEngine
 from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
-from benchmarking.infra.io.markdown_report_writer import MarkdownFileWriter
 from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
 from benchmarking.infra.storage.model_registry import configured_model_names
@@ -188,70 +183,20 @@ class TestDomainEngines:
         assert "p-adjusted" in df_pair.columns
         assert "Outcome" in df_pair.columns
 
-    def test_compute_convergence_iqr(self, ecdf_engine):
+    def test_paired_convergence_iqr(self, ecdf_engine):
         runs = [
             RunTrace(evaluations=np.array([1, 5, 10]), raw_objectives=np.array([100.0, 50.0, 1.0])),
             RunTrace(evaluations=np.array([1, 5, 10]), raw_objectives=np.array([100.0, 40.0, 2.0])),
             RunTrace(evaluations=np.array([1, 5, 10]), raw_objectives=np.array([100.0, 60.0, 0.5])),
         ]
-        eval_grid, med, q25, q75 = ecdf_engine.compute_convergence_iqr(runs, n_points=10)
+        eval_grid = np.logspace(0, 6, 10)
+        med, q25, q75, _ = ecdf_engine.compute_trajectory_and_ecdf(
+            runs, eval_grid, np.array([1e-8, 1.0])
+        )
         assert len(eval_grid) == 10
         assert len(med) == 10
         assert np.all(med >= q25)
         assert np.all(q75 >= med)
-
-    def test_condition_and_aggregate_curve_queries(self, ecdf_engine):
-        benchmark_data = EvaluationDataset()
-        traces = [
-            RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 0.1])),
-            RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([8.0, 0.2])),
-        ]
-        for problem_id in (1, 8):
-            condition = EvaluationCondition(dim=2, noise_std=0.0, problem_id=problem_id)
-            for trace in traces:
-                benchmark_data.add_run(condition, "CMA-ES", trace)
-
-        eval_grid = np.array([1.0, 10.0])
-        targets = np.array([0.15])
-        trajectory = ecdf_engine.get_convergence_trajectory(
-            benchmark_data,
-            dim=2,
-            noise_std=0.0,
-            problem_id=1,
-            solver="CMA-ES",
-            eval_grid=eval_grid,
-        )
-        assert trajectory is not None
-        assert trajectory["median"] == pytest.approx([9.0, 0.15])
-
-        curve = ecdf_engine.get_target_ecdf_curve(
-            benchmark_data,
-            targets,
-            dim=2,
-            noise_std=0.0,
-            problem_id=1,
-            solver="CMA-ES",
-            eval_grid=eval_grid,
-        )
-        assert curve == pytest.approx([0.0, 0.5])
-        assert ecdf_engine.get_aggregate_target_ecdf_curve(
-            benchmark_data,
-            targets,
-            dim=2,
-            noise_std=0.0,
-            solver="CMA-ES",
-            eval_grid=eval_grid,
-        ) == pytest.approx(curve)
-        assert (
-            ecdf_engine.get_aggregate_convergence(
-                benchmark_data,
-                dim=2,
-                noise_std=0.0,
-                solver="missing solver",
-                eval_grid=eval_grid,
-            )
-            is None
-        )
 
     def test_compute_auc_ecdf_matrix(self, ecdf_engine):
         bench_data = EvaluationDataset()
@@ -352,16 +297,13 @@ class TestApplicationServicesIntegration:
         session_factory = Database().session_factory
         sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
         trace_repo = IOHTraceReader(RESULTS_DIR / "ioh_traces")
-        service = AnalysisData(
-            sqlite_repo=sqlite_repo,
-            trace_repo=trace_repo,
-            model_names=configured_model_names(),
-        )
         if (DATA_DIR / "db.sqlite3").exists():
-            df_exp, df_iter = service.get_synthesis_dataframes()
+            df_exp, df_iter = sqlite_repo.get_synthesis_dataframes()
             assert isinstance(df_exp, pd.DataFrame)
             assert isinstance(df_iter, pd.DataFrame)
-            traces = service.load_evaluation_traces()
+            traces = trace_repo.load_evaluation_traces(
+                solver_resolver=configured_model_names().resolve_folder_solver_name
+            )
             assert isinstance(traces, EvaluationDataset)
 
 
@@ -392,54 +334,7 @@ class TestConcreteInfraRepositories:
         assert hasattr(repo, "parse_dat_file")
 
 
-class TestMarkdownReporting:
-    def test_generate_markdown_report_empty(self):
-        report = generate_markdown_report()
-        assert "Comprehensive Empirical Evaluation" in report
-        assert "Overview & Experimental Protocol" in report
-
-    def test_generate_markdown_report_with_data(self, tmp_path):
-        df_omnibus = pd.DataFrame(
-            [{"Condition": "3D_std0.0_f1", "Significant": "Yes", "p-value": 0.001}]
-        )
-        df_pairwise = pd.DataFrame([{"Comparison": "A vs B", "p-value": 0.01, "A12": 0.85}])
-        out_file = tmp_path / "test_report.md"
-        report = generate_markdown_report(
-            df_omnibus=df_omnibus,
-            df_pairwise=df_pairwise,
-            output_path=out_file,
-            writer=MarkdownFileWriter(),
-        )
-        assert out_file.exists()
-        assert "Comprehensive Empirical Evaluation" in report
-
-
-class TestConvergenceTiers:
-    def test_compute_convergence_tiers(self):
-        engine = PerformanceMetricsEngine()
-        dataset = EvaluationDataset()
-        cond = EvaluationCondition(dim=2, noise_std=0.0, problem_id=1)
-
-        # 4 runs with different error levels
-        r_solved = RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([100.0, 1e-9]))
-        r_moderate = RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([100.0, 1e-4]))
-        r_minor = RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([100.0, 0.5]))
-        r_stagnated = RunTrace(
-            evaluations=np.array([1, 10]), raw_objectives=np.array([100.0, 50.0])
-        )
-
-        dataset.add_run(cond, "TestSolver", r_solved)
-        dataset.add_run(cond, "TestSolver", r_moderate)
-        dataset.add_run(cond, "TestSolver", r_minor)
-        dataset.add_run(cond, "TestSolver", r_stagnated)
-
-        df_tiers = engine.compute_convergence_tiers(dataset)
-        assert len(df_tiers) == 4
-        assert "High Precision (Δy ≤ 10⁻⁸)" in df_tiers["Tier"].values
-        assert "Moderate Convergence (10⁻⁸ < Δy ≤ 10⁻²)" in df_tiers["Tier"].values
-        assert "Minor Progress (10⁻² < Δy ≤ 1.0)" in df_tiers["Tier"].values
-        assert "Severe Stagnation / Failure (Δy > 1.0)" in df_tiers["Tier"].values
-
+class TestNoiseSpecificEcdfTargets:
     def test_ecdf_matrix_with_dict_targets(self):
         ecdf_engine = EcdfConvergenceEngine()
         dataset = EvaluationDataset()
@@ -463,28 +358,3 @@ class TestConvergenceTiers:
         assert len(df_res) == 2
         assert "AUC-ECDF (%)" in df_res.columns
         assert (df_res["AUC-ECDF (%)"] >= 0.0).all()
-
-    def test_compute_multi_noise_summary(self):
-        perf_engine = PerformanceMetricsEngine()
-        dataset = EvaluationDataset()
-
-        # Multi-noise levels: 0.0, 0.05, 0.1, 0.2
-        for noise in [0.0, 0.05, 0.1, 0.2]:
-            cond = EvaluationCondition(dim=2, noise_std=noise, problem_id=1)
-            # Solved on clean, degrading with noise
-            err = (
-                1e-9
-                if noise == 0.0
-                else (1e-4 if noise == 0.05 else (0.5 if noise == 0.1 else 50.0))
-            )
-            r = RunTrace(evaluations=np.array([1, 100]), raw_objectives=np.array([100.0, err]))
-            dataset.add_run(cond, "DynamicSolver", r)
-
-        df_summary = perf_engine.compute_multi_noise_summary(dataset)
-        assert len(df_summary) == 4
-        assert list(df_summary["Noise Std"]) == [0.0, 0.05, 0.1, 0.2]
-        assert df_summary.loc[df_summary["Noise Std"] == 0.0, "Success Rate"].iloc[0] == 1.0
-        assert df_summary.loc[df_summary["Noise Std"] == 0.05, "Success Rate"].iloc[0] == 0.0
-        assert df_summary.loc[df_summary["Noise Std"] == 0.05, "Fragility Drop"].iloc[0] == 1.0
-        assert "Mean Log Error" in df_summary.columns
-        assert "Median Error" in df_summary.columns

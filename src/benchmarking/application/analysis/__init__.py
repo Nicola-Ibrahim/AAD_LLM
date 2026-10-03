@@ -1,4 +1,13 @@
-from benchmarking.application.analysis.data import AnalysisData
-from benchmarking.application.analysis.report import generate_markdown_report
+"""Application-owned scientific analysis workflows."""
 
-__all__ = ["AnalysisData", "generate_markdown_report"]
+from benchmarking.application.analysis.analyze_ecdf_and_convergence import AnalyzeEcdfAndConvergence
+from benchmarking.application.analysis.analyze_noise_robustness import AnalyzeNoiseRobustness
+from benchmarking.application.analysis.analyze_performance import AnalyzePerformance
+from benchmarking.application.analysis.analyze_reliability import AnalyzeReliability
+
+__all__ = [
+    "AnalyzeEcdfAndConvergence",
+    "AnalyzeReliability",
+    "AnalyzeNoiseRobustness",
+    "AnalyzePerformance",
+]

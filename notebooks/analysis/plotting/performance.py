@@ -7,12 +7,11 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from benchmarking.application.analysis.performance import PerformanceMetrics
-from benchmarking.application.analysis.view_data import AnalysisInputs
-from benchmarking.domain.services.performance import PerformanceMetricsEngine
-from shared.config import RESULTS_DIR
+from benchmarking.application.analysis.results import (
+    HardnessSummary,
+    PerformanceAnalysisResult,
+)
 
-from .cache import FigureCache
 from .style import (
     FONT_FAMILY,
     get_model_scale_color,
@@ -20,47 +19,36 @@ from .style import (
     get_solver_line_style,
 )
 
-REPORTS_DIR = RESULTS_DIR / "reports"
-THESIS_SUMMARY_DIR = RESULTS_DIR / "figures" / "06_thesis_summary"
-EXPLICIT_DIR = RESULTS_DIR / "figures" / "02_explicit"
 
-
-def export_model_scale(
-    inputs: AnalysisInputs, metrics: PerformanceMetrics, cache: FigureCache
-) -> None:
-    if not cache.needs_export(THESIS_SUMMARY_DIR / "fig_09e_auc_ecdf_model_scale.png"):
-        return
+def build_model_scale_figure(results: PerformanceAnalysisResult) -> go.Figure:
     fig9e = make_subplots(
         rows=1,
         cols=2,
         subplot_titles=[
-            f"<b>(A) Clean (σ={inputs.clean_std})</b>",
-            f"<b>(B) Noisy (σ={inputs.noisy_std})</b>",
+            f"<b>(A) Clean (σ={results.clean_std})</b>",
+            f"<b>(B) Noisy (σ={results.noisy_std})</b>",
         ],
         horizontal_spacing=0.1,
         shared_yaxes=True,
     )
-    dims = [d for d in [2, 3, 5, 10] if d in inputs.dataset.dims]
+    dims = [d for d in [2, 3, 5, 10] if d in results.dims]
 
     def extract_model_scale(m: str) -> float:
         match = re.search("(\\d+(?:\\.\\d+)?)\\s*[bB]", m)
         return float(match.group(1)) if match else 0.0
 
-    discovered_models = sorted(list(inputs.models_to_solvers.keys()), key=extract_model_scale)
+    discovered_models = sorted(list(results.models_to_solvers.keys()), key=extract_model_scale)
     for col_idx, (n_std, title_sfx) in enumerate(
-        [(inputs.clean_std, "Clean"), (inputs.noisy_std, "Noisy")], start=1
+        [(results.clean_std, "Clean"), (results.noisy_std, "Noisy")], start=1
     ):
         for model_name in discovered_models:
-            sub_m = metrics.table[metrics.table["Solver"].str.startswith(f"{model_name} /")]
-            c_m = sub_m[sub_m["Noise Std"] == n_std]
-            vals_m = [
-                c_m[c_m["Dim"] == d]["AUC-ECDF (%)"].mean()
-                if not c_m[c_m["Dim"] == d].empty
-                else np.nan
-                for d in dims
-            ]
+            c_m = results.model_scale[
+                (results.model_scale["Model"] == model_name)
+                & (results.model_scale["Noise Std"] == n_std)
+            ].set_index("Dim")
+            vals_m = c_m.reindex(dims)["AUC-ECDF (%)"].to_list()
             if any((pd.notna(v) and (not np.isnan(v)) for v in vals_m)):
-                m_color = get_model_scale_color(model_name, inputs.models_to_solvers)
+                m_color = get_model_scale_color(model_name, results.models_to_solvers)
                 fig9e.add_trace(
                     go.Bar(
                         x=[f"{d}D" for d in dims],
@@ -77,16 +65,12 @@ def export_model_scale(
                     row=1,
                     col=col_idx,
                 )
-        for baseline in inputs.classical_solvers:
-            b_sub = metrics.table[
-                (metrics.table["Solver"] == baseline) & (metrics.table["Noise Std"] == n_std)
-            ]
-            b_vals = [
-                b_sub[b_sub["Dim"] == d]["AUC-ECDF (%)"].mean()
-                if not b_sub[b_sub["Dim"] == d].empty
-                else np.nan
-                for d in dims
-            ]
+        for baseline in results.classical_solvers:
+            b_sub = results.model_scale[
+                (results.model_scale["Model"] == baseline)
+                & (results.model_scale["Noise Std"] == n_std)
+            ].set_index("Dim")
+            b_vals = b_sub.reindex(dims)["AUC-ECDF (%)"].to_list()
             b_style = get_solver_line_style(baseline)
             fig9e.add_trace(
                 go.Scatter(
@@ -166,141 +150,101 @@ def export_model_scale(
         row=1,
         col=2,
     )
-    out_9e = THESIS_SUMMARY_DIR / "fig_09e_auc_ecdf_model_scale.png"
-    if cache.needs_export(out_9e):
-        cache.export(fig9e, out_9e)
-    print("✅ Figure 9E (Model Comparison) generated from currently discovered models.")
+    return fig9e
 
 
-def export_hardness_ablation(
-    inputs: AnalysisInputs, metrics: PerformanceMetrics, cache: FigureCache
-) -> None:
-    def render_model_success_rate_by_hardness(
-        model_tag: str, solvers_list: list[str], dim: int
-    ) -> None:
-        out_p = (
-            EXPLICIT_DIR
-            / inputs.model_slugs[model_tag]
-            / f"{dim}D"
-            / "figure_success_rate_by_hardness.png"
-        )
-        if not cache.needs_export(out_p):
-            return
-        has_model_data = False
-        for noise_level in [inputs.clean_std, inputs.noisy_std]:
-            df_hard = PerformanceMetricsEngine().compute_hardness_success_rates(
-                inputs.dataset, dim, solvers_list, noise_level=noise_level
-            )
-            if not df_hard.empty and any((" / " in s for s in df_hard["Solver"].unique())):
-                has_model_data = True
-                break
-        if not has_model_data:
-            return
-        fig = make_subplots(
-            rows=1,
-            cols=2,
-            subplot_titles=(
-                f"<b>(A) Deterministic Landscape (σ={inputs.clean_std}, {dim}D)</b>",
-                f"<b>(B) Noisy Stochastic Landscape (σ={inputs.noisy_std}, {dim}D)</b>",
-            ),
-            horizontal_spacing=0.1,
-        )
-        for c_idx, noise_level in enumerate([inputs.clean_std, inputs.noisy_std], start=1):
-            df_hard = PerformanceMetricsEngine().compute_hardness_success_rates(
-                inputs.dataset, dim, solvers_list, noise_level=noise_level
-            )
-            for solver in solvers_list:
-                sub_s = (
-                    df_hard[df_hard["Solver"] == solver] if not df_hard.empty else pd.DataFrame()
-                )
-                if not sub_s.empty:
-                    fig.add_trace(
-                        go.Bar(
-                            name=solver,
-                            x=sub_s["Class"],
-                            y=sub_s["Success Rate"],
-                            marker=dict(
-                                color=get_solver_color(solver),
-                                line=dict(color="#0F172A", width=0.8),
-                            ),
-                            showlegend=c_idx == 1,
-                        ),
-                        row=1,
-                        col=c_idx,
-                    )
-        fig.update_xaxes(
-            title_text="<b>Landscape Hardness Class</b>",
-            title_font=dict(size=14, family=FONT_FAMILY, color="#0F172A"),
-            tickangle=-15,
-            tickfont=dict(size=12, family=FONT_FAMILY, color="#1E293B"),
-            row=1,
-            col=1,
-        )
-        fig.update_xaxes(
-            title_text="<b>Landscape Hardness Class</b>",
-            title_font=dict(size=14, family=FONT_FAMILY, color="#0F172A"),
-            tickangle=-15,
-            tickfont=dict(size=12, family=FONT_FAMILY, color="#1E293B"),
-            row=1,
-            col=2,
-        )
-        fig.update_yaxes(
-            title_text="<b>Target Success Rate (Δy ≤ 10⁻⁸)</b>",
-            title_font=dict(size=14, family=FONT_FAMILY, color="#0F172A"),
-            tickfont=dict(size=12, family=FONT_FAMILY, color="#1E293B"),
-            range=[0, 1.1],
-            showgrid=True,
-            gridcolor="#F1F5F9",
-            row=1,
-            col=1,
-        )
-        fig.update_yaxes(
-            tickfont=dict(size=12, family=FONT_FAMILY, color="#1E293B"),
-            range=[0, 1.1],
-            showgrid=True,
-            gridcolor="#F1F5F9",
-            row=1,
-            col=2,
-        )
-        for anno in fig.layout.annotations:
-            anno.update(font=dict(size=15, color="#0F172A", family=FONT_FAMILY))
-        fig.update_layout(
-            template="plotly_white",
-            title=dict(
-                text=f"<b>Empirical Success Rate by BBOB Landscape Hardness — {model_tag.upper()} ({dim}D)</b><br><span style='font-size:13px;color:#475569;font-weight:normal;'>Comparison of Target Precision Hitting Rates Across 5 Problem Classes in Deterministic vs. Noisy Regimes</span>",
-                x=0.02,
-                y=0.96,
-                font=dict(size=16, color="#1E293B", family=FONT_FAMILY),
-            ),
-            barmode="group",
-            bargap=0.25,
-            bargroupgap=0.08,
-            width=1240,
-            height=590,
-            margin=dict(l=80, r=40, t=100, b=120),
-            legend=dict(
-                orientation="h",
-                yanchor="top",
-                y=-0.22,
-                xanchor="center",
-                x=0.5,
-                bgcolor="rgba(255,255,255,0.95)",
-                bordercolor="#E2E8F0",
-                borderwidth=1,
-                font=dict(size=12, family=FONT_FAMILY),
-            ),
-        )
-        slug = inputs.model_slugs[model_tag]
-        m_dir = EXPLICIT_DIR / slug / f"{dim}D"
-        m_dir.mkdir(parents=True, exist_ok=True)
-        out_p = m_dir / "figure_success_rate_by_hardness.png"
-        if cache.needs_export(out_p):
-            cache.export(fig, out_p)
-
-    for dim in inputs.dataset.dims:
-        for model_name, solvers_list in inputs.models_to_solvers.items():
-            solvers_to_plot = solvers_list + inputs.classical_solvers
-            render_model_success_rate_by_hardness(model_name, solvers_to_plot, dim)
-    print(
-        "✅ Model-specific success rate by hardness generated for all discovered models and dimensions."
+def build_hardness_figure(
+    results: PerformanceAnalysisResult, summary: HardnessSummary
+) -> go.Figure:
+    model_tag, dim, solvers_list = summary.model, summary.dim, summary.solvers
+    fig = make_subplots(
+        rows=1,
+        cols=2,
+        subplot_titles=(
+            f"<b>(A) Deterministic Landscape (σ={results.clean_std}, {dim}D)</b>",
+            f"<b>(B) Noisy Stochastic Landscape (σ={results.noisy_std}, {dim}D)</b>",
+        ),
+        horizontal_spacing=0.1,
     )
+    for c_idx, noise_level in enumerate([results.clean_std, results.noisy_std], start=1):
+        df_hard = summary.tables[noise_level]
+        for solver in solvers_list:
+            sub_s = df_hard[df_hard["Solver"] == solver] if not df_hard.empty else pd.DataFrame()
+            if not sub_s.empty:
+                fig.add_trace(
+                    go.Bar(
+                        name=solver,
+                        x=sub_s["Class"],
+                        y=sub_s["Success Rate"],
+                        marker=dict(
+                            color=get_solver_color(solver),
+                            line=dict(color="#0F172A", width=0.8),
+                        ),
+                        showlegend=c_idx == 1,
+                    ),
+                    row=1,
+                    col=c_idx,
+                )
+    fig.update_xaxes(
+        title_text="<b>Landscape Hardness Class</b>",
+        title_font=dict(size=14, family=FONT_FAMILY, color="#0F172A"),
+        tickangle=-15,
+        tickfont=dict(size=12, family=FONT_FAMILY, color="#1E293B"),
+        row=1,
+        col=1,
+    )
+    fig.update_xaxes(
+        title_text="<b>Landscape Hardness Class</b>",
+        title_font=dict(size=14, family=FONT_FAMILY, color="#0F172A"),
+        tickangle=-15,
+        tickfont=dict(size=12, family=FONT_FAMILY, color="#1E293B"),
+        row=1,
+        col=2,
+    )
+    fig.update_yaxes(
+        title_text="<b>Target Success Rate (Δy ≤ 10⁻⁸)</b>",
+        title_font=dict(size=14, family=FONT_FAMILY, color="#0F172A"),
+        tickfont=dict(size=12, family=FONT_FAMILY, color="#1E293B"),
+        range=[0, 1.1],
+        showgrid=True,
+        gridcolor="#F1F5F9",
+        row=1,
+        col=1,
+    )
+    fig.update_yaxes(
+        tickfont=dict(size=12, family=FONT_FAMILY, color="#1E293B"),
+        range=[0, 1.1],
+        showgrid=True,
+        gridcolor="#F1F5F9",
+        row=1,
+        col=2,
+    )
+    for anno in fig.layout.annotations:
+        anno.update(font=dict(size=15, color="#0F172A", family=FONT_FAMILY))
+    fig.update_layout(
+        template="plotly_white",
+        title=dict(
+            text=f"<b>Empirical Success Rate by BBOB Landscape Hardness — {model_tag.upper()} ({dim}D)</b><br><span style='font-size:13px;color:#475569;font-weight:normal;'>Comparison of Target Precision Hitting Rates Across 5 Problem Classes in Deterministic vs. Noisy Regimes</span>",
+            x=0.02,
+            y=0.96,
+            font=dict(size=16, color="#1E293B", family=FONT_FAMILY),
+        ),
+        barmode="group",
+        bargap=0.25,
+        bargroupgap=0.08,
+        width=1240,
+        height=590,
+        margin=dict(l=80, r=40, t=100, b=120),
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.22,
+            xanchor="center",
+            x=0.5,
+            bgcolor="rgba(255,255,255,0.95)",
+            bordercolor="#E2E8F0",
+            borderwidth=1,
+            font=dict(size=12, family=FONT_FAMILY),
+        ),
+    )
+    return fig

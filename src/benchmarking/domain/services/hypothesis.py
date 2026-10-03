@@ -1,10 +1,8 @@
-"""Inferential statistical hypothesis testing, effect size estimation, and correlation analysis."""
-
-from typing import Any, cast
+"""Inferential statistical hypothesis testing, effect size estimation,."""
 
 import numpy as np
 import pandas as pd
-from scipy.stats import kruskal, mannwhitneyu, pearsonr
+from scipy.stats import kruskal, mannwhitneyu
 from statsmodels.stats.multitest import multipletests
 
 from benchmarking.domain.enums import BBOBFunction
@@ -43,7 +41,7 @@ class HypothesisTestingEngine:
         benchmark_data: EvaluationDataset,
     ) -> pd.DataFrame:
         """Execute omnibus Kruskal-Wallis H-tests across all solvers per problem condition."""
-        master_omnibus: list[dict[str, Any]] = []
+        master_omnibus: list[dict[str, object]] = []
 
         for cond, s_dict in benchmark_data.items():
             p_name = BBOBFunction.get_name(cond.problem_id)
@@ -92,7 +90,7 @@ class HypothesisTestingEngine:
         alpha: float = 0.05,
     ) -> pd.DataFrame:
         """Execute pairwise Mann-Whitney U tests with Benjamini-Hochberg FDR correction."""
-        master_pairwise: list[dict[str, Any]] = []
+        master_pairwise: list[dict[str, object]] = []
 
         for cond, s_dict in benchmark_data.items():
             solvers = sorted(s_dict.keys())
@@ -184,108 +182,3 @@ class HypothesisTestingEngine:
 
         df_pairwise["Outcome"] = df_pairwise.apply(get_outcome, axis=1)
         return df_pairwise
-
-    @staticmethod
-    def compute_pairwise_a12_matrix(
-        df_pairwise: pd.DataFrame,
-        solvers_order: list[str] | None = None,
-    ) -> tuple[list[str], np.ndarray]:
-        """Compute the pairwise Vargha-Delaney A12 matrix across all solvers.
-
-        Args:
-            df_pairwise: Pairwise DataFrame containing 'Solver 1', 'Solver 2', and 'A12'.
-            solvers_order: Optional list of solver names to order rows and columns.
-
-        Returns:
-            Tuple of (solvers_list, a12_matrix_2d_ndarray).
-        """
-        if df_pairwise.empty:
-            return [], np.empty((0, 0))
-
-        all_solvers = set(df_pairwise["Solver 1"]).union(set(df_pairwise["Solver 2"]))
-        if solvers_order is not None:
-            solvers = [s for s in solvers_order if s in all_solvers]
-            remaining = sorted(list(all_solvers - set(solvers)))
-            solvers.extend(remaining)
-        else:
-            solvers = sorted(list(all_solvers))
-
-        n = len(solvers)
-        matrix = np.full((n, n), 0.5)
-
-        for i, s1 in enumerate(solvers):
-            for j, s2 in enumerate(solvers):
-                if i == j:
-                    continue
-                sub_dir = df_pairwise[
-                    (df_pairwise["Solver 1"] == s1) & (df_pairwise["Solver 2"] == s2)
-                ]
-                sub_rev = df_pairwise[
-                    (df_pairwise["Solver 1"] == s2) & (df_pairwise["Solver 2"] == s1)
-                ]
-                vals: list[float] = []
-                if not sub_dir.empty:
-                    vals.extend(sub_dir["A12"].astype(float).tolist())
-                if not sub_rev.empty:
-                    vals.extend((1.0 - sub_rev["A12"].astype(float)).tolist())
-                if vals:
-                    matrix[i, j] = float(np.mean(vals))
-
-        return solvers, matrix
-
-    @staticmethod
-    def compute_pairwise_win_counts(
-        df_pairwise: pd.DataFrame,
-        solvers_order: list[str] | None = None,
-    ) -> pd.DataFrame:
-        """Compute pairwise win, tie, and loss totals per solver from pairwise FDR results.
-
-        Args:
-            df_pairwise: Pairwise DataFrame containing 'Solver 1', 'Solver 2', and 'Outcome'.
-            solvers_order: Optional list of solver names.
-
-        Returns:
-            DataFrame with columns ['Solver', 'FDR Wins', 'Losses', 'Ties'].
-        """
-        if df_pairwise.empty:
-            return pd.DataFrame(columns=["Solver", "FDR Wins", "Losses", "Ties"])
-
-        all_solvers = set(df_pairwise["Solver 1"]).union(set(df_pairwise["Solver 2"]))
-        solvers = (
-            [s for s in solvers_order if s in all_solvers]
-            if solvers_order is not None
-            else sorted(list(all_solvers))
-        )
-
-        rows: list[dict[str, Any]] = []
-        for s in solvers:
-            wins = int((df_pairwise["Outcome"] == f"{s} Wins").sum())
-            losses = int(
-                df_pairwise[
-                    ((df_pairwise["Solver 1"] == s) | (df_pairwise["Solver 2"] == s))
-                    & (df_pairwise["Outcome"] != "Tie")
-                    & (df_pairwise["Outcome"] != f"{s} Wins")
-                ].shape[0]
-            )
-            ties = int(
-                df_pairwise[
-                    ((df_pairwise["Solver 1"] == s) | (df_pairwise["Solver 2"] == s))
-                    & (df_pairwise["Outcome"] == "Tie")
-                ].shape[0]
-            )
-            rows.append({"Solver": s, "FDR Wins": wins, "Losses": losses, "Ties": ties})
-
-        return pd.DataFrame(rows).sort_values(by="FDR Wins", ascending=True)
-
-    @staticmethod
-    def compute_synthesis_transfer_correlation(df_exp: pd.DataFrame) -> tuple[float, float]:
-        """Compute Pearson correlation between synthesis final error and validation performance."""
-        if df_exp.empty or "final_error" not in df_exp.columns:
-            return 0.0, 1.0
-        valid = df_exp.dropna(subset=["final_error"])
-        if len(valid) < 3:
-            return 0.0, 1.0
-        y = valid["final_error"].values
-        x = valid["best_fitness"].values if "best_fitness" in valid.columns else y
-        res = pearsonr(x, y)
-        return float(cast(Any, res[0])), float(cast(Any, res[1]))

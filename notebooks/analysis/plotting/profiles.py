@@ -8,15 +8,13 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from benchmarking.application.analysis.view_data import AnalysisInputs
+from benchmarking.application.analysis.results import (
+    ConditionProfile,
+    ProfileMode,
+)
 from benchmarking.domain.enums import BBOBFunction
-from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
-from benchmarking.domain.vos import EvaluationDataset
-from shared.config import RESULTS_DIR
 
-from .cache import FigureCache
 from .style import (
-    CLASSICAL_BASELINES,
     FONT_FAMILY,
     clean_solver_name,
     get_rgba_fill,
@@ -35,17 +33,32 @@ class ProfileCurve:
 
 
 def build_profile(
-    inputs: AnalysisInputs,
-    dataset: EvaluationDataset,
-    curves: list[ProfileCurve],
-    targets: dict[float, np.ndarray],
+    profile: ConditionProfile,
+    mode: ProfileMode,
     *,
-    dim: int,
     kind: Literal["convergence", "ecdf"],
     title: str,
 ) -> go.Figure:
-    """Construct the same condition panels without duplicating two Plotly loops."""
-    problems = dataset.problem_ids
+    """Construct panels exclusively from precomputed scientific arrays."""
+    problems = profile.problems
+    curves = []
+    prompt_colors = {
+        "baseline": "#F59E0B",
+        "guided": "#0284C7",
+        "thinking": "#10B981",
+        "vectorization": "#EF4444",
+    }
+    for solver in profile.solvers:
+        label = clean_solver_name(solver)
+        style = get_solver_line_style(solver)
+        color, dash = get_solver_color(solver), str(style["dash"])
+        if mode == "comparison":
+            strategy = solver.split(" / ", 1)[1].split(" ", 1)[0]
+            informed = "(noise-adapted)" in solver
+            label = f"{strategy.title()} ({'noise-informed' if informed else 'noise-blind'})"
+            color, dash = prompt_colors.get(strategy, "#64748B"), "solid" if informed else "dash"
+        curves.append(ProfileCurve(solver, label, color, dash, profile.noise_std))
+    by_condition = {(s.problem_id, s.solver): s for s in profile.series}
     titles = [
         f"<b>{BBOBFunction.get_name(p)}</b><br><sup>{BBOBFunction.get_class(p)}</sup>"
         for p in problems
@@ -62,15 +75,16 @@ def build_profile(
         horizontal_spacing=0.08,
         vertical_spacing=0.22 if rows > 1 else 0.0,
     )
-    grid = np.logspace(0, 6, 300)
-    engine = EcdfConvergenceEngine()
+    grid = profile.evaluations
     for index, problem in enumerate(problems):
         row, col = divmod(index, 3)
         for curve in curves:
-            query = dict(dim=dim, noise_std=curve.noise_std, solver=curve.solver, eval_grid=grid)
+            series = by_condition.get((problem, curve.solver))
+            if series is None:
+                continue
             if kind == "convergence":
-                data = engine.get_convergence_trajectory(dataset, problem_id=problem, **query)
-                if data is None or np.isnan(data["median"]).all():
+                data = {"median": series.median, "q25": series.q25, "q75": series.q75}
+                if np.isnan(data["median"]).all():
                     continue
                 values = np.maximum(data["median"], 1e-12)
                 for bound, fill in [("q75", False), ("q25", True)]:
@@ -89,10 +103,8 @@ def build_profile(
                         col=col + 1,
                     )
             else:
-                values = engine.get_target_ecdf_curve(
-                    dataset, targets[curve.noise_std], problem_id=problem, **query
-                )
-                if values is None or np.isnan(values).all():
+                values = series.ecdf
+                if np.isnan(values).all():
                     continue
             figure.add_trace(
                 go.Scatter(
@@ -159,85 +171,3 @@ def build_profile(
         ),
     )
     return figure
-
-
-def export_performance_profiles(
-    inputs: AnalysisInputs,
-    targets: dict[float, np.ndarray],
-    cache: FigureCache,
-    *,
-    mode: Literal["explicit", "implicit", "comparison"],
-) -> None:
-    """Run one profile family; skip each figure before constructing it."""
-    directories = {
-        "explicit": "02_explicit",
-        "implicit": "03_implicit",
-        "comparison": "04_implicit_vs_explicit",
-    }
-    prompt_colors = {
-        "baseline": "#F59E0B",
-        "guided": "#0284C7",
-        "thinking": "#10B981",
-        "vectorization": "#EF4444",
-    }
-    for dim in inputs.dataset.dims:
-        for model, solvers in inputs.models_to_solvers.items():
-            for noise in inputs.dataset.noise_stds:
-                implicit = [s for s in solvers if "(noise-implicit)" in s]
-                adapted = [s for s in solvers if "(noise-adapted)" in s]
-                clean = [
-                    s for s in solvers if "(noise-implicit)" not in s and "(noise-adapted)" not in s
-                ]
-                if mode == "explicit":
-                    selected = clean if noise == 0.0 else (adapted or clean)
-                elif mode == "implicit":
-                    if noise == 0.0 or not implicit:
-                        continue
-                    selected = implicit
-                else:
-                    if noise == 0.0 or not implicit or not adapted:
-                        continue
-                    selected = adapted + implicit
-                curves = []
-                for solver in selected + ([] if mode == "comparison" else CLASSICAL_BASELINES):
-                    label = clean_solver_name(solver)
-                    style = get_solver_line_style(solver)
-                    color, dash = get_solver_color(solver), str(style["dash"])
-                    if mode == "comparison":
-                        strategy = solver.split(" / ", 1)[1].split(" ", 1)[0]
-                        informed = "(noise-adapted)" in solver
-                        label = f"{strategy.title()} ({'noise-informed' if informed else 'noise-blind'})"
-                        color, dash = (
-                            prompt_colors.get(strategy, "#64748B"),
-                            "solid" if informed else "dash",
-                        )
-                    curves.append(ProfileCurve(solver, label, color, dash, noise))
-                output = (
-                    RESULTS_DIR
-                    / "figures"
-                    / directories[mode]
-                    / inputs.model_slugs[model]
-                    / f"{dim}D"
-                    / f"std_{noise}"
-                )
-                for kind, filename in [
-                    (
-                        "convergence",
-                        "implicit_vs_noisy_convergence.png"
-                        if mode == "comparison"
-                        else "convergence_trajectories.png",
-                    ),
-                    ("ecdf", "target_precision_ecdf.png"),
-                ]:
-                    target = output / filename
-                    if cache.needs_export(target):
-                        figure = build_profile(
-                            inputs,
-                            inputs.dataset,
-                            curves,
-                            targets,
-                            dim=dim,
-                            kind=kind,
-                            title=f"<b>{mode.title()} {kind.upper()} — {model} ({dim}D, σ={noise:g})</b><br><sup>Adaptive-target ECDFs are exploratory; fixed-target reliability is reported separately.</sup>",
-                        )
-                        cache.export(figure, target)

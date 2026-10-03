@@ -109,7 +109,7 @@ subgraph group_benchmark["Benchmarking and audit"]
 end
 
 subgraph group_analysis["Analysis and transfer"]
-  node_analysis["Statistical analysis<br/>[report.py]"]
+  node_analysis["Analysis workflows<br/>[analysis/]"]
   node_analysis_services["ECDF and statistics<br/>[ecdf.py]"]
   node_transfer["Noise and transfer analysis<br/>[transfer.py]"]
   node_figures["Analysis figures<br/>[summary.py]"]
@@ -170,7 +170,7 @@ click node_baselines "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/be
 click node_champions "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/select_champions.py"
 click node_trace_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/io/trace_repository.py"
 click node_audit "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation/audit.py"
-click node_analysis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/analysis/report.py"
+click node_analysis "https://github.com/nicola-ibrahim/aad_llm/tree/main/src/benchmarking/application/analysis"
 click node_analysis_services "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/ecdf.py"
 click node_transfer "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/transfer.py"
 click node_figures "https://github.com/nicola-ibrahim/aad_llm/blob/main/notebooks/analysis/plotting/summary.py"
@@ -219,7 +219,7 @@ imports; analysis belongs to benchmarking, not a third bounded context.
 - [champions](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/select_champions.py)
 - [trace repo](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/io/trace_repository.py)
 - [audit](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation/audit.py)
-- [analysis](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/analysis/report.py)
+- [analysis](https://github.com/nicola-ibrahim/aad_llm/tree/main/src/benchmarking/application/analysis)
 - [analysis services](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/ecdf.py)
 - [transfer](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/transfer.py)
 - [figures](https://github.com/nicola-ibrahim/aad_llm/blob/main/notebooks/analysis/plotting/summary.py)
@@ -286,9 +286,12 @@ adjust `configs/synthesis.toml` before running a quick experiment.
 
 The three analysis notebooks run independently. Their shared Plotly builders live
 in `notebooks/analysis/plotting/`; calculations remain in the domain engines.
-Successful PNG exports are cached per workflow and per figure. Run only the
-sections you need, use condition filters for smaller sweeps, and set
-`FORCE_EXPORT = True` only when you deliberately want to regenerate images.
+Calculation cells save ECDF/convergence arrays and statistical tables under
+`results/analysis/`. The notebook-owned `AnalysisFigureExporter` exports PNGs
+separately; saved numerical snapshots can be reloaded without recalculation.
+Only intermediate numerical results are persisted for reuse—not Plotly figures
+or image-export state. Each export call rebuilds and writes the requested PNGs.
+Run only the sections you need and use condition filters for smaller sweeps.
 
 Noise robustness and cross-function generalization are separate secondary
 analyses, outside the native champion ranking. Cross-function evaluation is

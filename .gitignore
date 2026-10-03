@@ -82,6 +82,7 @@ celerybeat.pid
 !/data/champions.json
 /results/figures/
 /results/reports/
+/results/analysis/
 /results/benchmark/champions.json
 /results/profiles/
 /results/ioh_traces/

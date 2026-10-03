@@ -78,7 +78,7 @@ implements an interface. Application code does not import its concrete adapter.
 | Evolution | Prompts, campaigns, iterations, feedback, fitness penalties and synthesis recovery. |
 | Benchmarking | Champion selection, trial validity/resumption, audit, reliability, ECDF and transfer. |
 | Shared foundation | BBOB/noise definitions, objective gap, problem capabilities, execution and database adapters. |
-| Notebooks / bootstrap | Composition, labels, Plotly figures, caching and exports. |
+| Notebooks / bootstrap | Composition, labels, Plotly figures and explicit exports. |
 
 Neither context's application/domain imports the other context. Shared code imports
 neither context. Benchmarking infrastructure may read synthesis records through
@@ -177,12 +177,14 @@ generated-code execution.
 
 - `application/evaluation/` separates workload discovery, per-condition trials,
   batch execution, and coverage auditing. `select_champions.py` owns ranking.
-- `application/analysis/` loads datasets and writes reports. Notebooks call the
-  domain reliability, ECDF, performance, and hypothesis engines directly.
+- `application/analysis/` contains injected analysis use cases. A shared loader
+  reads validated snapshots; profile, reliability, noise-robustness and performance
+  use cases call domain engines and return calculated arrays/tables.
+  Numerical snapshots and CSV statistics remain separate from figure export.
 - `domain/` owns benchmark-independent reliability, ECDF, performance, and statistical
   calculations.
 - `infra/` owns SQLite candidate queries and benchmark state, champion JSON and trace
-  IO, Markdown writing, code loading, and CMA-ES/DE/PSO adapters. IOH problem
+  IO, numerical snapshot storage, code loading, and CMA-ES/DE/PSO adapters. IOH problem
   lifecycle/noise calibration and candidate execution are shared infrastructure.
 
 The notebook composition functions wire concrete problem, execution, solver, and
@@ -202,14 +204,26 @@ implicit/explicit origins, and cross-function conditions never substitute for on
 another. Baselines do not require a synthesis champion.
 
 Audit returns numeric IDs, counts, reasons, and statuses. Notebook 04 owns icons,
-labels, heatmaps, CSV exports, and the Markdown dashboard. Analysis input snapshots
-contain data and pure naming metadata, not live repositories or engine services.
-Scientific engines are called directly; Plotly, PNG export, and figure caching live
-under `notebooks/analysis/plotting/`. Terminal trial completion and available
+labels, heatmaps, CSV exports, and the Markdown dashboard. Analysis use cases receive
+required loaders and engines through constructor injection. The context-managed
+`bootstrap.analysis.build_analysis_use_cases()` wires concrete adapters and disposes
+database resources on exit, including exceptions. Application use cases load an
+internal snapshot and calculate results without writes. Notebooks receive detached
+scientific results and resolved metadata, not live repositories or engine services.
+Plotly builders consume those results; `AnalysisFigureExporter` orchestrates PNG
+export under `notebooks/analysis/plotting/`, without figure caching.
+`infra/storage/analysis_results_store.py` owns numeric persistence, separately composed
+by bootstrap: compressed arrays, CSV statistics and provenance manifests under
+`results/analysis/`, plus established report CSVs. Reloading restores detached
+results without database access or calculation. Calculation does not depend on export
+requests. Only intermediate numerical results are persisted for reuse, not
+Plotly objects or image-export state. Every export call rebuilds and writes PNGs.
+Terminal trial completion and available
 convergence traces remain distinct: missing traces are not fabricated.
 
 Architecture tests enforce layer direction, context independence, shared-foundation
-independence, and the absence of backend presentation dependencies.
+independence, the absence of backend presentation dependencies, and the absence
+of scientific calculation/data-loading calls in figure builders.
 
 ## Data and imports
 

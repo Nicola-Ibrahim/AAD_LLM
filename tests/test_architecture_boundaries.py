@@ -115,3 +115,43 @@ def test_domain_modules_do_not_read_configuration_or_files():
                     elif isinstance(node.func, ast.Attribute) and node.func.attr in file_methods:
                         violations.append(f"{path}: {node.func.attr}()")
     assert not violations, "Domain performed file/config IO:\n" + "\n".join(violations)
+
+
+def test_plotting_does_not_calculate_or_load_scientific_results() -> None:
+    plotting = ROOT.parent / "notebooks" / "analysis" / "plotting"
+    forbidden = (
+        "benchmarking.domain.services",
+        "benchmarking.application.analysis.data_loader",
+        "benchmarking.infra",
+        "bootstrap",
+    )
+    violations = []
+    for path in plotting.glob("*.py"):
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            else:
+                continue
+            if any(name.startswith(forbidden) for name in names):
+                violations.append(path.name)
+        scientific_calls = {
+            "mean",
+            "median",
+            "percentile",
+            "quantile",
+            "compute_attainment_band",
+            "compute_trajectory_and_ecdf",
+            "load_evaluation_traces",
+            "load_provenance_records",
+        }
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in scientific_calls
+            ):
+                violations.append(f"{path.name}: {node.func.attr}")
+    assert not violations, "Plotting calculates/loads scientific inputs: " + ", ".join(violations)

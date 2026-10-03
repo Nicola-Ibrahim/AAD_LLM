@@ -26,7 +26,7 @@ subgraph group_benchmark["Benchmarking and audit"]
 end
 
 subgraph group_analysis["Analysis and transfer"]
-  node_analysis["Statistical analysis<br/>[report.py]"]
+  node_analysis["Analysis workflows<br/>[analysis/]"]
   node_analysis_services["ECDF and statistics<br/>[ecdf.py]"]
   node_transfer["Noise and transfer analysis<br/>[transfer.py]"]
   node_figures["Analysis figures<br/>[summary.py]"]
@@ -87,7 +87,7 @@ click node_baselines "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/be
 click node_champions "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/select_champions.py"
 click node_trace_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/io/trace_repository.py"
 click node_audit "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation/audit.py"
-click node_analysis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/analysis/report.py"
+click node_analysis "https://github.com/nicola-ibrahim/aad_llm/tree/main/src/benchmarking/application/analysis"
 click node_analysis_services "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/ecdf.py"
 click node_transfer "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/transfer.py"
 click node_figures "https://github.com/nicola-ibrahim/aad_llm/blob/main/notebooks/analysis/plotting/summary.py"

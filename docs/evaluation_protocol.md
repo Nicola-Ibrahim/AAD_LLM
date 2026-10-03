@@ -215,7 +215,11 @@ tails are not treated as failures.
 
 Fixed-target attainment uses observed evaluation checkpoints without inventing
 intermediate target hits. Adaptive-target ECDF/AUC analysis remains exploratory.
-Notebooks own Plotly styling and PNG exports; domain engines own calculations.
+Application analysis use cases load validated data and coordinate domain-engine
+calculations. They return typed scientific results without exporting. Notebooks
+own Plotly styling and optional PNG exports; numeric results and statistics are
+saved separately by the infrastructure results store. Figure builders consume calculated
+results and do not call engines or load traces.
 
 See [analysis notebooks](../notebooks/analysis/README.md) for presentation and
 exports. No empirical winner, percentage or campaign total should be inferred

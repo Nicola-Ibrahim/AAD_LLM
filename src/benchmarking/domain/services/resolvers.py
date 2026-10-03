@@ -38,17 +38,6 @@ class ModelNames:
     def __init__(self, registry: Sequence[LLMModelSpec]) -> None:
         self.registry = tuple(registry)
 
-    def get_registered_model_ids(self) -> list[str]:
-        """Retrieve all model identifiers and filenames defined in configs/llms.toml."""
-        registry = self.registry
-        ids: list[str] = []
-        for spec in registry:
-            if spec.model and spec.model not in ids:
-                ids.append(spec.model)
-            if spec.file and spec.file not in ids:
-                ids.append(spec.file)
-        return ids
-
     def get_clean_model_label(self, llm_name: str) -> str:
         """Return the full configured model name, with dynamic fallback for unknown IDs.
 
@@ -202,19 +191,3 @@ class ModelNames:
                 return f"{model_lbl} / {s}{suffix}"
 
         return raw
-
-    def resolve_canonical_model_slug(
-        self, model_slug: str, known_models: list[str] | None = None
-    ) -> str:
-        """Normalize model slug for figure output directories using registered model IDs."""
-        slug_str = model_slug.lower()
-        models_to_check = known_models or self.get_registered_model_ids()
-        for db_m in models_to_check:
-            clean_db = db_m.removesuffix(".gguf")
-            if clean_db.lower() == slug_str or db_m.lower() == slug_str:
-                return clean_db
-            m = re.search(r"(\d+b)", slug_str)
-            if m and m.group(1) in clean_db.lower():
-                return clean_db
-
-        return model_slug.replace("LLaMEA-", "").replace(" ", "_").removesuffix(".gguf")
