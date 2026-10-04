@@ -1,61 +1,111 @@
 %-------------------------------------------------------------------------------
 % Chapter 6: Discussion and Conclusion
 %-------------------------------------------------------------------------------
+\chapter{Discussion and Conclusion}
+\label{chap:discussion}
 
-\chapter{Discussion and Conclusion}\label{chap:discussion}
+% Working draft: revise the synthesis of findings and research-question answers
+% after the figures and experimental interpretations have been reviewed.
 
-This chapter synthesizes the empirical evidence established within this research to explicitly resolve the core research questions posed in the introduction. Rather than reiterating raw convergence performance metrics, this discussion interprets the underlying mathematical implications, architectural boundaries, and emergent behaviors observed throughout the non-deterministic automated algorithm design loops. By mapping our empirical observations directly back to the original research objectives, we validate the structural mechanism of noise-injected evolution. Furthermore, this chapter provides a white-box critical analysis detailing why our noise-evolved heuristics established superior cross-environment generalizability over deterministic baselines, addresses the economic limitations of commercial API-driven hyper-heuristics, and establishes the formal scientific contributions this thesis delivers to the field of autonomous metaheuristic discovery.
+The experimental results distinguish the quality of points found during
+search from the quality of the solution returned at termination. This
+distinction helps interpret performance under noisy observations, where
+an optimizer may not recognize its most accurate queried point.
+The discussion considers these outcomes alongside the behavior of the
+generated programs and the limits of the experimental design.
 
-% ==============================================================================
-% DISCUSSION & CONTRIBUTIONS ROADMAP (ADDRESSING THE RQ BOUNDARY LINK ISSUE)
-% ==============================================================================
-%
-% % FUTURE SECTION 6.1: Direct Resolution of Research Questions
-% % - CRITICAL DEFENSE NOTE: You must write explicit, dedicated sub-paragraphs here 
-% %   re-stating each RQ and providing the summary answer based on Chapter 5 data.
-% %
-% %   - Link to RQ1 (The Noise Sandbox): Discuss the outcomes of your initial noise 
-% %     distribution testing. Conclude whether Additive Gaussian Noise successfully 
-% %     masked analytical gradients to establish a realistic physical noise floor, and 
-% %     how the parameters chosen altered the evaluation loop difficulty.
-% %
-% %   - Link to RQ2 (Autonomous Synthesis Resilience): Answer if the LLM successfully 
-% %     designed executable Python classes under stochastic pressure. Discuss the 
-% %     nature of the emergent mathematical logic it wrote—specifically how it adapted 
-% %     code statements to balance noise smoothing without getting permanently 
-% %     stuck in rugged local valleys of the sub-sampled BBOB landscapes.
-% %
-% %   - Link to RQ3 (Cross-Environment Robustness): Resolve the ultimate validation. 
-% %     Discuss the precise performance differential observed when the clean-trained 
-% %     heuristics collapsed under unexpected noise anomalies, proving why noise-aware 
-% %     evolution yields fundamentally superior generalizability metrics.
-%
-% % FUTURE SECTION 6.2: White-Box Interpretation of Emergent Algorithmic Logic
-% % - Placeholder to analyze the computer science inside the AI's champion code.
-% % - Discuss how the LLM responded to the evolutionary pressures of the stochastic loop.
-% % - Address a fascinating aspect: Did the LLM merely memorize hardcoded human math 
-% %   tricks (like moving averages), or did it combine code elements in unique structural 
-% %   ways that challenge traditional human-designed noise-handling conventions?
-%
-% % FUTURE SECTION 6.3: Model Economics and Scalability Constraints
-% % - Placeholder to address the resource bottleneck we tracked in our usage logs.
-% % - Discuss token depletion trends, context wind footprint behaviors, and the 
-% %   financial reality of scaling commercial API calls over multi-run parallel loops.
-% % - Propose a formal transition framework to localized open-weights ecosystems 
-% %   (e.g., Code Llama, StarCoder), detailing why private, quantized local processing 
-% %   is required to make stochastic AAD loops industrially scalable.
-%
-% % FUTURE SECTION 6.4: Behavioral Diversity and the No Free Lunch Boundaries
-% % - Placeholder to contextualize your results against the No Free Lunch (NFL) theorem.
-% % - Discuss landscape tradeoffs: If a noise-evolved champion excelled on Group 4 
-% %   multimodal structures, did it trade off performance efficiency on Group 1 separable 
-% %   functions? Outline why tracking behavioural profiles outside a strict 1+1 loop 
-% %   is necessary to manage early optimization convergence.
-%
-% % FUTURE SECTION 6.5: Comprehensive Summary of Contributions
-% % - Final summary block stating the direct engineering assets left behind by this thesis.
-% % - Explicitly list: (1) The validated stochastic IOH/BBOB software wrapper layer, 
-% %   (2) The queryable local SQLite evolution archive capturing code transformation history, 
-% %   and (3) The open-source suite of novel, robust metaheuristic Python scripts.
-%
-% ==============================================================================
+\section{Model and Prompt Comparisons}
+\label{sec:discussion_model_prompts}
+
+Performance depends on the model, prompt strategy, and optimization
+environment. The aggregate comparisons provide no consistent ordering
+in which a larger model or additional prompt guidance always produces
+a more successful optimizer.
+
+Native clean and noisy comparisons change both the synthesis environment
+and the evaluation environment. They therefore do not isolate the effect
+of evaluation noise on an individual optimizer. The frozen-champion
+comparison addresses that question by preserving the selected program,
+function, and dimension while changing the observation noise.
+
+\section{Interpreting Performance under Noise}
+\label{sec:discussion_noise}
+
+The heteroscedastic model makes observations at the exact optimum noiseless,
+but it does not guarantee that an optimizer can locate that point. For a feasible point $x$, let
+$\Delta(x)=\max\{0,f_{\mathrm{clean}}(x)-f^*\}$ be its clean optimality
+gap. For exact objective values, $f_{\mathrm{clean}}(x)-f^*\geq0$. With
+$Z\sim\mathcal N(0,1)$, the noisy observation relative to the optimum is
+\begin{equation}
+    \widetilde\Delta(x)=\Delta(x)+\sigma|\Delta(x)|Z
+    =\Delta(x)(1+\sigma Z), \qquad \Delta(x)\geq 0.
+    \label{eq:experiment_relative_noise}
+\end{equation}
+Unlike the clean gap, this noisy difference can be negative.
+Its absolute standard deviation tends to zero as $x$ approaches an optimum,
+but its standard deviation relative to a nonzero gap remains $\sigma$.
+Consequently, two nearby candidates can still be misranked when their
+clean improvement is small compared with their observational uncertainty.
+Repeated selection on noisy values can retain a favorable observation
+instead of the point with the smallest clean gap. The optimizer must also
+reach the low-noise vicinity through the wider search landscape; more
+dimensions, conditioning, or multiple basins can make this harder within
+the available budget. Thus the optimum itself is unperturbed while its
+surrounding observations, apparent contours, and the decisions based on
+them may be perturbed. Figures~\ref{fig:f8_noise_distortion} and
+\ref{fig:f21_noise_distortion} visualize this mechanism, but cannot
+establish that noise caused every poor outcome.
+
+The generated-program case study in
+Section~\ref{subsec:generated_program_cases} shows why poor outcomes should not
+be attributed to observation noise alone. Eleven instances fail because
+an offset-sensitive selection rule produces an empty population.
+Although those trials evaluate points before failing, they return no
+valid solution. Conversely, the nine finite returns do not meet the
+primary accuracy target. Search progress, valid completion, and
+returned-solution success therefore describe different aspects of
+performance.
+
+\section{Limitations}
+\label{sec:discussion_limitations}
+
+The reliability estimates describe selected programs across benchmark
+instances. Estimating how often an LLM independently discovers a successful
+program would require controlled repeated synthesis runs. Historical synthesis
+repeat counts are unbalanced and seeds are unrecorded. The excluded
+conditions also limit coverage, and descriptive rankings may change
+when further conditions become available. The illustrative profile figures show only
+Qwen2.5-Coder-32B-Instruct at $D=2$; the condition tables cover all tested dimensions and models.
+
+The 30-second timeout on generated champions, without an equivalent
+baseline timeout, limits a purely evaluation-count-based comparison.
+The reported reliability therefore includes the effect of these
+execution constraints as well as optimization performance.
+The synthesis case study also identifies a candidate that exceeded the
+configured $10^6$-evaluation allowance. Its near-optimal synthesis result
+therefore cannot be interpreted as performance achieved within that
+allowance. Independent benchmarking enforces its own evaluation budget,
+but the earlier violation limits interpretation of the synthesis process.
+
+The conclusions are limited to the tested LLM configurations, prompt
+variants, benchmark functions and instances, dimensions, noise model,
+budgets, and repetitions. They do not establish that the same performance
+will hold for other models, prompts, or optimization problems.
+
+\section{Conclusion}
+\label{sec:discussion_conclusion}
+
+The study combines locally hosted LLMs, optimizer synthesis, and a
+BBOB evaluation environment with controlled observation noise. Separate
+clean assessments allow search progress and returned-solution quality
+to be examined even when the optimizer receives noisy values.
+
+The results demonstrate successful optimization for some selected
+programs and conditions, alongside failures that become visible when
+the programs are evaluated across problem instances. The case studies
+show why a low synthesis gap alone is insufficient evidence of a
+reliable optimizer. Assessment across instances must consider accuracy,
+valid completion, and compliance with the evaluation allowance.
+
+% Add the final answers to the research questions and any further conclusions
+% only after the experimental findings have been agreed upon.
