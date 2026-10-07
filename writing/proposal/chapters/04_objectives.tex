@@ -3,10 +3,9 @@
 
 The primary aim of this thesis is to investigate the capacity of Large
 Language Models (LLMs) to autonomously synthesize optimization heuristics
-that can handle stochastic fitness evaluations. To investigate the use
-of Automated Algorithm Design (AAD) under noisy conditions, the proposed
-research is structured around three objectives and their corresponding
-research questions.
+that can handle stochastic fitness evaluations. The proposed research
+examines Automated Algorithm Design (AAD) under noisy conditions through
+three objectives and their corresponding research questions.
 
 \section*{Objective 1: Formulating a Stochastic Evaluation Sandbox}
 
@@ -20,12 +19,16 @@ question:
 extended to simulate stochastic landscapes?}
 \end{quote}
 
-The proposed approach is to develop a wrapper layer over continuous
-benchmark functions. Established benchmark definitions and literature
+The proposed approach is to develop a wrapper layer over functions from
+the noiseless BBOB suite. Established benchmark definitions and literature
 on optimization under uncertainty will guide the introduction of
-controlled statistical noise \cite{Hansen2009Noiseless,Hansen2009Noisy,
-Jin2005}. The resulting environment will provide a repeatable setting
-for evaluating generated algorithms using noisy fitness observations.
+controlled statistical noise
+\cite{Hansen2009Noiseless,Hansen2009Noisy,Jin2005}.
+The resulting environment will provide a repeatable setting for evaluating
+generated algorithms using noisy fitness observations. Applying noise
+to the same underlying BBOB functions, rather than using the separate
+noisy-BBOB suite, will allow a direct comparison of AAD performance
+under noiseless and noisy evaluations.
 
 \section*{Objective 2: Autonomous Synthesis of Noise-Resilient Heuristics}
 
@@ -61,8 +64,7 @@ conditions compared with established optimization methods?}
 \end{quote}
 
 Algorithms generated under noisy and noiseless conditions will be evaluated
-across different noise settings, including clean evaluations. This
+across different noise settings, including noiseless evaluations. This
 comparison will examine whether exposure to noise during algorithm
 evolution leads to differences in performance, robustness, or
-generalization. Established optimization methods may also be included
-as reference baselines where appropriate.
+generalization.
