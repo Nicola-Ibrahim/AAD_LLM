@@ -15,27 +15,14 @@ new candidates and use previously observed function values.
 The noiseless BBOB suite provides a standardized collection of continuous
 test functions with different landscape characteristics
 \cite{Hansen2009Noiseless}. Hansen et al.\ compared 31 algorithms on
-this testbed and showed that performance varies with the function group,
-dimension, target precision, and evaluation budget \cite{Hansen2010}.
-Restart variants of CMA-ES performed strongly on several difficult
-function groups, especially multimodal problems, while NEWUOA was
-competitive on separable and moderately conditioned functions.
-NEWUOA constructs quadratic interpolation models and uses a trust-region
-procedure without requiring derivatives \cite{Powell2006}. These
-findings support the use of established solvers as reference baselines,
-while also showing why an aggregate ranking should not be interpreted
-as superiority on every individual problem.
-
-Performance assessment in BBOB and the COmparing Continuous Optimizers
-(COCO) framework commonly uses the number of function evaluations needed
-to reach prescribed target values. For single-objective minimization,
-targets can be expressed as a required gap from the known optimum.
-Empirical cumulative distribution functions (ECDFs) aggregate target
-attainment over runs and problems, showing the fraction of run--target
-pairs that reach their specified precision within a given evaluation
-budget \cite{Hansen2016Performance}.
-This fixed-target perspective complements fixed-budget measurements of
-the solution quality achieved at the end of a run.
+this testbed, examining performance across function groups, dimensions,
+target precisions, and evaluation budgets. Restart variants of CMA-ES
+performed strongly on several difficult function groups, especially
+multimodal problems, while NEWUOA \cite{Powell2006} was competitive on
+separable and moderately conditioned functions \cite{Hansen2010}.
+These findings support the use of established solvers as reference
+baselines and show that a strong aggregate ranking does not imply
+superiority on every individual problem.
 
 Practical objective evaluations may be affected by sensor errors,
 randomized simulations, or other sources of uncertainty. Jin and Branke
@@ -43,12 +30,10 @@ review four related categories: noisy fitness evaluations, the search
 for robust solutions under disturbances to decision variables,
 approximation error, and objectives that change over time
 \cite{Jin2005}. This thesis concerns noise in fitness evaluations,
-rather than changes to the underlying objective or perturbations of
-the decision variables. In this setting, the value observed by an
-optimizer can differ from the underlying objective value. The BBOB
-noisy-functions report defines a separate testbed with specified noise
-models \cite{Hansen2009Noisy}, providing an established reference for
-benchmarking optimization under uncertainty.
+where the value observed by an optimizer can differ from the underlying
+objective value. The BBOB noisy-functions report defines a separate
+testbed with specified noise models for studying optimization under
+uncertainty \cite{Hansen2009Noisy}.
 
 Noise can distort candidate rankings and influence selection, step-size
 control, and other decisions based on observed fitness. Jin and Branke
@@ -56,27 +41,24 @@ review explicit averaging through repeated evaluations, implicit
 averaging through larger populations, and changes to selection rules
 \cite{Jin2005}. Repeated sampling can improve the reliability of a
 fitness estimate, but consumes evaluations that could otherwise explore
-new points. The survey also discusses adaptive sampling and reports
-that the relative benefits of sampling and population enlargement
-depend on the algorithm and problem. Hansen et al.\ provide a concrete
+new points. The survey also discusses adaptive sampling, with the
+relative benefits of sampling and population enlargement depending
+on the algorithm and problem. Hansen et al.\ provide an
 uncertainty-handling approach for CMA-ES based on detecting rank changes
-under re-evaluation \cite{Hansen2009}. Existing noise-handling methods
-thus already include adaptation during a run. The present study asks
-whether a code-generation process can produce useful combinations or
-alternatives under a controlled noisy evaluation setting.
+under re-evaluation \cite{Hansen2009}. These methods show that handling
+noise can require adaptation during a run, rather than only a fixed
+parameter configuration.
 
 Automating heuristic design predates the use of LLMs. The hyper-heuristics
 literature distinguishes approaches that select existing heuristics
 from those that generate new ones, including methods based on genetic
 programming \cite{Burke2013}. Modular algorithm design provides another
-route. Van Rijn et al.\ extract components from evolution-strategy
-variants and combine them into a space of 4,608 configurations, which
-is explored using a self-adaptive genetic algorithm \cite{vanRijn2016}.
-Such methods make structural search possible, although the available
-components are specified in advance. LLM-based code generation extends
-the implementation space that can be explored, while still depending
-on prompts, interfaces, and the evaluator used to judge candidate
-programs.
+route. Van Rijn et al.\ combine components from evolution-strategy
+variants and search the resulting configuration space
+\cite{vanRijn2016}. Such methods allow structural variation, although
+the available components are specified in advance. LLM-based code
+generation offers another way to explore algorithm implementations
+through executable source code.
 
 FunSearch combines a pretrained language model with a systematic evaluator
 and an evolutionary program database \cite{Romera2023}. Rather than
@@ -84,59 +66,52 @@ asking the model to output a solution directly, it evolves selected
 functions within a program skeleton. The resulting programs produced
 cap-set constructions beyond previously known bounds and online
 bin-packing heuristics that improved on widely used baselines in the
-reported experiments. This work demonstrates the value of an executable
-evaluation loop, but its conclusions concern the problems and evaluation
-conditions studied rather than continuous optimization under noisy
-observations.
+reported experiments. These results demonstrate the potential of
+closed-loop program generation and evaluation for automated algorithm
+design.
 
-LLMs can also participate directly in a numerical search. EvoLLM uses
+LLMs can also participate directly in numerical search. EvoLLM uses
 an LLM as an in-context recombination operator that proposes updates
-to the mean of a search distribution \cite{Lange2024}. The full study
-evaluates four BBOB functions---Sphere, Rosenbrock, Discus, and
-Schwefel---in dimensions three and five, with additional ten-dimensional
-Sphere and Rosenbrock experiments using split queries. It also considers
-small neuroevolution tasks. Unlike approaches that generate an optimizer
-for later execution, EvoLLM requires language-model queries during the
-optimization process.
+to the mean of a search distribution. The study evaluates this approach
+on BBOB functions and small neuroevolution tasks \cite{Lange2024}.
+Unlike approaches that generate an optimizer for later execution,
+EvoLLM requires language-model queries during the optimization process.
 
 Evolution of Heuristics (EoH) and Algorithm Evolution using Large Language
 Model (AEL) instead use language models to generate reusable algorithmic
 code. EoH jointly evolves natural-language descriptions of heuristics
-and their implementations, with evaluations on three combinatorial
-optimization problems \cite{Liu2024}. AEL evolves constructive
-heuristics for the travelling salesperson problem and evaluates them
-on instances containing 20 to 1,000 cities. Its results show improvements
-over simple greedy and directly LLM-generated heuristics, together with
-scalability across the tested problem sizes \cite{AEL2024}. These
-studies support code-based algorithm design, but do not establish its
-effectiveness for noisy continuous optimization.
+and their implementations, with evaluations on combinatorial optimization
+problems \cite{Liu2024}. AEL evolves constructive heuristics for the
+travelling salesperson problem and reports improvements over simple
+greedy and directly LLM-generated heuristics across the tested problem
+sizes \cite{AEL2024}. These studies illustrate different ways of using
+language models to generate and refine optimization heuristics.
 
 Execution feedback can help a language model revise unsuccessful
 programs. Reflexion uses linguistic feedback and an episodic memory of
 self-reflections to improve decisions across successive trials without
-updating the model's weights \cite{Shinn2023}. Chen et al.\ study
-self-debugging through code execution and natural-language explanation
-\cite{Chen2023}. They report accuracy improvements of up to 12\% on
-TransCoder and MBPP, and a 9\% improvement on the hardest Spider
-text-to-SQL problems. Reusing failed predictions also improves sampling
-efficiency relative to baselines that generate substantially more
-candidate programs. These results motivate automated feedback for code
-revision, although improved code correctness does not by itself imply
-improved optimization performance or robustness to noise.
+updating the model's weights \cite{Shinn2023}. Chen et al.\ investigate
+self-debugging through code execution and natural-language explanation.
+They report accuracy improvements on code-generation tasks and improved
+sampling efficiency through the reuse of failed predictions
+\cite{Chen2023}. These results support the use of automated feedback
+to guide the revision of generated code.
 
 LLaMEA applies this feedback-driven approach to the generation of
-continuous black-box optimizers \cite{LLaMEA2024}. It generates
-complete Python classes and evaluates them using IOHexperimenter.
-The original study examines both elitist $(1+1)$ and non-elitist $(1,1)$
-selection, using aggregated Area Over the Convergence Curve (AOCC)
-scores and execution diagnostics as feedback. Selected generated
-algorithms outperform the default CMA-ES and DE baselines on the
-five-dimensional noiseless BBOB suite under the reported performance
-measures, while comparisons with the tuned CMA-ES baseline depend on
-the measure and evaluation budget. The generated algorithms also show
-competitive performance in dimensions ten and twenty \cite{LLaMEA2024}.
-This thesis investigates whether the LLaMEA code-generation process
-can produce effective optimization heuristics under noisy fitness
-evaluations. Algorithms generated under noisy and noiseless conditions
-will be compared across different noise settings to assess their
-performance and robustness.
+continuous black-box optimizers \cite{LLaMEA2024}. It generates complete
+Python classes and evaluates them using IOHexperimenter. The original
+study examines both elitist $(1+1)$ and non-elitist $(1,1)$ selection,
+using aggregated Area Over the Convergence Curve (AOCC) scores and
+execution diagnostics as feedback. Selected generated algorithms
+outperform the default CMA-ES and DE baselines on the five-dimensional
+noiseless BBOB suite under the reported performance measures, while
+comparisons with tuned CMA-ES depend on the measure and evaluation
+budget. The generated algorithms also show competitive performance
+in dimensions ten and twenty \cite{LLaMEA2024}.
+
+The original LLaMEA study evaluates generated optimizers on noiseless
+functions. This thesis investigates whether the same code-generation
+process can produce effective optimization heuristics under noisy
+fitness evaluations. Algorithms generated under noisy and noiseless
+conditions will be compared across different noise settings to assess
+their performance and robustness.
