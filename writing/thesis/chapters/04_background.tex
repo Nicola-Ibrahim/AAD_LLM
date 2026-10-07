@@ -43,11 +43,10 @@ evaluations.
 
 This setting occurs in scientific and engineering problems where an explicit
 mathematical model is unavailable, too expensive to evaluate directly, or not
-accurate enough for optimization. The No Free Lunch theorem also shows that
-no single optimization heuristic can outperform all alternatives on every
-possible problem class without suitable problem-specific inductive bias
-\cite{Wolpert1997}. The characteristics of the optimization
-problem therefore matter when choosing or designing an optimization method.
+accurate enough for optimization. Algorithm performance depends on the
+characteristics of the problem, the dimensionality, the evaluation budget,
+and the target precision. These factors therefore matter when choosing or
+designing an optimization method \cite{Hansen2010}.
 
 Several properties can make a continuous black-box problem difficult. These
 include separability, conditioning, modality, and interactions between
@@ -91,9 +90,10 @@ these groups.
 \end{table}
 
 BBOB performance is commonly presented using empirical cumulative
-distribution functions (ECDFs). An ECDF shows the proportion of problem
-instances that reach a specified target within a given number of function
-evaluations \cite{Hansen2010}. A commonly used target in the noiseless
+distribution functions (ECDFs). An ECDF summarizes the fraction of run--target
+pairs that attain their specified precision within a given number of function
+evaluations, aggregated over the selected benchmark problems and instances
+\cite{Hansen2016Performance}. A commonly used target in the noiseless
 benchmark setting is an optimality gap of
 \begin{equation}
 \Delta f = f(x)-f(x^*) \leq 10^{-8}.
@@ -156,11 +156,15 @@ come from measurement errors, environmental effects, simulation randomness,
 numerical effects, or other sources of uncertainty. The optimizer therefore
 does not always observe the underlying objective directly.
 
-Jin and Branke classify uncertainty in optimization according to where it
-enters the optimization process, including the parameter space, time space,
-surrogate-model space, and fitness space \cite{Jin2005}. The focus here is on
-fitness-space uncertainty. In this case, the candidate solution itself is
-unchanged, while the objective value returned to the optimizer is perturbed.
+Jin and Branke distinguish four forms of uncertainty in evolutionary
+optimization: noisy fitness evaluations, the search for robust solutions,
+approximation errors in fitness evaluation, and time-varying objectives
+\cite{Jin2005}. Noisy and approximated evaluations introduce uncertainty
+in the fitness space, whereas robustness concerns uncertainty in the
+parameter space and dynamic objectives introduce uncertainty over time.
+This thesis focuses on noise in fitness evaluations. In this case, the
+candidate solution itself is unchanged, while the objective value returned
+to the optimizer is perturbed.
 
 A general additive representation is
 \begin{equation}\label{eq:noisy_evaluation_bg}
@@ -255,19 +259,21 @@ where
 \begin{equation}
 w_1 \geq w_2 \geq \dots \geq w_\mu > 0
 \end{equation}
-are the weights associated with candidates ordered according to their
-observed fitness,
+are positive recombination weights satisfying $\sum_{i=1}^{\mu}w_i=1$,
+associated with candidates ordered according to their observed fitness,
 \begin{equation}
 f_{\mathrm{obs}}(x_{1:\lambda}) \leq \dots \leq f_{\mathrm{obs}}(x_{\lambda:\lambda}).
 \end{equation}
 
-When the fitness evaluations are noisy, this ranking can be corrupted. A
-candidate with a worse clean objective may receive a better noisy evaluation
-and consequently a larger selection weight. These rank inversions can affect
-both cumulative step-size adaptation and covariance-matrix learning
-\cite{Jin2005,Hansen2009Noisy}. Noise can therefore
-influence not only which candidate is selected, but also the search
-distribution used in later generations.
+When fitness evaluations are noisy, the observed ranking can differ
+from the ranking under the underlying objective. A candidate with a
+worse clean objective may receive a more favorable noisy evaluation
+and consequently a larger selection weight. Since CMA-ES uses ranked
+candidates to update its search distribution, these differences can
+affect subsequent search steps \cite{Hansen2001}. Hansen et al.
+measure uncertainty through rank changes following reevaluation and
+use this information to guide uncertainty handling in CMA-ES
+\cite{Hansen2009}.
 
 Repeated evaluations can improve a fitness estimate when evaluations are
 independent and their errors have finite variance. For unbiased observations
@@ -528,19 +534,16 @@ such sequence as
 {\mathrm{ub}-\mathrm{lb}}
 \right),
 \end{equation}
-where $y_i$ is the best-so-far log-scaled precision at evaluation $i$ and
-$\mathrm{lb}<\mathrm{ub}$ are clipping bounds. In terms of raw objective
-values, the best-so-far gap before the log transformation is
-$\min_{1\leq j\leq i}\{f(x_j)-f(x^*)\}$. Smaller gaps reached earlier yield
-higher AOCC. The source describes log scaling and reports a precision range
-from $10^{-8}$ to $10^2$; reproducing numerical AOCC values requires using
-the same convention for transforming the values and their clipping bounds.
+Here, $y_i$ denotes best-so-far precision on the scale used to calculate
+the score, and $\mathrm{lb}<\mathrm{ub}$ delimit the corresponding range
+of interest. Smaller precision values reached earlier produce higher
+AOCC scores. The original study reports logarithmic scaling and a raw
+precision range from $10^{-8}$ to $10^2$ \cite{LLaMEA2024}.
 
-One AOCC value measures one optimizer run on one benchmark instance. To
-score a generated algorithm, the original LLaMEA experiment first averaged
-over 24 BBOB functions and three instances per function, and then averaged
-the resulting suite scores over five independent runs \cite{LLaMEA2024}.
-These counts describe the original experiment, not the AOCC definition. Let
+One AOCC value summarizes an optimizer run on a benchmark instance.
+LLaMEA aggregates these scores across benchmark functions, instances,
+and repeated evaluations to obtain a performance estimate for each
+generated algorithm \cite{LLaMEA2024}. Let
 $\widehat{F}(a)$ denote the resulting
 estimated mean AOCC for algorithm $a$; higher values indicate better anytime
 performance. The benchmark functions in the original experiment were
@@ -615,9 +618,11 @@ The distinction between evaluating a fixed optimizer and synthesizing one is
 important. In the former, noisy fitness affects the search over numerical
 solutions. In a feedback-driven generation process, its effects can also
 reach later program generations through the returned solutions and their
-assessment. Directly selecting on noisy returned values and separately
-assessing returned points are different protocols; the Methodology chapter
-specifies which protocol is used in this thesis.
+assessment.
+
+Directly selecting on noisy returned values and separately assessing returned
+points are different evaluation protocols. Their implications for algorithm
+selection depend on how performance is measured and aggregated.
 
 %------------------------------------------------------------------------------
 \section{Research Gap}\label{sec:research_gap}
@@ -628,7 +633,7 @@ relevant to this thesis. The first is continuous black-box optimization under
 uncertainty. Previous studies have shown that noisy fitness can distort
 candidate rankings, interfere with search directions, and affect adaptation
 mechanisms in established optimization algorithms
-\cite{Jin2005,Arnold2003,Hansen2009Noisy,Spall2003}. Noise-handling
+\cite{Jin2005,Arnold2003,Hansen2009,Spall2003}. Noise-handling
 strategies such as repeated evaluation and sample averaging can reduce the
 effect of noisy observations, but they also require additional function
 evaluations. In addition, they generally require the algorithm designer to

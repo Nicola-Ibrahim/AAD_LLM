@@ -121,7 +121,7 @@
 \newcolumntype{R}[1]{>{\raggedleft\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}
 
 % Tables according to Chicago Manual of Style
-\usepackage{tabularx, etoolbox, booktabs}
+\usepackage{tabularx, longtable, etoolbox, booktabs}
 \usepackage{multirow} % Allows rowspan
 \newcommand{\rarray}[1]{\renewcommand{\arraystretch}{#1}} % Slightly enlarged cells
 \captionsetup{belowskip=12pt,aboveskip=4pt} % Correct table caption distance
@@ -147,12 +147,6 @@
 \usepackage[backend=bibtex, bibencoding=utf8, style=alphabetic, giveninits=true, maxbibnames=99]{biblatex}
 % \usepackage[backend=biber, style=ieee]{biblatex} % Alternative
 \bibliography{literature}
-
-% According to the glossaries manual, this package should be loaded after hyperref, the toc option makes the glossaries appear in the table of contents
-\usepackage[acronym, toc, nonumberlist]{glossaries}
-\input{chapters/glossaries}
-% Add this after all new glossary entries
-\makeglossaries
 
 % Small font size for captions
 \addtokomafont{caption}{\small}

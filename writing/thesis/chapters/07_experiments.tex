@@ -3,32 +3,47 @@
 \label{chap:experiments}
 %==============================================================================
 
-Three locally hosted LLMs were used to generate optimizers for five BBOB
-functions under clean and stochastic observations. The synthesis experiments
-vary the model, prompt condition, problem dimension, and noise level. After
-synthesis, selected champions are benchmarked across 20 BBOB instances and
-compared with CMA-ES, Differential Evolution, and Particle Swarm Optimization.
-A separate noise-robustness evaluation tests clean-origin champions under
-changed observation noise while keeping their code fixed.
+A low clean optimality gap during synthesis shows how a candidate performs
+on the instance used to select it. It does not establish whether the
+selected optimizer remains effective across other instances or under
+different observation noise. The experiments therefore assess generated
+optimizers beyond their synthesis evaluations, examining search progress,
+target attainment, and the accuracy of returned solutions.
+
+The study first benchmarks champions under the function, dimension, and
+noise conditions used during synthesis. Comparisons with CMA-ES,
+Differential Evolution, and Particle Swarm Optimization provide reference
+performance under the same objective-evaluation budgets. A separate
+noise-robustness study evaluates champions synthesized under clean
+observations while varying evaluation noise and keeping each selected
+program fixed. This separates performance under matched synthesis and
+evaluation conditions from sensitivity to a changed observation environment.
 
 %==============================================================================
 \section{Experimental Setup}
 \label{sec:experimental_design}
 %==============================================================================
 
-The synthesis procedure and prompt specifications are defined in
-Chapter~\ref{chap:methodology}. The following settings determine the
-conditions used in the experiments.
+The experiments vary the LLM, prompt mode and scaffold, BBOB function,
+dimension, and observation noise level. The following subsections specify
+these configurations and the selection of champions for benchmarking.
+The synthesis procedure and full prompt definitions are given in
+Chapter~\ref{chap:methodology}.
 
 %------------------------------------------------------------------------------
 \subsection{Problems and Dimensions}
 \label{subsec:experiment_problems}
 %------------------------------------------------------------------------------
 
-The experiments use five functions from the noiseless BBOB suite
-\cite{BBOB2009,Hansen2021COCO}. These functions cover separable,
-ill-conditioned, and multimodal problems, providing different search
-challenges within a manageable subset of the suite.
+Five functions from the noiseless BBOB suite are selected to examine
+optimizers facing different search challenges
+\cite{BBOB2009,Hansen2021COCO}. Sphere provides a separable unimodal
+problem, while Rosenbrock introduces a curved valley and Discus introduces
+strong ill-conditioning. Rastrigin and Gallagher 101 peaks extend the
+assessment to multimodal landscapes with different degrees of global
+structure. Table~\ref{tab:experiment_functions} summarizes the selected
+functions. This subset supports comparisons across contrasting landscapes,
+although it does not represent the full BBOB suite.
 
 \begin{table}[htbp]
     \centering
@@ -161,7 +176,7 @@ results do not influence their selection.
 The independent benchmark evaluates the selected champions and reference
 optimizers on BBOB functions implemented in IOH
 \cite{deNobel2024,Hansen2021COCO}. The separation between synthesis and
-benchmarking is defined in Section~\ref{sec:independent_benchmark_method}.
+benchmarking is defined in Section~\ref{sec:benchmark_method}.
 
 The evaluation budget is $B_{\mathrm{eval}}=10{,}000D$, giving 20,000,
 30,000, 50,000 and 100,000 objective evaluations for $D=2,3,5,10$,
@@ -301,12 +316,10 @@ reported experiments.
 \label{sec:benchmark_results}
 %==============================================================================
 
-Of the 1,920 native benchmark conditions, 1,890 contain all 20 terminal
-trial results. One complete condition is excluded because its evaluated
-program does not match the selected champion: DeepSeek-Coder-V2-Lite-Instruct,
-Explicit-Noisy Vectorization, $f_{11}$, $D=3$, and $\sigma=0.05$.
-The descriptive summaries therefore include 1,889 complete conditions,
-covering 37,780 trials.
+All 1,920 native benchmark conditions have 20 terminal trial results.
+Eleven conditions are excluded because the evaluated code hash does not
+match the currently selected champion for that condition. The descriptive
+summaries therefore include 1,909 conditions, covering 38,180 trials.
 
 The model and prompt tables report equally weighted returned-solution
 success rates across eligible conditions. Convergence and ECDF figures
@@ -384,38 +397,64 @@ are carried forward; this is not the primary fixed-target ranking.}
 \end{figure}
 
 Under the common Baseline strategy, aggregate implicit solved rates are
-33.68\% for DeepSeek-Coder-V2-Lite-Instruct, 25.19\% for Qwen2.5-Coder-14B-Instruct and 20.91\% for Qwen2.5-Coder-32B-Instruct.
+34.10\% for DeepSeek-Coder-V2-Lite-Instruct, 23.92\% for Qwen2.5-Coder-14B-Instruct, and 19.81\% for Qwen2.5-Coder-32B-Instruct.
 These are descriptive rankings; the condition-bootstrap intervals overlap.
 The prompt-strategy comparisons are considered alongside the Explicit
 results in Section~\ref{subsec:model_prompt_comparison}.
 
 \begin{table}[htbp]
     \centering
-    \caption{Implicit native terminal reliability at $\Delta f\leq10^{-8}$.
-    Complete current conditions only; each contributes 20 trials.
-    Intervals are condition-cluster bootstrap 95\% intervals in percentage points.
-    Baseline rows compare models; the remaining rows compare prompt strategies.}
+    \caption{Returned-solution success rates for Implicit synthesis at
+    $\Delta f\leq10^{-8}$. Each complete condition contains 20 trials.
+    Rates and condition-bootstrap 95\% confidence limits are expressed
+    as percentages.}
     \label{tab:implicit_summary}
+
     \scriptsize
-    \setlength{\tabcolsep}{2pt}
-    \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{0.24\textwidth} l >{\raggedright\arraybackslash}X r r r l}
+    \renewcommand{\arraystretch}{1.25}
+    \setlength{\tabcolsep}{3pt}
+
+    \begin{tabularx}{\textwidth}{
+        >{\raggedright\arraybackslash}X
+        l l r r r l
+    }
         \hline
-        Model & Strategy & Origin & Conditions & Solved / trials & Rate (\%) & 95\% CI \\
+        Model & Strategy & Origin &
+        \shortstack[r]{Complete\\conditions} &
+        \shortstack[r]{Solved /\\trials} &
+        \shortstack[r]{Success\\(\%)} &
+        95\% CI \\
         \hline
-        Qwen2.5-Coder-14B-Instruct & Baseline & All native noise levels & 79 & 398/1580 & 25.19 & [16.39, 34.69] \\
-        Qwen2.5-Coder-14B-Instruct & Thinking & All native noise levels & 80 & 221/1600 & 13.81 & [7.25, 21.44] \\
-        Qwen2.5-Coder-14B-Instruct & Vectorization & All native noise levels & 79 & 428/1580 & 27.09 & [18.54, 37.09] \\
-        Qwen2.5-Coder-14B-Instruct & Guided & All native noise levels & 76 & 392/1520 & 25.79 & [17.11, 35.33] \\
-        Qwen2.5-Coder-32B-Instruct & Baseline & All native noise levels & 77 & 322/1540 & 20.91 & [13.44, 29.81] \\
-        Qwen2.5-Coder-32B-Instruct & Thinking & All native noise levels & 80 & 310/1600 & 19.37 & [12.25, 28.19] \\
-        Qwen2.5-Coder-32B-Instruct & Vectorization & All native noise levels & 79 & 425/1580 & 26.90 & [18.60, 35.82] \\
-        Qwen2.5-Coder-32B-Instruct & Guided & All native noise levels & 80 & 418/1600 & 26.13 & [18.31, 34.25] \\
-        DeepSeek-Coder-V2-Lite-Instruct & Baseline & All native noise levels & 76 & 512/1520 & 33.68 & [23.95, 43.55] \\
-        DeepSeek-Coder-V2-Lite-Instruct & Thinking & All native noise levels & 80 & 263/1600 & 16.44 & [9.87, 23.44] \\
-        DeepSeek-Coder-V2-Lite-Instruct & Vectorization & All native noise levels & 79 & 438/1580 & 27.72 & [18.60, 36.84] \\
-        DeepSeek-Coder-V2-Lite-Instruct & Guided & All native noise levels & 79 & 547/1580 & 34.62 & [25.44, 43.67] \\
+
+        \shortstack[l]{Qwen2.5-Coder\\14B-Instruct}
+        & Baseline
+        & \shortstack[l]{All native\\noise levels}
+        & 79 & 378/1580 & 23.92 & [15.57, 32.85] \\
+        & Thinking      & & 80 & 221/1600 & 13.81 & [7.06, 21.31] \\
+        & Vectorization & & 80 & 428/1600 & 26.75 & [17.94, 36.38] \\
+        & Guided        & & 77 & 392/1540 & 25.45 & [16.36, 33.70] \\
+        \hline
+
+        \shortstack[l]{Qwen2.5-Coder\\32B-Instruct}
+        & Baseline      & & 79 & 313/1580 & 19.81 & [12.02, 28.42] \\
+        & Thinking      & & 80 & 313/1600 & 19.56 & [11.75, 27.95] \\
+        & Vectorization & & 79 & 411/1580 & 26.01 & [17.34, 35.19] \\
+        & Guided        & & 80 & 415/1600 & 25.94 & [17.56, 34.44] \\
+        \hline
+
+        \shortstack[l]{DeepSeek-Coder\\V2-Lite-Instruct}
+        & Baseline      & & 78 & 532/1560 & 34.10 & [25.00, 43.99] \\
+        & Thinking      & & 80 & 263/1600 & 16.44 & [10.19, 23.63] \\
+        & Vectorization & & 80 & 438/1600 & 27.38 & [19.06, 36.57] \\
+        & Guided        & & 80 & 547/1600 & 34.19 & [24.81, 43.88] \\
         \hline
     \end{tabularx}
+
+    \smallskip
+    \parbox{\textwidth}{\scriptsize
+        All rows include all native noise levels.
+        Baseline rows compare models; the remaining rows compare
+        prompt strategies within each model.}
 \end{table}
 
 \subsection{Explicit Synthesis}
@@ -495,9 +534,10 @@ this plot does not combine Explicit-Clean and Explicit-Noisy champions.}
     \label{fig:explicit_noise_01}
 \end{figure}
 
-Baseline solved rates under Explicit-Clean are 34.25\%, 37.50\% and
-36.00\% for Qwen2.5-Coder-14B-Instruct, Qwen2.5-Coder-32B-Instruct and DeepSeek-Coder-V2-Lite-Instruct, respectively.
-Under native Explicit-Noisy conditions they are 5.89\%, 13.50\% and 18.73\%.
+Baseline solved rates under Explicit-Clean are 34.25\%, 36.25\%, and
+36.00\% for Qwen2.5-Coder-14B-Instruct, Qwen2.5-Coder-32B-Instruct,
+and DeepSeek-Coder-V2-Lite-Instruct, respectively. Under native
+Explicit-Noisy conditions they are 5.69\%, 13.08\%, and 18.73\%.
 The noisy aggregate covers three positive noise levels, whereas the clean
 aggregate covers one. The two rates therefore describe different
 synthesis and evaluation environments.
@@ -506,43 +546,69 @@ considered in Section~\ref{subsec:model_prompt_comparison}.
 
 \begin{table}[htbp]
     \centering
-    \caption{Explicit native terminal reliability at $\Delta f\leq10^{-8}$.
-    Complete current conditions only; each contributes 20 trials.
-    Intervals are condition-cluster bootstrap 95\% intervals in percentage points.
-    Baseline rows compare models; the remaining rows compare prompt strategies.}
+    \caption{Returned-solution success rates for Explicit synthesis at
+    $\Delta f\leq10^{-8}$. Each complete condition contains 20 trials.
+    Rates and condition-bootstrap 95\% confidence limits are expressed
+    as percentages.}
     \label{tab:explicit_summary}
+
     \scriptsize
-    \setlength{\tabcolsep}{2pt}
-    \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{0.24\textwidth} l >{\raggedright\arraybackslash}X r r r l}
+    \renewcommand{\arraystretch}{1.2}
+    \setlength{\tabcolsep}{3pt}
+
+    \begin{tabularx}{\textwidth}{
+        >{\raggedright\arraybackslash}X
+        l l r r r l
+    }
         \hline
-        Model & Strategy & Origin & Conditions & Solved / trials & Rate (\%) & 95\% CI \\
+        Model & Strategy & Origin &
+        \shortstack[r]{Complete\\conditions} &
+        \shortstack[r]{Solved /\\trials} &
+        \shortstack[r]{Success\\(\%)} &
+        95\% CI \\
         \hline
-        Qwen2.5-Coder-14B-Instruct & Baseline & Explicit-Clean & 20 & 137/400 & 34.25 & [17.99, 51.51] \\
-        Qwen2.5-Coder-14B-Instruct & Baseline & Explicit-Noisy & 56 & 66/1120 & 5.89 & [1.43, 11.25] \\
-        Qwen2.5-Coder-14B-Instruct & Thinking & Explicit-Clean & 19 & 141/380 & 37.11 & [18.16, 55.53] \\
-        Qwen2.5-Coder-14B-Instruct & Thinking & Explicit-Noisy & 60 & 34/1200 & 2.83 & [0.17, 6.83] \\
-        Qwen2.5-Coder-14B-Instruct & Vectorization & Explicit-Clean & 20 & 172/400 & 43.00 & [23.24, 62.02] \\
-        Qwen2.5-Coder-14B-Instruct & Vectorization & Explicit-Noisy & 58 & 129/1160 & 11.12 & [4.74, 18.02] \\
-        Qwen2.5-Coder-14B-Instruct & Guided & Explicit-Clean & 20 & 96/400 & 24.00 & [8.49, 42.75] \\
-        Qwen2.5-Coder-14B-Instruct & Guided & Explicit-Noisy & 58 & 195/1160 & 16.81 & [8.53, 26.73] \\
-        Qwen2.5-Coder-32B-Instruct & Baseline & Explicit-Clean & 20 & 150/400 & 37.50 & [15.99, 58.02] \\
-        Qwen2.5-Coder-32B-Instruct & Baseline & Explicit-Noisy & 60 & 162/1200 & 13.50 & [6.33, 21.17] \\
-        Qwen2.5-Coder-32B-Instruct & Thinking & Explicit-Clean & 20 & 185/400 & 46.25 & [24.75, 67.75] \\
-        Qwen2.5-Coder-32B-Instruct & Thinking & Explicit-Noisy & 60 & 107/1200 & 8.92 & [3.75, 15.67] \\
-        Qwen2.5-Coder-32B-Instruct & Vectorization & Explicit-Clean & 20 & 242/400 & 60.50 & [42.74, 79.52] \\
-        Qwen2.5-Coder-32B-Instruct & Vectorization & Explicit-Noisy & 60 & 145/1200 & 12.08 & [5.50, 20.42] \\
-        Qwen2.5-Coder-32B-Instruct & Guided & Explicit-Clean & 20 & 74/400 & 18.50 & [5.00, 36.25] \\
-        Qwen2.5-Coder-32B-Instruct & Guided & Explicit-Noisy & 60 & 179/1200 & 14.92 & [7.33, 24.17] \\
-        DeepSeek-Coder-V2-Lite-Instruct & Baseline & Explicit-Clean & 20 & 144/400 & 36.00 & [18.00, 55.51] \\
-        DeepSeek-Coder-V2-Lite-Instruct & Baseline & Explicit-Noisy & 59 & 221/1180 & 18.73 & [10.17, 27.88] \\
-        DeepSeek-Coder-V2-Lite-Instruct & Thinking & Explicit-Clean & 20 & 79/400 & 19.75 & [5.25, 36.50] \\
-        DeepSeek-Coder-V2-Lite-Instruct & Thinking & Explicit-Noisy & 59 & 110/1180 & 9.32 & [3.30, 17.12] \\
-        DeepSeek-Coder-V2-Lite-Instruct & Vectorization & Explicit-Clean & 20 & 109/400 & 27.25 & [10.98, 46.75] \\
-        DeepSeek-Coder-V2-Lite-Instruct & Vectorization & Explicit-Noisy & 58 & 209/1160 & 18.02 & [9.48, 27.86] \\
-        DeepSeek-Coder-V2-Lite-Instruct & Guided & Explicit-Clean & 19 & 112/380 & 29.47 & [14.21, 45.53] \\
-        DeepSeek-Coder-V2-Lite-Instruct & Guided & Explicit-Noisy & 59 & 242/1180 & 20.51 & [11.61, 29.92] \\
+
+        \shortstack[l]{Qwen2.5-Coder\\14B-Instruct}
+        & Baseline      & Clean & 20 & 137/400 & 34.25 & [18.75, 51.00] \\
+        &               & Noisy & 58 & 66/1160 & 5.69 & [1.81, 11.21] \\
+        & Thinking      & Clean & 20 & 141/400 & 35.25 & [18.00, 53.51] \\
+        &               & Noisy & 60 & 34/1200 & 2.83 & [0.17, 7.00] \\
+        & Vectorization & Clean & 20 & 172/400 & 43.00 & [22.74, 61.75] \\
+        &               & Noisy & 60 & 129/1200 & 10.75 & [4.08, 18.33] \\
+        & Guided        & Clean & 20 & 96/400 & 24.00 & [8.75, 42.75] \\
+        &               & Noisy & 60 & 195/1200 & 16.25 & [8.00, 26.25] \\
+        \hline
+
+        \shortstack[l]{Qwen2.5-Coder\\32B-Instruct}
+        & Baseline      & Clean & 20 & 145/400 & 36.25 & [15.74, 55.26] \\
+        &               & Noisy & 60 & 157/1200 & 13.08 & [5.75, 21.34] \\
+        & Thinking      & Clean & 20 & 184/400 & 46.00 & [26.00, 68.50] \\
+        &               & Noisy & 60 & 106/1200 & 8.83 & [3.08, 15.83] \\
+        & Vectorization & Clean & 20 & 245/400 & 61.25 & [43.48, 80.50] \\
+        &               & Noisy & 60 & 147/1200 & 12.25 & [5.58, 19.67] \\
+        & Guided        & Clean & 20 & 79/400 & 19.75 & [5.50, 35.00] \\
+        &               & Noisy & 60 & 176/1200 & 14.67 & [7.24, 22.92] \\
+        \hline
+
+        \shortstack[l]{DeepSeek-Coder\\V2-Lite-Instruct}
+        & Baseline      & Clean & 20 & 144/400 & 36.00 & [18.49, 56.50] \\
+        &               & Noisy & 59 & 221/1180 & 18.73 & [10.25, 28.31] \\
+        & Thinking      & Clean & 20 & 79/400 & 19.75 & [6.00, 38.00] \\
+        &               & Noisy & 60 & 110/1200 & 9.17 & [3.17, 16.50] \\
+        & Vectorization & Clean & 20 & 109/400 & 27.25 & [9.50, 44.75] \\
+        &               & Noisy & 60 & 212/1200 & 17.67 & [9.41, 26.92] \\
+        & Guided        & Clean & 20 & 120/400 & 30.00 & [14.50, 45.51] \\
+        &               & Noisy & 60 & 242/1200 & 20.17 & [11.33, 30.50] \\
         \hline
     \end{tabularx}
+
+    \smallskip
+    \parbox{\textwidth}{\scriptsize
+        Clean denotes Explicit-Clean synthesis and evaluation at
+        $\sigma=0$; Noisy denotes Explicit-Noisy synthesis and evaluation
+        across $\sigma\in\{0.05,0.1,0.2\}$.
+        Baseline rows compare models; the remaining rows compare
+        prompt strategies within each model.}
 \end{table}
 
 \subsection{Model and Prompt Comparisons}
