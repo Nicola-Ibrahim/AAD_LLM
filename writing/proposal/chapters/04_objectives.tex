@@ -1,53 +1,68 @@
-%-------------------------------------------------------------------------------
-% Core Research Objectives
-%-------------------------------------------------------------------------------
+\chapter{Research Objectives}
+\label{chap:objectives}
 
-\chapter{Research Objectives}\label{chap:objectives}
-
-The primary aim of this thesis is to investigate the capacity of Large Language Models (LLMs) to autonomously synthesize optimization heuristics that can handle stochastic fitness evaluations. To address the gap between existing deterministic Automated Algorithm Design (AAD) frameworks and optimization under noisy conditions, the proposed research is structured around three core objectives and their corresponding research questions:
-
-% ==============================================================================
-% OBJECTIVE 1
-% ==============================================================================
+The primary aim of this thesis is to investigate the capacity of Large
+Language Models (LLMs) to autonomously synthesize optimization heuristics
+that can handle stochastic fitness evaluations. To investigate the use
+of Automated Algorithm Design (AAD) under noisy conditions, the proposed
+research is structured around three objectives and their corresponding
+research questions.
 
 \section*{Objective 1: Formulating a Stochastic Evaluation Sandbox}
 
-To investigate the behavior of LLM-generated optimization algorithms under non-deterministic conditions, the evaluation environment could be extended by introducing controlled noise to continuous benchmark functions. Standard AAD frameworks primarily evaluate generated algorithms against clean, theoretical benchmark functions. This objective seeks to answer the following core question:
+The first objective is to extend continuous benchmark functions with
+controlled noise to investigate the behavior of LLM-generated optimization
+algorithms under stochastic evaluations. It addresses the following
+question:
 
 \begin{quote}
-
-\textbf{RQ1: How can continuous optimization benchmarks be systematically extended to simulate stochastic landscapes?}
-
+\textbf{RQ1: How can continuous optimization benchmarks be systematically
+extended to simulate stochastic landscapes?}
 \end{quote}
 
-To address this question, the proposed approach is to develop a non-deterministic wrapper layer over continuous benchmark functions. Based on established optimization literature \cite{Jin2005, Hansen2009Noisy}, this phase will consider how controlled statistical noise can be introduced into benchmark function evaluations. The resulting evaluation environment is intended to provide a repeatable setting in which generated algorithms can be evaluated using noisy fitness values, providing the basis for investigating their behavior under stochastic conditions.
-
-% ==============================================================================
-% OBJECTIVE 2
-% ==============================================================================
+The proposed approach is to develop a wrapper layer over continuous
+benchmark functions. Established benchmark definitions and literature
+on optimization under uncertainty will guide the introduction of
+controlled statistical noise \cite{Hansen2009Noiseless,Hansen2009Noisy,
+Jin2005}. The resulting environment will provide a repeatable setting
+for evaluating generated algorithms using noisy fitness observations.
 
 \section*{Objective 2: Autonomous Synthesis of Noise-Resilient Heuristics}
 
-Recent work has shown that automated frameworks can generate competitive optimization algorithms for clean, noiseless functions. However, it remains unclear whether the same evolutionary code-generation process can produce heuristics that account for noisy fitness evaluations. Consequently, this objective addresses the following research question:
+Existing work has demonstrated that LLaMEA can generate competitive
+optimization algorithms for noiseless benchmark functions
+\cite{LLaMEA2024}. The second objective is to investigate whether the
+same evolutionary code-generation process can produce heuristics that
+handle noisy fitness evaluations. It addresses the following question:
 
 \begin{quote}
-
-\textbf{RQ2: Can Large Language Models autonomously synthesize optimization heuristics that are resilient to noise?}
-
+\textbf{RQ2: Can Large Language Models autonomously synthesize optimization
+heuristics that are resilient to noise?}
 \end{quote}
 
-To investigate this question, the LLaMEA evolutionary framework will be applied to a representative set of continuous mathematical landscapes using lightweight and cost-effective language models. The proposed experiments will examine whether repeated evolutionary feedback from noisy evaluations can lead generated Python optimization algorithms to incorporate mechanisms for handling uncertainty. The evolution of the generated algorithms across multiple generations will be analyzed to assess whether specialized noise-handling strategies emerge during the process.
-
-% ==============================================================================
-% OBJECTIVE 3
-% ==============================================================================
+The LLaMEA framework will be applied to a representative set of continuous
+optimization landscapes using lightweight and cost-effective language
+models. The experiments will examine whether repeated evolutionary
+feedback from noisy evaluations leads generated Python optimization
+classes to incorporate mechanisms for handling uncertainty. Changes in
+the generated algorithms over successive generations will be analyzed
+alongside their performance to assess whether noise-handling strategies
+emerge and whether they are effective in the tested conditions.
 
 \section*{Objective 3: Empirical Benchmarking and Cross-Environment Analysis}
 
-The generated algorithms will be evaluated under different noise conditions to examine their performance, robustness, and generalization. This objective therefore addresses the following comparative question:
+The third objective is to evaluate the generated algorithms under different
+noise conditions and examine their performance, robustness, and
+generalization. It addresses the following comparative question:
 
 \begin{quote}
-\textbf{RQ3: How robust are LLM-generated heuristics across different noise conditions compared with established optimization methods?}
+\textbf{RQ3: How robust are LLM-generated heuristics across different noise
+conditions compared with established optimization methods?}
 \end{quote}
 
-To investigate this question, the proposed evaluation will consider algorithms generated under both noisy and noiseless conditions and evaluate them across different noise settings, including clean evaluations where appropriate. This cross-evaluation will provide a basis for examining whether exposure to noisy evaluations during algorithm evolution leads to differences in performance, robustness, or generalization compared with algorithms evolved under clean conditions. Traditional optimization methods may also be included as reference baselines where appropriate.
+Algorithms generated under noisy and noiseless conditions will be evaluated
+across different noise settings, including clean evaluations. This
+comparison will examine whether exposure to noise during algorithm
+evolution leads to differences in performance, robustness, or
+generalization. Established optimization methods may also be included
+as reference baselines where appropriate.
