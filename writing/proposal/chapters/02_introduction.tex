@@ -1,15 +1,82 @@
-\chapter{Introduction}\label{chap:intro}
+\chapter{Introduction}
+\label{chap:intro}
 
-Historically, the development of efficient continuous optimization algorithms has relied on mathematical derivations and extensive manual trial-and-error by human experts over several decades \cite{Nelder1965, Hansen2001}. This effort has produced a wide range of general-purpose solvers, from classical gradient-based methods such as Gradient Descent and Quasi-Newton algorithms to widely used derivative-free heuristics, most notably the Nelder-Mead simplex algorithm \cite{Nelder1965} and the Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001}. However, the diversity of real-world fitness landscapes means that no single general-purpose solver can achieve optimal performance across all problem instances without some form of specialized adaptation. Customizing algorithmic logic or tuning parameters for each application therefore requires substantial engineering effort and does not scale well across distinct optimization problems \cite{Burke2013}.
+The development of continuous optimization algorithms has traditionally
+combined mathematical analysis with empirical testing and refinement by
+human experts. This work has produced methods with different search
+mechanisms and requirements, including the derivative-free Nelder--Mead
+simplex algorithm \cite{Nelder1965} and the Covariance Matrix Adaptation
+Evolution Strategy (CMA-ES) \cite{Hansen2001}. Their performance depends
+on the objective landscape, problem dimension, target accuracy, and
+available evaluation budget. Comparisons on the Black-Box Optimization
+Benchmark (BBOB) testbed show that the preferred algorithm can change
+across these conditions \cite{Hansen2010}. Selecting or adapting a search
+method for a particular application therefore remains an important part
+of optimization practice, motivating approaches that automate heuristic
+selection and design \cite{Burke2013}.
 
-This challenge becomes more pronounced when optimization algorithms are deployed in non-deterministic, noisy environments. Traditional ranking-based heuristics such as CMA-ES can perform poorly in noisy settings, where statistical fluctuations may lead the search toward false improvements and require additional statistical mechanisms to maintain reliable convergence \cite{Hansen2009Noisy}. Designing a robust mathematical algorithm to handle this uncertainty is difficult because a fundamentally poor candidate solution may temporarily obtain a favorable fitness value due to a statistical anomaly, causing the search process to adjust its parameters toward an incorrect direction \cite{Jin2005}. The problem is particularly pronounced for classical gradient-based algorithms. Since these methods rely on analytical or finite-difference derivatives, even relatively small amounts of statistical noise can corrupt gradient estimates and substantially affect the resulting search direction \cite{Sarafian2024}.
+This design problem becomes more difficult when objective evaluations
+are affected by noise. Measurement errors and randomized simulations
+can cause repeated evaluations of the same solution to return different
+values. A candidate may consequently appear better than another even
+when its underlying objective value is worse, affecting selection and
+subsequent search decisions \cite{Jin2005}. Rank-based methods are also
+subject to this problem: Hansen et al.\ developed an uncertainty-handling
+method for CMA-ES that detects changes in candidate rankings through
+re-evaluation and adjusts the search accordingly \cite{Hansen2009}.
+For methods that estimate derivatives from function values, noise
+introduces a further difficulty. Finite-difference estimates must balance
+truncation error against noise amplification, making the differencing
+step important for obtaining useful estimates \cite{MoreWild2012}.
 
-To automate the discovery of specialized search strategies and reduce the need for manual algorithm design, techniques such as hyperparameter tuning, automated algorithm selection, and traditional Automated Algorithm Design (AAD) were developed long before the advent of deep learning. More recently, AAD has gained renewed interest through the use of Large Language Models (LLMs). Rather than relying entirely on rigid, predefined search templates, modern AAD frameworks incorporate foundation models into structured, closed-loop environments that can write, test, and refine executable source code \cite{Romera2023}.
+Existing approaches to noisy optimization include repeated sampling,
+larger populations, modified selection, and adaptive evaluation
+strategies. These approaches allocate computational effort differently,
+and their effectiveness depends on the algorithm and noise setting
+\cite{Jin2005}. Noise handling is therefore not simply a matter of
+choosing one fixed parameter configuration. It can also require changes
+to how an algorithm gathers information, compares candidates, and
+allocates its evaluation budget. The question examined in this thesis
+is whether such search logic can be generated and refined automatically.
 
-To implement such a code-generation loop, this research leverages the Large Language Model Evolutionary Algorithm (LLaMEA) framework \cite{LLaMEA2024}. The pipeline prompts the generative model to produce fully functional Python optimization classes, executes the generated code within a secure validation sandbox against standard mathematical benchmarks, and feeds execution metrics and compiler tracebacks back into the LLM's context to guide subsequent mutation and debugging. Existing work has shown that frameworks such as LLaMEA can produce competitive optimization results under deterministic evaluation conditions \cite{LLaMEA2024}. However, their ability to adapt generated code structures to non-deterministic conditions remains largely unexplored. This thesis addresses this gap by evaluating the performance and adaptive behavior of LLaMEA across continuous black-box optimization landscapes affected by stochastic noise, investigating whether closed-loop evolutionary feedback can lead language models to synthesize noise-resilient search strategies.
+Automated Algorithm Design (AAD) seeks to reduce the manual effort
+required to develop effective algorithms. Earlier approaches include
+genetic programming and the search over combinations of predefined
+algorithmic components \cite{Burke2013, vanRijn2016}. Large Language
+Models (LLMs) offer another way to explore algorithm implementations
+by generating executable source code. FunSearch demonstrates how a
+language model can be combined with an evaluator to iteratively improve
+programs, yielding new cap-set constructions and online bin-packing
+heuristics \cite{Romera2023}.
 
-This thesis establishes a benchmark-driven evaluation of Automated Algorithm Design under uncertainty. A controlled stochastic layer is constructed over the continuous Black-Box Optimization Benchmark (BBOB) suite \cite{Hansen2010}, which is widely used for evaluating single-objective continuous optimization algorithms. By introducing controlled statistical noise into the benchmark function evaluations, the evaluation environment provides a repeatable setting in which to examine the behavior of the LLaMEA framework under different noise conditions. This configuration allows the study to investigate whether evolutionary pressure from code evaluation under stochastic conditions can lead an LLM to discover and generate optimization heuristics that incorporate mechanisms for handling uncertainty.
+This thesis uses the Large Language Model Evolutionary Algorithm
+(LLaMEA) framework \cite{LLaMEA2024} to investigate code-based AAD for
+continuous black-box optimization under noisy observations. The model
+generates Python optimization classes, which are executed in an isolated
+evaluation environment. Performance feedback and execution diagnostics
+are then used to guide further revisions. The original LLaMEA study
+evaluates generated optimizers on noiseless BBOB functions. Here, the
+generated optimizers will instead be studied under both clean and noisy
+objective observations.
 
-The core contribution of this thesis is organized into three methodological phases. First, we formulate a non-deterministic evaluation sandbox by constructing a wrapper layer that applies controlled statistical noise to standard benchmark problems. Second, we evaluate the ability of the generative model to modify Python-based metaheuristic class structures when exposed to stochastic evaluations over multiple evolutionary cycles. Finally, we conduct a robustness evaluation in which algorithms evolved under noisy and noiseless conditions are evaluated across different noise settings, allowing their performance and generalization to be compared. Established optimization methods may also be included as reference baselines where appropriate.
+The study will introduce controlled statistical noise into selected
+functions from the noiseless BBOB suite \cite{Hansen2009Noiseless}.
+This will provide a repeatable setting in which to examine the
+performance and behavior of LLaMEA-generated algorithms under different
+noise conditions.
 
-The remainder of this thesis proposal is organized as follows. Chapter \ref{chap:research} reviews current work in black-box optimization, stochastic noise mitigation, and generative code-based algorithm design. Chapter \ref{chap:objectives} presents the research questions and formalizes the three experimental objectives, while the subsequent chapters describe the software pipeline architecture, scope and limitations, and provisional timeline for the final implementation.
+The proposed work has three objectives. First, it will construct a
+stochastic evaluation environment over continuous benchmark functions.
+Second, it will examine whether evolutionary feedback from noisy
+evaluations can lead LLMs to generate heuristics that handle uncertainty.
+Third, it will compare algorithms generated under noisy and noiseless
+conditions across different evaluation settings to assess their
+performance, robustness, and generalization. Established optimization
+methods may also be included as reference baselines.
+
+Chapter~\ref{chap:research} reviews continuous black-box optimization,
+noise-handling methods, and LLM-based algorithm design.
+Chapter~\ref{chap:objectives} states the research questions and
+experimental objectives. The subsequent parts of the proposal describe
+the software pipeline, scope and limitations, and implementation
+timeline.
