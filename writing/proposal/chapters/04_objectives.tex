@@ -1,70 +1,66 @@
 \chapter{Research Objectives}
 \label{chap:objectives}
 
-The primary aim of this thesis is to investigate the capacity of Large
-Language Models (LLMs) to autonomously synthesize optimization heuristics
-that can handle stochastic fitness evaluations. The proposed research
-examines Automated Algorithm Design (AAD) under noisy conditions through
-three objectives and their corresponding research questions.
+The overall aim of the proposed research is to investigate whether
+LLM-generated continuous optimization heuristics can operate effectively
+when fitness evaluations are stochastic. Three research questions will
+structure the investigation.
 
-\section*{Objective 1: Formulating a Stochastic Evaluation Sandbox}
-
-The first objective is to extend continuous benchmark functions with
-controlled noise to investigate the behavior of LLM-generated optimization
-algorithms under stochastic evaluations. It addresses the following
-question:
+\subsection*{Research Question 1}
 
 \begin{quote}
-\textbf{RQ1: How can continuous optimization benchmarks be systematically
-extended to simulate stochastic landscapes?}
+\textit{How can continuous optimization benchmarks be systematically
+extended with controlled stochastic evaluation to study optimization
+under fitness noise?}
 \end{quote}
 
-The proposed approach is to develop a wrapper layer over functions from
-the noiseless BBOB suite. Established benchmark definitions and literature
-on optimization under uncertainty will guide the introduction of
+An evaluation setting will be established to study the effects of
+fitness noise in a controlled manner.
+A wrapper layer will be developed over functions from the noiseless
+BBOB suite. Established benchmark definitions and literature on
+optimization under uncertainty will guide the introduction of
 controlled statistical noise
 \cite{Hansen2009Noiseless,Hansen2009Noisy,Jin2005}.
-The resulting environment will provide a repeatable setting for evaluating
-generated algorithms using noisy fitness observations. Applying noise
-to the same underlying BBOB functions, rather than using the separate
-noisy-BBOB suite, will allow a direct comparison of AAD performance
-under noiseless and noisy evaluations.
+The environment will provide a repeatable setting for evaluating
+generated heuristics and established optimization methods using noisy
+fitness observations, while retaining access to the underlying clean
+objective for assessment. Applying noise to the same underlying BBOB
+functions, rather than using the separate noisy-BBOB suite, will allow
+a direct comparison of AAD performance under noiseless and noisy
+evaluations.
 
-\section*{Objective 2: Autonomous Synthesis of Noise-Resilient Heuristics}
-
-Existing work has demonstrated that LLaMEA can generate competitive
-optimization algorithms for noiseless benchmark functions
-\cite{LLaMEA2024}. The second objective is to investigate whether the
-same evolutionary code-generation process can produce heuristics that
-handle noisy fitness evaluations. It addresses the following question:
+\subsection*{Research Question 2}
 
 \begin{quote}
-\textbf{RQ2: Can Large Language Models autonomously synthesize optimization
-heuristics that are resilient to noise?}
+\textit{Can Large Language Models autonomously synthesize continuous
+optimization heuristics that are resilient to noise?}
 \end{quote}
 
-The LLaMEA framework will be applied to a representative set of continuous
-optimization landscapes using lightweight and cost-effective language
-models. The experiments will examine whether repeated evolutionary
-feedback from noisy evaluations leads generated Python optimization
-classes to incorporate mechanisms for handling uncertainty. Changes in
-the generated algorithms over successive generations will be analyzed
-alongside their performance to assess whether noise-handling strategies
-emerge and whether they are effective in the tested conditions.
+The experiments will investigate whether LLM-based algorithm synthesis
+can produce heuristics that perform effectively when fitness evaluations
+are noisy. Existing work has demonstrated that LLaMEA can
+generate competitive optimization algorithms for noiseless benchmark
+functions \cite{LLaMEA2024}. The framework will be applied to a
+representative set of continuous optimization landscapes using
+lightweight and cost-effective language models. Rather than manually
+introducing noise-specific mechanisms into an optimizer, the experiments
+will examine whether such mechanisms emerge through evolutionary
+code generation and feedback. Changes in the generated algorithms
+over successive generations will be analyzed alongside their performance
+to assess whether these strategies are effective in the tested conditions.
 
-\section*{Objective 3: Empirical Benchmarking and Cross-Environment Analysis}
-
-The third objective is to evaluate the generated algorithms under different
-noise conditions and examine their performance, robustness, and
-generalization. It addresses the following comparative question:
+\subsection*{Research Question 3}
 
 \begin{quote}
-\textbf{RQ3: How robust are LLM-generated heuristics across different noise
+\textit{How robust are LLM-generated heuristics across different noise
 conditions compared with established optimization methods?}
 \end{quote}
 
-Algorithms generated under noisy and noiseless conditions will be evaluated
-across different noise settings, including noiseless evaluations. This
-comparison will examine whether exposure to noise during algorithm
-evolution leads to differences in performance, robustness, or
-generalization.
+The generated heuristics will be compared with established continuous
+optimization methods to assess their performance, robustness, and
+generalization. Algorithms generated
+under noisy and noiseless conditions will be evaluated across different
+noise settings, including noiseless evaluations. This comparison will
+examine whether exposure to noise during algorithm evolution leads
+to differences in performance and whether the generated heuristics
+remain effective when evaluation conditions change.

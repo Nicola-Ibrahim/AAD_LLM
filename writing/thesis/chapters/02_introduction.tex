@@ -73,19 +73,24 @@ The overall objective of this thesis is to investigate whether LLM-generated con
 
 \subsection*{Research Question 1}
 
-\textit{How can continuous optimization benchmarks be systematically extended with controlled stochastic evaluation to study optimization under fitness noise?}
+\textit{How can continuous optimization benchmarks be systematically
+extended with controlled stochastic evaluation to study optimization
+under fitness noise?}
 
 The first objective is to establish an evaluation setting in which the effect of fitness noise can be studied in a controlled manner. The evaluation environment should introduce different levels of stochasticity while retaining access to the underlying clean objective for diagnostic analysis. This provides a common basis for evaluating both generated heuristics and established optimization methods.
 
 \subsection*{Research Question 2}
 
-\textit{Can Large Language Models autonomously synthesize continuous optimization heuristics that are resilient to noise?}
+\textit{Can Large Language Models autonomously synthesize continuous
+optimization heuristics that are resilient to noise?}
+
 
 The second objective is to investigate whether LLM-based algorithm synthesis can produce heuristics that perform effectively when fitness evaluations are noisy. Rather than manually introducing noise-specific mechanisms into an optimizer, the study examines whether useful search behavior can emerge through the automated synthesis process.
 
 \subsection*{Research Question 3}
 
-\textit{How robust are LLM-generated heuristics across different noise conditions compared with established optimization methods?}
+\textit{How robust are LLM-generated heuristics across different noise
+conditions compared with established optimization methods?}
 
 The third objective is to evaluate the generated heuristics relative to established continuous optimization methods. The comparison considers different problem dimensions and noise conditions in order to characterize how the performance of generated and conventional algorithms changes as the evaluation becomes increasingly uncertain.
 
