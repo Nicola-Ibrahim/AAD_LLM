@@ -6,16 +6,15 @@ combined mathematical analysis with empirical testing and refinement by
 human experts. This work has produced methods with different search
 mechanisms and requirements, including the derivative-free Nelder--Mead
 simplex algorithm \cite{Nelder1965} and the Covariance Matrix Adaptation
-Evolution Strategy (CMA-ES) \cite{Hansen2001}. These methods are used to
-search diverse landscapes, including real-world optimization problems
-and artificial benchmark functions. Their performance depends on the
-objective landscape, problem dimension, target accuracy, and available
-evaluation budget. Comparisons on the Black-Box Optimization Benchmark
-(BBOB) testbed illustrate this variation, showing that the preferred
-algorithm can change across these conditions \cite{Hansen2010}.
-Selecting or adapting a search method for a particular application
-therefore remains an important part of optimization practice, motivating
-approaches that automate heuristic selection and design \cite{Burke2013}.
+Evolution Strategy (CMA-ES) \cite{Hansen2001}. These methods are used
+across diverse landscapes, including real-world optimization problems
+and artificial benchmark functions. On the noiseless Black-Box
+Optimization Benchmark (BBOB) testbed, relative algorithm performance
+varies across benchmark functions, problem dimensions, target precisions,
+and function evaluation budgets \cite{Hansen2010}. Selecting or adapting
+a search method for a particular application therefore remains an
+important part of optimization practice, motivating approaches that
+automate heuristic selection and design \cite{Burke2013}.
 
 This design problem becomes more difficult when objective evaluations
 are affected by noise. Measurement errors and randomized simulations
@@ -38,8 +37,8 @@ and their effectiveness depends on the algorithm and noise setting
 \cite{Jin2005}. Noise handling is therefore not simply a matter of
 choosing one fixed parameter configuration. It can also require changes
 to how an algorithm gathers information, compares candidates, and
-allocates its evaluation budget. This thesis investigates whether such
-search logic can be generated and refined automatically.
+allocates its evaluation budget. The proposed research will investigate
+whether such search logic can be generated and refined automatically.
 
 Automated Algorithm Design (AAD) seeks to reduce the manual effort
 required to develop effective algorithms. Earlier approaches include
@@ -51,37 +50,24 @@ language model can be combined with an evaluator to iteratively improve
 programs, yielding new cap-set constructions and online bin-packing
 heuristics \cite{Romera2023}.
 
-This thesis uses the Large Language Model Evolutionary Algorithm
-(LLaMEA) framework developed by Niki van Stein and Thomas Bäck
-\cite{LLaMEA2024} to investigate code-based AAD for continuous black-box
-optimization under noisy observations. The model generates Python
-optimization classes, which are executed in an isolated evaluation
-environment. Performance feedback and execution diagnostics are then
-used to guide further revisions. The original LLaMEA study evaluates
-generated optimizers on noiseless BBOB functions. Here, the generated
-optimizers will be studied under both noiseless and noisy objective
-observations.
+The proposed study will use the Large Language Model Evolutionary
+Algorithm (LLaMEA) framework developed by Niki van Stein and Thomas
+Bäck \cite{LLaMEA2024} to investigate code-based AAD for continuous
+black-box optimization under noisy observations. The model will generate
+Python optimization classes, which will be executed in an isolated
+evaluation environment. Performance feedback and execution diagnostics
+will guide further revisions. The original LLaMEA study evaluates
+generated optimizers on noiseless BBOB functions. The proposed
+experiments will examine generated optimizers under both noiseless and
+noisy objective observations.
 
 The study will introduce controlled statistical noise into selected
 functions from the noiseless BBOB suite \cite{Hansen2009Noiseless}.
 This will provide a repeatable setting in which to examine the
 performance and behavior of LLaMEA-generated algorithms under different
-noise conditions. Applying noise to the same underlying benchmark
-functions will allow a direct comparison of AAD under noiseless and
-noisy evaluations.
+noise conditions.
 
-The proposed work has three objectives. First, it will construct a
-stochastic evaluation environment over continuous benchmark functions.
-Second, it will examine whether evolutionary feedback from noisy
-evaluations can lead LLMs to generate heuristics that handle uncertainty.
-Third, it will compare algorithms generated under noisy and noiseless
-conditions across different evaluation settings to assess their
-performance, robustness, and generalization. Established optimization
-methods will be included as reference baselines.
-
-Chapter~\ref{chap:research} reviews continuous black-box optimization,
-noise-handling methods, and LLM-based algorithm design.
-Chapter~\ref{chap:objectives} states the research questions and
-experimental objectives. The subsequent parts of the proposal describe
-the software pipeline, scope and limitations, and implementation
-timeline.
+The proposed work will combine this evaluation environment with
+algorithm generation and comparative benchmarking to investigate
+whether exposure to noise during evolution improves the resulting
+heuristics' performance and robustness.

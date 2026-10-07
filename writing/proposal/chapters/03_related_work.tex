@@ -36,14 +36,14 @@ testbed with specified noise models for studying optimization under
 uncertainty \cite{Hansen2009Noisy}.
 
 Noise can distort candidate rankings and influence selection, step-size
-control, and other decisions based on observed fitness. Jin and Branke
-review explicit averaging through repeated evaluations, implicit
+control, and other decisions based on observed fitness. Common approaches
+include explicit averaging through repeated evaluations, implicit
 averaging through larger populations, and changes to selection rules
 \cite{Jin2005}. Repeated sampling can improve the reliability of a
 fitness estimate, but consumes evaluations that could otherwise explore
-new points. The survey also discusses adaptive sampling, with the
-relative benefits of sampling and population enlargement depending
-on the algorithm and problem. Hansen et al.\ provide an
+new points. Sampling can also be adapted during a run, with the relative
+benefits of sampling and population enlargement depending on the
+algorithm and problem. Hansen et al.\ provide an
 uncertainty-handling approach for CMA-ES based on detecting rank changes
 under re-evaluation \cite{Hansen2009}. These methods show that handling
 noise can require adaptation during a run, rather than only a fixed
@@ -57,8 +57,8 @@ route. Van Rijn et al.\ combine components from evolution-strategy
 variants and search the resulting configuration space
 \cite{vanRijn2016}. Such methods allow structural variation, although
 the available components are specified in advance. LLM-based code
-generation offers another way to explore algorithm implementations
-through executable source code.
+generation extends this design space by allowing algorithm
+implementations to be expressed directly as executable source code.
 
 FunSearch combines a pretrained language model with a systematic evaluator
 and an evolutionary program database \cite{Romera2023}. Rather than
@@ -84,8 +84,7 @@ and their implementations, with evaluations on combinatorial optimization
 problems \cite{Liu2024}. AEL evolves constructive heuristics for the
 travelling salesperson problem and reports improvements over simple
 greedy and directly LLM-generated heuristics across the tested problem
-sizes \cite{AEL2024}. These studies illustrate different ways of using
-language models to generate and refine optimization heuristics.
+sizes \cite{AEL2024}.
 
 Execution feedback can help a language model revise unsuccessful
 programs. Reflexion uses linguistic feedback and an episodic memory of
@@ -109,9 +108,8 @@ comparisons with tuned CMA-ES depend on the measure and evaluation
 budget. The generated algorithms also show competitive performance
 in dimensions ten and twenty \cite{LLaMEA2024}.
 
-The original LLaMEA study evaluates generated optimizers on noiseless
-functions. This thesis investigates whether the same code-generation
-process can produce effective optimization heuristics under noisy
-fitness evaluations. Algorithms generated under noisy and noiseless
-conditions will be compared across different noise settings to assess
-their performance and robustness.
+These evaluations concern noiseless functions. This thesis investigates
+whether the same code-generation process can produce effective
+optimization heuristics under noisy fitness evaluations. Algorithms
+generated under noisy and noiseless conditions will be compared across
+different noise settings to assess their performance and robustness.
