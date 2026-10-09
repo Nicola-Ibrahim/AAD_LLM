@@ -349,7 +349,7 @@ CMA-ES, DE, and PSO separately for each function.
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{images/experiments/03_implicit/qwen_32b/2D/std_0.2/convergence_trajectories.png}
-    \caption{Representative implicit-synthesis convergence for Qwen2.5-Coder-32B-Instruct at $D=2$ and
+    \caption[Implicit-synthesis convergence at noise level 0.2]{\textbf{Implicit-synthesis convergence at noise level 0.2.} Representative convergence for Qwen2.5-Coder-32B-Instruct at $D=2$ and
 $\sigma_{\mathrm{synth}}=\sigma_{\mathrm{eval}}=0.2$, comparing all four
 strategies with CMA-ES, DE and PSO. Curves show median best-queried clean gaps;
 ribbons show the interquartile range. The search budget is 20,000; the
@@ -360,7 +360,7 @@ extended axis is carry-forward. Functions are shown separately.}
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{images/experiments/03_implicit/qwen_32b/2D/std_0.2/target_precision_ecdf.png}
-    \caption{Exploratory adaptive-target ECDF for the same implicit Qwen2.5-Coder-32B-Instruct condition.
+    \caption[Implicit-synthesis adaptive-target ECDF at noise level 0.2]{\textbf{Implicit-synthesis adaptive-target ECDF at noise level 0.2.} Exploratory ECDF for the same Qwen2.5-Coder-32B-Instruct condition.
 The ordinate is the proportion of run--target pairs attained by each query
 count, using 51 empirically selected targets. Values beyond 20,000 queries
 are carried forward; this is not the primary fixed-target ranking.}
@@ -372,7 +372,7 @@ are carried forward; this is not the primary fixed-target ranking.}
     \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/2D/std_0.05/convergence_trajectories.png}
     \par\smallskip
     \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/2D/std_0.05/target_precision_ecdf.png}
-    \caption{Implicit native profiles for Qwen2.5-Coder-32B-Instruct at
+    \caption[Implicit-synthesis profiles at noise level 0.05]{\textbf{Implicit-synthesis profiles at noise level 0.05.} Native profiles for Qwen2.5-Coder-32B-Instruct at
     $D=2$ and $\sigma_{\mathrm{synth}}=\sigma_{\mathrm{eval}}=0.05$:
     convergence above and adaptive-target ECDF below. Four strategies
     are compared with CMA-ES, DE and PSO on the five functions.
@@ -387,7 +387,7 @@ are carried forward; this is not the primary fixed-target ranking.}
     \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/2D/std_0.1/convergence_trajectories.png}
     \par\smallskip
     \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/2D/std_0.1/target_precision_ecdf.png}
-    \caption{Implicit native profiles at $D=2$ and
+    \caption[Implicit-synthesis profiles at noise level 0.1]{\textbf{Implicit-synthesis profiles at noise level 0.1.} Native profiles at $D=2$ and
     $\sigma_{\mathrm{synth}}=\sigma_{\mathrm{eval}}=0.1$ for the same
     model, functions, strategies and baselines as
     Figure~\ref{fig:implicit_noise_005}. Convergence is above and
@@ -475,7 +475,7 @@ show the corresponding clean, $\sigma=0.05$, and $\sigma=0.1$ conditions.
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{images/experiments/02_explicit/qwen_32b/2D/std_0.2/convergence_trajectories.png}
-    \caption{Representative Explicit-Noisy convergence for Qwen2.5-Coder-32B-Instruct, $D=2$,
+    \caption[Explicit-Noisy convergence at noise level 0.2]{\textbf{Explicit-Noisy convergence at noise level 0.2.} Representative convergence for Qwen2.5-Coder-32B-Instruct, $D=2$,
 $\sigma_{\mathrm{synth}}=\sigma_{\mathrm{eval}}=0.2$, with four strategies
 and classical baselines. Median best-queried clean gaps and IQR ribbons
 are shown. Search ends at 20,000 evaluations; later values are carried forward.
@@ -486,7 +486,7 @@ Explicit-Clean results are reported separately in the summary table.}
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{images/experiments/02_explicit/qwen_32b/2D/std_0.2/target_precision_ecdf.png}
-    \caption{Exploratory adaptive-target ECDF for the Explicit-Noisy Qwen2.5-Coder-32B-Instruct example.
+    \caption[Explicit-Noisy adaptive-target ECDF at noise level 0.2]{\textbf{Explicit-Noisy adaptive-target ECDF at noise level 0.2.} Exploratory ECDF for the Qwen2.5-Coder-32B-Instruct example.
 Targets and query-axis carry-forward follow the implicit ECDF convention;
 this plot does not combine Explicit-Clean and Explicit-Noisy champions.}
     \label{fig:explicit_ecdf}
@@ -497,7 +497,7 @@ this plot does not combine Explicit-Clean and Explicit-Noisy champions.}
     \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_32b/2D/std_0.0/convergence_trajectories.png}
     \par\smallskip
     \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_32b/2D/std_0.0/target_precision_ecdf.png}
-    \caption{Explicit-Clean reference for Qwen2.5-Coder-32B-Instruct at
+    \caption[Explicit-Clean convergence and ECDF]{\textbf{Explicit-Clean convergence and ECDF.} Reference profiles for Qwen2.5-Coder-32B-Instruct at
     $D=2$ and $\sigma_{\mathrm{synth}}=\sigma_{\mathrm{eval}}=0$.
     Convergence above shows median best-queried clean gaps and IQR;
     adaptive-target ECDF below shows run--target attainment.
@@ -512,7 +512,7 @@ this plot does not combine Explicit-Clean and Explicit-Noisy champions.}
     \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_32b/2D/std_0.05/convergence_trajectories.png}
     \par\smallskip
     \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_32b/2D/std_0.05/target_precision_ecdf.png}
-    \caption{Explicit-Noisy native profiles for Qwen2.5-Coder-32B-Instruct
+    \caption[Explicit-Noisy profiles at noise level 0.05]{\textbf{Explicit-Noisy profiles at noise level 0.05.} Native profiles for Qwen2.5-Coder-32B-Instruct
     at $D=2$ and $\sigma_{\mathrm{synth}}=\sigma_{\mathrm{eval}}=0.05$.
     Convergence is above and adaptive-target ECDF below, retaining
     the functions, strategies, baselines and 20,000-query budget of
@@ -526,7 +526,7 @@ this plot does not combine Explicit-Clean and Explicit-Noisy champions.}
     \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_32b/2D/std_0.1/convergence_trajectories.png}
     \par\smallskip
     \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_32b/2D/std_0.1/target_precision_ecdf.png}
-    \caption{Explicit-Noisy native profiles at $D=2$ and
+    \caption[Explicit-Noisy profiles at noise level 0.1]{\textbf{Explicit-Noisy profiles at noise level 0.1.} Native profiles at $D=2$ and
     $\sigma_{\mathrm{synth}}=\sigma_{\mathrm{eval}}=0.1$ for the same
     model, functions, strategies and baselines as
     Figure~\ref{fig:explicit_noise_005}. Convergence is above and
@@ -644,7 +644,7 @@ baselines provide a reference under the same noise conditions.
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{images/experiments/05_noise_robustness/success_rate_vs_noise.png}
-    \caption{Returned-solution success rate ($\Delta f\leq10^{-8}$) versus evaluation
+    \caption[Returned-solution success across evaluation noise]{\textbf{Returned-solution success across evaluation noise.} Success rate ($\Delta f\leq10^{-8}$) versus evaluation
 noise for frozen Baseline-strategy champions and classical baselines. Panels
 separate dimensions; points average available functions with equal weight and
 bars show 95\% condition-bootstrap intervals. Missing data are not plotted.

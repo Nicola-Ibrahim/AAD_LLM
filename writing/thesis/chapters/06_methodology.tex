@@ -17,9 +17,7 @@ the outer synthesis framework to assess that algorithm. During execution, a
 generated optimizer interacts with the optimization problem only through the
 provided objective interface. Under stochastic conditions, this interface
 returns noisy objective values. The optimizer does not receive direct access to the underlying analytical
-benchmark function or its known optimum. It obtains objective values only
-through the supplied interface: clean values under deterministic evaluation
-and noisy values under stochastic evaluation.
+benchmark function or its known optimum.
 
 After the optimizer terminates, the surrounding synthesis framework evaluates
 the returned solution using the clean objective. This separation is deliberate.
@@ -44,8 +42,7 @@ loop.
     \resizebox{\textwidth}{!}{%
         \input{figures/methodology_architecture}
     }
-    \caption{High-level architecture of the methodology used in this thesis.
-    The Problem and Fitness Setup, together with the selected prompt
+    \caption[Thesis methodology architecture]{\textbf{Thesis methodology architecture.} The Problem and Fitness Setup, together with the selected prompt
     configuration, define the environment supplied to the LLaMEA synthesis
     stage. LLaMEA produces executable optimization algorithms, which are
     subsequently evaluated independently under clean and stochastic fitness
@@ -83,16 +80,6 @@ behave when the fitness information available during search is uncertain
 without changing the underlying optimization problem itself. Stochasticity is
 therefore introduced at the objective interface rather than by modifying the
 generated optimization algorithm.
-
-The outer framework deliberately retains access to the clean objective because
-the methodology separates two levels of optimization. At the inner level, a
-generated algorithm must solve the black-box optimization problem using only
-the evaluations returned by its supplied objective interface. At the outer
-level, LLaMEA evolves complete optimization algorithms and therefore requires a
-common algorithm-level criterion for comparing generated programs. The clean
-objective is used for this outer comparison after the inner optimization run
-has finished. It is never provided to the generated optimizer as an additional
-objective observation.
 
 
 %------------------------------------------------------------------------------
@@ -416,18 +403,6 @@ curved valley \cite{Hansen2010}. Its structure makes it useful for examining
 how the two noise models behave when objective values differ substantially
 between poor regions of the search space and points closer to the optimum.
 
-Under the homoscedastic formulation, the scale estimated before optimization
-determines one fixed noise standard deviation for the complete problem. The
-absolute perturbation scale therefore remains the same when a queried point
-moves from a region with a large objective error toward a region with a much
-smaller error.
-
-The heteroscedastic formulation behaves differently. Its standard deviation
-is recomputed from the clean optimality gap for each query. Regions with large
-objective gaps therefore exhibit larger stochastic variation, whereas the
-perturbation magnitude decreases as the clean objective approaches the
-optimum.
-
 The clean representation serves as the reference against which both stochastic
 formulations can be compared.
 
@@ -442,8 +417,8 @@ formulations can be compared.
     \includegraphics[width=\textwidth]
     {images/landscapes/f8/figure_2d_noise_topology.png}
 
-    \caption{Comparison of the clean, homoscedastic, and heteroscedastic
-    evaluations of BBOB $f_8$ (Rosenbrock). The one-dimensional cross-section
+    \caption[Rosenbrock noise-model comparison]{\textbf{Rosenbrock noise-model comparison.} Clean, homoscedastic, and heteroscedastic
+    evaluations of BBOB $f_8$. The one-dimensional cross-section
     (top) and two-dimensional representation (bottom) show how the
     homoscedastic model applies a fixed calibrated perturbation scale across
     the problem, whereas the heteroscedastic model changes its standard
@@ -458,15 +433,6 @@ contrast to the narrow curved valley of $f_8$, this function contains many
 local structures and provides a multimodal example in which stochastic
 variation can alter the observed ranking of candidate points.
 
-For the homoscedastic formulation, the same calibrated standard deviation is
-used throughout the complete search space. The absolute perturbation scale
-therefore remains fixed across regions with different objective errors.
-
-For the heteroscedastic formulation, the perturbation scale is determined by
-the clean objective gap at each queried point. The amount of stochastic
-variation therefore changes across the function according to the remaining
-objective error.
-
 \begin{figure}[htbp]
     \centering
 
@@ -478,8 +444,8 @@ objective error.
     \includegraphics[width=\textwidth]
     {images/landscapes/f21/figure_2d_noise_topology.png}
 
-    \caption{Comparison of the clean, homoscedastic, and heteroscedastic
-    evaluations of BBOB $f_{21}$ (Gallagher 101-peaks). The one-dimensional
+    \caption[Gallagher 101-peaks noise-model comparison]{\textbf{Gallagher 101-peaks noise-model comparison.} Clean, homoscedastic, and heteroscedastic
+    evaluations of BBOB $f_{21}$. The one-dimensional
     cross-section (top) and two-dimensional representation (bottom) show the
     clean function together with the fixed-scale homoscedastic perturbation
     and the optimality-gap-dependent heteroscedastic perturbation. The
@@ -568,8 +534,7 @@ used for subsequent generations.
         \input{figures/evolutionary_aad_loop}
     }
 
-    \caption{Detailed view of the LLaMEA-based algorithm synthesis process
-    used in this thesis. The LLM generates candidate optimization heuristics,
+    \caption[LLaMEA algorithm synthesis loop]{\textbf{LLaMEA algorithm synthesis loop.} The LLM generates candidate optimization heuristics,
     which are extracted, validated, and executed through the configured
     objective interface. The generated optimizer receives only the
     information exposed by that interface. After execution, the outer
@@ -824,21 +789,8 @@ stochastic model defined in
 Section~\ref{sec:problem_evaluation_setup}.
 
 After the execution has finished, the returned solution is evaluated using the
-clean objective. Using the same definition as
-Equation~\ref{eq:clean_optimality_gap}, its clean error is
-
-\begin{equation}
-\Delta f(x_{\mathrm{best}})
-=
-\left|
-f_{\mathrm{clean}}(x_{\mathrm{best}}) - f^*
-\right|.
-\label{eq:clean_optimality_gap_selection}
-\end{equation}
-
-Here, $f^*$ is the known global minimum value of the clean benchmark
-objective, as defined in Equation~\ref{eq:true_optimum}. It is available to
-the outer evaluator but not to the generated optimizer during its search.
+clean objective. Its clean error is calculated according to
+Equation~\ref{eq:clean_optimality_gap}.
 
 The error is converted into the fitness score used by LLaMEA,
 
@@ -850,7 +802,6 @@ S = -\Delta f(x_{\mathrm{best}}).
 The minus sign is used because the outer controller selects larger fitness
 scores, whereas a smaller clean error is better.
 
-Smaller clean optimality gaps therefore correspond to larger fitness scores.
 A candidate with zero clean error receives the maximum possible score of
 zero.
 
@@ -1073,14 +1024,7 @@ The meta-feedback deliberately does not recommend a particular optimization
 algorithm. This keeps the synthesis process separate from the external
 benchmark algorithms used later during independent evaluation.
 
-Taken together, the feedback messages provide information about what happened
-to the previous candidate while leaving the evolutionary selection mechanism
-unchanged. A successful candidate contributes its observed algorithm-level
-performance, a failed candidate contributes diagnostic information about its
-execution problem, and repeated failures can trigger a request for a
-substantially different search mechanism.
-
-This information is accumulated in the synthesis history
+The feedback messages are accumulated in the synthesis history
 $\mathcal{H}_{1:g-1}$ introduced in
 Equation~\ref{eq:synthesis_context}. At generation $g$, the relevant history
 is supplied to the LLM together with the current task prompt.
@@ -1144,7 +1088,7 @@ Figure~\ref{fig:prompt_architecture} summarizes the prompt architecture.
         \input{figures/prompt_architecture}
     }
 
-    \caption{Prompt composition used for synthesis. The \texttt{EXAMPLE} and
+    \caption[Synthesis prompt composition]{\textbf{Synthesis prompt composition.} The \texttt{EXAMPLE} and
     \texttt{FORMAT} components are invariant. For each synthesis condition,
     the \texttt{TASK} prompt combines the common task layout with one selected
     environment-information block and one strategy scaffold. The environment
@@ -1605,24 +1549,20 @@ comparison groups.
 \label{subsec:benchmark_performance_measures}
 %------------------------------------------------------------------------------
 
-All measures use clean objective values, including when the optimizer
-receives noisy observations. Chapter~\ref{chap:experiments} specifies the
-comparison groups, adaptive target sets, and plotting settings and presents
-the resulting tables and figures.
+Performance is assessed using clean objective values, including when the
+optimizer receives noisy observations. For trial $r$, let
+$f_{\mathrm{clean}}^{(r)}$ denote the clean objective of its problem
+instance and let $f_r^*$ denote the corresponding global minimum value.
+As elsewhere in this chapter, $x$ denotes a solution vector. The clean
+optimality gap is the absolute difference between the objective value and
+the known minimum. Chapter~\ref{chap:experiments} specifies the benchmark
+conditions, comparison groups, and adaptive target sets.
 
-For benchmark trial $r$, let $f_{\mathrm{clean}}^{(r)}$ denote the clean
-objective of its problem instance and let $f_r^*$ denote the corresponding
-global minimum value. The trial index extends the notation introduced in
-Section~\ref{subsec:deterministic_stochastic}; the clean optimality gap
-retains the absolute-difference definition in
-Equation~\ref{eq:clean_optimality_gap}. As elsewhere in this chapter, $x$
-denotes a solution vector.
-
-Convergence curves describe how the best clean gap develops as objective
-evaluations are spent. Let $n_r$ be the number of actual objective evaluations
-in trial $r$, corresponding to $N_{\mathrm{eval}}$ for that trial, and let
-$x_{r,j}$ be its $j$-th queried point. For $n_r\geq1$ and integer
-evaluation count $b\geq1$, the best clean gap found by that count is
+Convergence curves answer how solution quality develops as objective
+evaluations are spent. Let $n_r$ denote the number of objective evaluations
+in trial $r$ and let $x_{r,j}$ be its $j$-th queried point. For
+$n_r\geq1$ and integer evaluation count $b\geq1$, the best clean gap
+found by that count is
 \begin{equation}
     g_r(b)
     =
@@ -1632,30 +1572,29 @@ evaluation count $b\geq1$, the best clean gap found by that count is
     \right|.
     \label{eq:benchmark_query_convergence}
 \end{equation}
-The absolute difference gives the clean gap of each queried point, and the
+The inner expression gives the clean gap of each queried point, and the
 minimum selects the smallest gap found within the first $b$ evaluations.
-This adapts IOHprofiler's best-so-far construction to minimization and
-clean gaps \cite[Sec.~4.1]{Doerr2018IOHprofiler}. If no point is evaluated,
-set $g_r(b)=\infty$. After a trial's last evaluation, its best gap is
-carried forward without implying additional search.
+This applies IOHprofiler's best-so-far notation to clean gaps in a
+minimization problem \cite[Sec.~4.1]{Doerr2018IOHprofiler}.
+If no point is evaluated, set $g_r(b)=\infty$. After the last evaluation,
+the final best gap is carried forward without implying further search.
 
-The horizontal axis of a convergence plot gives the objective-evaluation
-count, and the vertical axis gives the median of $g_r(b)$ across the
-included trials at that count. The median is the 50th percentile,
-and the ribbon spans the 25th to 75th percentiles. The difference between
-these percentiles is the interquartile range (IQR). These summaries show
-when improvements occur, where progress stagnates, and how much outcomes
-vary across instances and seeds. Lower median gaps indicate better
-solution quality at the same evaluation count. The ribbon describes
-variation; it is not a confidence interval or a test of statistical
-significance. Convergence does not require a success threshold and can
-therefore reveal differences between optimizers even when none reaches
-the required accuracy.
+The horizontal axis gives the objective-evaluation count, and the
+vertical axis shows the median best clean gap across the included trials.
+The shaded band spans the 25th to 75th percentiles, whose difference is
+the interquartile range (IQR). The median describes typical performance,
+while the band shows variation across problem instances and random seeds.
+Lower median gaps indicate better solution quality at the same evaluation
+count. Improvements and flat regions show where the search progresses
+and where it stagnates. The shaded band represents variation in outcomes
+rather than a confidence interval. Since convergence measures the gap
+directly, it can distinguish performance even when no trial reaches a
+specified accuracy threshold.
 
-To examine the evaluations needed to reach specified accuracy levels,
-we use the empirical cumulative distribution function (ECDF) of
-target-hitting times. This follows the fixed-target perspective described
-in IOHprofiler \cite[Sec.~4.1]{Doerr2018IOHprofiler} and COCO
+The empirical cumulative distribution function (ECDF) answers how many
+accuracy targets are attained within a given number of evaluations.
+The target-attainment perspective is described in IOHprofiler
+\cite[Sec.~4.3.4]{Doerr2018IOHprofiler} and COCO
 \cite[Sec.~5]{Hansen2016Performance}. For a target gap $\tau>0$, the
 first attainment time is
 \begin{equation}
@@ -1667,15 +1606,11 @@ first attainment time is
     \label{eq:benchmark_target_hitting_time}
 \end{equation}
 This counts evaluations through the first query that meets the target.
-An infinite value indicates that the target was not reached during the
-observed trial, not that it could never be reached with further search.
+An infinite value means that the target was not attained during the
+trial; it does not establish whether further search could attain it.
 
-The exploratory ECDFs use multiple adaptive target gaps. Their
-construction and the groups for which they are defined are specified in
-Chapter~\ref{chap:experiments}. Within a comparison group, let
-$\mathcal R$ be a nonempty trial set and $\mathcal T$ the nonempty
-target set shared by the curves being compared. The target-attainment
-ECDF is
+For a nonempty trial set $\mathcal R$ and a nonempty target set
+$\mathcal T$, the target-attainment ECDF is
 \begin{equation}
     \widehat F_{\mathcal R,\mathcal T}(b)
     =
@@ -1685,62 +1620,68 @@ ECDF is
     \mathbf{1}\{T_{r,\tau}\leq b\}.
     \label{eq:benchmark_target_ecdf}
 \end{equation}
-The indicator $\mathbf{1}\{\cdot\}$ equals one when its condition holds
-and zero otherwise. Each indicator therefore records whether a particular
-trial has reached a particular target within $b$ evaluations. Dividing
-their sum by the total number of trial--target pairs gives the attained
-fraction. This follows IOHprofiler's run--target aggregation
-\cite[Sec.~4.1]{Doerr2018IOHprofiler}, with unreached targets retained in
-the denominator, as also described in COCO
-\cite[Sec.~5]{Hansen2016Performance}.
+The indicator $\mathbf{1}\{\cdot\}$ equals one if trial $r$ has reached
+target $\tau$ within $b$ evaluations and zero otherwise. Each trial is
+assessed against the same target set, and each target contributes at most
+once per trial. The two sums count all attained trial--target pairs;
+division by $|\mathcal R|\,|\mathcal T|$ gives their attained fraction.
+For a comparison containing all 20 trials and 51 targets, the denominator
+is therefore $20\times51=1020$. Here, $b$ denotes the evaluation count
+within each trial, not the total evaluations across trials.
+Unattained targets remain in the denominator.
 
-The horizontal axis of an ECDF plot gives the objective-evaluation count,
-and the vertical axis gives the fraction of trial--target pairs attained.
-For example, an ECDF value of $0.6$ means that 60\% of the included pairs
-have been reached; it does not mean that 60\% of trials have reached the
-primary success threshold or the most demanding target. For the same
-trial grouping and target set, a higher ECDF curve indicates that more
-pairs have been attained within the available evaluations.
+The exploratory ECDFs use multiple adaptive accuracy targets. The
+horizontal axis gives the objective-evaluation count, and the vertical
+axis gives the attained fraction of trial--target pairs. An ECDF value
+of $0.6$, for example, means that 60\% of the included pairs have been
+attained; it does not mean that 60\% of trials have reached the most
+demanding target. For the same trial grouping and target set, a higher
+curve indicates greater target attainment within the available evaluations.
 
-Comparisons between ECDF curves require a shared target set. When adaptive
-target sets differ between comparison groups, their ECDF values describe
-attainment relative to different accuracy levels and cannot be interpreted
-as attainment of a common absolute standard. The ECDFs describe attainment
-during individual trials, without simulated restarts.
+Direct comparisons require the same target set for all curves in a
+comparison group. When adaptive target sets differ between groups, the
+ECDFs describe attainment relative to different accuracy levels rather
+than a common absolute standard.
 
-Success rates focus on one specified accuracy level. The primary success
-threshold is a clean optimality gap of
+Success rates measure how often an optimizer meets a specified accuracy
+threshold. The primary threshold is
 \begin{equation}
     \tau_{\mathrm{primary}}=10^{-8}.
     \label{eq:benchmark_primary_threshold}
 \end{equation}
-Search success means that at least one queried point meets this threshold.
-A benchmark condition $c$ fixes the optimizer, function, dimension, and
-evaluation noise level; its trials vary the problem instance and random
-seed. Let $\mathcal R_c$ be its nonempty trial set. The fraction of trials
-that have attained a target $\tau$ within $b$ evaluations is
+Search success measures whether the optimizer finds a sufficiently
+accurate point during optimization. Returned-solution success measures
+whether the point it returns meets the threshold.
+
+A benchmark condition $c$ fixes the optimizer, BBOB function, dimension,
+and evaluation noise level. Each condition has 20 configured trials,
+using different instances of the same function and their assigned
+random seeds.
+
+For search success, let $\mathcal R_c^{\mathrm{search}}$ be the nonempty
+set of included trials. Using the target-hitting time $T_{r,\tau}$
+defined above, the success rate at evaluation count $b$ is
 \begin{equation}
     \widehat p_{c,\tau}^{\mathrm{search}}(b)
     =
-    \frac{1}{|\mathcal R_c|}
-    \sum_{r\in\mathcal R_c}
+    \frac{1}{|\mathcal R_c^{\mathrm{search}}|}
+    \sum_{r\in\mathcal R_c^{\mathrm{search}}}
     \mathbf{1}\{T_{r,\tau}\leq b\}.
     \label{eq:benchmark_search_success}
 \end{equation}
-At $\tau=\tau_{\mathrm{primary}}$, this gives the fixed-target attainment
-curve: the observed fraction of trials reaching the primary threshold as
-evaluations are spent. At the full evaluation budget for condition $c$,
-denoted by $B_c$, the value
-$\widehat p_{c,\tau}^{\mathrm{search}}(B_c)$ gives the search success rate.
-Here, $B_c$ is the condition-specific benchmark allowance, using the same
-budget convention as $B$ in Equation~\ref{eq:evaluation_budget}. Search
-success is used in the problem-group and prompt-strategy success-rate
-comparisons.
+The indicator equals one if trial $r$ has reached the target within
+$b$ evaluations and zero otherwise. Thus, four successful trials out
+of 20 give a success rate of 20\%. At the full evaluation budget $B_c$,
+this expression gives the final search success rate.
 
-Under noise, finding an accurate point does not guarantee that the
-optimizer recognizes or returns it. Returned-solution quality is therefore
-assessed separately using $x_{r,\mathrm{best}}$, the point returned at
-termination in trial $r$. Its clean optimality gap is
+Unlike the multi-target ECDF, this measure counts successful trials
+at one accuracy threshold. It therefore shows how consistently an
+optimizer reaches the required accuracy, rather than averaging
+attainment across easier and harder targets.
+
+Returned-solution success assesses the point selected at termination.
+Let $x_{r,\mathrm{best}}$ denote this point in trial $r$. Its clean
+optimality gap is
 \begin{equation}
     \Delta f_r
     =
@@ -1749,57 +1690,62 @@ termination in trial $r$. Its clean optimality gap is
     \right|.
     \label{eq:benchmark_final_gap}
 \end{equation}
-This uses the absolute-difference definition introduced in
-Equation~\ref{eq:clean_optimality_gap}, with a trial index.
-Smaller gaps indicate more accurate returned solutions. The assessment
-uses the returned point's clean value rather than its noisy observed
-value. The optimizer does not receive the post-run clean measurement.
-As in synthesis, this diagnostic assessment is separate from the
-objective-query allowance. A failed execution or invalid returned solution
-is assigned a terminal gap of $\infty$.
+Smaller gaps indicate more accurate returned solutions. Failed executions and
+invalid returned solutions are assigned $\Delta f_r=\infty$.
 
-The returned-solution success rate is
+For the nonempty set $\mathcal R_c^{\mathrm{return}}$ of terminal
+trial results, including failures, the returned-solution success rate is
 \begin{equation}
     \widehat p_{c,\tau}^{\mathrm{return}}
     =
-    \frac{1}{|\mathcal R_c|}
-    \sum_{r\in\mathcal R_c}
+    \frac{1}{|\mathcal R_c^{\mathrm{return}}|}
+    \sum_{r\in\mathcal R_c^{\mathrm{return}}}
     \mathbf{1}\{\Delta f_r\leq\tau\}.
     \label{eq:benchmark_return_reliability}
 \end{equation}
-At the primary threshold, this measures how often an optimizer returns a
-solution with a clean gap no greater than $10^{-8}$. It is used in the
-success-rate comparisons across evaluation noise levels. Failed executions
-remain in the denominator and contribute zero returned-solution successes.
-A trial may attain the target during search yet fail this terminal
-assessment.
+Failed executions contribute zero successes and remain in the
+denominator. Under noise, an optimizer may find an accurate point
+without recognizing or returning it. This measure therefore assesses
+whether search produces an accurate returned solution. It is used
+for success-rate comparisons across noise levels.
 
-For a nonempty set $\mathcal C$ of complete benchmark conditions for a
-given optimizer, equally weighted aggregate success rates are
+Aggregation across conditions follows the purpose of each comparison.
+Fixed-target attainment curves pool the included search trials from
+selected complete conditions and apply
+Equation~\ref{eq:benchmark_search_success} to the pooled trial set.
+Each included trial has equal weight, so conditions contributing more
+trials have greater influence.
+
+Problem-group and prompt-strategy comparisons instead average the
+final search success rates across a nonempty set of conditions
+$\mathcal C_{\mathrm{search}}$:
 \begin{equation}
-    \begin{aligned}
-        \widehat p_{\mathcal C,\tau}^{\mathrm{search}}
-        &=
-        \frac{1}{|\mathcal C|}
-        \sum_{c\in\mathcal C}
-        \widehat p_{c,\tau}^{\mathrm{search}}(B_c),
-        \\
-        \widehat p_{\mathcal C,\tau}^{\mathrm{return}}
-        &=
-        \frac{1}{|\mathcal C|}
-        \sum_{c\in\mathcal C}
-        \widehat p_{c,\tau}^{\mathrm{return}}.
-    \end{aligned}
+    \widehat p_{\mathcal C_{\mathrm{search}},\tau}^{\mathrm{search}}
+    =
+    \frac{1}{|\mathcal C_{\mathrm{search}}|}
+    \sum_{c\in\mathcal C_{\mathrm{search}}}
+    \widehat p_{c,\tau}^{\mathrm{search}}(B_c).
+    \label{eq:benchmark_aggregate_search_success}
+\end{equation}
+Each condition has equal weight, even when the number of included
+search trials differs. These comparisons do not require all 20
+search trials per condition.
+
+Returned-solution summaries include only conditions with all 20
+terminal trial results. For a nonempty set of such conditions
+$\mathcal C_{\mathrm{return}}$, the aggregate is
+\begin{equation}
+    \widehat p_{\mathcal C_{\mathrm{return}},\tau}^{\mathrm{return}}
+    =
+    \frac{1}{|\mathcal C_{\mathrm{return}}|}
+    \sum_{c\in\mathcal C_{\mathrm{return}}}
+    \widehat p_{c,\tau}^{\mathrm{return}}.
     \label{eq:benchmark_aggregate_success}
 \end{equation}
-Each included condition has equal weight. The comparison groups used for
-these summaries are specified in Chapter~\ref{chap:experiments}.
-Reliability tables also report results at the secondary threshold
-$\tau_{\mathrm{secondary}}=10^{-2}$; this threshold is not used in the
-primary success-rate figures.
+The trials included in search and returned-solution assessments
+may differ. Both aggregates give each condition equal weight.
 
-A zero success rate indicates that no included trial meets the specified
-threshold under the relevant definition of success. It does not imply
-that the optimizer made no progress. Final clean gaps retain differences
-in returned-solution quality when strict returned-solution success rates
-are zero.
+The success-rate figures use the primary threshold, while reliability
+tables also report $\tau_{\mathrm{secondary}}=10^{-2}$. A zero success
+rate means that no included trial meets the chosen threshold; it does
+not mean that the optimizer made no progress.
