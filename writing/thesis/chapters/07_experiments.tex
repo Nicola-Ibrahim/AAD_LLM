@@ -20,19 +20,22 @@ program fixed. This separates performance under matched synthesis and
 evaluation conditions from sensitivity to a changed observation environment.
 
 %==============================================================================
-\section{Experimental Setup}
+
+%==============================================================================
+\section{Synthesis Setup}
+%==============================================================================
+
 \label{sec:experimental_design}
 %==============================================================================
 
 The experiments vary the LLM, prompt mode and scaffold, BBOB function,
-dimension, and observation noise level. The following subsections specify
+dimension, and observation noise level. The following paragraphs specify
 these configurations and the selection of champions for benchmarking.
 The synthesis procedure and full prompt definitions are given in
 Chapter~\ref{chap:methodology}.
 
 %------------------------------------------------------------------------------
-\subsection{Problems and Dimensions}
-\label{subsec:experiment_problems}
+
 %------------------------------------------------------------------------------
 
 Five functions from the noiseless BBOB suite are selected to examine
@@ -74,8 +77,7 @@ instance. Instance 1 is therefore shared with synthesis, while
 instances 2--20 provide additional landscape realizations.
 
 %------------------------------------------------------------------------------
-\subsection{Noise Levels}
-\label{subsec:experiment_noise}
+
 %------------------------------------------------------------------------------
 
 The experiments use the heteroscedastic Gaussian noise model defined in
@@ -95,11 +97,10 @@ The noise model is applied to noiseless BBOB functions through IOH;
 the experiments do not use the official COCO \texttt{bbob-noisy} suite.
 We distinguish synthesis noise, $\sigma_{\mathrm{synth}}$, from
 benchmark noise, $\sigma_{\mathrm{eval}}$. The native and noise-robustness evaluations are described in
-Section~\ref{subsec:experiment_robustness_design}.
+Section~\ref{sec:noise_robustness}.
 
 %------------------------------------------------------------------------------
-\subsection{Models and Prompts}
-\label{subsec:synthesis_conditions}
+
 %------------------------------------------------------------------------------
 
 Three locally hosted LLMs are included in the completed synthesis
@@ -130,8 +131,7 @@ the observation environment. The full prompt definitions are given in
 Chapter~\ref{chap:methodology}.
 
 %------------------------------------------------------------------------------
-\subsection{Synthesis Runs}
-\label{subsec:synthesis_runs}
+
 %------------------------------------------------------------------------------
 
 Each LLM covers 640 synthesis conditions: five functions, four dimensions,
@@ -140,12 +140,11 @@ two prompt modes, four scaffolds, and four noise levels
 1,920 model-specific conditions in total. Each synthesis run has a maximum
 of 10 iterations and a configured budget of $10^6$ objective evaluations
 per candidate. This is the intended allowance; the case study in
-Section~\ref{subsec:generated_program_cases} identifies a historical
+Section~\ref{sec:generated_program_cases} identifies a historical
 execution that exceeded it.
 
 %------------------------------------------------------------------------------
-\subsection{Champion Selection}
-\label{subsec:champion_selection}
+
 %------------------------------------------------------------------------------
 
 After synthesis, one champion is selected for each combination of model,
@@ -166,12 +165,14 @@ results do not influence their selection.
 
 
 %==============================================================================
-\section{Independent Benchmarking}
+
+%==============================================================================
+\section{Benchmark Setup and Performance Measures}
+%==============================================================================
+
 \label{sec:independent_benchmark}
 %==============================================================================
 
-\subsection{Benchmark Protocol}
-\label{subsec:experiment_benchmark_protocol}
 
 The independent benchmark evaluates the selected champions and reference
 optimizers on BBOB functions implemented in IOH
@@ -230,8 +231,6 @@ Table~\ref{tab:reference_optimizers} lists the baseline settings.
     \end{tabular}
 \end{table}
 
-\subsection{Performance Measures}
-\label{subsec:experiment_performance_measures}
 
 Convergence, target-attainment ECDFs, and success rates are defined in
 Section~\ref{subsec:benchmark_performance_measures}. The following
@@ -270,8 +269,6 @@ equally, as defined in Equation~\eqref{eq:benchmark_aggregate_success}.
 The secondary threshold $\tau_{\mathrm{secondary}}=10^{-2}$ is used
 in additional reliability diagnostics.
 
-\subsection{Uncertainty and Comparisons}
-\label{subsec:experiment_uncertainty}
 
 Per-condition returned-solution success rates use 95\% Wilson intervals.
 Aggregate intervals use 1,000 condition-cluster bootstrap resamples,
@@ -298,21 +295,11 @@ and 1.2.0, respectively. These and the library versions in
 Table~\ref{tab:reference_optimizers} describe the recorded installations;
 versions were not retained for every historical run.
 
-\subsection{Noise Robustness}
-\label{subsec:experiment_robustness_design}
-
-Native benchmarking evaluates each champion on the function, dimension,
-and noise level used during its synthesis, across instances 1--20.
-The noise-robustness study instead evaluates an unchanged Explicit-Clean
-champion under $\sigma_{\mathrm{eval}}\in\{0,0.05,0.1,0.2\}$ while
-keeping its function and dimension fixed. No adaptation or champion
-reselection occurs between noise levels. This design examines sensitivity
-to evaluation noise separately from the synthesis environment.
-Cross-function and cross-dimension transfer are outside the scope of the
-reported experiments.
 
 %==============================================================================
-\section{Benchmark Results}
+\section{Performance under Matched Conditions}
+%==============================================================================
+
 \label{sec:benchmark_results}
 %==============================================================================
 
@@ -331,8 +318,6 @@ champion. These results describe the combined synthesis and evaluation
 conditions. The later noise-robustness comparison holds the champion
 fixed to examine changes in evaluation noise.
 
-\subsection{Implicit Synthesis}
-\label{subsec:implicit_results}
 
 The Implicit experiments evaluate optimizers synthesized without an
 explicit description of the observation environment.
@@ -396,69 +381,6 @@ are carried forward; this is not the primary fixed-target ranking.}
     \label{fig:implicit_noise_01}
 \end{figure}
 
-Under the common Baseline strategy, aggregate implicit solved rates are
-34.10\% for DeepSeek-Coder-V2-Lite-Instruct, 23.92\% for Qwen2.5-Coder-14B-Instruct, and 19.81\% for Qwen2.5-Coder-32B-Instruct.
-These are descriptive rankings; the condition-bootstrap intervals overlap.
-The prompt-strategy comparisons are considered alongside the Explicit
-results in Section~\ref{subsec:model_prompt_comparison}.
-
-\begin{table}[htbp]
-    \centering
-    \caption{Returned-solution success rates for Implicit synthesis at
-    $\Delta f\leq10^{-8}$. Each complete condition contains 20 trials.
-    Rates and condition-bootstrap 95\% confidence limits are expressed
-    as percentages.}
-    \label{tab:implicit_summary}
-
-    \scriptsize
-    \renewcommand{\arraystretch}{1.25}
-    \setlength{\tabcolsep}{3pt}
-
-    \begin{tabularx}{\textwidth}{
-        >{\raggedright\arraybackslash}X
-        l l r r r l
-    }
-        \hline
-        Model & Strategy & Origin &
-        \shortstack[r]{Complete\\conditions} &
-        \shortstack[r]{Solved /\\trials} &
-        \shortstack[r]{Success\\(\%)} &
-        95\% CI \\
-        \hline
-
-        \shortstack[l]{Qwen2.5-Coder\\14B-Instruct}
-        & Baseline
-        & \shortstack[l]{All native\\noise levels}
-        & 79 & 378/1580 & 23.92 & [15.57, 32.85] \\
-        & Thinking      & & 80 & 221/1600 & 13.81 & [7.06, 21.31] \\
-        & Vectorization & & 80 & 428/1600 & 26.75 & [17.94, 36.38] \\
-        & Guided        & & 77 & 392/1540 & 25.45 & [16.36, 33.70] \\
-        \hline
-
-        \shortstack[l]{Qwen2.5-Coder\\32B-Instruct}
-        & Baseline      & & 79 & 313/1580 & 19.81 & [12.02, 28.42] \\
-        & Thinking      & & 80 & 313/1600 & 19.56 & [11.75, 27.95] \\
-        & Vectorization & & 79 & 411/1580 & 26.01 & [17.34, 35.19] \\
-        & Guided        & & 80 & 415/1600 & 25.94 & [17.56, 34.44] \\
-        \hline
-
-        \shortstack[l]{DeepSeek-Coder\\V2-Lite-Instruct}
-        & Baseline      & & 78 & 532/1560 & 34.10 & [25.00, 43.99] \\
-        & Thinking      & & 80 & 263/1600 & 16.44 & [10.19, 23.63] \\
-        & Vectorization & & 80 & 438/1600 & 27.38 & [19.06, 36.57] \\
-        & Guided        & & 80 & 547/1600 & 34.19 & [24.81, 43.88] \\
-        \hline
-    \end{tabularx}
-
-    \smallskip
-    \parbox{\textwidth}{\scriptsize
-        All rows include all native noise levels.
-        Baseline rows compare models; the remaining rows compare
-        prompt strategies within each model.}
-\end{table}
-
-\subsection{Explicit Synthesis}
-\label{subsec:explicit_results}
 
 The Explicit experiments provide task information about the observation
 environment. Explicit-Clean covers clean synthesis and evaluation;
@@ -534,6 +456,72 @@ this plot does not combine Explicit-Clean and Explicit-Noisy champions.}
     \label{fig:explicit_noise_01}
 \end{figure}
 
+
+%==============================================================================
+\section{Model and Prompt Comparisons}
+\label{sec:model_prompt_comparison}
+%==============================================================================
+Under the common Baseline strategy, aggregate implicit solved rates are
+34.10\% for DeepSeek-Coder-V2-Lite-Instruct, 23.92\% for Qwen2.5-Coder-14B-Instruct, and 19.81\% for Qwen2.5-Coder-32B-Instruct.
+These are descriptive rankings; the condition-bootstrap intervals overlap.
+The prompt-strategy comparisons are considered alongside the Explicit
+results in Section~\ref{sec:model_prompt_comparison}.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Returned-solution success rates for Implicit synthesis at
+    $\Delta f\leq10^{-8}$. Each complete condition contains 20 trials.
+    Rates and condition-bootstrap 95\% confidence limits are expressed
+    as percentages.}
+    \label{tab:implicit_summary}
+
+    \scriptsize
+    \renewcommand{\arraystretch}{1.25}
+    \setlength{\tabcolsep}{3pt}
+
+    \begin{tabularx}{\textwidth}{
+        >{\raggedright\arraybackslash}X
+        l l r r r l
+    }
+        \hline
+        Model & Strategy & Origin &
+        \shortstack[r]{Complete\\conditions} &
+        \shortstack[r]{Solved /\\trials} &
+        \shortstack[r]{Success\\(\%)} &
+        95\% CI \\
+        \hline
+
+        \shortstack[l]{Qwen2.5-Coder\\14B-Instruct}
+        & Baseline
+        & \shortstack[l]{All native\\noise levels}
+        & 79 & 378/1580 & 23.92 & [15.57, 32.85] \\
+        & Thinking      & & 80 & 221/1600 & 13.81 & [7.06, 21.31] \\
+        & Vectorization & & 80 & 428/1600 & 26.75 & [17.94, 36.38] \\
+        & Guided        & & 77 & 392/1540 & 25.45 & [16.36, 33.70] \\
+        \hline
+
+        \shortstack[l]{Qwen2.5-Coder\\32B-Instruct}
+        & Baseline      & & 79 & 313/1580 & 19.81 & [12.02, 28.42] \\
+        & Thinking      & & 80 & 313/1600 & 19.56 & [11.75, 27.95] \\
+        & Vectorization & & 79 & 411/1580 & 26.01 & [17.34, 35.19] \\
+        & Guided        & & 80 & 415/1600 & 25.94 & [17.56, 34.44] \\
+        \hline
+
+        \shortstack[l]{DeepSeek-Coder\\V2-Lite-Instruct}
+        & Baseline      & & 78 & 532/1560 & 34.10 & [25.00, 43.99] \\
+        & Thinking      & & 80 & 263/1600 & 16.44 & [10.19, 23.63] \\
+        & Vectorization & & 80 & 438/1600 & 27.38 & [19.06, 36.57] \\
+        & Guided        & & 80 & 547/1600 & 34.19 & [24.81, 43.88] \\
+        \hline
+    \end{tabularx}
+
+    \smallskip
+    \parbox{\textwidth}{\scriptsize
+        All rows include all native noise levels.
+        Baseline rows compare models; the remaining rows compare
+        prompt strategies within each model.}
+\end{table}
+
 Baseline solved rates under Explicit-Clean are 34.25\%, 36.25\%, and
 36.00\% for Qwen2.5-Coder-14B-Instruct, Qwen2.5-Coder-32B-Instruct,
 and DeepSeek-Coder-V2-Lite-Instruct, respectively. Under native
@@ -542,7 +530,7 @@ The noisy aggregate covers three positive noise levels, whereas the clean
 aggregate covers one. The two rates therefore describe different
 synthesis and evaluation environments.
 Table~\ref{tab:explicit_summary} also reports the prompt-strategy results
-considered in Section~\ref{subsec:model_prompt_comparison}.
+considered in Section~\ref{sec:model_prompt_comparison}.
 
 \begin{table}[htbp]
     \centering
@@ -611,8 +599,6 @@ considered in Section~\ref{subsec:model_prompt_comparison}.
         prompt strategies within each model.}
 \end{table}
 
-\subsection{Model and Prompt Comparisons}
-\label{subsec:model_prompt_comparison}
 
 The Baseline scaffold provides a common reference for comparing models.
 DeepSeek-Coder-V2-Lite-Instruct has the highest aggregate Implicit rate,
@@ -631,10 +617,25 @@ The Implicit table combines all four native noise levels, whereas the
 Explicit table separates clean and noisy conditions. Direct comparisons
 between these aggregates cannot isolate the contribution of explicit
 environment information. That comparison requires the matching conditions
-defined in Section~\ref{subsec:experiment_uncertainty}.
+defined in Section~\ref{sec:independent_benchmark}.
 
-\subsection{Noise Robustness}
-\label{subsec:cross_evaluation_results}
+
+%==============================================================================
+\section{Noise Robustness}
+\label{sec:noise_robustness}
+%==============================================================================
+
+Native benchmarking evaluates each champion on the function, dimension,
+and noise level used during its synthesis, across instances 1--20.
+The noise-robustness study instead evaluates an unchanged Explicit-Clean
+champion under $\sigma_{\mathrm{eval}}\in\{0,0.05,0.1,0.2\}$ while
+keeping its function and dimension fixed. No adaptation or champion
+reselection occurs between noise levels. This design examines sensitivity
+to evaluation noise separately from the synthesis environment.
+Cross-function and cross-dimension transfer are outside the scope of the
+reported experiments.
+
+%==============================================================================
 
 Figure~\ref{fig:cross_evaluation_success_rate} reports returned-solution
 success for unchanged Explicit-Clean Baseline champions under different
@@ -658,8 +659,11 @@ selected program across noise levels. It therefore assesses the noise
 sensitivity of that champion, rather than the ability of an LLM to
 synthesize a new optimizer for each environment.
 
-\subsection{Generated-Program Case Studies}
-\label{subsec:generated_program_cases}
+
+%==============================================================================
+\section{Generated-Program Case Studies}
+\label{sec:generated_program_cases}
+%==============================================================================
 
 Aggregate success rates do not show how a generated program makes search
 decisions or why a particular instance fails. The following two selected
@@ -669,7 +673,6 @@ The complete selected programs
 are reproduced with line numbers in Appendix~\ref{app:generated_programs};
 the excerpts below identify the decisions examined in this section.
 
-\subsubsection{Successful Clean Search}
 
 A DeepSeek-Coder-V2-Lite-Instruct Explicit-Clean Baseline champion for $f_1$ at $D=2$ is a generated
 particle-swarm optimizer (experiment 2063, iteration 2). It maintains
@@ -695,7 +698,6 @@ budget boundary, where the benchmark wrapper enforces the actual evaluation
 limit. The evidence here concerns its observed returned-solution performance
 under the stated clean, two-dimensional condition.
 
-\subsubsection{Offset-Sensitive Selection}
 
 In contrast, the DeepSeek-Coder-V2-Lite-Instruct Implicit Baseline champion for noisy $f_1$ at
 $D=5$ and $\sigma=0.05$ is \texttt{ImprovedSES} (experiment 2139,
@@ -794,7 +796,6 @@ failure at 150 calls. These bounded checks identify offset sensitivity in
 the early selection logic; they do not establish final convergence of the
 shifted runs or replace the archived benchmark measurements.
 
-\subsubsection{Budget Counting}
 
 A second weakness appears in lines 22 and 39 of
 Listing~\ref{lst:generated_ses_complete}. If $P=50$ is the fixed nominal
@@ -824,6 +825,3 @@ that rule. Conversely, the nine finite-return trials still require
 separate quality assessment: their completion does not imply that the
 optimum was found. This distinction motivates reporting finite returns,
 target successes, and failures together with the terminal median.
-
-The following chapter discusses these findings in relation to the
-research questions and examines the limitations of the study.
