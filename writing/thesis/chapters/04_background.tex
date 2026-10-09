@@ -2,7 +2,8 @@
 % Chapter 2: Background and Related Work
 %------------------------------------------------------------------------------
 
-\chapter{Background}\label{chap:background}
+\chapter{Background}
+\label{chap:background}
 
 Continuous black-box optimization considers problems in which an algorithm
 must make decisions from objective-function evaluations without access to the
@@ -25,28 +26,32 @@ elitist selection is examined. This provides the basis for the research gap
 addressed in this thesis.
 
 %------------------------------------------------------------------------------
-\section{Continuous Optimization}\label{sec:continuous_optimization}
+\section{Continuous Optimization}
+\label{sec:continuous_optimization}
 %------------------------------------------------------------------------------
 
 Continuous black-box optimization seeks the global minimum of an unknown
 real-valued objective function:
-\begin{equation}\label{eq:bbob_min}
-\min_{x \in \mathcal{S} \subseteq \mathbb{R}^D} f(x)
+\begin{equation}
+\label{eq:bbob_min}
+    \min_{x \in \mathcal{S} \subseteq \mathbb{R}^D} f(x),
 \end{equation}
 where $\mathcal{S}$ denotes a bounded $D$-dimensional continuous search space.
-In the BBOB benchmark setting, the search domain is commonly defined within
-$[-5,5]^D$ for typical initial search and benchmark settings; the test
-functions themselves are defined on $\mathbb{R}^D$ \cite{BBOB2009}. The analytical gradients $\nabla f(x)$ and the internal
+In typical BBOB benchmark settings, $[-5,5]^D$ serves as the initial search
+region, while the test functions themselves are defined on $\mathbb{R}^D$
+\cite{BBOB2009}. The analytical gradients $\nabla f(x)$ and the internal
 formulation of the objective are not available to the optimizer. Instead, the
 algorithm has to learn about the search landscape from objective-function
 evaluations.
 
 This setting occurs in scientific and engineering problems where an explicit
 mathematical model is unavailable, too expensive to evaluate directly, or not
-accurate enough for optimization. Algorithm performance depends on the
-characteristics of the problem, the dimensionality, the evaluation budget,
-and the target precision. These factors therefore matter when choosing or
-designing an optimization method \cite{Hansen2010}.
+accurate enough for optimization. In the finite-search setting considered by
+Wolpert and Macready, the No Free Lunch theorem establishes equal average
+performance across algorithms when averaged uniformly over all objective
+functions under the theorem's assumptions \cite{Wolpert1997}. The
+characteristics of the optimization problem therefore matter when choosing
+or designing an optimization method.
 
 Several properties can make a continuous black-box problem difficult. These
 include separability, conditioning, modality, and interactions between
@@ -62,31 +67,40 @@ Because optimization performance depends on these characteristics,
 standardized benchmark suites are useful for comparing algorithms under
 reproducible conditions. The Black-Box Optimization Benchmark (BBOB) suite
 provides a collection of continuous test functions with different landscape
-structures \cite{BBOB2009}. The suite is integrated into
-experimental frameworks such as \texttt{IOHexperimenter} \cite{deNobel2024}
-and COCO \cite{Hansen2021COCO}. The known optima of the benchmark functions also make it possible to
-measure the progress of an optimizer relative to a known reference solution.
+structures \cite{BBOB2009}. The suite is integrated into experimental
+frameworks such as \texttt{IOHexperimenter} \cite{deNobel2024} and COCO
+\cite{Hansen2021COCO}. The known optima of the benchmark functions also make
+it possible to measure the progress of an optimizer relative to a known
+reference solution.
 
 The 24 noiseless BBOB functions are organized into five broad groups according
 to their structural characteristics. Table~\ref{tab:bbob_groups} summarizes
 these groups.
 
 \begin{table}[htbp]
-\centering
-\caption{Groups of the 24 noiseless BBOB functions, following \cite{BBOB2009}.}
-\label{tab:bbob_groups}
-\small
-\begin{tabularx}{\textwidth}{c c X}
-\toprule
-\textbf{Group} & \textbf{Function indices} & \textbf{Characterization} \\
-\midrule
-1 & $f_1$--$f_5$ & Separable functions. \\
-2 & $f_6$--$f_9$ & Functions with low or moderate conditioning. \\
-3 & $f_{10}$--$f_{14}$ & Unimodal functions with high conditioning. \\
-4 & $f_{15}$--$f_{19}$ & Multimodal functions with adequate global structure. \\
-5 & $f_{20}$--$f_{24}$ & Multimodal functions with weak global structure. \\
-\bottomrule
-\end{tabularx}
+    \centering
+    \caption{Groups of the 24 noiseless BBOB functions, following
+    \cite{BBOB2009}.}
+    \label{tab:bbob_groups}
+    \small
+    \begin{tabularx}{\textwidth}{c c X}
+        \toprule
+        \textbf{Group} &
+        \textbf{Function indices} &
+        \textbf{Characterization} \\
+        \midrule
+        1 & $f_1$--$f_5$ &
+        Separable functions. \\
+        2 & $f_6$--$f_9$ &
+        Functions with low or moderate conditioning. \\
+        3 & $f_{10}$--$f_{14}$ &
+        Unimodal functions with high conditioning. \\
+        4 & $f_{15}$--$f_{19}$ &
+        Multimodal functions with adequate global structure. \\
+        5 & $f_{20}$--$f_{24}$ &
+        Multimodal functions with weak global structure. \\
+        \bottomrule
+    \end{tabularx}
 \end{table}
 
 BBOB performance is commonly presented using empirical cumulative
@@ -96,10 +110,10 @@ evaluations, aggregated over the selected benchmark problems and instances
 \cite{Hansen2016Performance}. A commonly used target in the noiseless
 benchmark setting is an optimality gap of
 \begin{equation}
-\Delta f = f(x)-f(x^*) \leq 10^{-8}.
+    \Delta f = f(x)-f(x^*) \leq 10^{-8}.
 \end{equation}
-Such evaluations consider both the quality of the final solution and the
-number of objective evaluations required to reach a given level of precision.
+Such evaluations consider both solution quality and the number of objective
+evaluations required to reach a given level of precision.
 
 A number of derivative-free and evolutionary methods are commonly used for
 continuous black-box optimization. Nelder--Mead maintains a simplex of
@@ -113,8 +127,9 @@ candidate vectors using differences between existing population members
 \cite{Storn1997}. Mutation and crossover allow the method to explore the
 continuous search space while making use of information contained in the
 current population. Particle Swarm Optimization (PSO) uses a population of
-particles whose movement depends on their previous positions and information
-obtained from the population \cite{Kennedy1995}.
+particles whose movement is influenced by their own best-known positions
+and information about successful positions found by other particles
+\cite{Kennedy1995}.
 
 Evolution Strategies form another important class of continuous optimization
 methods. They use stochastic variation and selection to update candidate
@@ -143,32 +158,32 @@ Measurement-based applications help motivate noisy objective evaluations.
 Plett's work on battery state-of-charge estimation addresses measurement and
 model uncertainty in battery management \cite{Plett2004}. Structural model
 updating likewise relies on measured vibration data, which can contain
-measurement errors \cite{Mottershead1993,Marwala2010}. These applications motivate the discussion of uncertainty below; the
-benchmark noise distributions are separate, explicitly defined models.
+measurement errors \cite{Mottershead1993,Marwala2010}. These applications
+motivate the discussion of uncertainty below; the benchmark noise
+distributions are separate, explicitly defined models.
 
 %------------------------------------------------------------------------------
-\section{Noisy Optimization}\label{sec:noisy_optimization}
+\section{Noisy Optimization}
+\label{sec:noisy_optimization}
 %------------------------------------------------------------------------------
 
 In practical optimization, repeated evaluations of the same candidate
 solution do not necessarily return the same fitness value. Stochasticity can
 come from measurement errors, environmental effects, simulation randomness,
-numerical effects, or other sources of uncertainty. The optimizer therefore
-does not always observe the underlying objective directly.
+or other sources of uncertainty. The optimizer therefore does not always
+observe the underlying objective directly.
 
-Jin and Branke distinguish four forms of uncertainty in evolutionary
-optimization: noisy fitness evaluations, the search for robust solutions,
-approximation errors in fitness evaluation, and time-varying objectives
-\cite{Jin2005}. Noisy and approximated evaluations introduce uncertainty
-in the fitness space, whereas robustness concerns uncertainty in the
-parameter space and dynamic objectives introduce uncertainty over time.
-This thesis focuses on noise in fitness evaluations. In this case, the
-candidate solution itself is unchanged, while the objective value returned
-to the optimizer is perturbed.
+Jin and Branke distinguish four categories of uncertainty: noisy fitness
+evaluations, robustness to perturbations of design variables or environmental
+parameters, fitness approximation, and time-varying objectives
+\cite{Jin2005}. The focus here is on noise in fitness evaluations, where the
+candidate solution itself is unchanged but the objective value returned to
+the optimizer is perturbed.
 
 A general additive representation is
-\begin{equation}\label{eq:noisy_evaluation_bg}
-f_{\text{noisy}}(x) = f_{\text{clean}}(x) + z,
+\begin{equation}
+\label{eq:noisy_evaluation_bg}
+    f_{\text{noisy}}(x) = f_{\text{clean}}(x) + z,
 \end{equation}
 where $f_{\text{clean}}(x)$ is the underlying objective and $z$ is a random
 disturbance. The observed value $f_{\text{noisy}}(x)$ is therefore a random
@@ -181,99 +196,99 @@ are function-dependent and need not equal these additive examples
 \cite{Hansen2009Noisy}:
 
 \begin{enumerate}
-\item \textbf{Additive Uniform Noise:}
-The disturbance is bounded within a fixed interval:
-\begin{equation}
-z \sim \mathcal{U}(-a,a).
-\end{equation}
+    \item \textbf{Additive Uniform Noise:}
+    The disturbance is bounded within a fixed interval:
+    \begin{equation}
+        z \sim \mathcal{U}(-a,a),
+        \qquad a>0.
+    \end{equation}
 
-\item \textbf{Additive Cauchy Noise:}
-The Cauchy distribution introduces heavy-tailed deviations:
-\begin{equation}
-p(z)=
-\frac{1}{\pi\gamma\left[1+(z/\gamma)^2\right]}.
-\end{equation}
+    \item \textbf{Additive Cauchy Noise:}
+    The Cauchy distribution introduces heavy-tailed deviations:
+    \begin{equation}
+        p(z)=
+        \frac{1}{\pi\gamma\left[1+(z/\gamma)^2\right]},
+        \qquad \gamma>0.
+    \end{equation}
 
-\item \textbf{Additive Gaussian Noise:}
-The disturbance is normally distributed:
-\begin{equation}
-z \sim \mathcal{N}(0,\sigma^2).
-\end{equation}
+    \item \textbf{Additive Gaussian Noise:}
+    The disturbance is normally distributed:
+    \begin{equation}
+        z \sim \mathcal{N}(0,\sigma^2).
+    \end{equation}
 \end{enumerate}
 
-These distributions provide generic examples of fitness-noise
-models. The exact noise definitions used in benchmark suites can differ from
-these simple additive formulations. Uniform noise limits the disturbance to a
-fixed range, whereas Cauchy noise can produce occasional large deviations
-because of its heavy tails. Gaussian noise gives a continuous model in which
-the variance can be controlled through $\sigma$. The choice of noise model
-therefore affects both the frequency and magnitude of deviations between
-observed and underlying fitness.
+Uniform noise limits the disturbance to a fixed range, whereas Cauchy noise
+can produce occasional large deviations because of its heavy tails.
+Gaussian noise gives a continuous model in which the variance can be
+controlled through $\sigma$. The choice of noise model therefore affects
+both the frequency and magnitude of deviations between observed and
+underlying fitness.
 
 The effect of noise becomes especially important when an algorithm makes
 decisions based on relative fitness. Consider two candidate solutions for
 which
 \begin{equation}
-f_{\text{clean}}(x_1) < f_{\text{clean}}(x_2).
+    f_{\text{clean}}(x_1) < f_{\text{clean}}(x_2).
 \end{equation}
 According to the clean objective, $x_1$ is the better solution. A particular
 noise realization can nevertheless result in
 \begin{equation}
-f_{\text{noisy}}(x_1) >
-f_{\text{noisy}}(x_2).
+    f_{\text{noisy}}(x_1) > f_{\text{noisy}}(x_2).
 \end{equation}
 The observed ranking is then reversed. An optimizer that relies on this
 ranking may consequently make a selection decision that differs from the one
 it would make using the clean objective.
 
-The consequences depend on the optimization method. Direct
-search and evolution-strategy methods can respond differently to noisy
-evaluations, and noise can make objective differences unreliable when the
-search approaches the scale of the perturbations
-\cite{ArnoldB03,Arnold2003}. For direct-search methods,
-small objective differences can become difficult to distinguish from
-evaluation noise, which can affect decisions about the local search
-direction or step size. As the search radius decreases, the actual objective
-differences can become comparable to the noise magnitude. The resulting
-decisions may reduce the search radius even though the current solution is
-still far from the optimum.
+The consequences depend on the optimization method. Direct-search and
+evolution-strategy methods can respond differently to noisy evaluations
+\cite{ArnoldB03,Arnold2003}. Small objective differences can become difficult
+to distinguish from evaluation noise, affecting decisions about the local
+search direction or step size. As a search radius decreases, objective
+differences may become comparable to the noise magnitude. Decisions based
+on these observations can then reduce the search radius even when the
+current solution remains far from the optimum.
 
-Arnold and Beyer analyzed when population-based Evolution Strategies benefit
-from multiple evaluations under noise \cite{Arnold2003}. Recombining several
-selected parents uses information from more than one candidate, but robustness
-still depends on the noise model and evaluation budget.
+Arnold and Beyer analyzed how maintaining multiple candidate solutions can
+improve the local performance of Evolution Strategies under noise
+\cite{Arnold2003}. The benefits of population-based search depend on the
+noise model and the optimization setting.
 
 CMA-ES provides a more direct example of the effect of noisy ranking. Its
-population update depends on the ordering of candidate solutions according to
-their measured fitness \cite{Hansen2001}. The generation mean can be written as
-\begin{equation}\label{eq:cma_mean_update_bg}
-m^{(g+1)} =
-m^{(g)} +
-\sum_{i=1}^{\mu}
-w_i
-\left(
-x_{i:\lambda}-m^{(g)}
-\right),
+population update depends on the ordering of candidate solutions according
+to their measured fitness \cite{Hansen2001}. The generation mean can be
+written as
+\begin{equation}
+\label{eq:cma_mean_update_bg}
+    m^{(g+1)} =
+    m^{(g)} +
+    \sum_{i=1}^{\mu}
+    w_i
+    \left(
+        x_{i:\lambda}-m^{(g)}
+    \right),
 \end{equation}
 where
 \begin{equation}
-w_1 \geq w_2 \geq \dots \geq w_\mu > 0
+    w_1 \geq w_2 \geq \dots \geq w_\mu > 0,
+    \qquad
+    \sum_{i=1}^{\mu}w_i=1
 \end{equation}
-are positive recombination weights satisfying $\sum_{i=1}^{\mu}w_i=1$,
-associated with candidates ordered according to their observed fitness,
+are the normalized weights associated with candidates ordered according to
+their observed fitness,
 \begin{equation}
-f_{\mathrm{obs}}(x_{1:\lambda}) \leq \dots \leq f_{\mathrm{obs}}(x_{\lambda:\lambda}).
+    f_{\mathrm{obs}}(x_{1:\lambda})
+    \leq \dots \leq
+    f_{\mathrm{obs}}(x_{\lambda:\lambda}).
 \end{equation}
 
-When fitness evaluations are noisy, the observed ranking can differ
-from the ranking under the underlying objective. A candidate with a
-worse clean objective may receive a more favorable noisy evaluation
-and consequently a larger selection weight. Since CMA-ES uses ranked
-candidates to update its search distribution, these differences can
-affect subsequent search steps \cite{Hansen2001}. Hansen et al.
-measure uncertainty through rank changes following reevaluation and
-use this information to guide uncertainty handling in CMA-ES
-\cite{Hansen2009}.
+When the fitness evaluations are noisy, this ranking can be corrupted. A
+candidate with a worse clean objective may receive a better noisy evaluation
+and consequently a larger selection weight. These rank inversions can affect
+both cumulative step-size adaptation and covariance-matrix learning
+\cite{Jin2005,Hansen2009}. Noise can therefore influence not only which
+candidate is selected, but also the search distribution used in later
+generations.
 
 Repeated evaluations can improve a fitness estimate when evaluations are
 independent and their errors have finite variance. For unbiased observations
@@ -296,14 +311,16 @@ deterministic assumptions may therefore behave differently once its objective
 evaluations become stochastic.
 
 %------------------------------------------------------------------------------
-\section{Automated Algorithm Design}\label{sec:automated_algorithm_design}
+\section{Automated Algorithm Design}
+\label{sec:automated_algorithm_design}
 %------------------------------------------------------------------------------
 
 The difficulty of manually designing and configuring optimization algorithms
-has motivated research into Automated Algorithm Design (AAD). Earlier methods include genetic programming for generating procedures and
-hyper-heuristics for selecting or generating heuristics \cite{Burke2013}. Instead of
-manually specifying every algorithmic decision, these methods search over a
-predefined representation of possible solutions.
+has motivated research into Automated Algorithm Design (AAD). Earlier
+methods include genetic programming for generating procedures and
+hyper-heuristics for selecting or generating heuristics \cite{Burke2013}.
+Instead of manually specifying every algorithmic decision, these methods
+search over a predefined representation of possible solutions.
 
 Modular algorithm design developed this idea further by decomposing existing
 optimization algorithms into interchangeable components
@@ -318,7 +335,7 @@ fixed set of components. The development of large language models has made
 this approach increasingly practical, since LLMs can generate and modify
 source code from natural-language instructions.
 
-Romera-Paredes et al.~introduced FunSearch, which combines a language model
+Romera-Paredes et al.\ introduced FunSearch, which combines a language model
 with an automated evaluation process to search program space
 \cite{Romera2023}. The framework constrains the LLM to generate particular
 program components within a larger structure and uses evaluation results to
@@ -343,10 +360,10 @@ one-shot code generator.
 
 The distinction between numerical and programmatic generation is important.
 A system that generates a numerical update, as in EvoLLM, changes a search
-process without generating its source code. A system that generates executable algorithms instead searches
-over programs. This program-space search can produce different combinations of
-operations and algorithmic structures rather than choosing only among
-predefined numerical actions.
+process without generating its source code. A system that generates executable
+algorithms instead searches over programs. This program-space search can
+produce different combinations of operations and algorithmic structures
+rather than choosing only among predefined numerical actions.
 
 Across these papers, the LLM can generate a program, modify a previous
 program, or interpret evaluation feedback. These are descriptions of the
@@ -358,60 +375,110 @@ Table~\ref{tab:llm_aad_comparison} summarizes the main LLM-driven AAD
 approaches considered in this work.
 
 \begin{table}[htbp]
-\centering
-\caption{Objects generated and feedback reported by related LLM systems. Descriptions summarize the cited papers; evaluation settings are restricted to those reports.}
-\label{tab:llm_aad_comparison}
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.0cm} >{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{3.0cm}}
-\toprule
-\textbf{System} & \textbf{Generated object} & \textbf{Feedback used in the reported method} & \textbf{Reported setting} \\
-\midrule
-FunSearch \cite{Romera2023} & Functions within a program skeleton & Automated evaluation scores & Mathematical and algorithmic search \\
-EvoLLM \cite{Lange2024} & Numerical distribution-mean updates & Ranked, discretized population & BBOB and neuroevolution tasks \\
-EvoPrompt \cite{Guo2023} & Prompt strings & Task evaluation scores & Prompt optimization \\
-EoH \cite{Liu2024} & Heuristic ideas and code & Evaluated heuristic performance and evolutionary prompts & Combinatorial tasks \\
-AEL \cite{AEL2024} & Heuristic algorithm code & Evaluated heuristic scores & Traveling-salesman problems \\
-ReEvo \cite{ReEvo2024} & Heuristic code & Evaluations and verbal reflection & Combinatorial tasks \\
-AutoEP \cite{AutoEP2026} & Hyperparameter control & Online landscape analysis and evaluation feedback & Combinatorial tasks \\
-LLaMEA-SAGE \cite{LLaMEASAGE2026} & Optimizer code & Performance and structural features of source code & Automated optimizer design \\
-LLaMEA-BO \cite{LLaMEABO2025} & Bayesian optimizer code & Benchmark scores & Bayesian optimization benchmarks \\
-LLaMEA \cite{LLaMEA2024} & Optimizer code & Benchmark scores and execution feedback & Noiseless BBOB functions \\
-\bottomrule
-\end{tabularx}
+    \centering
+    \caption{Objects generated and feedback reported by related LLM systems.
+    Descriptions summarize the cited papers; evaluation settings are
+    restricted to those reports.}
+    \label{tab:llm_aad_comparison}
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabularx}{\textwidth}{
+        >{\raggedright\arraybackslash}p{2.0cm}
+        >{\raggedright\arraybackslash}p{2.5cm}
+        >{\raggedright\arraybackslash}X
+        >{\raggedright\arraybackslash}p{3.0cm}
+    }
+        \toprule
+        \textbf{System} &
+        \textbf{Generated object} &
+        \textbf{Feedback used in the reported method} &
+        \textbf{Reported setting} \\
+        \midrule
+        FunSearch \cite{Romera2023} &
+        Functions within a program skeleton &
+        Automated evaluation scores &
+        Mathematical and algorithmic search \\
+
+        EvoLLM \cite{Lange2024} &
+        Numerical distribution-mean updates &
+        Ranked, discretized population &
+        BBOB and neuroevolution tasks \\
+
+        EvoPrompt \cite{Guo2023} &
+        Prompt strings &
+        Task evaluation scores &
+        Prompt optimization \\
+
+        EoH \cite{Liu2024} &
+        Heuristic ideas and code &
+        Evaluated heuristic performance and evolutionary prompts &
+        Combinatorial tasks \\
+
+        AEL \cite{AEL2024} &
+        Heuristic algorithm code &
+        Evaluated heuristic scores &
+        Traveling-salesman problems \\
+
+        ReEvo \cite{ReEvo2024} &
+        Heuristic code &
+        Evaluations and verbal reflection &
+        Combinatorial tasks \\
+
+        AutoEP \cite{AutoEP2026} &
+        Hyperparameter control &
+        Online landscape analysis and evaluation feedback &
+        Combinatorial tasks \\
+
+        LLaMEA-SAGE \cite{LLaMEASAGE2026} &
+        Optimizer code &
+        Performance and structural features of source code &
+        Automated optimizer design \\
+
+        LLaMEA-BO \cite{LLaMEABO2025} &
+        Bayesian optimizer code &
+        Benchmark scores &
+        Bayesian optimization benchmarks \\
+
+        LLaMEA \cite{LLaMEA2024} &
+        Optimizer code &
+        Benchmark scores and execution feedback &
+        Noiseless BBOB functions \\
+        \bottomrule
+    \end{tabularx}
 \end{table}
 
 The literature also differs in the information provided to the LLM before
-generation. AutoEP uses online exploratory landscape analysis to inform LLM-driven
-hyperparameter control during combinatorial optimization
+generation. AutoEP uses online exploratory landscape analysis to inform
+LLM-driven hyperparameter control during combinatorial optimization
 \cite{AutoEP2026}. Its use of landscape information concerns the optimization
 problem, rather than a direct test of selection under noisy BBOB fitness.
 
-Other approaches make use of execution feedback. Reflexion shows how runtime
-observations and feedback can be incorporated into later model generations
-\cite{Shinn2023}. Chen et al.~\cite{Chen2023} found that execution feedback
-can improve Python function generation accuracy while reducing the number of
-generation samples required. For executable algorithm synthesis, this type of
-feedback can include numerical performance as well as syntax errors, runtime
-exceptions, and other execution information.
+Other approaches make use of execution feedback. Reflexion incorporates
+feedback and self-reflections into subsequent trials through an episodic
+memory, without updating the model's weights \cite{Shinn2023}. Chen et al.\
+\cite{Chen2023} found that execution feedback can improve Python function
+generation accuracy while reducing the number of generation samples required.
+For executable algorithm synthesis, this type of feedback can include
+numerical performance as well as syntax errors, runtime exceptions, and
+other execution information.
 
-Prompt scaffolding provides another way to constrain the generation process.
+Prompt optimization provides another way to shape the generation process.
 EvoPrompt treats prompts themselves as objects of evolutionary optimization
-\cite{Guo2023}. Promptomatix develops automated prompt optimization from task descriptions
-\cite{Murthy2025}. These approaches show that the
-prompt can form part of the search mechanism rather than simply being a fixed
-instruction. Their direct use as variation mechanisms for continuous
-optimization algorithm synthesis under stochastic fitness is not the focus of
-the reported evaluations and therefore does not establish their effectiveness
-in that setting.
+\cite{Guo2023}. Promptomatix develops automated prompt optimization from task
+descriptions \cite{Murthy2025}. These approaches show that the prompt can form
+part of the search mechanism rather than simply being a fixed instruction.
+Their direct use as variation mechanisms for continuous optimization
+algorithm synthesis under stochastic fitness is not the focus of the reported
+evaluations and therefore does not establish their effectiveness in that
+setting.
 
 Structural information can also be used when generating source code.
 LLaMEA-SAGE extends the LLaMEA approach with Abstract Syntax Tree (AST) and
 Explainable AI (XAI) information to characterize generated algorithms
-\cite{LLaMEASAGE2026}. Van Stein et al.~\cite{vanStein2025} outline a research agenda for
-understanding the link between generated algorithm behavior and performance.
-These approaches suggest that algorithm synthesis can use information beyond
-a single scalar fitness value.
+\cite{LLaMEASAGE2026}. Van Stein et al.\ \cite{vanStein2025} outline a research
+agenda for understanding the link between generated algorithm behavior and
+performance. These approaches suggest that algorithm synthesis can use
+information beyond a single scalar fitness value.
 
 The reported experiments in Table~\ref{tab:llm_aad_comparison} differ in
 task and evaluation protocol. The studies provide evidence about algorithm
@@ -420,7 +487,8 @@ optimizers behave when objective observations during search are noisy. This
 is a more specific question than whether an LLM can produce executable code.
 
 %------------------------------------------------------------------------------
-\section{Selection Under Noise}\label{sec:selection_under_noise}
+\section{Selection Under Noise}
+\label{sec:selection_under_noise}
 %------------------------------------------------------------------------------
 
 Evolutionary Computation provides the conceptual foundation for many of the
@@ -428,7 +496,7 @@ automated search processes discussed above \cite{Eiben2015}. Classical
 Evolutionary Algorithms repeatedly perform initialization, variation, fitness
 evaluation, and selection. An initial population can be represented as
 \begin{equation}
-\mathcal{P}_0 = \{\theta_1, \dots, \theta_\mu\},
+    \mathcal{P}_0 = \{\theta_1,\dots,\theta_\mu\},
 \end{equation}
 where $\mu$ candidate solutions are sampled from the search space. Variation
 operators generate new candidates, fitness evaluation assigns a scalar score,
@@ -446,18 +514,28 @@ fitness observations by considering multiple candidates. A $(1+1)$
 Evolution Strategy takes a different approach: it maintains a single parent
 and generates one child at each iteration. Its selection rule can be written
 as
-\begin{equation}\label{eq:standard_one_plus_one}
-\theta^{(g+1)} =
-\begin{cases}
-\theta_{\text{child}}^{(g)} & \text{if } f(\theta_{\text{child}}^{(g)}) \leq f(\theta_{\text{parent}}^{(g)}), \\
-\theta_{\text{parent}}^{(g)} & \text{otherwise}.
-\end{cases}
+\begin{equation}
+\label{eq:standard_one_plus_one}
+    \theta^{(g+1)} =
+    \begin{cases}
+        \theta_{\text{child}}^{(g)}
+        &
+        \text{if }
+        f(\theta_{\text{child}}^{(g)})
+        \leq
+        f(\theta_{\text{parent}}^{(g)}),
+        \\
+        \theta_{\text{parent}}^{(g)}
+        &
+        \text{otherwise}.
+    \end{cases}
 \end{equation}
 
 The $(1+1)$ structure is computationally simple because only one new
-candidate has to be generated and compared with the current parent. With one comparison per iteration, an erroneous estimate can influence which
-parent survives \cite{ArnoldB03,Jin2005}. Repeated evaluation or other
-noise-handling rules can change this behavior, at an evaluation cost.
+candidate has to be generated and compared with the current parent. With one
+comparison per iteration, an erroneous estimate can influence which parent
+survives \cite{ArnoldB03,Jin2005}. Repeated evaluation or other noise-handling
+rules can change this behavior, at an evaluation cost.
 
 This property becomes particularly relevant when the individuals in the
 evolutionary process are not numerical candidate solutions but complete
@@ -481,14 +559,15 @@ previously evaluated candidates, and the optimization task.
 
 For the discussion in this thesis, the generation context can be represented
 compactly as
-\begin{equation}\label{eq:llamea_context_assembly}
-\mathcal{C}_g =
-\left\{
-\mathcal{P}_{\text{task}},
-\mathcal{H}_{1 \dots g-1},
-\mathcal{T}_{\text{incumbent}},
-F_{\text{directive}}
-\right\},
+\begin{equation}
+\label{eq:llamea_context_assembly}
+    \mathcal{C}_g =
+    \left\{
+        \mathcal{P}_{\text{task}},
+        \mathcal{H}_{1\dots g-1},
+        \mathcal{T}_{\text{incumbent}},
+        F_{\text{directive}}
+    \right\},
 \end{equation}
 where $\mathcal{P}_{\text{task}}$ specifies the optimization problem, search
 bounds, evaluation budget, and required algorithm interface;
@@ -499,22 +578,18 @@ $F_{\text{directive}}$ specifies the requested modification.
 This notation is a compact representation used in this thesis rather than a
 formal notation introduced by the original LLaMEA paper.
 
-The task description contains the continuous search domain, commonly
-$[-5,5]^D$, together with the evaluation budget and interface requirements.
-The history provides information about previously generated candidates and
-their observed performance. The incumbent context provides the LLM with the
-current algorithm and its evaluation feedback. The mutation directive can
-ask the model to refine the existing strategy or to redesign it.
+The mutation directive can ask the model to refine the existing strategy
+or to redesign it.
 
 The generated response must be converted into executable source code before
 evaluation. Code extraction removes conversational text surrounding the
 generated program. The resulting candidate is then loaded into the execution
 environment and evaluated using the optimization benchmark infrastructure.
-In the standard LLaMEA setting, candidate algorithms are evaluated on
+In the original LLaMEA study, candidate algorithms are evaluated on
 deterministic functions using \texttt{IOHexperimenter}
 \cite{deNobel2024,LLaMEA2024}. The evaluation tracks the objective gap
 \begin{equation}
-\Delta f(x_k)=f(x_k)-f(x^*)
+    \Delta f(x_k)=f(x_k)-f(x^*)
 \end{equation}
 throughout the available evaluation budget and uses the BBOB target
 $\Delta f \leq 10^{-8}$ as a high-precision reference
@@ -526,40 +601,54 @@ the entire optimization run, rather than only its final solution
 $\mathbf{y}_{a,f}$ be the sequence of best-so-far, log-scaled precision
 values over $B$ objective evaluations. The paper defines the score for one
 such sequence as
-\begin{equation}\label{eq:aocc_metric_bg}
-\operatorname{AOCC}(\mathbf{y}_{a,f})=
-\frac{1}{B}\sum_{i=1}^{B}
-\left(1-
-\frac{\min\{\max\{y_i,\mathrm{lb}\},\mathrm{ub}\}-\mathrm{lb}}
-{\mathrm{ub}-\mathrm{lb}}
-\right),
+\begin{equation}
+\label{eq:aocc_metric_bg}
+    \operatorname{AOCC}(\mathbf{y}_{a,f}) =
+    \frac{1}{B}\sum_{i=1}^{B}
+    \left(
+        1-
+        \frac{
+            \min\{\max\{y_i,\mathrm{lb}\},\mathrm{ub}\}
+            -\mathrm{lb}
+        }{
+            \mathrm{ub}-\mathrm{lb}
+        }
+    \right),
 \end{equation}
-Here, $y_i$ denotes best-so-far precision on the scale used to calculate
-the score, and $\mathrm{lb}<\mathrm{ub}$ delimit the corresponding range
-of interest. Smaller precision values reached earlier produce higher
-AOCC scores. The original study reports logarithmic scaling and a raw
-precision range from $10^{-8}$ to $10^2$ \cite{LLaMEA2024}.
+where $y_i$ is the best-so-far log-scaled precision at evaluation $i$ and
+$\mathrm{lb}<\mathrm{ub}$ are clipping bounds. In terms of raw objective
+values, the best-so-far gap before the log transformation is
+$\min_{1\leq j\leq i}\{f(x_j)-f(x^*)\}$. Smaller gaps reached earlier yield
+higher AOCC. The source describes log scaling and reports a precision range
+from $10^{-8}$ to $10^2$; reproducing numerical AOCC values requires using
+the same convention for transforming the values and their clipping bounds.
 
-One AOCC value summarizes an optimizer run on a benchmark instance.
-LLaMEA aggregates these scores across benchmark functions, instances,
-and repeated evaluations to obtain a performance estimate for each
-generated algorithm \cite{LLaMEA2024}. Let
-$\widehat{F}(a)$ denote the resulting
-estimated mean AOCC for algorithm $a$; higher values indicate better anytime
-performance. The benchmark functions in the original experiment were
-noiseless, although runs could still vary because the optimizer itself was
-stochastic. The known optimum $f(x^*)$ is used by the evaluator to calculate
-the precision measure; it is not an objective value supplied to the
-candidate optimizer during its search.
+One AOCC value measures one optimizer run on one benchmark instance. To
+score a generated algorithm, the original LLaMEA study aggregates AOCC over
+benchmark functions, instances, and repeated optimizer runs
+\cite{LLaMEA2024}. Let $\widehat{F}(a)$ denote the resulting estimated mean
+AOCC for algorithm $a$; higher values indicate better anytime performance.
+The benchmark functions in the original experiment were noiseless, although
+runs could still vary because the optimizer itself was stochastic. The known
+optimum $f(x^*)$ is used by the evaluator to calculate the precision measure.
 
-In the original LLaMEA experiment, selection can be written as the
-$(1+1)$ replacement rule:
-\begin{equation}\label{eq:one_plus_one_selection}
-\mathcal{A}_{\text{parent}}^{(g+1)} =
-\begin{cases}
-\mathcal{A}_{\text{child}}^{(g)} & \text{if } \widehat{F}(\mathcal{A}_{\text{child}}^{(g)}) \geq \widehat{F}(\mathcal{A}_{\text{parent}}^{(g)}), \\
-\mathcal{A}_{\text{parent}}^{(g)} & \text{otherwise}.
-\end{cases}
+In the original LLaMEA experiment, selection in the $(1+1)$ variant can be
+written as the replacement rule:
+\begin{equation}
+\label{eq:one_plus_one_selection}
+    \mathcal{A}_{\text{parent}}^{(g+1)} =
+    \begin{cases}
+        \mathcal{A}_{\text{child}}^{(g)}
+        &
+        \text{if }
+        \widehat{F}(\mathcal{A}_{\text{child}}^{(g)})
+        \geq
+        \widehat{F}(\mathcal{A}_{\text{parent}}^{(g)}),
+        \\
+        \mathcal{A}_{\text{parent}}^{(g)}
+        &
+        \text{otherwise}.
+    \end{cases}
 \end{equation}
 
 Here $\widehat{F}$ is the original experiment's estimated aggregate AOCC,
@@ -577,55 +666,49 @@ the standard deviation obtained across repeated runs and any runtime error
 information. For the elitist $(1+1)$ variant, this information is included in
 the context used to generate the next candidate, together with the current
 best-so-far algorithm and the history of previously generated algorithms
-\cite{LLaMEA2024}. Runtime errors are handled explicitly: if an
-evaluation fails, the candidate is assigned the worst fitness value in the
-original maximization formulation. The feedback therefore allows the LLM to
-use both performance information and execution errors when modifying or
-redesigning an algorithm.
+\cite{LLaMEA2024}. Runtime errors are handled explicitly: if an evaluation
+fails, the candidate is assigned the worst fitness value in the original
+maximization formulation. The feedback therefore allows the LLM to use both
+performance information and execution errors when modifying or redesigning
+an algorithm.
 
-This feedback mechanism is relevant to LLaMEA under stochastic fitness. The
-original paper evaluates optimizers on noiseless BBOB functions, although
-individual runs can vary because an optimizer may be stochastic
-\cite{LLaMEA2024}. Adding noise to the objective values observed during a
-generated optimizer's search introduces another source of variation. The
-noise can change candidate comparisons, the search trajectory, and the point
-the algorithm returns.
+This feedback mechanism is relevant to LLaMEA under stochastic fitness.
+Adding noise to the objective values observed during a generated optimizer's
+search introduces another source of variation. The noise can change candidate
+comparisons, the search trajectory, and the point the algorithm returns.
 
-There is a second, distinct possibility: an outer controller might select
-generated programs directly using noisy performance measurements. In that
-case, a child with worse expected performance can receive a favorable score
-in one evaluation and displace a better parent. To describe this general
-problem, let $F(\mathcal{A})$ denote an algorithm's expected score under a
-specified evaluation protocol. A measured score can be written as
+At the outer level, variation in measured algorithm performance can also
+affect the selection of generated programs. In that case, a child with worse
+expected performance can receive a favorable score in one evaluation and
+displace a better parent. To describe this general problem, let
+$F(\mathcal{A})$ denote an algorithm's expected score under a specified
+evaluation protocol. A measured score can be written as
 \begin{equation}
-\widehat{F}(\mathcal{A}) =
-F(\mathcal{A})+\epsilon_{\mathcal{A}},
+    \widehat{F}(\mathcal{A}) =
+    F(\mathcal{A})+\epsilon_{\mathcal{A}},
 \end{equation}
 where $\epsilon_{\mathcal{A}}$ is the deviation of that particular measurement
-from the expected score. This identity makes no assumption that algorithm-level
-score errors have the same distribution as noise in individual objective
-observations. It is a general conceptual model, not an additional AOCC
-formula or a claim about how this thesis computes its score.
+from the expected score. This identity makes no assumption that
+algorithm-level score errors have the same distribution as noise in individual
+objective observations. It is a general conceptual model, not an additional
+AOCC formula or a claim about how this thesis computes its score.
 
-When selection uses such one-run scores, a fortunate evaluation can cause a
-child with lower expected performance to become the incumbent. The LLM may
-then modify that program in subsequent generations. If a later run does not
-reproduce the favorable outcome, the earlier selection can still have
-changed the trajectory of program generation. This illustrates why
-variation in program-level scores matters in an elitist search.
+The LLM may then modify the selected program in subsequent generations. If a
+later run does not reproduce the favorable outcome, the earlier selection
+can still have changed the trajectory of program generation. This illustrates
+why variation in program-level scores matters in an elitist search.
 
 The distinction between evaluating a fixed optimizer and synthesizing one is
 important. In the former, noisy fitness affects the search over numerical
 solutions. In a feedback-driven generation process, its effects can also
 reach later program generations through the returned solutions and their
-assessment.
-
-Directly selecting on noisy returned values and separately assessing returned
-points are different evaluation protocols. Their implications for algorithm
-selection depend on how performance is measured and aggregated.
+assessment. Directly selecting on noisy returned values and separately
+assessing returned points are different protocols; the Methodology chapter
+specifies which protocol is used in this thesis.
 
 %------------------------------------------------------------------------------
-\section{Research Gap}\label{sec:research_gap}
+\section{Research Gap}
+\label{sec:research_gap}
 %------------------------------------------------------------------------------
 
 The literature reviewed in this chapter covers two areas that are directly
@@ -633,28 +716,28 @@ relevant to this thesis. The first is continuous black-box optimization under
 uncertainty. Previous studies have shown that noisy fitness can distort
 candidate rankings, interfere with search directions, and affect adaptation
 mechanisms in established optimization algorithms
-\cite{Jin2005,Arnold2003,Hansen2009,Spall2003}. Noise-handling
-strategies such as repeated evaluation and sample averaging can reduce the
-effect of noisy observations, but they also require additional function
-evaluations. In addition, they generally require the algorithm designer to
-specify how uncertainty should be handled.
+\cite{Jin2005,Arnold2003,Hansen2009,Spall2003}. Noise-handling strategies such
+as repeated evaluation and sample averaging can reduce the effect of noisy
+observations, but they also require additional function evaluations. In
+addition, they generally require the algorithm designer to specify how
+uncertainty should be handled.
 
 The second area is Automated Algorithm Design and the use of LLMs for program
 synthesis. Earlier AAD approaches relied on predefined components or program
 representations \cite{Burke2013,vanRijn2016,deNobel2021}. More recent
 approaches use LLMs to generate and modify executable programs
 \cite{Romera2023,AEL2024,Liu2024,ReEvo2024,LLaMEA2024}. LLaMEA is especially
-relevant because it uses an LLM as a semantic variation operator inside a
-$(1+1)$ evolutionary search and uses measured algorithm performance and
-execution feedback to guide later generations \cite{LLaMEA2024}.
+relevant because its elitist variant uses an LLM as a semantic variation
+operator inside a $(1+1)$ evolutionary search and uses measured algorithm
+performance and execution feedback to guide later generations
+\cite{LLaMEA2024}.
 
-These two areas have not been studied to the same extent in combination. The
-LLM-based AAD frameworks reviewed in this chapter primarily report evaluations
-under deterministic or otherwise controlled benchmark conditions. They use
-different forms of performance, structural, reflective, and task-specific
-feedback. They do not establish how noisy objective observations during a
-generated optimizer's search affect the quality and behavior of the
-algorithms produced by a feedback-driven generation process.
+These two areas have not been studied to the same extent in combination.
+The LLM-based AAD frameworks reviewed in this chapter use different forms
+of performance, structural, reflective, and task-specific feedback. Their
+reported evaluations do not directly establish how noisy objective
+observations during a generated optimizer's search affect the quality and
+behavior of the algorithms produced by a feedback-driven generation process.
 
 For an established optimizer, noisy fitness can change its search over
 numerical solutions. In an LLM-based AAD process, altered search outcomes
@@ -666,9 +749,7 @@ It therefore remains insufficiently characterized whether LLM-generated
 continuous optimization heuristics remain effective under stochastic fitness
 evaluation, how their performance changes as the noise level increases, and
 how their behavior compares with established optimization methods under the
-same conditions. It is also not yet clear to what extent the feedback-driven
-generation process can produce algorithmic structures that remain effective
-under noisy evaluations.
+same conditions.
 
 This thesis addresses this gap by studying LLM-based automated algorithm
 design under controlled stochastic fitness evaluation. The investigation uses
