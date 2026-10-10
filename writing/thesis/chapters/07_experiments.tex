@@ -20,11 +20,7 @@ program fixed. This separates performance under matched synthesis and
 evaluation conditions from sensitivity to a changed observation environment.
 
 %==============================================================================
-
-%==============================================================================
 \section{Synthesis Setup}
-%==============================================================================
-
 \label{sec:experimental_design}
 %==============================================================================
 
@@ -33,10 +29,6 @@ dimension, and observation noise level. The following paragraphs specify
 these configurations and the selection of champions for benchmarking.
 The synthesis procedure and full prompt definitions are given in
 Chapter~\ref{chap:methodology}.
-
-%------------------------------------------------------------------------------
-
-%------------------------------------------------------------------------------
 
 Five functions from the noiseless BBOB suite are selected to examine
 optimizers facing different search challenges
@@ -56,8 +48,8 @@ although it does not represent the full BBOB suite.
         \hline
         Function & Name & Main characteristic \\
         \hline
-        $f_1$  & Sphere & Separable and unimodal \\
-        $f_8$  & Rosenbrock original & Non-separable curved valley \\
+        $f_1$ & Sphere & Separable and unimodal \\
+        $f_8$ & Rosenbrock original & Non-separable curved valley \\
         $f_{11}$ & Discus & Unimodal and highly conditioned \\
         $f_{15}$ & Rastrigin & Multimodal with global structure \\
         $f_{21}$ & Gallagher 101 peaks & Multimodal with weak global structure \\
@@ -76,10 +68,6 @@ Independent benchmarking uses instances 1--20, with one trial per
 instance. Instance 1 is therefore shared with synthesis, while
 instances 2--20 provide additional landscape realizations.
 
-%------------------------------------------------------------------------------
-
-%------------------------------------------------------------------------------
-
 The experiments use the heteroscedastic Gaussian noise model defined in
 Chapter~\ref{chap:methodology}, with
 \begin{equation}
@@ -93,15 +81,10 @@ is the optimum value of the function instance. These levels therefore
 control noise relative to the clean optimality gap. Each stochastic
 objective evaluation uses a new noise realization.
 
-The noise model is applied to noiseless BBOB functions through IOH;
-the experiments do not use the official COCO \texttt{bbob-noisy} suite.
 We distinguish synthesis noise, $\sigma_{\mathrm{synth}}$, from
-benchmark noise, $\sigma_{\mathrm{eval}}$. The native and noise-robustness evaluations are described in
+benchmark noise, $\sigma_{\mathrm{eval}}$. The native and
+noise-robustness evaluations are described in
 Section~\ref{sec:noise_robustness}.
-
-%------------------------------------------------------------------------------
-
-%------------------------------------------------------------------------------
 
 Three locally hosted LLMs are included in the completed synthesis
 experiments. Table~\ref{tab:llm_configurations} identifies the model
@@ -127,12 +110,7 @@ The synthesis experiments use two prompt modes, Implicit and Explicit,
 each combined with Baseline, Thinking, Vectorization, or Guided. In Explicit
 mode, clean problems use Explicit-Clean task information and noisy problems
 use Explicit-Noisy information. Implicit mode does not explicitly identify
-the observation environment. The full prompt definitions are given in
-Chapter~\ref{chap:methodology}.
-
-%------------------------------------------------------------------------------
-
-%------------------------------------------------------------------------------
+the observation environment.
 
 Each LLM covers 640 synthesis conditions: five functions, four dimensions,
 two prompt modes, four scaffolds, and four noise levels
@@ -143,68 +121,60 @@ per candidate. This is the intended allowance; the case study in
 Section~\ref{sec:generated_program_cases} identifies a historical
 execution that exceeded it.
 
-%------------------------------------------------------------------------------
-
-%------------------------------------------------------------------------------
-
 After synthesis, one champion is selected for each combination of model,
-function, dimension, prompt condition, and synthesis noise level.
-Where multiple runs cover the same condition, their recorded candidates
-are considered together.
+function, dimension, synthesis mode, prompt strategy, and synthesis noise
+level. Where multiple completed synthesis runs cover the same condition,
+their recorded candidates are considered together.
 
 The champion is the candidate with the lowest recorded clean optimality
-gap, equivalent to the highest synthesis score. Candidates with equal
-clean optimality gap are ranked by the number of objective evaluations used;
-remaining ties retain the existing record order.
-
-This selection yields 1,920 champions for independent benchmarking.
+gap, equivalent to the highest synthesis fitness among successful
+candidates. Equal gaps are resolved by preferring the candidate with fewer
+recorded objective evaluations; exact ties retain the existing record
+order.
 
 Champion selection uses only synthesis measurements. The selected
 programs are fixed before independent benchmarking, and benchmark
 results do not influence their selection.
 
+\FloatBarrier
 
 %==============================================================================
-
-%==============================================================================
-\section{Benchmark Setup and Performance Measures}
-%==============================================================================
-
+\section{Benchmark Setup}
 \label{sec:independent_benchmark}
 %==============================================================================
 
+The selected champions are benchmarked against reference optimizers on
+BBOB functions implemented in IOH \cite{deNobel2024,Hansen2021COCO}.
+The distinction between synthesis and independent benchmarking is
+described in Section~\ref{sec:benchmark_method}.
 
-The independent benchmark evaluates the selected champions and reference
-optimizers on BBOB functions implemented in IOH
-\cite{deNobel2024,Hansen2021COCO}. The separation between synthesis and
-benchmarking is defined in Section~\ref{sec:benchmark_method}.
+Each benchmark condition comprises 20 trials, using BBOB instance $r$
+and optimizer/noise seed $42+r$ for $r=1,\ldots,20$. All optimizers
+receive the same evaluation budget at a given dimension:
+$B_{\mathrm{eval}}=10{,}000D$, corresponding to 20,000, 30,000,
+50,000 and 100,000 evaluations for $D=2,3,5,10$, respectively.
+The proportional scaling with dimension is consistent with the budget
+scaling discussed in the COCO experimental procedure
+\cite{Hansen2016Procedure}; the multiplier 10,000 is chosen for this
+study.
 
-The evaluation budget is $B_{\mathrm{eval}}=10{,}000D$, giving 20,000,
-30,000, 50,000 and 100,000 objective evaluations for $D=2,3,5,10$,
-respectively. Each condition has 20 configured trials, using instance $r$
-and optimizer/noise seed $42+r$ for $r=1,\ldots,20$.
-Dimension-proportional budgeting follows the COCO experimental procedure
-\cite{Hansen2016Procedure}; the multiplier 10,000 is selected for this
-study. Optimizers at the same dimension receive the same evaluation
-allowance. The smaller benchmark budget assesses the selected programs
-across instances under a more restricted search allowance than synthesis.
+Every objective evaluation counts toward the budget, including the
+initial evaluation and repeated measurements of the same point.
+The separate clean assessment of the returned solution is excluded.
+Once the budget is exhausted, further requests return the last observed
+value without evaluating the objective again. Optimizers may terminate
+early; unused evaluations are not allocated to restarts.
 
-The budget counts actual objective evaluations, including repeated
-measurements of the same point. The initial evaluation consumes budget;
-the separate clean assessment of the returned solution does not.
-After the budget is exhausted, further requests receive the last observed
-value without a new objective evaluation. An optimizer may stop early,
-and unused budget is not spent through restarts. Each of the 20 trials
-uses a different instance.
+Generated champions are subject to a 30-second timeout to prevent
+stalled or non-terminating executions from blocking the benchmark.
+Classical baselines have no equivalent timeout. The comparison therefore
+uses equal objective-evaluation budgets, which measure search effort,
+but different execution-time constraints.
 
-Generated champions have a 30-second execution timeout. Classical
-baselines do not have an equivalent timeout, so their execution
-constraints differ. Objective evaluations are the primary measure of
-search effort. Elapsed time is recorded separately but is not directly
-comparable because its measurement boundaries differ between optimizers.
-The optimizers share the instance and seed schedule, although their
-search procedures consume random numbers differently.
-Table~\ref{tab:reference_optimizers} lists the baseline settings.
+All optimizers use the same instance and seed schedule, although their
+different search procedures do not produce identical random sequences.
+The reference implementations and their settings are listed in
+Table~\ref{tab:reference_optimizers}.
 
 \begin{table}[htbp]
     \centering
@@ -221,7 +191,7 @@ Table~\ref{tab:reference_optimizers} lists the baseline settings.
         default population/stopping rules. \\
         Differential Evolution & SciPy 1.18.0 &
         Population multiplier 15; \texttt{polish=False};
-        $\mathrm{maxiter}=\max(1,\lfloor B/(15D)\rfloor)$;
+        $\mathrm{maxiter}=\max(1,\lfloor B_{\mathrm{eval}}/(15D)\rfloor)$;
         other parameters use library defaults. \\
         Particle Swarm & Repository NumPy implementation &
         $n=\min(50,\max(10,5D))$; $w=0.729$;
@@ -231,82 +201,45 @@ Table~\ref{tab:reference_optimizers} lists the baseline settings.
     \end{tabular}
 \end{table}
 
+Performance is assessed using convergence curves, target-attainment
+ECDFs, and returned-solution success rates, as defined in
+Section~\ref{subsec:benchmark_performance_measures}.
 
-Convergence, target-attainment ECDFs, and success rates are defined in
-Section~\ref{subsec:benchmark_performance_measures}. The following
-settings specify their use in the experiments.
-
-Convergence figures show the median best clean optimality gap and its
-interquartile range. They use a 300-point logarithmic evaluation grid
-from 1 to $10^6$. The final attained value is carried forward after each
-trial ends. Values beyond $B_{\mathrm{eval}}$ represent the same final
-outcome and do not indicate further search or new target attainment.
-
-The exploratory ECDFs use 51 logarithmically spaced target gaps derived
-from observed positive gaps separately for each noise level. Let
-$\tau_{\min,\sigma}$ and $\tau_{\max,\sigma}$ be the positive endpoints
-selected for a plotted comparison. The target grid is
-\begin{equation}
-    \tau_{k,\sigma}
-    =10^{\log_{10}\tau_{\min,\sigma}
-    +\frac{k}{50}\left(\log_{10}\tau_{\max,\sigma}
-    -\log_{10}\tau_{\min,\sigma}\right)},
-    \qquad k=0,\ldots,50.
-    \label{eq:benchmark_adaptive_targets}
-\end{equation}
-The targets are shared by the curves within a comparison. Their endpoints
-are determined by the observed gaps rather than a fixed COCO target
-schedule. ECDF heights across different target sets therefore do not
-measure attainment of a common absolute accuracy level.
-
-The primary success threshold is $\tau_{\mathrm{primary}}=10^{-8}$.
-The model and prompt summary tables and the noise-robustness figure
-assess the clean gap of the returned solution at this threshold.
-These are returned-solution success rates, rather than the search-success
-measure used for attainment during optimization. The tables include
-complete conditions with 20 terminal trial results and weight conditions
-equally, as defined in Equation~\eqref{eq:benchmark_aggregate_success}.
+Returned-solution success is assessed at the primary threshold
+$\tau_{\mathrm{primary}}=10^{-8}$. Aggregate success rates include
+only complete conditions with results from all 20 trials. Each
+condition receives equal weight, as defined in
+Equation~\eqref{eq:benchmark_aggregate_success}.
 The secondary threshold $\tau_{\mathrm{secondary}}=10^{-2}$ is used
 in additional reliability diagnostics.
 
+For each condition, uncertainty in the returned-solution success rate
+is summarized using a 95\% Wilson interval. Aggregate success rates
+use percentile 95\% intervals calculated from 1,000 bootstrap
+resamples. Resampling is performed over whole conditions, keeping
+the 20 trials within each selected condition together.
 
-Per-condition returned-solution success rates use 95\% Wilson intervals.
-Aggregate intervals use 1,000 condition-cluster bootstrap resamples,
-seed 20260923, and percentile 95\% limits. Each resample selects whole
-conditions, preserving their 20 trials together.
-
-Incomplete conditions and conditions whose evaluated program does not
+Incomplete conditions and conditions whose evaluated algorithm does not
 match the selected champion are excluded. Confirmed execution failures
 remain in the assessment, with infinite returned-solution gaps and zero
-successes. Timeout and runtime failures cannot be distinguished in the
-available terminal results.
+successes.
 
-Model comparisons use the Baseline scaffold; prompt-strategy comparisons
-are made within each model. Comparisons of Implicit and Explicit modes
-require matching functions, dimensions, scaffolds, and noise levels.
-Where groups contain different sets of complete conditions, differences
-in aggregate success rates can also reflect their coverage. Restricting
-comparisons to common conditions would remove that source of variation.
+Model comparisons use the Baseline scaffold to keep the prompt strategy
+fixed. Prompt-strategy comparisons are made within each model.
+Comparisons of Implicit and Explicit modes require matching functions,
+dimensions, scaffolds, and noise levels. If the included conditions
+differ between groups, aggregate success rates also depend on which
+conditions are represented.
 
-The chapter reports descriptive comparisons and bootstrap intervals.
-Numerical hypothesis-test results are unavailable, so no statistical
-significance is claimed. The recorded IOH and LLaMEA versions are 0.3.22
-and 1.2.0, respectively. These and the library versions in
-Table~\ref{tab:reference_optimizers} describe the recorded installations;
-versions were not retained for every historical run.
+\FloatBarrier
 
-
-%==============================================================================
-\section{Performance under Matched Conditions}
-%==============================================================================
-
+\section{Performance Results}
 \label{sec:benchmark_results}
-%==============================================================================
 
-All 1,920 native benchmark conditions have 20 terminal trial results.
-Eleven conditions are excluded because the evaluated code hash does not
-match the currently selected champion for that condition. The descriptive
-summaries therefore include 1,909 conditions, covering 38,180 trials.
+All 1,920 native benchmark conditions have 20 terminal trial results,
+giving 38,400 terminal trial outcomes. All conditions pass the current
+champion code-hash eligibility check and are retained in the terminal
+descriptive summaries.
 
 The model and prompt tables report equally weighted returned-solution
 success rates across eligible conditions. Convergence and ECDF figures
@@ -318,69 +251,12 @@ champion. These results describe the combined synthesis and evaluation
 conditions. The later noise-robustness comparison holds the champion
 fixed to examine changes in evaluation noise.
 
-
-The Implicit experiments evaluate optimizers synthesized without an
-explicit description of the observation environment.
-Table~\ref{tab:implicit_summary} summarizes the eligible conditions
-across all models, dimensions, functions, and four native noise levels.
-
-Figures~\ref{fig:implicit_convergence} and~\ref{fig:implicit_ecdf}
-show convergence and ECDFs for Qwen2.5-Coder-32B-Instruct at $D=2$ and
-$\sigma=0.2$. Figures~\ref{fig:implicit_noise_005} and
-\ref{fig:implicit_noise_01} provide the corresponding profiles at
-$\sigma=0.05$ and $0.1$. These examples compare the four scaffolds with
-CMA-ES, DE, and PSO separately for each function.
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{images/experiments/03_implicit/qwen_32b/2D/std_0.2/convergence_trajectories.png}
-    \caption[Implicit-synthesis convergence at noise level 0.2]{\textbf{Implicit-synthesis convergence at noise level 0.2.} Representative convergence for Qwen2.5-Coder-32B-Instruct at $D=2$ and
-$\sigma_{\mathrm{synth}}=\sigma_{\mathrm{eval}}=0.2$, comparing all four
-strategies with CMA-ES, DE and PSO. Curves show median best-queried clean gaps;
-ribbons show the interquartile range. The search budget is 20,000; the
-extended axis is carry-forward. Functions are shown separately.}
-    \label{fig:implicit_convergence}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{images/experiments/03_implicit/qwen_32b/2D/std_0.2/target_precision_ecdf.png}
-    \caption[Implicit-synthesis adaptive-target ECDF at noise level 0.2]{\textbf{Implicit-synthesis adaptive-target ECDF at noise level 0.2.} Exploratory ECDF for the same Qwen2.5-Coder-32B-Instruct condition.
-The ordinate is the proportion of run--target pairs attained by each query
-count, using 51 empirically selected targets. Values beyond 20,000 queries
-are carried forward; this is not the primary fixed-target ranking.}
-    \label{fig:implicit_ecdf}
-\end{figure}
-
-\begin{figure}[p]
-    \centering
-    \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/2D/std_0.05/convergence_trajectories.png}
-    \par\smallskip
-    \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/2D/std_0.05/target_precision_ecdf.png}
-    \caption[Implicit-synthesis profiles at noise level 0.05]{\textbf{Implicit-synthesis profiles at noise level 0.05.} Native profiles for Qwen2.5-Coder-32B-Instruct at
-    $D=2$ and $\sigma_{\mathrm{synth}}=\sigma_{\mathrm{eval}}=0.05$:
-    convergence above and adaptive-target ECDF below. Four strategies
-    are compared with CMA-ES, DE and PSO on the five functions.
-    Convergence shows median best-queried clean gaps and IQR ribbons;
-    the ECDF shows run--target attainment. The budget is 20,000 queries;
-    values beyond this budget are carried forward.}
-    \label{fig:implicit_noise_005}
-\end{figure}
-
-\begin{figure}[p]
-    \centering
-    \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/2D/std_0.1/convergence_trajectories.png}
-    \par\smallskip
-    \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/2D/std_0.1/target_precision_ecdf.png}
-    \caption[Implicit-synthesis profiles at noise level 0.1]{\textbf{Implicit-synthesis profiles at noise level 0.1.} Native profiles at $D=2$ and
-    $\sigma_{\mathrm{synth}}=\sigma_{\mathrm{eval}}=0.1$ for the same
-    model, functions, strategies and baselines as
-    Figure~\ref{fig:implicit_noise_005}. Convergence is above and
-    adaptive-target ECDF below. The budget remains 20,000 queries;
-    the adaptive targets are specific to the plotted condition.}
-    \label{fig:implicit_noise_01}
-\end{figure}
-
+The convergence and ECDF figures compare Baseline, Thinking,
+Vectorization, and Guided champions for the same LLM with CMA-ES,
+DE, and PSO. Each function is shown separately. The discussion first
+presents Explicit results, followed by the corresponding Implicit
+results. Within each mode, convergence and target attainment are
+considered alongside aggregate returned-solution success rates.
 
 The Explicit experiments provide task information about the observation
 environment. Explicit-Clean covers clean synthesis and evaluation;
@@ -409,12 +285,13 @@ Explicit-Clean results are reported separately in the summary table.}
     \centering
     \includegraphics[width=\textwidth]{images/experiments/02_explicit/qwen_32b/2D/std_0.2/target_precision_ecdf.png}
     \caption[Explicit-Noisy adaptive-target ECDF at noise level 0.2]{\textbf{Explicit-Noisy adaptive-target ECDF at noise level 0.2.} Exploratory ECDF for the Qwen2.5-Coder-32B-Instruct example.
-Targets and query-axis carry-forward follow the implicit ECDF convention;
+The curves use 51 empirically selected targets, with values beyond
+20,000 evaluations carried forward;
 this plot does not combine Explicit-Clean and Explicit-Noisy champions.}
     \label{fig:explicit_ecdf}
 \end{figure}
 
-\begin{figure}[p]
+\begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_32b/2D/std_0.0/convergence_trajectories.png}
     \par\smallskip
@@ -429,7 +306,7 @@ this plot does not combine Explicit-Clean and Explicit-Noisy champions.}
     \label{fig:explicit_noise_0}
 \end{figure}
 
-\begin{figure}[p]
+\begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_32b/2D/std_0.05/convergence_trajectories.png}
     \par\smallskip
@@ -443,7 +320,7 @@ this plot does not combine Explicit-Clean and Explicit-Noisy champions.}
     \label{fig:explicit_noise_005}
 \end{figure}
 
-\begin{figure}[p]
+\begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_32b/2D/std_0.1/convergence_trajectories.png}
     \par\smallskip
@@ -456,71 +333,14 @@ this plot does not combine Explicit-Clean and Explicit-Noisy champions.}
     \label{fig:explicit_noise_01}
 \end{figure}
 
+\FloatBarrier
 
-%==============================================================================
-\section{Model and Prompt Comparisons}
-\label{sec:model_prompt_comparison}
-%==============================================================================
-Under the common Baseline strategy, aggregate implicit solved rates are
-34.10\% for DeepSeek-Coder-V2-Lite-Instruct, 23.92\% for Qwen2.5-Coder-14B-Instruct, and 19.81\% for Qwen2.5-Coder-32B-Instruct.
-These are descriptive rankings; the condition-bootstrap intervals overlap.
-The prompt-strategy comparisons are considered alongside the Explicit
-results in Section~\ref{sec:model_prompt_comparison}.
-
-\begin{table}[htbp]
-    \centering
-    \caption{Returned-solution success rates for Implicit synthesis at
-    $\Delta f\leq10^{-8}$. Each complete condition contains 20 trials.
-    Rates and condition-bootstrap 95\% confidence limits are expressed
-    as percentages.}
-    \label{tab:implicit_summary}
-
-    \scriptsize
-    \renewcommand{\arraystretch}{1.25}
-    \setlength{\tabcolsep}{3pt}
-
-    \begin{tabularx}{\textwidth}{
-        >{\raggedright\arraybackslash}X
-        l l r r r l
-    }
-        \hline
-        Model & Strategy & Origin &
-        \shortstack[r]{Complete\\conditions} &
-        \shortstack[r]{Solved /\\trials} &
-        \shortstack[r]{Success\\(\%)} &
-        95\% CI \\
-        \hline
-
-        \shortstack[l]{Qwen2.5-Coder\\14B-Instruct}
-        & Baseline
-        & \shortstack[l]{All native\\noise levels}
-        & 79 & 378/1580 & 23.92 & [15.57, 32.85] \\
-        & Thinking      & & 80 & 221/1600 & 13.81 & [7.06, 21.31] \\
-        & Vectorization & & 80 & 428/1600 & 26.75 & [17.94, 36.38] \\
-        & Guided        & & 77 & 392/1540 & 25.45 & [16.36, 33.70] \\
-        \hline
-
-        \shortstack[l]{Qwen2.5-Coder\\32B-Instruct}
-        & Baseline      & & 79 & 313/1580 & 19.81 & [12.02, 28.42] \\
-        & Thinking      & & 80 & 313/1600 & 19.56 & [11.75, 27.95] \\
-        & Vectorization & & 79 & 411/1580 & 26.01 & [17.34, 35.19] \\
-        & Guided        & & 80 & 415/1600 & 25.94 & [17.56, 34.44] \\
-        \hline
-
-        \shortstack[l]{DeepSeek-Coder\\V2-Lite-Instruct}
-        & Baseline      & & 78 & 532/1560 & 34.10 & [25.00, 43.99] \\
-        & Thinking      & & 80 & 263/1600 & 16.44 & [10.19, 23.63] \\
-        & Vectorization & & 80 & 438/1600 & 27.38 & [19.06, 36.57] \\
-        & Guided        & & 80 & 547/1600 & 34.19 & [24.81, 43.88] \\
-        \hline
-    \end{tabularx}
-
-    \smallskip
-    \parbox{\textwidth}{\scriptsize
-        All rows include all native noise levels.
-        Baseline rows compare models; the remaining rows compare
-        prompt strategies within each model.}
-\end{table}
+The convergence curves show how the best queried clean gap develops
+as evaluations are spent, with interquartile bands showing variation
+across trials. The ECDFs complement these profiles by showing the
+fraction of run--target pairs attained within a given evaluation count.
+Both views retain the four scaffolds and classical baselines within
+each function panel.
 
 Baseline solved rates under Explicit-Clean are 34.25\%, 36.25\%, and
 36.00\% for Qwen2.5-Coder-14B-Instruct, Qwen2.5-Coder-32B-Instruct,
@@ -529,8 +349,8 @@ Explicit-Noisy conditions they are 5.69\%, 13.08\%, and 18.73\%.
 The noisy aggregate covers three positive noise levels, whereas the clean
 aggregate covers one. The two rates therefore describe different
 synthesis and evaluation environments.
-Table~\ref{tab:explicit_summary} also reports the prompt-strategy results
-considered in Section~\ref{sec:model_prompt_comparison}.
+Table~\ref{tab:explicit_summary} also reports the results for each
+prompt scaffold.
 
 \begin{table}[htbp]
     \centering
@@ -599,6 +419,138 @@ considered in Section~\ref{sec:model_prompt_comparison}.
         prompt strategies within each model.}
 \end{table}
 
+\FloatBarrier
+
+The Implicit experiments evaluate optimizers synthesized without an
+explicit description of the observation environment.
+Table~\ref{tab:implicit_summary} summarizes the eligible conditions
+across all models, dimensions, functions, and four native noise levels.
+
+Figures~\ref{fig:implicit_convergence} and~\ref{fig:implicit_ecdf}
+show convergence and ECDFs for Qwen2.5-Coder-32B-Instruct at $D=2$ and
+$\sigma=0.2$. Figures~\ref{fig:implicit_noise_005} and
+\ref{fig:implicit_noise_01} provide the corresponding profiles at
+$\sigma=0.05$ and $0.1$. These examples compare the four scaffolds with
+CMA-ES, DE, and PSO separately for each function.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{images/experiments/03_implicit/qwen_32b/2D/std_0.2/convergence_trajectories.png}
+    \caption[Implicit-synthesis convergence at noise level 0.2]{\textbf{Implicit-synthesis convergence at noise level 0.2.} Representative convergence for Qwen2.5-Coder-32B-Instruct at $D=2$ and
+$\sigma_{\mathrm{synth}}=\sigma_{\mathrm{eval}}=0.2$, comparing all four
+strategies with CMA-ES, DE and PSO. Curves show median best-queried clean gaps;
+ribbons show the interquartile range. The search budget is 20,000; the
+extended axis is carry-forward. Functions are shown separately.}
+    \label{fig:implicit_convergence}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{images/experiments/03_implicit/qwen_32b/2D/std_0.2/target_precision_ecdf.png}
+    \caption[Implicit-synthesis adaptive-target ECDF at noise level 0.2]{\textbf{Implicit-synthesis adaptive-target ECDF at noise level 0.2.} Exploratory ECDF for the same Qwen2.5-Coder-32B-Instruct condition.
+The ordinate is the proportion of run--target pairs attained by each query
+count, using 51 empirically selected targets. Values beyond 20,000 queries
+are carried forward; this is not the primary fixed-target ranking.}
+    \label{fig:implicit_ecdf}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/2D/std_0.05/convergence_trajectories.png}
+    \par\smallskip
+    \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/2D/std_0.05/target_precision_ecdf.png}
+    \caption[Implicit-synthesis profiles at noise level 0.05]{\textbf{Implicit-synthesis profiles at noise level 0.05.} Native profiles for Qwen2.5-Coder-32B-Instruct at
+    $D=2$ and $\sigma_{\mathrm{synth}}=\sigma_{\mathrm{eval}}=0.05$:
+    convergence above and adaptive-target ECDF below. Four strategies
+    are compared with CMA-ES, DE and PSO on the five functions.
+    Convergence shows median best-queried clean gaps and IQR ribbons;
+    the ECDF shows run--target attainment. The budget is 20,000 queries;
+    values beyond this budget are carried forward.}
+    \label{fig:implicit_noise_005}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/2D/std_0.1/convergence_trajectories.png}
+    \par\smallskip
+    \includegraphics[width=\textwidth,height=0.39\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/2D/std_0.1/target_precision_ecdf.png}
+    \caption[Implicit-synthesis profiles at noise level 0.1]{\textbf{Implicit-synthesis profiles at noise level 0.1.} Native profiles at $D=2$ and
+    $\sigma_{\mathrm{synth}}=\sigma_{\mathrm{eval}}=0.1$ for the same
+    model, functions, strategies and baselines as
+    Figure~\ref{fig:implicit_noise_005}. Convergence is above and
+    adaptive-target ECDF below. The budget remains 20,000 queries;
+    the adaptive targets are specific to the plotted condition.}
+    \label{fig:implicit_noise_01}
+\end{figure}
+
+\FloatBarrier
+
+The Implicit figures use the same measures and comparison layout.
+They therefore show both search progress and target attainment for
+champions synthesized without explicit disclosure of the observation
+environment. The following aggregate rates summarize the accuracy
+of returned solutions across the eligible conditions.
+
+Under the common Baseline strategy, aggregate implicit solved rates are
+34.10\% for DeepSeek-Coder-V2-Lite-Instruct, 23.92\% for Qwen2.5-Coder-14B-Instruct, and 19.81\% for Qwen2.5-Coder-32B-Instruct.
+These are descriptive rankings; the condition-bootstrap intervals overlap.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Returned-solution success rates for Implicit synthesis at
+    $\Delta f\leq10^{-8}$. Each complete condition contains 20 trials.
+    Rates and condition-bootstrap 95\% confidence limits are expressed
+    as percentages.}
+    \label{tab:implicit_summary}
+
+    \scriptsize
+    \renewcommand{\arraystretch}{1.25}
+    \setlength{\tabcolsep}{3pt}
+
+    \begin{tabularx}{\textwidth}{
+        >{\raggedright\arraybackslash}X
+        l l r r r l
+    }
+        \hline
+        Model & Strategy & Origin &
+        \shortstack[r]{Complete\\conditions} &
+        \shortstack[r]{Solved /\\trials} &
+        \shortstack[r]{Success\\(\%)} &
+        95\% CI \\
+        \hline
+
+        \shortstack[l]{Qwen2.5-Coder\\14B-Instruct}
+        & Baseline
+        & \shortstack[l]{All native\\noise levels}
+        & 79 & 378/1580 & 23.92 & [15.57, 32.85] \\
+        & Thinking      & & 80 & 221/1600 & 13.81 & [7.06, 21.31] \\
+        & Vectorization & & 80 & 428/1600 & 26.75 & [17.94, 36.38] \\
+        & Guided        & & 77 & 392/1540 & 25.45 & [16.36, 33.70] \\
+        \hline
+
+        \shortstack[l]{Qwen2.5-Coder\\32B-Instruct}
+        & Baseline      & & 79 & 313/1580 & 19.81 & [12.02, 28.42] \\
+        & Thinking      & & 80 & 313/1600 & 19.56 & [11.75, 27.95] \\
+        & Vectorization & & 79 & 411/1580 & 26.01 & [17.34, 35.19] \\
+        & Guided        & & 80 & 415/1600 & 25.94 & [17.56, 34.44] \\
+        \hline
+
+        \shortstack[l]{DeepSeek-Coder\\V2-Lite-Instruct}
+        & Baseline      & & 78 & 532/1560 & 34.10 & [25.00, 43.99] \\
+        & Thinking      & & 80 & 263/1600 & 16.44 & [10.19, 23.63] \\
+        & Vectorization & & 80 & 438/1600 & 27.38 & [19.06, 36.57] \\
+        & Guided        & & 80 & 547/1600 & 34.19 & [24.81, 43.88] \\
+        \hline
+    \end{tabularx}
+
+    \smallskip
+    \parbox{\textwidth}{\scriptsize
+        All rows include all native noise levels.
+        Baseline rows compare models; the remaining rows compare
+        prompt strategies within each model.}
+\end{table}
+
+\FloatBarrier
 
 The Baseline scaffold provides a common reference for comparing models.
 DeepSeek-Coder-V2-Lite-Instruct has the highest aggregate Implicit rate,
@@ -619,6 +571,7 @@ between these aggregates cannot isolate the contribution of explicit
 environment information. That comparison requires the matching conditions
 defined in Section~\ref{sec:independent_benchmark}.
 
+\FloatBarrier
 
 %==============================================================================
 \section{Noise Robustness}
@@ -653,6 +606,8 @@ Within each function and dimension, the same champion code is evaluated across
 noise levels; this is not cross-function or cross-dimension transfer.}
     \label{fig:cross_evaluation_success_rate}
 \end{figure}
+
+\FloatBarrier
 
 Within each function and dimension, the comparison follows the same
 selected program across noise levels. It therefore assesses the noise
@@ -743,6 +698,8 @@ history because the program evaluated points before failing to return.
         \hline
     \end{tabular}
 \end{table}
+
+\FloatBarrier
 
 The rule is sensitive to the absolute objective offset. If $s$ is the
 stored best observation, adding a constant $c$ to the objective changes
