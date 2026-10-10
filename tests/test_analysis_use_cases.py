@@ -175,6 +175,14 @@ def test_noise_and_performance_match_domain_services(snapshot):
         snapshot.dataset, snapshot.solver_order, targets=performance.targets, group_by="condition"
     )
     pd.testing.assert_frame_equal(performance.table.drop(columns="Canonical Solver"), expected)
+    expected_scale, _ = PerformanceMetricsEngine.summarize_auc_results(
+        performance.table,
+        list(snapshot.models_to_solvers),
+        snapshot.classical_solvers,
+        performance.dims,
+        snapshot.dataset.noise_stds,
+    )
+    pd.testing.assert_frame_equal(performance.model_scale, expected_scale)
     for summary in performance.hardness:
         for noise, table in summary.tables.items():
             pd.testing.assert_frame_equal(

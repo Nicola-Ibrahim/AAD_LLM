@@ -1,6 +1,7 @@
 """Exploratory AUC and strategy-ablation figure exports."""
 
 import re
+from math import ceil
 
 import numpy as np
 import pandas as pd
@@ -21,14 +22,21 @@ from .style import (
 
 
 def build_model_scale_figure(results: PerformanceAnalysisResult) -> go.Figure:
+    noise_levels = sorted(results.model_scale["Noise Std"].unique())
+    if not noise_levels:
+        raise ValueError("No noise-level summaries available for performance comparison.")
+    rows = ceil(len(noise_levels) / 2)
     fig9e = make_subplots(
-        rows=1,
+        rows=rows,
         cols=2,
         subplot_titles=[
-            f"<b>(A) Clean (σ={results.clean_std})</b>",
-            f"<b>(B) Noisy (σ={results.noisy_std})</b>",
+            f"<b>{'Clean' if noise == 0 else 'Noisy'} (σ={noise:g})</b>" for noise in noise_levels
+        ],
+        specs=[
+            [{} if 2 * r + c < len(noise_levels) else None for c in range(2)] for r in range(rows)
         ],
         horizontal_spacing=0.1,
+        vertical_spacing=0.18 if rows > 1 else 0,
         shared_yaxes=True,
     )
     dims = [d for d in [2, 3, 5, 10] if d in results.dims]
@@ -38,9 +46,9 @@ def build_model_scale_figure(results: PerformanceAnalysisResult) -> go.Figure:
         return float(match.group(1)) if match else 0.0
 
     discovered_models = sorted(list(results.models_to_solvers.keys()), key=extract_model_scale)
-    for col_idx, (n_std, title_sfx) in enumerate(
-        [(results.clean_std, "Clean"), (results.noisy_std, "Noisy")], start=1
-    ):
+    shown_models: set[str] = set()
+    for panel_idx, n_std in enumerate(noise_levels):
+        row_idx, col_idx = panel_idx // 2 + 1, panel_idx % 2 + 1
         for model_name in discovered_models:
             c_m = results.model_scale[
                 (results.model_scale["Model"] == model_name)
@@ -60,11 +68,13 @@ def build_model_scale_figure(results: PerformanceAnalysisResult) -> go.Figure:
                         ],
                         textposition="outside",
                         textfont=dict(size=11, family=FONT_FAMILY, color="#1E293B"),
-                        showlegend=col_idx == 1,
+                        legendgroup=model_name,
+                        showlegend=model_name not in shown_models,
                     ),
-                    row=1,
+                    row=row_idx,
                     col=col_idx,
                 )
+                shown_models.add(model_name)
         for baseline in results.classical_solvers:
             b_sub = results.model_scale[
                 (results.model_scale["Model"] == baseline)
@@ -87,29 +97,31 @@ def build_model_scale_figure(results: PerformanceAnalysisResult) -> go.Figure:
                         if "pso" in baseline.lower()
                         else "circle",
                     ),
-                    showlegend=col_idx == 1,
+                    legendgroup=baseline,
+                    showlegend=baseline not in shown_models,
                 ),
-                row=1,
+                row=row_idx,
                 col=col_idx,
             )
+            shown_models.add(baseline)
     for anno in fig9e.layout.annotations:
         anno.update(font=dict(size=16, color="#0F172A", family=FONT_FAMILY))
     fig9e.update_layout(
         template="plotly_white",
         title=dict(
-            text="<b>Figure 9E: LLM Model Comparison Across Dimensions</b><br><span style='font-size:13px;color:#475569;font-weight:normal;'>Mean Area Under Runtime ECDF (AUC-ECDF %) Across Synthesized Models vs. Classical Baselines in Clean and Noisy Regimes</span>",
+            text="<b>LLM Performance Across Dimensions and Noise Levels</b><br><span style='font-size:13px;color:#475569;font-weight:normal;'>Mean adaptive-target AUC-ECDF across included functions, strategies and synthesis modes; targets differ by noise level</span>",
             font=dict(size=20, color="#0F172A", family=FONT_FAMILY),
             x=0.02,
             y=0.97,
         ),
         barmode="group",
         width=1380,
-        height=640,
-        margin=dict(l=70, r=40, t=110, b=90),
+        height=max(640, rows * 420 + 150),
+        margin=dict(l=70, r=40, t=110, b=130),
         legend=dict(
             orientation="h",
             yanchor="top",
-            y=-0.14,
+            y=-0.12,
             xanchor="center",
             x=0.5,
             bgcolor="rgba(255,255,255,0.95)",
@@ -122,33 +134,14 @@ def build_model_scale_figure(results: PerformanceAnalysisResult) -> go.Figure:
         title_text="<b>Mean AUC-ECDF (%)</b>",
         title_font=dict(size=15, family=FONT_FAMILY, color="#0F172A"),
         tickfont=dict(size=13, family=FONT_FAMILY, color="#1E293B"),
-        range=[0, 65],
+        range=[0, 105],
         showgrid=True,
         gridcolor="#F1F5F9",
-        row=1,
-        col=1,
-    )
-    fig9e.update_yaxes(
-        tickfont=dict(size=13, family=FONT_FAMILY, color="#1E293B"),
-        range=[0, 65],
-        showgrid=True,
-        gridcolor="#F1F5F9",
-        row=1,
-        col=2,
     )
     fig9e.update_xaxes(
         title_text="<b>Problem Dimension</b>",
         title_font=dict(size=15, family=FONT_FAMILY, color="#0F172A"),
         tickfont=dict(size=13, family=FONT_FAMILY, color="#1E293B"),
-        row=1,
-        col=1,
-    )
-    fig9e.update_xaxes(
-        title_text="<b>Problem Dimension</b>",
-        title_font=dict(size=15, family=FONT_FAMILY, color="#0F172A"),
-        tickfont=dict(size=13, family=FONT_FAMILY, color="#1E293B"),
-        row=1,
-        col=2,
     )
     return fig9e
 

@@ -102,6 +102,11 @@ Snapshots are detached, validated on reload, and do not automatically incorporat
 new evaluations. Rerun calculation when source results change.
 The exporter also exposes `export_reliability`, `export_noise_robustness`,
 `export_model_scale`, and `export_hardness_ablation`.
+The AUC-ECDF performance comparison is exported to
+`results/figures/08_performance_comparison/fig_09e_auc_ecdf_model_scale.png`,
+with a panel for every included noise level and dimensions on the horizontal axis.
+It averages included functions, strategies and synthesis modes; adaptive targets
+are shared within each noise level, not necessarily between noise levels.
 Figures and established report CSVs remain under `results/figures/` and
 `results/reports/`. Images are PNG-only, high-resolution, and never rendered inline.
 Classical baseline profiles are solid; LLM profiles are dashed. The explicit-versus-

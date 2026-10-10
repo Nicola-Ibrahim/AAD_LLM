@@ -44,7 +44,7 @@ class AnalyzePerformance:
             list(snapshot.models_to_solvers),
             snapshot.classical_solvers,
             dims,
-            [snapshot.clean_std, snapshot.noisy_std],
+            snapshot.dataset.noise_stds,
         )
         hardness = []
         for dim in snapshot.dataset.dims:

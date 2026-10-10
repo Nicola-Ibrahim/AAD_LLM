@@ -55,11 +55,16 @@ class AnalysisFigureExporter:
                 ("ecdf", "target_precision_ecdf.png"),
             ]:
                 target = output / filename
+                heading = (
+                    "Explicit versus implicit"
+                    if results.mode == "comparison"
+                    else results.mode.title()
+                )
                 figure = profiles.build_profile(
                     profile,
                     results.mode,
                     kind=kind,
-                    title=f"<b>{results.mode.title()} {kind.upper()} — {profile.model} ({profile.dim}D, σ={profile.noise_std:g})</b><br><sup>Adaptive-target ECDFs are exploratory; fixed-target reliability is reported separately.</sup>",
+                    title=f"<b>{heading} {kind.upper()} — {profile.model} ({profile.dim}D, σ={profile.noise_std:g})</b><br><sup>Adaptive-target ECDFs are exploratory; fixed-target reliability is reported separately.</sup>",
                 )
                 self.export_figure(figure, target)
 
@@ -81,7 +86,7 @@ class AnalysisFigureExporter:
 
     def export_model_scale(self, results: PerformanceAnalysisResult) -> None:
         target = (
-            self.results_dir / "figures" / "06_thesis_summary"
+            self.results_dir / "figures" / "08_performance_comparison"
         ) / "fig_09e_auc_ecdf_model_scale.png"
         if results.diagnostics:
             return

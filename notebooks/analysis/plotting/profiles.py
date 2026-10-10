@@ -114,7 +114,7 @@ def build_profile(
                     name=curve.label,
                     legendgroup=curve.label,
                     line=dict(color=curve.color, dash=curve.dash, width=2.2),
-                    showlegend=index == 0,
+                    showlegend=index == 0 and mode != "comparison",
                 ),
                 row=row + 1,
                 col=col + 1,
@@ -170,4 +170,72 @@ def build_profile(
             font=dict(size=12, family=FONT_FAMILY),
         ),
     )
+    if mode == "comparison":
+        # Independent visual keys: color identifies strategy, dash identifies mode.
+        # Keep the full series labels for hover, without repeating them in the legend.
+        for strategy, color in prompt_colors.items():
+            matching = [curve for curve in curves if curve.color == color]
+            if not matching:
+                continue
+            figure.add_trace(
+                go.Scatter(
+                    x=[None],
+                    y=[None],
+                    mode="markers",
+                    marker=dict(color=color, size=11, symbol="square"),
+                    name="Baseline prompt" if strategy == "baseline" else strategy.title(),
+                    showlegend=True,
+                    hoverinfo="skip",
+                )
+            )
+        for label, dash in [
+            ("Explicit (noise-informed)", "solid"),
+            ("Implicit (noise-blind)", "dash"),
+        ]:
+            figure.add_trace(
+                go.Scatter(
+                    x=[None],
+                    y=[None],
+                    mode="lines",
+                    line=dict(color="#475569", dash=dash, width=2.2),
+                    name=label,
+                    legend="legend2",
+                    showlegend=True,
+                    hoverinfo="skip",
+                )
+            )
+        figure.update_layout(
+            height=figure.layout.height + 120,
+            margin=dict(b=270),
+            legend=dict(
+                title=dict(text="Prompt strategy", side="top"),
+                x=0.5,
+                xanchor="center",
+                y=-0.13,
+                yanchor="top",
+            ),
+            legend2=dict(
+                title=dict(text="Synthesis mode", side="top"),
+                orientation="h",
+                yanchor="top",
+                y=-0.27,
+                xanchor="center",
+                x=0.5,
+                bgcolor="rgba(255,255,255,0.95)",
+                bordercolor="#E2E8F0",
+                borderwidth=1,
+                font=dict(size=12, family=FONT_FAMILY),
+            ),
+        )
+        figure.add_annotation(
+            x=0,
+            y=-0.41,
+            xref="paper",
+            yref="paper",
+            xanchor="left",
+            yanchor="top",
+            showarrow=False,
+            text="Both modes are evaluated under noise; noise-blind refers to the prompt, not the objective.",
+            font=dict(size=12, color="#475569", family=FONT_FAMILY),
+        )
     return figure
