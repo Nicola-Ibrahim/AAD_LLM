@@ -25,9 +25,7 @@ evaluation conditions from sensitivity to a changed observation environment.
 %==============================================================================
 
 The experiments vary the LLM, prompt mode and scaffold, BBOB function,
-dimension, and observation noise level. The following paragraphs specify
-these configurations and the selection of champions for benchmarking.
-The synthesis procedure and full prompt definitions are given in
+dimension, and observation noise level. The synthesis procedure and full prompt definitions are given in
 Chapter~\ref{chap:methodology}.
 
 Five functions from the noiseless BBOB suite are selected to examine
@@ -172,10 +170,10 @@ Classical baselines have no equivalent timeout. The comparison therefore
 uses equal objective-evaluation budgets, which measure search effort,
 but different execution-time constraints.
 
-All optimizers use the same instance and seed schedule, although their
-different search procedures do not produce identical random sequences.
-The reference implementations and their settings are listed in
-Table~\ref{tab:reference_optimizers}.
+The shared instance and seed schedule controls the trial settings,
+although the optimizers consume random numbers differently.
+Table~\ref{tab:reference_optimizers} lists the reference implementations
+and their settings.
 
 \begin{table}[htbp]
     \centering
@@ -237,14 +235,10 @@ conditions are represented.
 \section{Performance Results}
 \label{sec:benchmark_results}
 
-% VERIFY COVERAGE: the opening states 1,920 conditions / 38,400 trials.
-% The current Implicit table totals 952 conditions; the Explicit table totals
-% 960, giving 1,912 conditions / 38,240 trials. Verify the underlying data
-% and update the affected counts, rates, intervals, and interpretation together.
-All 1,920 native benchmark conditions have 20 terminal trial results,
-giving 38,400 terminal trial outcomes. All conditions pass the current
-champion code-hash eligibility check and are retained in the terminal
-descriptive summaries.
+
+The terminal summaries include eligible conditions with all 20 trial
+results. The retained coverage is reported in
+Tables~\ref{tab:explicit_summary} and~\ref{tab:implicit_summary}.
 
 The model and prompt tables report equally weighted returned-solution
 success rates across eligible conditions. Raw gaps are not averaged
@@ -255,12 +249,10 @@ champion. These results describe the combined synthesis and evaluation
 conditions. The later noise-robustness comparison holds the champion
 fixed to examine changes in evaluation noise.
 
-The convergence and ECDF figures compare Baseline, Thinking,
-Vectorization, and Guided champions for the same LLM with CMA-ES,
-DE, and PSO. Each function is shown separately. The discussion first
-presents Explicit results, followed by the corresponding Implicit
-results. Within each mode, convergence and target attainment are
-considered alongside aggregate returned-solution success rates.
+The figures compare the four prompt strategies with CMA-ES, DE,
+and PSO in separate function panels. Explicit results are presented
+first, followed by Implicit results and their aggregate returned-solution
+success rates. Each function panel uses its own selected champions.
 
 The Explicit experiments provide task information about the observation
 environment. Explicit-Clean covers clean synthesis and evaluation;
@@ -268,18 +260,13 @@ Explicit-Noisy covers the three positive native noise levels.
 Table~\ref{tab:explicit_summary} reports these groups separately for
 each model and scaffold.
 
-The main-text profiles use a balanced selection of the three evaluated
-LLMs, rather than repeating one model across every noise level. Explicit
-examples comprise Qwen2.5-Coder-32B-Instruct at $D=2$, $\sigma=0$;
-Qwen2.5-Coder-14B-Instruct at $D=5$, $\sigma=0.05$; and
-DeepSeek-Coder-V2-Lite-Instruct at $D=5$, $\sigma=0.2$.
-The complementary Implicit examples below give each model representation
-in both $D=2$ and $D=5$ across the two modes. This selection illustrates
-different behavior, not a controlled cross-model ranking: model,
-dimension, and noise vary between examples. Appendix~\ref{app:benchmark_profiles}
-provides the remaining matched profiles for all three models, $D\in\{2,5\}$,
-and the selected noise levels. The aggregate tables retain the full
-experimental coverage, including $\sigma=0.1$.
+The selected profiles cover all three LLMs, with each model shown
+in both $D=2$ and $D=5$ across the two prompt modes. Because model,
+dimension, and noise vary between examples, they illustrate search
+behavior rather than provide a controlled comparison of models or modes.
+Appendix~\ref{app:benchmark_profiles} provides the remaining matched
+profiles for all three models, $D\in\{2,5\}$, and the selected noise
+levels. The aggregate tables also include $\sigma=0.1$.
 
 \begin{figure}[!htbp]
     \centering
@@ -288,25 +275,23 @@ experimental coverage, including $\sigma=0.1$.
     \includegraphics[width=\textwidth,height=0.36\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_32b/2D/std_0.0/target_precision_ecdf.png}
     \caption[Explicit-Clean profiles: Qwen 32B, 2D]{\textbf{Explicit-Clean profiles: Qwen2.5-Coder-32B-Instruct, $D=2$, $\sigma=0$.}
     Convergence above shows median best-queried clean gaps and IQR bands;
-    the adaptive-target ECDF below shows trial--target attainment.
+    the adaptive-target ECDF below shows the proportion of trial--target
+pairs attained within each evaluation count.
     Each function panel compares four prompt strategies with CMA-ES, DE,
     and PSO. The query allowance is 20,000; later values are carried forward.}
     \label{fig:explicit_qwen32_clean}
 \end{figure}
 
-Figure~\ref{fig:explicit_qwen32_clean} shows why clean performance
-cannot be summarized by a single strategy ranking. CMA-ES improves
-earlier on Sphere ($f_1$) and Rosenbrock ($f_8$), and both CMA-ES and
-Vectorization reach very small median gaps on Discus ($f_{11}$).
-On Rastrigin ($f_{15}$), however, Thinking and Vectorization make
-pronounced later improvements while CMA-ES plateaus. Their ECDFs
-reach the full adaptive target set on that function. Several generated
-champions also attain more targets than CMA-ES on Gallagher ($f_{21}$),
-although PSO improves earlier. Baseline's plateau on $f_1$ contrasts
-with its much stronger attainment on $f_8$ and $f_{21}$.
-The generated champion is different in each function panel, so this
-is evidence of function-specific performance rather than one program
-dominating across all landscapes.
+Figure~\ref{fig:explicit_qwen32_clean} contrasts faster early convergence
+with stronger final target attainment. CMA-ES reaches small gaps sooner
+on Sphere and Rosenbrock, and leads target attainment on Discus, where
+Vectorization eventually also reaches the full target set. On Rastrigin,
+Thinking and Vectorization achieve substantial later improvements and
+full target attainment, while CMA-ES plateaus. On Gallagher, all four
+generated champions attain a greater final fraction of targets than
+CMA-ES, although PSO improves earlier. Baseline's limited attainment on
+Sphere contrasts with its stronger results on Rosenbrock and Gallagher,
+showing that its performance depends on the function.
 
 \begin{figure}[!htbp]
     \centering
@@ -321,19 +306,16 @@ dominating across all landscapes.
     \label{fig:explicit_qwen14_noisy}
 \end{figure}
 
-Figure~\ref{fig:explicit_qwen14_noisy} provides a five-dimensional
-example with mild noise. On $f_1$, Guided makes a large late improvement
-and attains the full adaptive target set, whereas Baseline and Thinking
-retain larger median residuals. CMA-ES and PSO make their main gains
-earlier. On $f_8$, Guided attains a greater final fraction of targets
-than the other generated strategies, while Thinking shows little
-attainment. On $f_{11}$, CMA-ES reaches a much smaller median gap
-than the generated champions. The multimodal functions remain
-challenging: all generated curves on $f_{15}$ plateau with substantial
-residual error, and DE has the smallest median gap. On $f_{21}$,
-the generated ECDFs remain below DE and PSO. This example complements
-the favorable clean cases by showing conditions where generated search
-does not consistently match the classical references.
+Figure~\ref{fig:explicit_qwen14_noisy} shows Guided's strongest results
+on Sphere and Rosenbrock. On Sphere, it reaches a very small median gap
+and attains nearly all adaptive targets, although CMA-ES and PSO improve
+earlier. On Rosenbrock, Guided achieves the highest final target
+attainment among the generated champions, while Thinking attains few
+targets. Classical baselines lead elsewhere: CMA-ES reaches a much
+smaller median gap on Discus, and DE achieves the smallest median gap
+and highest final target attainment on Rastrigin. On Gallagher, all
+generated champions attain fewer targets than DE and PSO.
+
 
 \begin{figure}[!htbp]
     \centering
@@ -347,45 +329,26 @@ does not consistently match the classical references.
     \label{fig:explicit_deepseek_noisy}
 \end{figure}
 
-Figure~\ref{fig:explicit_deepseek_noisy} again shows distinct strengths
-by function and strategy. On $f_1$, Thinking and Vectorization make
-large improvements and attain the full adaptive target set, whereas
-Baseline and Guided plateau much earlier. On $f_8$, all generated
-median gaps remain above the classical references, with Baseline
-particularly far from the optimum. On $f_{11}$, DE has the smallest
-median gap and the highest final target attainment. Vectorization
-is more competitive on $f_{15}$: its late reduction produces a smaller
-median gap and slightly greater final attainment than the classical
-references. On $f_{21}$, Guided's early plateau contrasts with
-Thinking and Vectorization's later gains. The broad interquartile
-bands in some panels underline that a favorable median does not
-describe every instance and seed.
+Figure~\ref{fig:explicit_deepseek_noisy} shows contrasting results across
+functions. On Sphere, Thinking and Vectorization reach very small median
+gaps and full adaptive-target attainment, while Baseline and Guided
+retain larger gaps. The classical references perform better on
+Rosenbrock, and DE achieves the lowest median gap and highest final
+target attainment on Discus. Vectorization is strongest on Rastrigin,
+where its later improvement produces the lowest final median gap and
+slightly higher target attainment than the classical references.
+On Gallagher, Guided plateaus early, whereas Thinking and Vectorization
+continue improving; DE nevertheless attains the greatest final
+fraction of targets.
 
 \FloatBarrier
 
-The selected profiles span clean, mildly noisy, and strongly noisy
-native environments. They do not isolate a noise effect, because each
-environment uses its own synthesized champion, and the adaptive target
-sets vary by noise level. The later frozen-champion experiment addresses
-that distinction. Two-dimensional trials have a 20,000-query allowance
-and five-dimensional trials have a 50,000-query allowance. Flat tails
-beyond those allowances carry forward the last recorded values, not
-continued search to one million evaluations. Values at the display
-floor indicate very small plotted gaps, not that every trial returned
-the exact optimum. Likewise, full adaptive-target attainment does not
-establish 100\% returned-solution success at $10^{-8}$.
-The following table assesses returned solutions over the full set
-of experimental dimensions and noise levels.
-
-Baseline solved rates under Explicit-Clean are 34.25\%, 36.25\%, and
-36.00\% for Qwen2.5-Coder-14B-Instruct, Qwen2.5-Coder-32B-Instruct,
-and DeepSeek-Coder-V2-Lite-Instruct, respectively. Under native
-Explicit-Noisy conditions they are 7.08\%, 13.08\%, and 18.75\%.
-The noisy aggregate covers three positive noise levels, whereas the clean
-aggregate covers one. The two rates therefore describe different
-synthesis and evaluation environments.
-Table~\ref{tab:explicit_summary} also reports the results for each
-prompt scaffold.
+Table~\ref{tab:explicit_summary} complements the selected search profiles
+with returned-solution success rates at $\Delta f\leq10^{-8}$.
+Baseline success rates are similar across models under Explicit-Clean
+conditions, but lower and more varied under Explicit-Noisy conditions.
+Because each environment uses separately synthesized champions, this
+comparison does not measure the noise sensitivity of a fixed optimizer.
 
 \begin{table}[htbp]
     \centering
@@ -458,18 +421,11 @@ prompt scaffold.
 
 \FloatBarrier
 
-The Implicit experiments evaluate optimizers synthesized without an
-explicit description of the observation environment.
-
-The Implicit examples complement the Explicit selection:
-Qwen2.5-Coder-14B-Instruct at $D=2$, $\sigma=0.05$;
-DeepSeek-Coder-V2-Lite-Instruct at $D=2$, $\sigma=0.2$; and
-Qwen2.5-Coder-32B-Instruct at $D=5$, $\sigma=0.2$.
-Only positive noise levels are illustrated for this mode. The examples
-retain the same five function panels and four strategies alongside
-CMA-ES, DE, and PSO. Matching model--dimension--noise comparisons are
-available in Appendix~\ref{app:benchmark_profiles}; differences between
-these main-text examples cannot be attributed to model or mode alone.
+The following figures show Implicit champions synthesized without
+explicit information about the observation environment. The selected
+noisy conditions cover Qwen2.5-Coder-14B-Instruct and
+DeepSeek-Coder-V2-Lite-Instruct at $D=2$, and
+Qwen2.5-Coder-32B-Instruct at $D=5$.
 
 \begin{figure}[!htbp]
     \centering
@@ -484,19 +440,17 @@ these main-text examples cannot be attributed to model or mode alone.
     \label{fig:implicit_qwen14_noisy}
 \end{figure}
 
-Figure~\ref{fig:implicit_qwen14_noisy} shows substantial variation
-between champions synthesized with the same neutral environment framing.
-On $f_1$, Guided and Vectorization attain very small median gaps,
-whereas Baseline plateaus; the ECDF makes that contrast visible.
-On $f_8$, several generated champions reach the full adaptive target
-set, although their attainment times differ. Guided shows particularly
-strong performance on $f_{11}$, while Vectorization retains a large
-residual and attains relatively few targets. On $f_{15}$, a generated
-champion makes a pronounced late improvement and reaches full target
-attainment, while other generated curves retain substantial residuals.
-On $f_{21}$, several generated curves finish above the classical ECDFs.
-These favorable cases concern search attainment, not a guarantee that
-the optimizer returns its best queried point under noise.
+Figure~\ref{fig:implicit_qwen14_noisy} shows different strengths across
+the prompt strategies. Guided and Vectorization reach very small median
+gaps and full adaptive-target attainment on Sphere, while Baseline
+plateaus. Several generated champions also attain the full target set
+on Rosenbrock, although at different evaluation counts. On Discus,
+Guided reaches full target attainment, whereas Vectorization retains
+a large median gap and attains few targets. Baseline shows the strongest
+later improvement on Rastrigin and is the only displayed optimizer
+to attain the full target set. On Gallagher, all four generated
+champions achieve higher final target attainment than the classical
+references.
 
 \begin{figure}[!htbp]
     \centering
@@ -510,8 +464,8 @@ the optimizer returns its best queried point under noise.
     \label{fig:implicit_deepseek_noisy}
 \end{figure}
 
-Figure~\ref{fig:implicit_deepseek_noisy} reinforces that additional
-prompt structure does not yield a uniformly better champion. On $f_1$,
+Figure~\ref{fig:implicit_deepseek_noisy} shows a reversal between
+Guided and Vectorization on Sphere and Discus. On $f_1$,
 Guided makes a large improvement, whereas Vectorization plateaus with
 a much larger median gap. On $f_{11}$, the ordering reverses:
 Vectorization reaches very small median gaps and the full target set,
@@ -520,9 +474,7 @@ Guided and Thinking show strong final attainment despite different
 early trajectories. On $f_{15}$, Vectorization makes a pronounced
 late reduction, while other generated curves exhibit different
 residuals and attainment fractions. On $f_{21}$, several generated
-champions achieve more target attainment than CMA-ES. The differing
-rankings across panels explain why an overall strategy average needs
-to be interpreted alongside function-specific evidence.
+champions achieve more target attainment than CMA-ES. 
 
 \begin{figure}[!htbp]
     \centering
@@ -536,9 +488,8 @@ to be interpreted alongside function-specific evidence.
     \label{fig:implicit_qwen32_noisy}
 \end{figure}
 
-Figure~\ref{fig:implicit_qwen32_noisy} supplies a higher-dimensional
-counterpart without changing the interpretation of the measures.
-On $f_1$, Guided and Vectorization make much larger median improvements
+In Figure~\ref{fig:implicit_qwen32_noisy}, the strongest generated
+strategy varies between functions. On $f_1$, Guided and Vectorization make much larger median improvements
 than Thinking, although CMA-ES reaches the adaptive targets earlier.
 On $f_8$, generated and classical trajectories retain nonzero
 residuals; their ECDFs do not reach the full target set. On $f_{11}$,
@@ -547,10 +498,6 @@ than DE, despite DE's earlier gains. On $f_{15}$, DE achieves the
 smallest median gap and the largest final attainment among the
 displayed solvers. On $f_{21}$, Vectorization has the highest final
 attainment, but broad bands expose substantial between-trial variation.
-These observations illustrate limits as well as favorable cases.
-They do not establish an overall Implicit advantage or a causal effect
-of dimension, since the corresponding two-dimensional programs are
-different champions.
 
 \FloatBarrier
 
@@ -619,9 +566,8 @@ These are descriptive rankings; the condition-bootstrap intervals overlap.
 
 \FloatBarrier
 
-The Baseline scaffold provides a common reference for comparing models.
-DeepSeek-Coder-V2-Lite-Instruct has the highest aggregate Implicit rate,
-while the Explicit-Clean Baseline rates are closer across the three models.
+The Explicit-Clean Baseline rates are closer across the three models
+than the Implicit rates.
 The larger Qwen model therefore does not consistently lead the smaller
 one across prompt environments.
 
@@ -684,16 +630,13 @@ PSO changes less across noise levels, although its absolute success
 rate is lower in the higher-dimensional panels. DE remains close to
 zero at this strict threshold, which should not be read as absence of
 search progress. The broad condition-bootstrap intervals indicate
-substantial uncertainty across the included functions; the visual
-ordering alone is not a significance test.
+substantial uncertainty across the included functions.
 
-The displayed LLM observations occur only at the clean reference points.
-The absence of their positive-noise points must therefore be treated
-as missing plotted evidence, not as a zero success rate or proof of
-complete failure under noise. In its present form, this figure supports
-a noise-sensitivity discussion for the classical references and a clean
-reference comparison for the generated champions, but not a numerical
-estimate of each LLM champion's reliability drop across noise levels.
+The generated champions are plotted only at the clean reference
+points. Their missing positive-noise observations prevent an assessment
+of their change in success rate; they do not indicate zero success.
+The figure therefore shows noise sensitivity for the classical references
+and clean performance for the generated champions.
 
 %==============================================================================
 \section{Generated-Program Case Studies}
@@ -719,8 +662,7 @@ personal_best_values[improvement_mask] = new_values[improvement_mask]
 \end{lstlisting}
 Its 20 benchmark instances all meet the returned-solution target
 $\Delta f\leq10^{-8}$ within the $D=2$ budget of 20,000 evaluations.
-This establishes success for this specified condition, not superiority
-across the whole BBOB subset. The comparison in line 41 of
+The comparison in line 41 of
 Listing~\ref{lst:generated_pso_complete} accepts an improvement by comparing
 two objective values directly. Adding the same constant to both values
 preserves their ordering. Similarly, the global incumbent is selected by
@@ -729,8 +671,7 @@ avoids the sign-sensitive parent-selection rule found in the next example.
 It does not establish that every implementation detail is ideal: complete
 particle batches can make the optimizer request additional calls near the
 budget boundary, where the benchmark wrapper enforces the actual evaluation
-limit. The evidence here concerns its observed returned-solution performance
-under the stated clean, two-dimensional condition.
+limit. Its success applies to this clean, two-dimensional condition.
 
 In contrast, the DeepSeek-Coder-V2-Lite-Instruct Implicit Baseline champion for noisy $f_1$ at
 $D=5$ and $\sigma=0.05$ is \texttt{ImprovedSES} (experiment 2139,
