@@ -1594,8 +1594,8 @@ specified accuracy threshold.
 The empirical cumulative distribution function (ECDF) answers how many
 accuracy targets are attained within a given number of evaluations.
 The target-attainment perspective is described in IOHprofiler
-\cite[Sec.~4.3.4]{Doerr2018IOHprofiler} and COCO
-\cite[Sec.~5]{Hansen2016Performance}. For a target gap $\tau>0$, the
+\cite{Doerr2018IOHprofiler} and COCO
+\cite{Hansen2016Performance}. For a target gap $\tau>0$, the
 first attainment time is
 \begin{equation}
     T_{r,\tau}
@@ -1685,13 +1685,14 @@ optimality gap is
 \begin{equation}
     \Delta f_r
     =
-    \left|
+    \max\!\left(
+        0,\,
         f_{\mathrm{clean}}^{(r)}(x_{r,\mathrm{best}})-f_r^*
-    \right|.
+    \right).
     \label{eq:benchmark_final_gap}
 \end{equation}
-Smaller gaps indicate more accurate returned solutions. Failed executions and
-invalid returned solutions are assigned $\Delta f_r=\infty$.
+Smaller gaps indicate more accurate returned solutions. Failed executions
+and invalid returned solutions are assigned $\Delta f_r=\infty$.
 
 For the nonempty set $\mathcal R_c^{\mathrm{return}}$ of terminal
 trial results, including failures, the returned-solution success rate is
@@ -1704,10 +1705,10 @@ trial results, including failures, the returned-solution success rate is
     \label{eq:benchmark_return_reliability}
 \end{equation}
 Failed executions contribute zero successes and remain in the
-denominator. Under noise, an optimizer may find an accurate point
+denominator. Under noise, an optimizer may evaluate an accurate point
 without recognizing or returning it. This measure therefore assesses
-whether search produces an accurate returned solution. It is used
-for success-rate comparisons across noise levels.
+the accuracy of the solution actually returned. It is used for
+success-rate comparisons across noise levels.
 
 Aggregation across conditions follows the purpose of each comparison.
 Fixed-target attainment curves pool the included search trials from
@@ -1743,9 +1744,19 @@ $\mathcal C_{\mathrm{return}}$, the aggregate is
     \label{eq:benchmark_aggregate_success}
 \end{equation}
 The trials included in search and returned-solution assessments
-may differ. Both aggregates give each condition equal weight.
+may differ. The problem-group and prompt-strategy search summaries
+and the returned-solution aggregates give each included condition
+equal weight. The pooled fixed-target attainment curves instead
+give each included trial equal weight.
 
-The success-rate figures use the primary threshold, while reliability
-tables also report $\tau_{\mathrm{secondary}}=10^{-2}$. A zero success
-rate means that no included trial meets the chosen threshold; it does
-not mean that the optimizer made no progress.
+The success-rate figures use the primary threshold
+$\tau_{\mathrm{primary}}=10^{-8}$, while reliability tables also
+report $\tau_{\mathrm{secondary}}=10^{-2}$. The secondary threshold
+provides a less stringent accuracy criterion, identifying returned
+solutions that meet this tolerance despite missing the primary
+threshold. It supplements the primary definition of success and
+does not affect optimizer execution. Both thresholds are criteria
+chosen for this study.
+
+A zero success rate means that no included trial meets the chosen
+threshold; it does not mean that the optimizer made no progress.
