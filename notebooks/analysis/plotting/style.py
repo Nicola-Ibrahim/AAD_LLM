@@ -8,15 +8,16 @@ CLASSICAL_BASELINES = ["CMA-ES", "PSO", "DE"]
 
 FONT_FAMILY = "Inter, -apple-system, BlinkMacSystemFont, Arial, sans-serif"
 
-STRATEGY_COLOR_ARCHETYPES = {
-    "guided": {"large": "#38BDF8", "small": "#38BDF8", "base": "#38BDF8"},
-    "thinking": {"large": "#34D399", "small": "#34D399", "base": "#34D399"},
-    "vectorization": {"large": "#F87171", "small": "#F87171", "base": "#F87171"},
-    "baseline": {"large": "#FBBF24", "small": "#FBBF24", "base": "#FBBF24"},
+# Strategy identifies color; model size and synthesis mode must not change it.
+STRATEGY_COLORS = {
+    "baseline": "#0072B2",
+    "guided": "#009E73",
+    "thinking": "#E69F00",
+    "vectorization": "#CC79A7",
 }
 CLASSICAL_SOLVERS_STYLE = {
     "cma-es": {"color": "#334155", "dash": "solid", "width": 2.2},
-    "pso": {"color": "#0D9488", "dash": "solid", "width": 2.2},
+    "pso": {"color": "#D55E00", "dash": "solid", "width": 2.2},
     "de": {"color": "#7C3AED", "dash": "solid", "width": 2.2},
 }
 MODEL_SCALE_PALETTE = {
@@ -60,7 +61,7 @@ _DYNAMIC_STYLE_CACHE: dict[str, dict[str, str | float]] = {}
 def get_solver_line_style(solver_name: str) -> dict[str, str | float]:
     if not solver_name:
         return {"color": "#64748B", "dash": "solid", "width": 2.0}
-    s = solver_name.strip()
+    s = clean_solver_name(solver_name)
     s_lower = s.lower()
     if s in _DYNAMIC_STYLE_CACHE:
         return _DYNAMIC_STYLE_CACHE[s]
@@ -73,10 +74,9 @@ def get_solver_line_style(solver_name: str) -> dict[str, str | float]:
         strat_key = strat_part.strip().lower()
         size_match = re.search(r"(\d+(?:\.\d+)?)\s*[bB]", model_part)
         is_large = float(size_match.group(1)) >= 14.0 if size_match else True
-        scale_key = "large" if is_large else "small"
         line_width = 2.5 if is_large else 1.8
-        if strat_key in STRATEGY_COLOR_ARCHETYPES:
-            hex_color = STRATEGY_COLOR_ARCHETYPES[strat_key][scale_key]
+        if strat_key in STRATEGY_COLORS:
+            hex_color = STRATEGY_COLORS[strat_key]
         else:
             base_hue = stable_hue(strat_key)
             hex_color = hsl_to_hex(base_hue, s=0.85, lightness=0.45 if is_large else 0.62)

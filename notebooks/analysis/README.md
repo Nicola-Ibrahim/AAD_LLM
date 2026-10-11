@@ -111,6 +111,9 @@ Figures and established report CSVs remain under `results/figures/` and
 `results/reports/`. Images are PNG-only, high-resolution, and never rendered inline.
 Classical baseline profiles are solid; LLM profiles are dashed. The explicit-versus-
 implicit comparison intentionally distinguishes informed/blind modes by line style.
+ECDF and convergence share one strategy palette across every model and mode:
+Baseline is blue, Guided green, Thinking amber, and Vectorization pink.
+CMA-ES is slate, PSO vermilion, and DE violet. Mode suffixes do not alter colors.
 
 The optional `FILTER_DIMS`, `FILTER_PROBLEMS` and `FILTER_NOISE_STDS` settings
 reduce work. Only intermediate arrays, statistics and their provenance are saved

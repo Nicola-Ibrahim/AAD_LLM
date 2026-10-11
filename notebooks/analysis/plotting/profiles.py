@@ -16,6 +16,7 @@ from benchmarking.domain.enums import BBOBFunction
 
 from .style import (
     FONT_FAMILY,
+    STRATEGY_COLORS,
     clean_solver_name,
     get_rgba_fill,
     get_solver_color,
@@ -42,12 +43,6 @@ def build_profile(
     """Construct panels exclusively from precomputed scientific arrays."""
     problems = profile.problems
     curves = []
-    prompt_colors = {
-        "baseline": "#F59E0B",
-        "guided": "#0284C7",
-        "thinking": "#10B981",
-        "vectorization": "#EF4444",
-    }
     for solver in profile.solvers:
         label = clean_solver_name(solver)
         style = get_solver_line_style(solver)
@@ -56,7 +51,7 @@ def build_profile(
             strategy = solver.split(" / ", 1)[1].split(" ", 1)[0]
             informed = "(noise-adapted)" in solver
             label = f"{strategy.title()} ({'noise-informed' if informed else 'noise-blind'})"
-            color, dash = prompt_colors.get(strategy, "#64748B"), "solid" if informed else "dash"
+            color, dash = STRATEGY_COLORS.get(strategy, "#64748B"), "solid" if informed else "dash"
         curves.append(ProfileCurve(solver, label, color, dash, profile.noise_std))
     by_condition = {(s.problem_id, s.solver): s for s in profile.series}
     titles = [
@@ -173,7 +168,7 @@ def build_profile(
     if mode == "comparison":
         # Independent visual keys: color identifies strategy, dash identifies mode.
         # Keep the full series labels for hover, without repeating them in the legend.
-        for strategy, color in prompt_colors.items():
+        for strategy, color in STRATEGY_COLORS.items():
             matching = [curve for curve in curves if curve.color == color]
             if not matching:
                 continue
