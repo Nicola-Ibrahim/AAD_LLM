@@ -1,8 +1,4 @@
-# ==========================================
-# Tracing Objectives Backwards - Global Git Ignore
-# ==========================================
-
-# --- System & IDE ---
+# Operating system and editors
 .DS_Store
 .AppleDouble
 .LSOverride
@@ -13,20 +9,24 @@ Icon
 *.swp
 *.swo
 
-# --- Python: Byte-compiled / optimized / DLL files ---
+# Python bytecode and native extensions
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 
-# --- Python: Environments ---
+# Local environments and secrets (keep shareable templates)
 .env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
 .venv/
 venv/
 env/
 .python-version
 
-# --- Python: Build & Distribution ---
+# Build and distribution artifacts
 build/
 dist/
 *.egg-info/
@@ -38,7 +38,7 @@ wheels/
 *.egg
 MANIFEST
 
-# --- Tools & Caches ---
+# Tool caches, test output, and notebook checkpoints
 .cache/
 .tox/
 .nox/
@@ -52,7 +52,7 @@ MANIFEST
 coverage/
 htmlcov/
 
-# --- Runtime & Data ---
+# Runtime files and databases
 *.log
 *.pem
 *.db
@@ -66,45 +66,36 @@ celerybeat.pid
 *.manifest
 *.spec
 
-# --- Translations ---
+# Generated translation files
 *.mo
 *.pot
 
-# ==========================================
-# Tracing Objectives Backwards - Project Specific
-# (Anchored to Root)
-# ==========================================
-
-# Data, Results & Storage
+# Local data: keep directory placeholders, never champion exports or databases
 /data/**
 !/data/**/
 !/data/**/.gitkeep
-!/data/champions.json
-/results/figures/
-/results/reports/
-/results/analysis/
-/results/archives/
-/results/comparisons/
-/results/benchmark/
-/results/profiles/
-/results/ioh_traces/
-/results/evaluations/
-/results/audit/
-*.png
-!/writing/thesis/images/**/*.png
+
+# All generated results, including champion exports, statistics, and archives
+/results/
+
+# Local models, context data, diagnostics, and JavaScript dependencies
 /models/
 /contexts/
 /diagnostics/
 /node_modules/
 
-# Agent Tools
+# Local agent tooling
 /.agent/
 /.specify/
 /.devops/
 
-# Experiments & Server Logs
+# Experiment and server logs (keep the root directory placeholder)
 /logs/*
 !/logs/.gitkeep
 
-# Checkpoints & Pickle states
+# Serialized runtime checkpoints
 *.pkl
+
+# Generated PNGs: thesis illustrations are the intentional exception
+*.png
+!/writing/thesis/images/**/*.png
