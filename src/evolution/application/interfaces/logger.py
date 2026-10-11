@@ -76,7 +76,9 @@ class BaseLogger(ABC):
 
     def cached(self, exp_id: int, total_iters: int, best_error: float | None) -> None:
         err_str = f" (Best Error: {best_error:.4e})" if best_error is not None else ""
-        self.info(f"Exp ID: #{exp_id} already completed {total_iters} generations{err_str}. Skipping.")
+        self.info(
+            f"Exp ID: #{exp_id} already completed {total_iters} generations{err_str}. Skipping."
+        )
 
     def stagnation_warning(self, consecutive_failures: int, threshold: int) -> None:
         self.warning(

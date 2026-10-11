@@ -3,7 +3,6 @@
 import re
 from math import ceil
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -21,12 +20,22 @@ from .style import (
 )
 
 
+def _model_size(model: str) -> float:
+    match = re.search(r"(\d+(?:\.\d+)?)\s*[bB]", model)
+    return float(match.group(1)) if match else 0.0
+
+
+def _dimension_values(table: pd.DataFrame, model: str, noise: float, dims: list[int]) -> pd.Series:
+    selected = table.loc[(table["Model"] == model) & (table["Noise Std"] == noise)]
+    return selected.set_index("Dim")["AUC-ECDF (%)"].reindex(dims)
+
+
 def build_model_scale_figure(results: PerformanceAnalysisResult) -> go.Figure:
     noise_levels = sorted(results.model_scale["Noise Std"].unique())
     if not noise_levels:
         raise ValueError("No noise-level summaries available for performance comparison.")
     rows = ceil(len(noise_levels) / 2)
-    fig9e = make_subplots(
+    figure = make_subplots(
         rows=rows,
         cols=2,
         subplot_titles=[
@@ -41,51 +50,41 @@ def build_model_scale_figure(results: PerformanceAnalysisResult) -> go.Figure:
     )
     dims = [d for d in [2, 3, 5, 10] if d in results.dims]
 
-    def extract_model_scale(m: str) -> float:
-        match = re.search("(\\d+(?:\\.\\d+)?)\\s*[bB]", m)
-        return float(match.group(1)) if match else 0.0
-
-    discovered_models = sorted(list(results.models_to_solvers.keys()), key=extract_model_scale)
+    discovered_models = sorted(results.models_to_solvers, key=_model_size)
     shown_models: set[str] = set()
     for panel_idx, n_std in enumerate(noise_levels):
         row_idx, col_idx = panel_idx // 2 + 1, panel_idx % 2 + 1
         for model_name in discovered_models:
-            c_m = results.model_scale[
-                (results.model_scale["Model"] == model_name)
-                & (results.model_scale["Noise Std"] == n_std)
-            ].set_index("Dim")
-            vals_m = c_m.reindex(dims)["AUC-ECDF (%)"].to_list()
-            if any((pd.notna(v) and (not np.isnan(v)) for v in vals_m)):
-                m_color = get_model_scale_color(model_name, results.models_to_solvers)
-                fig9e.add_trace(
-                    go.Bar(
-                        x=[f"{d}D" for d in dims],
-                        y=vals_m,
-                        name=model_name,
-                        marker=dict(color=m_color, line=dict(color="#0F172A", width=0.8)),
-                        text=[
-                            f"{v:.1f}%" if pd.notna(v) and (not np.isnan(v)) else "" for v in vals_m
-                        ],
-                        textposition="outside",
-                        textfont=dict(size=11, family=FONT_FAMILY, color="#1E293B"),
-                        legendgroup=model_name,
-                        showlegend=model_name not in shown_models,
-                    ),
-                    row=row_idx,
-                    col=col_idx,
-                )
-                shown_models.add(model_name)
+            values = _dimension_values(results.model_scale, model_name, n_std, dims)
+            auc_values = values.to_list()
+            if values.isna().all():
+                continue
+            model_color = get_model_scale_color(model_name, results.models_to_solvers)
+            figure.add_trace(
+                go.Bar(
+                    x=[f"{d}D" for d in dims],
+                    y=auc_values,
+                    name=model_name,
+                    marker=dict(color=model_color, line=dict(color="#0F172A", width=0.8)),
+                    text=[f"{v:.1f}%" if pd.notna(v) else "" for v in auc_values],
+                    textposition="outside",
+                    textfont=dict(size=11, family=FONT_FAMILY, color="#1E293B"),
+                    legendgroup=model_name,
+                    showlegend=model_name not in shown_models,
+                ),
+                row=row_idx,
+                col=col_idx,
+            )
+            shown_models.add(model_name)
         for baseline in results.classical_solvers:
-            b_sub = results.model_scale[
-                (results.model_scale["Model"] == baseline)
-                & (results.model_scale["Noise Std"] == n_std)
-            ].set_index("Dim")
-            b_vals = b_sub.reindex(dims)["AUC-ECDF (%)"].to_list()
+            baseline_values = _dimension_values(
+                results.model_scale, baseline, n_std, dims
+            ).to_list()
             b_style = get_solver_line_style(baseline)
-            fig9e.add_trace(
+            figure.add_trace(
                 go.Scatter(
                     x=[f"{d}D" for d in dims],
-                    y=b_vals,
+                    y=baseline_values,
                     mode="lines+markers",
                     name=baseline,
                     line=dict(color=b_style["color"], dash=b_style["dash"], width=2.2),
@@ -104,9 +103,9 @@ def build_model_scale_figure(results: PerformanceAnalysisResult) -> go.Figure:
                 col=col_idx,
             )
             shown_models.add(baseline)
-    for anno in fig9e.layout.annotations:
+    for anno in figure.layout.annotations:
         anno.update(font=dict(size=16, color="#0F172A", family=FONT_FAMILY))
-    fig9e.update_layout(
+    figure.update_layout(
         template="plotly_white",
         title=dict(
             text="<b>LLM Performance Across Dimensions and Noise Levels</b><br><span style='font-size:13px;color:#475569;font-weight:normal;'>Mean adaptive-target AUC-ECDF across included functions, strategies and synthesis modes; targets differ by noise level</span>",
@@ -130,7 +129,7 @@ def build_model_scale_figure(results: PerformanceAnalysisResult) -> go.Figure:
             font=dict(size=13, family=FONT_FAMILY),
         ),
     )
-    fig9e.update_yaxes(
+    figure.update_yaxes(
         title_text="<b>Mean AUC-ECDF (%)</b>",
         title_font=dict(size=15, family=FONT_FAMILY, color="#0F172A"),
         tickfont=dict(size=13, family=FONT_FAMILY, color="#1E293B"),
@@ -138,12 +137,12 @@ def build_model_scale_figure(results: PerformanceAnalysisResult) -> go.Figure:
         showgrid=True,
         gridcolor="#F1F5F9",
     )
-    fig9e.update_xaxes(
+    figure.update_xaxes(
         title_text="<b>Problem Dimension</b>",
         title_font=dict(size=15, family=FONT_FAMILY, color="#0F172A"),
         tickfont=dict(size=13, family=FONT_FAMILY, color="#1E293B"),
     )
-    return fig9e
+    return figure
 
 
 def build_hardness_figure(
@@ -161,38 +160,31 @@ def build_hardness_figure(
     )
     for c_idx, noise_level in enumerate([results.clean_std, results.noisy_std], start=1):
         df_hard = summary.tables[noise_level]
+        if df_hard.empty:
+            continue
         for solver in solvers_list:
-            sub_s = df_hard[df_hard["Solver"] == solver] if not df_hard.empty else pd.DataFrame()
-            if not sub_s.empty:
-                fig.add_trace(
-                    go.Bar(
-                        name=solver,
-                        x=sub_s["Class"],
-                        y=sub_s["Success Rate"],
-                        marker=dict(
-                            color=get_solver_color(solver),
-                            line=dict(color="#0F172A", width=0.8),
-                        ),
-                        showlegend=c_idx == 1,
+            sub_s = df_hard.loc[df_hard["Solver"] == solver]
+            if sub_s.empty:
+                continue
+            fig.add_trace(
+                go.Bar(
+                    name=solver,
+                    x=sub_s["Class"],
+                    y=sub_s["Success Rate"],
+                    marker=dict(
+                        color=get_solver_color(solver),
+                        line=dict(color="#0F172A", width=0.8),
                     ),
-                    row=1,
-                    col=c_idx,
-                )
+                    showlegend=c_idx == 1,
+                ),
+                row=1,
+                col=c_idx,
+            )
     fig.update_xaxes(
         title_text="<b>Landscape Hardness Class</b>",
         title_font=dict(size=14, family=FONT_FAMILY, color="#0F172A"),
         tickangle=-15,
         tickfont=dict(size=12, family=FONT_FAMILY, color="#1E293B"),
-        row=1,
-        col=1,
-    )
-    fig.update_xaxes(
-        title_text="<b>Landscape Hardness Class</b>",
-        title_font=dict(size=14, family=FONT_FAMILY, color="#0F172A"),
-        tickangle=-15,
-        tickfont=dict(size=12, family=FONT_FAMILY, color="#1E293B"),
-        row=1,
-        col=2,
     )
     fig.update_yaxes(
         title_text="<b>Target Success Rate (Δy ≤ 10⁻⁸)</b>",

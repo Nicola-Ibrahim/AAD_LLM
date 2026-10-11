@@ -52,7 +52,7 @@ flowchart TD
     Status -->|complete and valid| Cached["Reuse current trials"]
     Status -->|partial or not started| Resume["Retain valid prefix<br/>run remaining trials"]
     Status -->|stale schema, hash or champion validation| Restart["Restart this condition<br/>do not reuse stale trials"]
-    Resume --> Trials["Execute scheduled trials<br/>instance r, seed base+r, budget D×multiplier"]
+    Resume --> Trials["Execute scheduled trials<br/>instance r, seed base+r, budget dimension × 10,000"]
     Restart --> Trials
     Trials --> Provenance["Persist terminal errors + provenance<br/>clean traces + sampled noisy observations"]
     Cached --> Analysis["Read-only audit and analysis<br/>terminal completeness ≠ trace availability"]
@@ -62,6 +62,9 @@ flowchart TD
 This is normal resumption with `force_rerun=false`. Force rerun deliberately
 bypasses cache reuse. Historical skipped tails are excluded from reusable trials;
 confirmed execution failures remain observations.
+Results with a different or unrecorded objective-query budget are stale and
+restart rather than resuming. This includes classical baselines. Analysis
+excludes those results until they have been evaluated under the configured budget.
 Older champion results without the current returned-point validation marker are
 stale; classical baseline results remain reusable.
 
@@ -89,7 +92,7 @@ are not failures and are excluded from aggregates.
 | Uncertainty | Wilson condition intervals; deterministic condition-cluster aggregate bootstrap. |
 | Budget | Benchmark attaches `set_budget`; excess queries warn and return the last value. Synthesis does not itself attach that cap. |
 | Timeout | Per-candidate `func_timeout`; session process workers are not a per-candidate security sandbox. |
-| Default benchmark trials | 20; instance `r`, seed `42+r`, budget `D×10000`, timeout 30 seconds. |
+| Default benchmark trials | 20; instance `r`, seed `42+r`, budget `dimension * 10000`, champion timeout 30 seconds. |
 
 Defaults come from [benchmark configuration](../configs/benchmark.toml).
 Synthesis uses instance 1: benchmark trials are not exclusively held-out instances.

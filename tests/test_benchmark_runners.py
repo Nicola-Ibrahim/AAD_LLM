@@ -133,12 +133,24 @@ target_noise_levels = [0.0]
     prov_data = json.loads(prov_file.read_text(encoding="utf-8"))
     assert prov_data["baseline"] == "pso"
     assert prov_data["n_runs"] == 2
+    assert prov_data["budget"] == 100
 
     # 2. Second call should hit cache
     cached_res = service.trials.run_baseline_trials(
         dim=2, noise_std=0.0, p_id=1, baseline_slug="pso"
     )
     assert cached_res["status"] == "CACHED"
+
+    # A changed allowance invalidates the cache even without force_rerun.
+    service.trials.budget_multiplier = 75
+    updated = service.trials.run_baseline_trials(dim=2, noise_std=0.0, p_id=1, baseline_slug="pso")
+    assert updated["status"] == "SUCCESS"
+    assert json.loads(prov_file.read_text())["budget"] == 150
+
+    # The configured allowance scales with the problem dimension.
+    service.trials.run_baseline_trials(dim=5, noise_std=0.0, p_id=1, baseline_slug="pso")
+    higher_dim_provenance = eval_dir / "5D" / "std_0.0" / "f1" / "pso" / "provenance.json"
+    assert json.loads(higher_dim_provenance.read_text())["budget"] == 375
 
 
 def test_service_champion_execution(tmp_path: Path):
@@ -385,7 +397,7 @@ def test_evaluation_config_repository_edge_cases(tmp_path: Path):
     repo_bench_empty = EvaluationConfigRepository(config_path=bench_empty_file)
     cfg_bench_empty = repo_bench_empty.load_config()
     assert cfg_bench_empty.target_eval_runs == 20
-    assert cfg_bench_empty.budget_multiplier == 10000
+    assert cfg_bench_empty.budget_multiplier == 10_000
 
     # 4. File with [evaluation] section fallback
     eval_file = tmp_path / "eval_fallback.toml"
@@ -701,9 +713,7 @@ target_noise_levels = [0.2]
     assert all(samples for samples in provenance["observed_objectives"])
     assert all(
         samples[-1]["evaluations"] == count
-        for samples, count in zip(
-            provenance["observed_objectives"], provenance["evaluations_used"]
-        )
+        for samples, count in zip(provenance["observed_objectives"], provenance["evaluations_used"])
     )
     assert all(
         "clean_y" not in sample

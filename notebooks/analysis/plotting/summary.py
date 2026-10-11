@@ -16,16 +16,16 @@ def build_attainment_figure(results: ReliabilityAnalysisResult) -> go.Figure:
         for idx, model in enumerate(model_order)
     }
     baseline_styles = {"CMA-ES": "#334155", "DE": "#7C3AED", "PSO": "#0F766E"}
-    eval_grid_reliability = results.evaluations
-    if not len(eval_grid_reliability):
+    evaluations = results.evaluations
+    if not len(evaluations):
         raise ValueError("No complete native conditions available for attainment.")
-    max_budget = eval_grid_reliability[-1]
-    fig10b = go.Figure()
+    max_budget = evaluations[-1]
+    figure = go.Figure()
     for series in results.attainment:
         if series.baseline:
-            fig10b.add_trace(
+            figure.add_trace(
                 go.Scatter(
-                    x=eval_grid_reliability,
+                    x=evaluations,
                     y=series.probability,
                     mode="lines",
                     name=series.solver,
@@ -36,40 +36,33 @@ def build_attainment_figure(results: ReliabilityAnalysisResult) -> go.Figure:
             )
             continue
         model = series.solver
-        curve, lower, upper = series.probability, series.lower, series.upper
         color = model_colors[model]
-        fig10b.add_trace(
-            go.Scatter(
-                x=eval_grid_reliability,
-                y=upper,
-                mode="lines",
-                line=dict(width=0),
-                showlegend=False,
-                hoverinfo="skip",
+        bounds = [
+            (series.upper, {}),
+            (series.lower, {"fill": "tonexty", "fillcolor": "rgba(56, 189, 248, 0.12)"}),
+        ]
+        for values, fill_options in bounds:
+            figure.add_trace(
+                go.Scatter(
+                    x=evaluations,
+                    y=values,
+                    mode="lines",
+                    line=dict(width=0),
+                    showlegend=False,
+                    hoverinfo="skip",
+                    **fill_options,
+                )
             )
-        )
-        fig10b.add_trace(
+        figure.add_trace(
             go.Scatter(
-                x=eval_grid_reliability,
-                y=lower,
-                mode="lines",
-                line=dict(width=0),
-                fill="tonexty",
-                fillcolor="rgba(56, 189, 248, 0.12)",
-                showlegend=False,
-                hoverinfo="skip",
-            )
-        )
-        fig10b.add_trace(
-            go.Scatter(
-                x=eval_grid_reliability,
-                y=curve,
+                x=evaluations,
+                y=series.probability,
                 mode="lines",
                 name=model,
                 line=dict(color=color, width=2.6, dash="dash"),
             )
         )
-    fig10b.update_layout(
+    figure.update_layout(
         template="plotly_white",
         title=dict(
             text='<b>Figure 10B: Clean Target Attainment During Search</b><br><span style="font-size:13px;color:#475569;font-weight:normal;">Best-queried clean-gap attainment (not returned-point reliability); LLMs dashed, classical baselines solid; 95% trial-bootstrap bands; shorter-budget traces are carried forward within the plotted range</span>',
@@ -92,7 +85,7 @@ def build_attainment_figure(results: ReliabilityAnalysisResult) -> go.Figure:
             font=dict(size=12, family=FONT_FAMILY),
         ),
     )
-    fig10b.update_xaxes(
+    figure.update_xaxes(
         type="log",
         range=[0, np.log10(max_budget)],
         title_text="<b>Evaluations</b>",
@@ -102,7 +95,7 @@ def build_attainment_figure(results: ReliabilityAnalysisResult) -> go.Figure:
         ticks="outside",
         tickfont=dict(size=13, family=FONT_FAMILY, color="#1E293B"),
     )
-    fig10b.update_yaxes(
+    figure.update_yaxes(
         range=[0, 1.05],
         title_text="<b>Probability of Querying a Target Point</b>",
         tickformat=".0%",
@@ -112,4 +105,4 @@ def build_attainment_figure(results: ReliabilityAnalysisResult) -> go.Figure:
         ticks="outside",
         tickfont=dict(size=13, family=FONT_FAMILY, color="#1E293B"),
     )
-    return fig10b
+    return figure

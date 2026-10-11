@@ -122,5 +122,31 @@ Each explicit export call rebuilds the figures from calculated results and write
 the requested PNGs, replacing existing files at the established output paths.
 Changing styling requires only another export, not recalculation.
 
+Profile grids and logarithmic x-axes end at the configured objective-query
+allowance, `dimension * budget_multiplier` (currently 10,000 per dimension).
+Early termination still carries the last observation forward within that allowance,
+but analysis excludes evaluations recorded with a different budget.
+AUC integrates over each condition's allowance, normalized by its
+logarithmic grid span. Recalculate profiles and performance after restoring
+matching evaluations: earlier saved snapshots retain their historical
+grids and AUC values and must not be exported as new-protocol findings.
+The grid-policy version is recorded in new result provenance.
+
+## Preserved evaluation campaigns
+
+The old proportional-budget campaign is backed up under
+`results/archives/2026-10-11_proportional_budget/`, including traces, statistics,
+figures, reports and champion exports. Its `manifest.json` identifies recorded
+budgets and verified artifact inventories; its README gives a concrete snapshot
+loading/export example. This folder is a local archive, not another database.
+
+For historical figures, use `AnalysisResultsStore(archive / "analysis").load(...)`
+with the chosen snapshot directory and export under
+`results/comparisons/proportional_budget/`. Current analysis use cases accept only
+traces matching the configured budget and current champion. Archived numeric
+results are detached from the live database and remain
+usable without relaxing those checks. Never write new evaluations or figures into
+the archive. Copy it to another device/server for an off-machine backup.
+
 The legacy combined figures notebook has been retired. Use the three notebooks
 in this folder; there is no forwarding notebook or duplicated plotting code.

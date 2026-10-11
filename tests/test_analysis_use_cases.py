@@ -104,6 +104,9 @@ def test_profiles_match_existing_calculations_and_load_once(snapshot, mode):
         len(c.series) for c in result.conditions
     )
     for condition in result.conditions:
+        assert condition.evaluations[0] == 1
+        assert condition.evaluations[-1] == condition.dim * snapshot.config.budget_multiplier
+        assert len(condition.evaluations) == 300
         for series in condition.series:
             runs = snapshot.dataset.get_runs(
                 condition.dim, condition.noise_std, series.problem_id, series.solver
@@ -133,20 +136,62 @@ def test_profiles_match_existing_calculations_and_load_once(snapshot, mode):
             np.testing.assert_array_equal(series.ecdf, expected_ecdf)
 
 
+def test_profiles_use_configured_proportional_budget(snapshot):
+    snapshot = replace(snapshot, config=EvaluationConfig(budget_multiplier=1234))
+    result = AnalyzeEcdfAndConvergence(loader_for(snapshot), EcdfConvergenceEngine()).execute(
+        mode="explicit", dims=None, problems=None, noise_stds=None
+    )
+    for condition in result.conditions:
+        assert condition.evaluations[-1] == condition.dim * 1234
+    assert result.provenance.settings["profile_grid_policy"] == "dimension_proportional_v1"
+
+
+def test_performance_uses_configured_proportional_budget(snapshot):
+    snapshot = replace(snapshot, config=EvaluationConfig(budget_multiplier=1234))
+    ecdf = MagicMock(wraps=EcdfConvergenceEngine())
+    result = AnalyzePerformance(loader_for(snapshot), ecdf, PerformanceMetricsEngine()).execute(
+        dims=None, problems=None, noise_stds=None
+    )
+    assert ecdf.compute_auc_ecdf_matrix.call_args.kwargs["max_evals"] is None
+    assert ecdf.compute_auc_ecdf_matrix.call_args.kwargs["budget_multiplier"] == 1234
+    assert result.provenance.settings["auc_grid_policy"] == "dimension_proportional_v1"
+
+
+def test_checkpoint_fractions_use_proportional_budget(snapshot):
+    table = ReliabilityEngine().compute_checkpoint_table(
+        snapshot.dataset,
+        checkpoint_fractions=[0.1, 1.0],
+        budget_multiplier=100,
+    )
+    assert set(table.loc[table["Checkpoint Fraction"] == 0.1, "Checkpoint Evaluations"]) == {20, 50}
+    assert set(table.loc[table["Checkpoint Fraction"] == 1.0, "Checkpoint Evaluations"]) == {
+        200,
+        500,
+    }
+    assert set(table["Dim"]) == {2, 5}
+
+
 def test_reliability_matches_bootstrap_and_preserves_raw_csv_identifiers(snapshot):
     result = AnalyzeReliability(
         loader_for(snapshot), TransferAnalysisEngine(), ReliabilityEngine()
     ).execute(dims=None, problems=None, noise_stds=None)
     assert result.native.iloc[0]["Model"] == "raw-model"
     assert result.primary.iloc[0]["Model"] == "Model"
-    runs = snapshot.dataset.get_runs(2, 0.0, 1, "Model / baseline")
     rel = snapshot.config.reliability
-    expected = ReliabilityEngine().compute_attainment_band(
-        runs, result.evaluations, rel.primary_target, rel.bootstrap_samples, rel.bootstrap_seed
-    )
-    series = next(s for s in result.attainment if not s.baseline)
-    for actual, expected_values in zip([series.probability, series.lower, series.upper], expected):
-        np.testing.assert_array_equal(actual, expected_values)
+    assert [(series.solver, series.baseline) for series in result.attainment] == [
+        ("Model", False),
+        ("PSO", True),
+    ]
+    for series, solver in zip(result.attainment, ["Model / baseline", "PSO"]):
+        runs = snapshot.dataset.get_runs(2, 0.0, 1, solver)
+        expected = ReliabilityEngine().compute_attainment_band(
+            runs, result.evaluations, rel.primary_target, rel.bootstrap_samples, rel.bootstrap_seed
+        )
+        assert series.trace_count == len(runs)
+        for actual, expected_values in zip(
+            [series.probability, series.lower, series.upper], expected
+        ):
+            np.testing.assert_array_equal(actual, expected_values)
 
 
 def test_noise_and_performance_match_domain_services(snapshot):
@@ -172,7 +217,12 @@ def test_noise_and_performance_match_domain_services(snapshot):
     ).execute(**filters)
     engine = EcdfConvergenceEngine()
     expected = engine.compute_auc_ecdf_matrix(
-        snapshot.dataset, snapshot.solver_order, targets=performance.targets, group_by="condition"
+        snapshot.dataset,
+        snapshot.solver_order,
+        targets=performance.targets,
+        group_by="condition",
+        max_evals=None,
+        budget_multiplier=snapshot.config.budget_multiplier,
     )
     pd.testing.assert_frame_equal(performance.table.drop(columns="Canonical Solver"), expected)
     expected_scale, _ = PerformanceMetricsEngine.summarize_auc_results(
@@ -264,6 +314,7 @@ def test_bootstrap_disposes_on_use_case_failure(monkeypatch):
         ("stale_hash", 0),
         ("missing_code", 0),
         ("stale_validation", 0),
+        ("stale_budget", 0),
         ("skipped_tail", 1),
     ],
 )
@@ -284,6 +335,7 @@ def test_loader_eligibility_and_dynamic_models(state, expected_native):
     )
     record = dict(
         evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
+        budget=20_000,
         return_validation_version=CHAMPION_RETURN_VALIDATION_VERSION,
         error_definition=ERROR_DEFINITION,
         evaluation_kind="native",
@@ -313,9 +365,12 @@ def test_loader_eligibility_and_dynamic_models(state, expected_native):
         record["code_hash"] = "old"
     if state == "stale_validation":
         record["return_validation_version"] = -1
+    if state == "stale_budget":
+        record["budget"] = 1_000_000
     baseline = dict(
         record,
         baseline="pso",
+        budget=20_000,
         solver_folder="pso",
         evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
     )

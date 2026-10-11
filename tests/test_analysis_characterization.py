@@ -8,6 +8,21 @@ from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
 from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
 
 
+@pytest.mark.parametrize("noise_std", [0.0, 0.05, 0.2])
+@pytest.mark.parametrize("include_failed_trace", [False, True])
+def test_adaptive_target_fallbacks(noise_std: float, include_failed_trace: bool) -> None:
+    dataset = EvaluationDataset()
+    if include_failed_trace:
+        dataset.add_run(
+            EvaluationCondition(dim=2, noise_std=noise_std, problem_id=1),
+            "Model / baseline",
+            RunTrace(evaluations=np.array([1]), raw_objectives=np.array([np.inf])),
+        )
+    targets = EcdfConvergenceEngine().compute_adaptive_targets(dataset, noise_std)
+    expected = np.logspace(-8, 2, 51) if noise_std == 0.0 else np.logspace(-2, 3, 51)
+    np.testing.assert_array_equal(targets, expected)
+
+
 def test_ecdf_and_convergence_characterization():
     runs = [
         RunTrace(evaluations=np.array([1, 3, 5]), raw_objectives=np.array([10.0, 2.0, 4.0])),
@@ -80,3 +95,44 @@ def test_auc_preserves_values_without_convergence_statistics(monkeypatch) -> Non
         ]
     )
     pd.testing.assert_frame_equal(table, expected)
+
+
+def test_auc_excludes_attainment_after_fixed_budget() -> None:
+    dataset = EvaluationDataset()
+    for dim in [2, 5]:
+        dataset.add_run(
+            EvaluationCondition(dim=dim, noise_std=0.0, problem_id=1),
+            "Model / baseline",
+            RunTrace(
+                evaluations=np.array([1, 201]),
+                raw_objectives=np.array([10.0, 0.0]),
+            ),
+        )
+    engine = EcdfConvergenceEngine()
+    table = engine.compute_auc_ecdf_matrix(
+        dataset,
+        ["Model / baseline"],
+        np.array([1.0]),
+        group_by="condition",
+        max_evals=200,
+    )
+    np.testing.assert_array_equal(table["AUC-ECDF (%)"], [0.0, 0.0])
+    extended = engine.compute_auc_ecdf_matrix(
+        dataset,
+        ["Model / baseline"],
+        np.array([1.0]),
+        group_by="condition",
+        max_evals=1000,
+    )
+    assert (extended["AUC-ECDF (%)"] > 0).all()
+
+    proportional = engine.compute_auc_ecdf_matrix(
+        dataset,
+        ["Model / baseline"],
+        np.array([1.0]),
+        group_by="condition",
+        max_evals=None,
+        budget_multiplier=100,
+    )
+    assert proportional.loc[proportional["Dim"] == 2, "AUC-ECDF (%)"].iloc[0] == 0.0
+    assert proportional.loc[proportional["Dim"] == 5, "AUC-ECDF (%)"].iloc[0] > 0.0

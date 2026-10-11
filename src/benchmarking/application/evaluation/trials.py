@@ -88,25 +88,18 @@ class EvaluationTrialRunner:
                 provenance=prov,
                 expected_code_hash=expected_code_hash,
                 expected_trials=self.n_runs,
+                expected_budget=dim * self.budget_multiplier,
             )
             if inspection.reason in {"complete", "partial", "not_started"}:
-                clean_errors = prov.get("clean_errors", [])
-                best_objectives = prov.get("best_objectives", [])
-                true_optima = prov.get("true_optima", [])
-                instance_ids = prov.get("instance_ids", [])
-                trial_seeds = prov.get("trial_seeds", [])
-                runtimes = prov.get("runtimes", [])
-                evals_list = prov.get("evaluations_used", [])
-                observed_objectives = prov.get("observed_objectives", [])
                 existing_runs = inspection.reusable_trials
-                clean_errors = clean_errors[:existing_runs]
-                best_objectives = best_objectives[:existing_runs]
-                true_optima = true_optima[:existing_runs]
-                instance_ids = instance_ids[:existing_runs]
-                trial_seeds = trial_seeds[:existing_runs]
-                runtimes = runtimes[:existing_runs]
-                evals_list = evals_list[:existing_runs]
-                observed_objectives = observed_objectives[:existing_runs]
+                clean_errors = prov.get("clean_errors", [])[:existing_runs]
+                best_objectives = prov.get("best_objectives", [])[:existing_runs]
+                true_optima = prov.get("true_optima", [])[:existing_runs]
+                instance_ids = prov.get("instance_ids", [])[:existing_runs]
+                trial_seeds = prov.get("trial_seeds", [])[:existing_runs]
+                runtimes = prov.get("runtimes", [])[:existing_runs]
+                evals_list = prov.get("evaluations_used", [])[:existing_runs]
+                observed_objectives = prov.get("observed_objectives", [])[:existing_runs]
                 # Historical trials have no observation sidecar; preserve their
                 # positions so resumed trial indices do not become misaligned.
                 observed_objectives += [[] for _ in range(existing_runs - len(observed_objectives))]
@@ -120,7 +113,7 @@ class EvaluationTrialRunner:
                         "clean_errors": clean_errors,
                         "n_runs": existing_runs,
                     }
-                elif existing_runs > 0:
+                if existing_runs > 0:
                     can_resume = True
                     self.logger.resuming(existing_runs, self.n_runs)
 
@@ -140,7 +133,6 @@ class EvaluationTrialRunner:
             start_run_idx = existing_runs + 1
             is_incremental = True
 
-        budget = dim * self.budget_multiplier
         noise_model = NoiseModelEnum.NONE if noise_std == 0.0 else NoiseModelEnum.HETEROSCEDASTIC
 
         with self.state_repo.open_run_logger(target_dir, algo_name, is_incremental) as logger_ioh:
@@ -164,12 +156,16 @@ class EvaluationTrialRunner:
                 trial_seeds.append(trial_seed)
 
                 prob.attach_logger(logger_ioh)
-                prob.set_budget(budget)
+                prob.set_budget(dim * self.budget_multiplier)
                 if noise_std > 0.0:
-                    prob.configure_observation_checkpoints(budget, self.observation_trace_points)
+                    prob.configure_observation_checkpoints(
+                        dim * self.budget_multiplier, self.observation_trace_points
+                    )
                 trial_started = time.perf_counter()
                 try:
-                    best_objective, rt, _reported_evals = runner_fn(prob, budget)
+                    best_objective, rt, _reported_evals = runner_fn(
+                        prob, dim * self.budget_multiplier
+                    )
                     best_objective = float(best_objective)
                     if not np.isfinite(best_objective):
                         best_objective = float("inf")
@@ -215,7 +211,7 @@ class EvaluationTrialRunner:
             "problem_id": p_id,
             "dim": dim,
             "noise_std": noise_std,
-            "budget": budget,
+            "budget": dim * self.budget_multiplier,
             "instance_ids": instance_ids,
             "trial_seeds": trial_seeds,
             "true_optima": true_optima,

@@ -1,9 +1,9 @@
 """Application evaluation configuration models for benchmark execution.
 
-Defines the strongly-typed configuration parameter object for EvaluationService.
+Defines validated settings for benchmark execution and analysis workflows.
 """
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from shared.domain.bbob import BBOBFunction
 
@@ -24,7 +24,7 @@ class ReliabilityConfig(BaseModel):
 class EvaluationConfig(BaseModel):
     """Strongly-typed application configuration for multi-trial benchmarking campaigns.
 
-    Provides typed attributes and validated defaults for EvaluationService.
+    Provides typed attributes and validated defaults for evaluation and analysis.
     """
 
     target_eval_runs: int = Field(
@@ -90,5 +90,3 @@ class EvaluationConfig(BaseModel):
         description="Raw benchmark section dictionary from TOML.",
     )
     reliability: ReliabilityConfig = Field(default_factory=ReliabilityConfig)
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)

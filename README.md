@@ -304,7 +304,7 @@ scoring, storage, and thesis interpretation.
 | File | Purpose |
 | --- | --- |
 | `configs/synthesis.toml` | Synthesis matrix, noise conditions, prompt strategies, budgets, retries, and process concurrency. |
-| `configs/benchmark.toml` | Independent trial count, evaluation budget multiplier, timeout, and classical baselines. |
+| `configs/benchmark.toml` | Independent trial count, dimension-proportional evaluation budget, timeout, and classical baselines. |
 | `configs/problems.toml` | BBOB problem descriptions and groupings. |
 | `configs/llms.toml` | Available local-model presets. |
 | `.env` | Active LLM provider and local model/server settings. |

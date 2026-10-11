@@ -35,19 +35,17 @@ class AnalyzeEcdfAndConvergence:
             noise: self.engine.compute_adaptive_targets(dataset, noise_std=noise)
             for noise in dataset.noise_stds
         }
-        grid = np.logspace(0, 6, 300)
-        conditions = []
-        diagnostics = []
+        conditions: list[ConditionProfile] = []
+        diagnostics: list[str] = []
         for dim in dataset.dims:
+            grid = np.geomspace(1, dim * snapshot.config.budget_multiplier, 300)
             for model, solvers in snapshot.models_to_solvers.items():
+                implicit = [s for s in solvers if "(noise-implicit)" in s]
+                adapted = [s for s in solvers if "(noise-adapted)" in s]
+                clean = [
+                    s for s in solvers if "(noise-implicit)" not in s and "(noise-adapted)" not in s
+                ]
                 for noise in dataset.noise_stds:
-                    implicit = [s for s in solvers if "(noise-implicit)" in s]
-                    adapted = [s for s in solvers if "(noise-adapted)" in s]
-                    clean = [
-                        s
-                        for s in solvers
-                        if "(noise-implicit)" not in s and "(noise-adapted)" not in s
-                    ]
                     if mode == "explicit":
                         selected = clean if noise == 0.0 else (adapted or clean)
                     elif mode == "implicit":
@@ -58,8 +56,9 @@ class AnalyzeEcdfAndConvergence:
                         if noise == 0.0 or not implicit or not adapted:
                             continue
                         selected = adapted + implicit
-                    selected = selected + ([] if mode == "comparison" else ["CMA-ES", "PSO", "DE"])
-                    series = []
+                    if mode != "comparison":
+                        selected = selected + ["CMA-ES", "PSO", "DE"]
+                    series: list[ProfileSeries] = []
                     for problem in dataset.problem_ids:
                         for solver in selected:
                             runs = dataset.get_runs(dim, noise, problem, solver)
@@ -88,5 +87,13 @@ class AnalyzeEcdfAndConvergence:
                         )
                     )
         provenance = snapshot.provenance("profiles")
-        provenance = replace(provenance, filters={**provenance.filters, "mode": mode})
+        provenance = replace(
+            provenance,
+            filters={**provenance.filters, "mode": mode},
+            settings={
+                **provenance.settings,
+                "profile_grid_policy": "dimension_proportional_v1",
+                "profile_grid_points": 300,
+            },
+        )
         return ProfileAnalysisResult(mode, conditions, provenance, tuple(diagnostics))

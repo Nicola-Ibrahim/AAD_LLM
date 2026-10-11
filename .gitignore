@@ -83,6 +83,8 @@ celerybeat.pid
 /results/figures/
 /results/reports/
 /results/analysis/
+/results/archives/
+/results/comparisons/
 /results/benchmark/
 /results/profiles/
 /results/ioh_traces/

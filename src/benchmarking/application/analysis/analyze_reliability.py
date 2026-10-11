@@ -9,7 +9,7 @@ from benchmarking.application.analysis.results import (
 )
 from benchmarking.domain.services.reliability import ReliabilityEngine
 from benchmarking.domain.services.transfer import TransferAnalysisEngine
-from benchmarking.domain.vos import EvaluationCondition
+from benchmarking.domain.vos import EvaluationCondition, RunTrace
 
 
 class AnalyzeReliability:
@@ -62,16 +62,18 @@ class AnalyzeReliability:
             else display
         )
         grid = np.array([], dtype=float)
-        series = []
+        series: list[AttainmentSeries] = []
         models = sorted(primary["Model"].unique()) if not primary.empty else []
-        diagnostics = []
+        diagnostics: list[str] = []
         if primary.empty:
             diagnostics.append("No complete current native primary-strategy conditions.")
         else:
-            max_budget = int(primary["Dim"].max()) * snapshot.config.budget_multiplier
-            grid = np.logspace(0, np.log10(max_budget), 200)
+            grid = np.logspace(
+                0, np.log10(int(primary["Dim"].max()) * snapshot.config.budget_multiplier), 200
+            )
+            grouped_runs: list[tuple[str, bool, list[RunTrace]]] = []
             for model in models:
-                runs = []
+                runs: list[RunTrace] = []
                 for _, row in primary[primary["Model"] == model].iterrows():
                     runs.extend(
                         snapshot.dataset.get_runs(
@@ -84,14 +86,7 @@ class AnalyzeReliability:
                 if not runs:
                     diagnostics.append(f"No attainment traces: {model}")
                     continue
-                curve, lower, upper = self.attainment.compute_attainment_band(
-                    runs,
-                    grid,
-                    config.primary_target,
-                    config.bootstrap_samples,
-                    config.bootstrap_seed,
-                )
-                series.append(AttainmentSeries(model, False, curve, lower, upper, len(runs)))
+                grouped_runs.append((model, False, runs))
             paired = {
                 (int(row["Dim"]), float(row["Noise Std"]), int(row["Problem ID"]))
                 for _, row in primary.iterrows()
@@ -105,6 +100,8 @@ class AnalyzeReliability:
                     runs.extend(snapshot.dataset.get(condition, {}).get(baseline, []))
                 if not runs:
                     continue
+                grouped_runs.append((str(baseline), True, runs))
+            for solver, is_baseline, runs in grouped_runs:
                 curve, lower, upper = self.attainment.compute_attainment_band(
                     runs,
                     grid,
@@ -112,7 +109,7 @@ class AnalyzeReliability:
                     config.bootstrap_samples,
                     config.bootstrap_seed,
                 )
-                series.append(AttainmentSeries(str(baseline), True, curve, lower, upper, len(runs)))
+                series.append(AttainmentSeries(solver, is_baseline, curve, lower, upper, len(runs)))
         return ReliabilityAnalysisResult(
             native,
             noise,

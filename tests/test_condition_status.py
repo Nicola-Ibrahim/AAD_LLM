@@ -38,6 +38,7 @@ def test_condition_policy(
         code_available=code,
         directory_exists=directory,
         provenance={
+            "budget": 1_000_000,
             "evaluation_schema_version": schema,
             "error_definition": ERROR_DEFINITION,
             "code_hash": hash_value,
@@ -45,6 +46,7 @@ def test_condition_policy(
         },
         expected_code_hash="current",
         expected_trials=20,
+        expected_budget=1_000_000,
     )
     assert result.status == state
     assert result.reusable_trials == reusable
@@ -58,7 +60,9 @@ def test_confirmed_failure_counts_but_historical_skipped_tail_does_not() -> None
         directory_exists=True,
         expected_code_hash=None,
         expected_trials=20,
+        expected_budget=1_000_000,
         provenance={
+            "budget": 1_000_000,
             "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
             "error_definition": ERROR_DEFINITION,
             "clean_errors": [float("inf")] * 20,
@@ -70,9 +74,38 @@ def test_confirmed_failure_counts_but_historical_skipped_tail_does_not() -> None
     assert result.status == "PENDING"
 
 
+@pytest.mark.parametrize("recorded_budget", [None, 20000, 50000, 100000])
+@pytest.mark.parametrize("baseline", [False, True])
+def test_lower_or_unknown_budget_is_not_reusable(recorded_budget, baseline):
+    provenance = {
+        "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
+        "error_definition": ERROR_DEFINITION,
+        "budget": recorded_budget,
+        "clean_errors": [0.0] * 20,
+    }
+    if baseline:
+        provenance["baseline"] = "pso"
+    else:
+        provenance["model"] = "model"
+        provenance["return_validation_version"] = CHAMPION_RETURN_VALIDATION_VERSION
+    result = inspect_condition(
+        code_available=True,
+        directory_exists=True,
+        provenance=provenance,
+        expected_code_hash=None,
+        expected_trials=20,
+        expected_budget=1_000_000,
+    )
+    assert result.status == "NEEDS_RERUN"
+    assert result.reason == "stale_budget"
+    assert result.recorded_trials == 20
+    assert result.reusable_trials == 0
+
+
 def test_old_champion_results_are_not_reused_after_return_validation_change() -> None:
     provenance = {
         "model": "model",
+        "budget": 1_000_000,
         "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
         "error_definition": ERROR_DEFINITION,
         "code_hash": "current",
@@ -84,6 +117,7 @@ def test_old_champion_results_are_not_reused_after_return_validation_change() ->
         provenance=provenance,
         expected_code_hash="current",
         expected_trials=20,
+        expected_budget=1_000_000,
     )
     assert old.status == "NEEDS_RERUN"
     assert old.reusable_trials == 0
@@ -96,6 +130,7 @@ def test_old_champion_results_are_not_reused_after_return_validation_change() ->
         provenance=provenance,
         expected_code_hash="current",
         expected_trials=20,
+        expected_budget=1_000_000,
     )
     assert current.status == "COMPLETED"
 
@@ -109,6 +144,7 @@ def test_old_champion_results_are_not_reused_after_return_validation_change() ->
             provenance=baseline,
             expected_code_hash=None,
             expected_trials=20,
+            expected_budget=1_000_000,
         ).status
         == "COMPLETED"
     )

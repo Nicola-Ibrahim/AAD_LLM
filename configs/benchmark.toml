@@ -11,7 +11,7 @@ target_eval_runs = 20
 random_seed = 42
 
 # Objective-evaluation budget per dimension: budget = dim * budget_multiplier.
-# Low-budget protocol: 2D=20,000; 3D=30,000; 5D=50,000; 10D=100,000.
+# 2D=20,000; 3D=30,000; 5D=50,000; 10D=100,000.
 budget_multiplier = 10000
 
 # Per-trial execution wall-clock timeout in seconds

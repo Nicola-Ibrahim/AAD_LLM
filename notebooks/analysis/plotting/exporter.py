@@ -1,6 +1,7 @@
 """Notebook-owned PNG export orchestration; accepts calculated results only."""
 
 from pathlib import Path
+from typing import Literal
 
 import plotly.graph_objects as go
 
@@ -12,6 +13,12 @@ from benchmarking.application.analysis.results import (
 )
 
 from . import generalization, performance, profiles, summary
+
+PROFILE_DIRECTORIES = {
+    "explicit": "02_explicit",
+    "implicit": "03_implicit",
+    "comparison": "04_implicit_vs_explicit",
+}
 
 
 class AnalysisFigureExporter:
@@ -29,10 +36,14 @@ class AnalysisFigureExporter:
 
     def export_profiles(self, results: ProfileAnalysisResult) -> None:
         """Optional presentation/export of already-calculated profiles."""
-        directories = {
-            "explicit": "02_explicit",
-            "implicit": "03_implicit",
-            "comparison": "04_implicit_vs_explicit",
+        heading = (
+            "Explicit versus implicit" if results.mode == "comparison" else results.mode.title()
+        )
+        outputs: dict[Literal["convergence", "ecdf"], str] = {
+            "convergence": "implicit_vs_noisy_convergence.png"
+            if results.mode == "comparison"
+            else "convergence_trajectories.png",
+            "ecdf": "target_precision_ecdf.png",
         }
         for profile in results.conditions:
             if not profile.series:
@@ -40,26 +51,13 @@ class AnalysisFigureExporter:
             output = (
                 self.results_dir
                 / "figures"
-                / directories[results.mode]
+                / PROFILE_DIRECTORIES[results.mode]
                 / profile.model_slug
                 / f"{profile.dim}D"
                 / f"std_{profile.noise_std}"
             )
-            for kind, filename in [
-                (
-                    "convergence",
-                    "implicit_vs_noisy_convergence.png"
-                    if results.mode == "comparison"
-                    else "convergence_trajectories.png",
-                ),
-                ("ecdf", "target_precision_ecdf.png"),
-            ]:
+            for kind, filename in outputs.items():
                 target = output / filename
-                heading = (
-                    "Explicit versus implicit"
-                    if results.mode == "comparison"
-                    else results.mode.title()
-                )
                 figure = profiles.build_profile(
                     profile,
                     results.mode,

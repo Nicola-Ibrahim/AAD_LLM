@@ -63,6 +63,7 @@ def inputs(tmp_path: Path) -> AnalysisSnapshot:
     code_hash = hashlib.sha256(code.encode()).hexdigest()
     native = dict(
         evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
+        budget=20_000,
         return_validation_version=CHAMPION_RETURN_VALIDATION_VERSION,
         error_definition=ERROR_DEFINITION,
         model=model,
@@ -80,6 +81,7 @@ def inputs(tmp_path: Path) -> AnalysisSnapshot:
     noise_record = dict(native, noise_std=0.05, evaluation_kind="noise_robustness")
     baseline = dict(
         evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
+        budget=20_000,
         error_definition=ERROR_DEFINITION,
         baseline="pso",
         problem_id=1,

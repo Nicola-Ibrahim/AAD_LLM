@@ -138,3 +138,61 @@ def test_ecdf_and_convergence_share_strategy_palette(mode):
                 assert trace.line.color == CLASSICAL_SOLVERS_STYLE[trace.name.lower()]["color"]
                 assert trace.line.dash == "solid"
     assert styles[0] == styles[1]
+
+
+@pytest.mark.parametrize("kind", ["convergence", "ecdf"])
+@pytest.mark.parametrize("dim,budget", [(2, 20000), (3, 30000), (5, 50000), (10, 100000)])
+def test_profile_axes_end_at_calculated_budget(kind, dim, budget):
+    grid = np.geomspace(1, budget, 300)
+    values = np.ones(300)
+    profile = ConditionProfile(
+        "Model",
+        "model",
+        dim,
+        0.0,
+        [1],
+        ["Model / baseline"],
+        grid,
+        np.array([1e-8]),
+        [ProfileSeries("Model / baseline", 1, values, values, values, values, 20)],
+    )
+    figure = build_profile(profile, "explicit", kind=kind, title="Profile")
+    assert figure.layout.xaxis.range == (0.0, np.log10(budget))
+    assert max(figure.layout.xaxis.tickvals) == budget
+    assert figure.layout.xaxis.ticktext[-1] == f"{budget / 1000:g}k"
+    assert all(max(trace.x) == budget for trace in figure.data)
+
+
+@pytest.mark.parametrize("kind", ["convergence", "ecdf"])
+def test_profile_skips_missing_and_nan_series_without_mutating_arrays(kind):
+    values = np.array([2.0, 1.0])
+    unavailable = np.full(2, np.nan)
+    solvers = ["Model / guided", "Model / thinking", "Model / baseline"]
+    profile = ConditionProfile(
+        "Model",
+        "model",
+        2,
+        0.05,
+        [1],
+        solvers,
+        np.array([1, 20000]),
+        np.array([1e-8]),
+        [
+            ProfileSeries(solvers[0], 1, values, values, values, values, 20),
+            ProfileSeries(solvers[1], 1, unavailable, unavailable, unavailable, unavailable, 0),
+        ],
+    )
+    first = build_profile(profile, "explicit", kind=kind, title="Profile")
+    second = build_profile(profile, "explicit", kind=kind, title="Profile")
+    assert [trace.name for trace in first.data if trace.name] == [solvers[0]]
+    assert first.to_json() == second.to_json()
+    np.testing.assert_array_equal(values, [2.0, 1.0])
+    assert np.isnan(unavailable).all()
+
+
+def test_line_style_results_do_not_share_mutable_state():
+    for solver in ["CMA-ES", "Model / guided", "Unknown solver"]:
+        expected = get_solver_line_style(solver)
+        mutated = get_solver_line_style(solver)
+        mutated["color"] = "#FFFFFF"
+        assert get_solver_line_style(solver) == expected

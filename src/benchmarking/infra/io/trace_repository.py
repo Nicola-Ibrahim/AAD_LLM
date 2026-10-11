@@ -132,6 +132,7 @@ class IOHTraceReader(EvaluationTraceReader):
                 provenance=record,
                 expected_code_hash=None,
                 expected_trials=1,
+                expected_budget=None,  # Raw reading preserves historical protocols.
             )
             if inspection.reason not in {"complete", "partial", "not_started"}:
                 continue

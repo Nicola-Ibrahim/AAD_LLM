@@ -55,20 +55,13 @@ def hsl_to_hex(h: float, s: float, lightness: float) -> str:
     )
 
 
-_DYNAMIC_STYLE_CACHE: dict[str, dict[str, str | float]] = {}
-
-
 def get_solver_line_style(solver_name: str) -> dict[str, str | float]:
     if not solver_name:
         return {"color": "#64748B", "dash": "solid", "width": 2.0}
     s = clean_solver_name(solver_name)
     s_lower = s.lower()
-    if s in _DYNAMIC_STYLE_CACHE:
-        return _DYNAMIC_STYLE_CACHE[s]
     if s_lower in CLASSICAL_SOLVERS_STYLE:
-        res = CLASSICAL_SOLVERS_STYLE[s_lower].copy()
-        _DYNAMIC_STYLE_CACHE[s] = res
-        return res
+        return CLASSICAL_SOLVERS_STYLE[s_lower].copy()
     if " / " in s:
         model_part, strat_part = s.split(" / ", 1)
         strat_key = strat_part.strip().lower()
@@ -80,14 +73,10 @@ def get_solver_line_style(solver_name: str) -> dict[str, str | float]:
         else:
             base_hue = stable_hue(strat_key)
             hex_color = hsl_to_hex(base_hue, s=0.85, lightness=0.45 if is_large else 0.62)
-        res = {"color": hex_color, "dash": "dash", "width": line_width}
-        _DYNAMIC_STYLE_CACHE[s] = res
-        return res
+        return {"color": hex_color, "dash": "dash", "width": line_width}
     hue = stable_hue(s_lower)
     hex_color = hsl_to_hex(hue, s=0.75, lightness=0.50)
-    res = {"color": hex_color, "dash": "dash", "width": 2.0}
-    _DYNAMIC_STYLE_CACHE[s] = res
-    return res
+    return {"color": hex_color, "dash": "dash", "width": 2.0}
 
 
 def get_solver_color(solver_name: str) -> str:

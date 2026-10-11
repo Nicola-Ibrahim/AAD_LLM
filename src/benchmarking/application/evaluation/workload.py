@@ -75,7 +75,11 @@ class EvaluationWorkload:
     # ── Status Inspection Helper ─────────────────────────────────────────────────
 
     def inspect_status(
-        self, target_dir: Path, expected_code_hash: str | None = None, code_valid: bool = True
+        self,
+        target_dir: Path,
+        dim: int,
+        expected_code_hash: str | None = None,
+        code_valid: bool = True,
     ) -> ConditionStatus:
         return inspect_condition(
             code_available=code_valid,
@@ -83,6 +87,7 @@ class EvaluationWorkload:
             provenance=self.state_repo.read_provenance(target_dir),
             expected_code_hash=expected_code_hash,
             expected_trials=self.n_runs,
+            expected_budget=dim * self.config.budget_multiplier,
         )
 
     # ── Workload Auditing Helpers & Builders ────────────────────────────────────
@@ -146,7 +151,7 @@ class EvaluationWorkload:
         if target_problem_id is not None:
             display_suffix = f" (f{source_problem_id} → f{p_id})"
         inspection = self.inspect_status(
-            target_dir, expected_code_hash=code_hash, code_valid=code_valid
+            target_dir, dim, expected_code_hash=code_hash, code_valid=code_valid
         )
 
         row_key = f"{champ_key}_eval_std{eval_noise}" if is_noise_robustness else champ_key
@@ -269,7 +274,7 @@ class EvaluationWorkload:
                     / baseline_slug
                 )
                 inspection = self.inspect_status(
-                    target_dir, expected_code_hash=None, code_valid=True
+                    target_dir, dim, expected_code_hash=None, code_valid=True
                 )
                 rows.append(
                     {

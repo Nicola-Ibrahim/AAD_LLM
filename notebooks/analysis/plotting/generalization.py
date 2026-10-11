@@ -22,6 +22,16 @@ def build_noise_success_figure(results: NoiseRobustnessResult) -> go.Figure:
     dims = sorted(aggregate["Dim"].unique())
     models = sorted(aggregate["Model"].unique())
     labels = {model: results.model_labels[model] for model in models}
+    model_styles = {}
+    ordered_labels = sorted(labels.values())
+    for model, label in labels.items():
+        baseline = str(model).lower() in {"cmaes", "cma-es", "de", "pso"}
+        color = (
+            str(get_solver_line_style(label)["color"])
+            if baseline
+            else get_model_scale_color(label, ordered_labels)
+        )
+        model_styles[model] = dict(color=color, dash="solid" if baseline else "dash", width=2.5)
     noises = sorted(table["Noise Std"].unique())
     rows = ceil(len(dims) / 2)
     figure = make_subplots(
@@ -39,13 +49,6 @@ def build_noise_success_figure(results: NoiseRobustnessResult) -> go.Figure:
             )
             if group["Primary Success Rate"].isna().all():
                 continue
-            baseline = str(model).lower() in {"cmaes", "cma-es", "de", "pso"}
-            style = get_solver_line_style(labels[model])
-            color = (
-                str(style["color"])
-                if baseline
-                else get_model_scale_color(labels[model], sorted(labels.values()))
-            )
             figure.add_trace(
                 go.Scatter(
                     x=noises,
@@ -55,7 +58,7 @@ def build_noise_success_figure(results: NoiseRobustnessResult) -> go.Figure:
                     legendgroup=labels[model],
                     showlegend=index == 0,
                     connectgaps=False,
-                    line=dict(color=color, dash="solid" if baseline else "dash", width=2.5),
+                    line=model_styles[model],
                     error_y=dict(
                         type="data",
                         symmetric=False,

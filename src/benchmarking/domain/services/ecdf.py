@@ -103,18 +103,20 @@ class EcdfConvergenceEngine:
         ] = "dim",
         max_evals: int | None = 1_000_000,
         n_grid_points: int = 200,
+        budget_multiplier: int = 10_000,
     ) -> pd.DataFrame:
         """Compute Area Under the Runtime ECDF (AUC-ECDF) matrix disaggregated by grouping axis.
 
         Returns a long-format DataFrame with percentage AUC values scaled to [0, 100].
-        Standardized to 10^6 max evaluations budget across all conditions.
+        When max_evals is None, each condition uses dim * budget_multiplier.
         Targets can be a single np.ndarray or a dictionary mapping noise_std to target arrays.
         """
         rows = []
 
         for cond, s_dict in benchmark_data.items():
-            dim_budget = max_evals if max_evals is not None else cond.dim * 10000
-            c_grid = np.logspace(0, np.log10(dim_budget), n_grid_points)
+            c_grid = np.geomspace(
+                1, cond.dim * budget_multiplier if max_evals is None else max_evals, n_grid_points
+            )
             log_x = np.log10(c_grid)
             x_range = float(log_x[-1] - log_x[0])
 
@@ -165,11 +167,6 @@ class EcdfConvergenceEngine:
         n_targets: int = 51,
     ) -> np.ndarray:
         """Compute noise-aware adaptive logarithmic target thresholds spanning empirical error range."""
-        if not benchmark_data:
-            if noise_std <= 0.0:
-                return np.logspace(-8, 2, n_targets)
-            return np.logspace(-2, 3, n_targets)
-
         mins: list[float] = []
         maxs: list[float] = []
         for cond, s_dict in benchmark_data.items():

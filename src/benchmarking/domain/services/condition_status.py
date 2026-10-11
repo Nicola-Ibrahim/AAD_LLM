@@ -31,8 +31,12 @@ def inspect_condition(
     provenance: Mapping[str, object] | None,
     expected_code_hash: str | None,
     expected_trials: int,
+    expected_budget: int | None,
 ) -> ConditionStatus:
-    """Reuse only results scored under the current champion-return policy."""
+    """Inspect validity; None budget supports budget-agnostic historical readers.
+
+    Execution, readiness and current analysis supply their configured budget.
+    """
     recorded = executed_trial_count(provenance) if provenance is not None else 0
     median = (
         provenance.get("median_error", provenance.get("median_clean_error")) if provenance else None
@@ -58,6 +62,8 @@ def inspect_condition(
         return ConditionStatus(
             "NEEDS_RERUN", recorded, 0, expected_trials, median_error, "stale_champion"
         )
+    if expected_budget is not None and provenance.get("budget") != expected_budget:
+        return ConditionStatus("NEEDS_RERUN", recorded, 0, expected_trials, None, "stale_budget")
     complete = recorded >= expected_trials
     return ConditionStatus(
         "COMPLETED" if complete else "PENDING",
