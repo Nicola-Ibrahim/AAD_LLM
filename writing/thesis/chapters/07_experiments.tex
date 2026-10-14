@@ -3,21 +3,17 @@
 \label{chap:experiments}
 %==============================================================================
 
-A low clean optimality gap during synthesis shows how a candidate performs
-on the instance used to select it. It does not establish whether the
-selected optimizer remains effective across other instances or under
-different observation noise. The experiments therefore assess generated
-optimizers beyond their synthesis evaluations, examining search progress,
-target attainment, and the accuracy of returned solutions.
+A low synthesis gap establishes performance on the selection instance.
+Independent benchmarking examines whether selected optimizers remain
+effective across instances, using search progress, target attainment,
+and returned-solution accuracy.
 
 The study first benchmarks champions under the function, dimension, and
 noise conditions used during synthesis. Comparisons with CMA-ES,
 Differential Evolution, and Particle Swarm Optimization provide reference
-performance under the same objective-evaluation budgets. A separate
-noise-robustness study evaluates champions synthesized under clean
-observations while varying evaluation noise and keeping each selected
-algorithm fixed. This separates performance under matched synthesis and
-evaluation conditions from sensitivity to a changed observation environment.
+performance under the same objective-evaluation budgets. The noise-robustness design instead holds clean-synthesis champions
+fixed while varying evaluation noise; the available evidence is discussed
+separately.
 
 %==============================================================================
 \section{Synthesis Setup}
@@ -25,7 +21,8 @@ evaluation conditions from sensitivity to a changed observation environment.
 %==============================================================================
 
 The experiments vary the LLM, prompt mode and scaffold, BBOB function,
-dimension, and observation noise level. The synthesis procedure and full prompt definitions are given in
+dimension, and observation noise level. The synthesis procedure and
+full prompt definitions are given in
 Chapter~\ref{chap:methodology}.
 
 Five functions from the noiseless BBOB suite are selected to examine
@@ -80,11 +77,7 @@ control noise relative to the clean optimality gap. Each stochastic
 objective evaluation uses a new noise realization.
 
 We distinguish synthesis noise, $\sigma_{\mathrm{synth}}$, from
-benchmark noise, $\sigma_{\mathrm{eval}}$. The native and
-noise-robustness evaluations are described in
-Sections~\ref{sec:benchmark_results} and~\ref{sec:noise_robustness},
-respectively.
-
+benchmark noise, $\sigma_{\mathrm{eval}}$. 
 Three locally hosted LLMs are included in the completed synthesis
 experiments. Table~\ref{tab:llm_configurations} identifies the model
 artifacts. The models were hosted through a separate Python LLM server,
@@ -116,7 +109,9 @@ two prompt modes, four scaffolds, and four noise levels
 ($5\times4\times2\times4\times4=640$). The three models therefore cover
 1,920 model-specific conditions in total. Each synthesis run has a maximum
 of 10 iterations and a configured budget of $10^6$ objective evaluations
-per candidate. This is the intended allowance; the case study in
+per candidate. These counts describe distinct synthesis conditions;
+multiple runs may contribute candidates to the same condition.
+The case study in
 Section~\ref{sec:generated_program_cases} identifies a historical
 execution that exceeded it.
 
@@ -235,36 +230,32 @@ conditions are represented.
 \section{Performance Results}
 \label{sec:benchmark_results}
 
-
 All 1,920 native benchmark conditions have 20 terminal trial results,
-giving 38,400 terminal outcomes. Their recorded code hashes match the
-currently selected champions, and their provenance satisfies the current
-budget and validity checks. The terminal summaries therefore retain all
-960 Explicit conditions and all 960 Implicit conditions, with 19,200
-outcomes in each mode. Confirmed execution failures remain included;
-complete coverage does not imply successful optimization.
-Tables~\ref{tab:explicit_summary} and~\ref{tab:implicit_summary} report
-this retained coverage.
+giving 38,400 terminal outcomes. Their recorded code hashes match the selected champions, and the
+independent benchmark records satisfy the current evaluation-budget
+and validity checks. Each mode contributes 960 conditions and 19,200
+outcomes, including confirmed execution failures.
 
 The model and prompt tables report equally weighted returned-solution
 success rates across eligible conditions. Raw gaps are not averaged
 across functions because their scales differ.
 
 In the native comparisons, each noise level uses its own synthesized
-champion. These results describe the combined synthesis and evaluation
-conditions. The later noise-robustness comparison holds the champion
-fixed to examine changes in evaluation noise.
+champion. These comparisons therefore describe matched synthesis and evaluation
+conditions, rather than the noise sensitivity of a fixed champion.
 
-The figures compare the four prompt strategies with CMA-ES, DE,
-and PSO in separate function panels. Explicit results are presented
-first, followed by Implicit results and their aggregate returned-solution
-success rates. Each function panel uses its own selected champions.
+The paired plots compare the four prompt strategies with CMA-ES,
+DE, and PSO in separate function panels. Convergence shows median
+best-queried clean gaps, while the ECDF shows attainment over the adaptive
+target set. Reaching the display floor or full adaptive-target attainment
+does not establish that every trial returns a solution meeting $10^{-8}$.
+Explicit results are presented first, followed by Implicit results and
+aggregate returned-solution success rates. Each function panel uses its
+own selected champions.
 
 The Explicit experiments provide task information about the observation
 environment. Explicit-Clean covers clean synthesis and evaluation;
 Explicit-Noisy covers the three positive native noise levels.
-Table~\ref{tab:explicit_summary} reports these groups separately for
-each model and scaffold.
 
 The selected profiles cover all three LLMs, with each model shown
 in both $D=2$ and $D=5$ across the two prompt modes. Because model,
@@ -272,17 +263,20 @@ dimension, and noise vary between examples, they illustrate search
 behavior rather than provide a controlled comparison of models or modes.
 Appendix~\ref{app:benchmark_profiles} provides the remaining matched
 profiles for all three models, $D\in\{2,5\}$, and the selected noise
-levels. The aggregate tables also include $\sigma=0.1$.
+levels. The aggregate tables cover all four experimental dimensions and
+noise levels, including $\sigma=0.1$. Adaptive target sets vary by noise
+level, so ECDF heights across these sets do not represent a common
+absolute accuracy.
 
-\begin{figure}[!htbp]
+\begin{figure}[p]
     \centering
-    \includegraphics[width=\textwidth,height=0.36\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_32b/2D/std_0.0/convergence_trajectories.png}
+    \includegraphics[width=\textwidth,height=0.42\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_32b/2D/std_0.0/convergence_trajectories.png}
     \par\smallskip
-    \includegraphics[width=\textwidth,height=0.36\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_32b/2D/std_0.0/target_precision_ecdf.png}
+    \includegraphics[width=\textwidth,height=0.42\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_32b/2D/std_0.0/target_precision_ecdf.png}
     \caption[Explicit-Clean profiles: Qwen 32B, 2D]{\textbf{Explicit-Clean profiles: Qwen2.5-Coder-32B-Instruct, $D=2$, $\sigma=0$.}
     Convergence above shows median best-queried clean gaps and IQR bands;
     the adaptive-target ECDF below shows the proportion of trial--target
-pairs attained within each evaluation count.
+pairs attained within a given evaluation count.
     Each function panel compares four prompt strategies with CMA-ES, DE,
     and PSO. The query allowance is 20,000; later values are carried forward.}
     \label{fig:explicit_qwen32_clean}
@@ -295,19 +289,20 @@ Vectorization eventually also reaches the full target set. On Rastrigin,
 Thinking and Vectorization achieve substantial later improvements and
 full target attainment, while CMA-ES plateaus. On Gallagher, all four
 generated champions attain a greater final fraction of targets than
-CMA-ES, although PSO improves earlier. Baseline's limited attainment on
-Sphere contrasts with its stronger results on Rosenbrock and Gallagher,
-showing that its performance depends on the function.
+CMA-ES, although PSO improves earlier. Baseline's limited attainment on Sphere contrasts with its stronger
+results on Rosenbrock and Gallagher.
 
-\begin{figure}[!htbp]
+The next profile examines a five-dimensional noisy condition,
+where generated search is more limited on several functions.
+
+\begin{figure}[p]
     \centering
-    \includegraphics[width=\textwidth,height=0.36\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_14b/5D/std_0.05/convergence_trajectories.png}
+    \includegraphics[width=\textwidth,height=0.42\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_14b/5D/std_0.05/convergence_trajectories.png}
     \par\smallskip
-    \includegraphics[width=\textwidth,height=0.36\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_14b/5D/std_0.05/target_precision_ecdf.png}
+    \includegraphics[width=\textwidth,height=0.42\textheight,keepaspectratio]{images/experiments/02_explicit/qwen_14b/5D/std_0.05/target_precision_ecdf.png}
     \caption[Explicit-Noisy profiles: Qwen 14B, 5D]{\textbf{Explicit-Noisy profiles: Qwen2.5-Coder-14B-Instruct, $D=5$, $\sigma=0.05$.}
-    Native synthesis and evaluation use the same noise level. Convergence
-    is above and adaptive-target ECDF below, retaining the five functions,
-    four strategies, and classical references. The query allowance is
+    Native synthesis and evaluation use the same noise level. The upper plots show median best-queried clean gaps with IQR bands;
+    the lower plots show adaptive-target ECDFs for the same comparisons. The query allowance is
     50,000; later values are carried forward.}
     \label{fig:explicit_qwen14_noisy}
 \end{figure}
@@ -322,12 +317,15 @@ smaller median gap on Discus, and DE achieves the smallest median gap
 and highest final target attainment on Rastrigin. On Gallagher, all
 generated champions attain fewer targets than DE and PSO.
 
+The DeepSeek profile provides a contrasting noisy example, with
+favorable generated search on Sphere and Rastrigin alongside weaker
+results on Rosenbrock and Discus.
 
-\begin{figure}[!htbp]
+\begin{figure}[p]
     \centering
-    \includegraphics[width=\textwidth,height=0.36\textheight,keepaspectratio]{images/experiments/02_explicit/deepseek_coder_v2_lite_instruct_q4_k_m/5D/std_0.2/convergence_trajectories.png}
+    \includegraphics[width=\textwidth,height=0.42\textheight,keepaspectratio]{images/experiments/02_explicit/deepseek_coder_v2_lite_instruct_q4_k_m/5D/std_0.2/convergence_trajectories.png}
     \par\smallskip
-    \includegraphics[width=\textwidth,height=0.36\textheight,keepaspectratio]{images/experiments/02_explicit/deepseek_coder_v2_lite_instruct_q4_k_m/5D/std_0.2/target_precision_ecdf.png}
+    \includegraphics[width=\textwidth,height=0.42\textheight,keepaspectratio]{images/experiments/02_explicit/deepseek_coder_v2_lite_instruct_q4_k_m/5D/std_0.2/target_precision_ecdf.png}
     \caption[Explicit-Noisy profiles: DeepSeek, 5D]{\textbf{Explicit-Noisy profiles: DeepSeek-Coder-V2-Lite-Instruct, $D=5$, $\sigma=0.2$.}
     Convergence above and adaptive-target ECDF below compare native
     champions with classical references under stronger noise.
@@ -335,10 +333,10 @@ generated champions attain fewer targets than DE and PSO.
     \label{fig:explicit_deepseek_noisy}
 \end{figure}
 
-Figure~\ref{fig:explicit_deepseek_noisy} shows contrasting results across
-functions. On Sphere, Thinking and Vectorization reach very small median
-gaps and full adaptive-target attainment, while Baseline and Guided
-retain larger gaps. The classical references perform better on
+In Figure~\ref{fig:explicit_deepseek_noisy}, Thinking and Vectorization
+reach very small median gaps on Sphere. They show full adaptive-target
+attainment, while Baseline and Guided retain larger gaps.
+ The classical references perform better on
 Rosenbrock, and DE achieves the lowest median gap and highest final
 target attainment on Discus. Vectorization is strongest on Rastrigin,
 where its later improvement produces the lowest final median gap and
@@ -353,8 +351,6 @@ Table~\ref{tab:explicit_summary} complements the selected search profiles
 with returned-solution success rates at $\Delta f\leq10^{-8}$.
 Baseline success rates are similar across models under Explicit-Clean
 conditions, but lower and more varied under Explicit-Noisy conditions.
-Because each environment uses separately synthesized champions, this
-comparison does not measure the noise sensitivity of a fixed optimizer.
 
 \begin{table}[htbp]
     \centering
@@ -433,13 +429,13 @@ noisy conditions cover Qwen2.5-Coder-14B-Instruct and
 DeepSeek-Coder-V2-Lite-Instruct at $D=2$, and
 Qwen2.5-Coder-32B-Instruct at $D=5$.
 
-\begin{figure}[!htbp]
+\begin{figure}[p]
     \centering
-    \includegraphics[width=\textwidth,height=0.36\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_14b/2D/std_0.05/convergence_trajectories.png}
+    \includegraphics[width=\textwidth,height=0.42\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_14b/2D/std_0.05/convergence_trajectories.png}
     \par\smallskip
-    \includegraphics[width=\textwidth,height=0.36\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_14b/2D/std_0.05/target_precision_ecdf.png}
+    \includegraphics[width=\textwidth,height=0.42\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_14b/2D/std_0.05/target_precision_ecdf.png}
     \caption[Implicit profiles: Qwen 14B, 2D]{\textbf{Implicit profiles: Qwen2.5-Coder-14B-Instruct, $D=2$, $\sigma=0.05$.}
-    Convergence above shows median queried clean gaps with IQR;
+    Convergence above shows median best-queried clean gaps with IQR bands;
     adaptive-target ECDF below shows trial--target attainment.
     Native champions are evaluated with a 20,000-query allowance;
     later values are carried forward.}
@@ -458,11 +454,14 @@ to attain the full target set. On Gallagher, all four generated
 champions achieve higher final target attainment than the classical
 references.
 
-\begin{figure}[!htbp]
+The next Implicit profile highlights how median convergence and
+target attainment can favor different strategies.
+
+\begin{figure}[p]
     \centering
-    \includegraphics[width=\textwidth,height=0.36\textheight,keepaspectratio]{images/experiments/03_implicit/deepseek_coder_v2_lite_instruct_q4_k_m/2D/std_0.2/convergence_trajectories.png}
+    \includegraphics[width=\textwidth,height=0.42\textheight,keepaspectratio]{images/experiments/03_implicit/deepseek_coder_v2_lite_instruct_q4_k_m/2D/std_0.2/convergence_trajectories.png}
     \par\smallskip
-    \includegraphics[width=\textwidth,height=0.36\textheight,keepaspectratio]{images/experiments/03_implicit/deepseek_coder_v2_lite_instruct_q4_k_m/2D/std_0.2/target_precision_ecdf.png}
+    \includegraphics[width=\textwidth,height=0.42\textheight,keepaspectratio]{images/experiments/03_implicit/deepseek_coder_v2_lite_instruct_q4_k_m/2D/std_0.2/target_precision_ecdf.png}
     \caption[Implicit profiles: DeepSeek, 2D]{\textbf{Implicit profiles: DeepSeek-Coder-V2-Lite-Instruct, $D=2$, $\sigma=0.2$.}
     Convergence above and adaptive-target ECDF below compare the
     generated champions with classical references under stronger noise.
@@ -470,8 +469,7 @@ references.
     \label{fig:implicit_deepseek_noisy}
 \end{figure}
 
-Figure~\ref{fig:implicit_deepseek_noisy} shows contrasting strengths
-across functions. Guided reaches a very small median gap on Sphere,
+In Figure~\ref{fig:implicit_deepseek_noisy}, Guided reaches a very small median gap on Sphere,
 whereas Vectorization plateaus. On Discus, Vectorization instead
 achieves the smallest median gap and full adaptive-target attainment,
 while Thinking retains large errors and attains few targets.
@@ -482,21 +480,23 @@ the different information provided by the two measures. On Gallagher,
 all four generated champions attain more targets than CMA-ES,
 with Baseline reaching full attainment. 
 
-\begin{figure}[!htbp]
+The final Implicit profile examines a five-dimensional condition,
+where later improvements change some of the relative rankings.
+
+\begin{figure}[p]
     \centering
-    \includegraphics[width=\textwidth,height=0.36\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/5D/std_0.2/convergence_trajectories.png}
+    \includegraphics[width=\textwidth,height=0.42\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/5D/std_0.2/convergence_trajectories.png}
     \par\smallskip
-    \includegraphics[width=\textwidth,height=0.36\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/5D/std_0.2/target_precision_ecdf.png}
+    \includegraphics[width=\textwidth,height=0.42\textheight,keepaspectratio]{images/experiments/03_implicit/qwen_32b/5D/std_0.2/target_precision_ecdf.png}
     \caption[Implicit profiles: Qwen 32B, 5D]{\textbf{Implicit profiles: Qwen2.5-Coder-32B-Instruct, $D=5$, $\sigma=0.2$.}
-    Convergence above and adaptive-target ECDF below provide the
-    five-dimensional Implicit example. The query allowance is 50,000;
+    Median best-queried clean gaps with IQR bands are shown above;
+    adaptive-target ECDFs are shown below. The query allowance is 50,000;
     later values are carried forward.}
     \label{fig:implicit_qwen32_noisy}
 \end{figure}
 
-Figure~\ref{fig:implicit_qwen32_noisy} shows different strengths across
-functions. On Sphere, Guided and Vectorization reach much smaller
-median gaps than Thinking, although CMA-ES attains the targets earlier.
+In Figure~\ref{fig:implicit_qwen32_noisy}, Guided and Vectorization
+reach much smaller median gaps on Sphere than Thinking, although CMA-ES attains the targets earlier.
 No displayed optimizer reaches full adaptive-target attainment on
 Rosenbrock. On Discus, Guided improves later but finishes with a smaller
 median gap and greater target attainment than DE. DE performs strongest
@@ -511,7 +511,7 @@ Table~\ref{tab:implicit_summary} summarizes returned-solution success
 across functions, dimensions, and all native noise levels. Under the
 Baseline scaffold, DeepSeek-Coder-V2-Lite-Instruct has the highest
 aggregate success rate, followed by Qwen2.5-Coder-14B-Instruct and
-Qwen2.5-Coder-32B-Instruct. The reported confidence intervals overlap.
+Qwen2.5-Coder-32B-Instruct. The reported intervals overlap.
 
 \begin{table}[htbp]
     \centering
@@ -572,11 +572,6 @@ Qwen2.5-Coder-32B-Instruct. The reported confidence intervals overlap.
 
 \FloatBarrier
 
-The Explicit-Clean Baseline rates are closer across the three models
-than the Implicit rates.
-The larger Qwen model therefore does not consistently lead the smaller
-one across prompt environments.
-
 Vectorization has the highest aggregate success rate for both Qwen
 models under Implicit and Explicit-Clean synthesis. Baseline leads
 for DeepSeek-Coder-V2-Lite-Instruct, although its Implicit rate is
@@ -587,7 +582,8 @@ The Implicit table pools all four noise levels, while the Explicit
 table separates clean and noisy conditions. Assessing the contribution
 of explicit environment information therefore requires comparisons
 over matching conditions, as defined in
-Section~\ref{sec:independent_benchmark}.
+Section~\ref{sec:independent_benchmark}. The selected profiles and
+pooled tables do not establish an overall advantage for either mode.
 
 \FloatBarrier
 
@@ -596,14 +592,15 @@ Section~\ref{sec:independent_benchmark}.
 \label{sec:noise_robustness}
 %==============================================================================
 
-The noise-robustness evaluation tests Explicit-Clean Baseline champions
-under $\sigma_{\mathrm{eval}}\in\{0,0.05,0.1,0.2\}$, keeping the selected
+The native comparisons use a different champion at each noise level.
+The noise-robustness evaluation is designed to test unchanged Explicit-Clean
+Baseline champions under $\sigma_{\mathrm{eval}}\in\{0,0.05,0.1,0.2\}$, keeping the selected
 code, function, and dimension fixed. Champions are not reselected
 between noise levels, although their search procedures may adapt during
-each run. This comparison examines sensitivity to observation noise;
-it does not test transfer between functions or dimensions.
-Figure~\ref{fig:cross_evaluation_success_rate} compares returned-solution
-success with the classical baselines, separately for each dimension.
+each run. This is not a test of transfer between functions or dimensions.
+Figure~\ref{fig:cross_evaluation_success_rate} shows the available
+returned-solution success results alongside the classical baselines,
+separately for each dimension.
 
 \begin{figure}[htbp]
     \centering
@@ -636,12 +633,14 @@ and must not be interpreted as zero success.
 \label{sec:generated_program_cases}
 %==============================================================================
 
-Aggregate success rates do not show how a generated program makes search
-decisions or why a particular instance fails. The following two selected
+The performance comparisons show where selected optimizers succeed
+or fail, but do not explain the decisions responsible for those outcomes. The following two selected
 champions illustrate distinct behaviors; they have different benchmark
 conditions and are not a controlled head-to-head comparison.
-The complete selected programs
-are reproduced with line numbers in Appendix~\ref{app:generated_programs};
+These cases examine reliability and implementation behavior rather
+than demonstrate the emergence of a noise-handling mechanism.
+The complete selected programs are reproduced with line numbers in
+Appendix~\ref{app:generated_programs};
 the excerpts below identify the decisions examined in this section.
 
 A DeepSeek-Coder-V2-Lite-Instruct Explicit-Clean Baseline champion for $f_1$ at $D=2$ is a generated
@@ -661,10 +660,9 @@ two objective values directly. Adding the same constant to both values
 preserves their ordering. Similarly, the global incumbent is selected by
 an \texttt{argmin}, which is unchanged by a common additive offset. This
 avoids the sign-sensitive parent-selection rule found in the next example.
-It does not establish that every implementation detail is ideal: complete
-particle batches can make the optimizer request additional calls near the
-budget boundary, where the benchmark wrapper enforces the actual evaluation
-limit. Its success applies to this clean, two-dimensional condition.
+The implementation can nevertheless request calls beyond the remaining
+budget when evaluating a complete particle batch; the benchmark wrapper
+limits actual objective evaluations. Its success applies to this clean, two-dimensional condition.
 
 In contrast, the DeepSeek-Coder-V2-Lite-Instruct Implicit Baseline champion for noisy $f_1$ at
 $D=5$ and $\sigma=0.05$ is \texttt{ImprovedSES} (experiment 2139,
@@ -713,9 +711,10 @@ history because the program evaluated points before failing to return.
 
 \FloatBarrier
 
-The rule is sensitive to the absolute objective offset. If $s$ is the
-stored best observation, adding a constant $c$ to the objective changes
-the acceptance condition as follows:
+The rule is sensitive to the absolute objective offset. Let
+$\widetilde f(x)$ denote the noisy observation and $s$ the stored best
+observation. Adding a constant $c$ to the objective changes the acceptance
+condition as follows:
 \begin{equation}
     \widetilde f(x)+c < 1.1(s+c)
     \quad\Longleftrightarrow\quad
@@ -749,10 +748,8 @@ at 150 calls on all eleven previously failed instances. For instance 3,
 the stored best observation after the first pass was approximately
 $-241.626$, giving a cutoff of $-265.789$ and zero surviving parents.
 For instance 1, the corresponding observation was $87.588$, its cutoff
-was $96.347$, and five parents survived. The archived terminal records
-do not contain these exception details; these local-state values and the
-exception were obtained by the additional diagnostic, rather than inferred
-from the median alone.
+was $96.347$, and five parents survived. These exception details and local-state values come from the additional
+diagnostic, not the archived terminal records.
 
 To isolate the role of the offset, the same diagnostic added $326.59$ to
 the observations on instance 3, retaining the initial population and
@@ -784,12 +781,10 @@ counter when assessing effort. The much smaller independent search allowance
 also means that the synthesis gap and the finite benchmark gaps cannot be
 interpreted as a contrast of instance effects alone.
 
-The eleven early failures consume only $0.3\%$ of the benchmark budget.
-Their cause is the reproduced empty-population error, rather than budget
-exhaustion. Observation noise can change candidate ordering, but the
-offset-dependent comparison and absence of an empty-population guard
-explain this particular failure pattern. More evaluations do not repair
-that rule. Conversely, the nine finite-return trials still require
-separate quality assessment: their completion does not imply that the
-optimum was found. This distinction motivates reporting finite returns,
-target successes, and failures together with the terminal median.
+Each of the eleven early failures consumes only $0.3\%$ of the
+benchmark budget. The reproduced empty-population error, rather than
+budget exhaustion, explains these failures. Although observation noise
+can change candidate ordering, additional budget does not repair the
+offset-dependent filter or supply the missing empty-population guard.
+This case illustrates why a small synthesis gap must be assessed alongside
+execution reliability and returned-solution accuracy across instances.
