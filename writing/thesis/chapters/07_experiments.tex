@@ -200,15 +200,17 @@ ECDFs, and returned-solution success rates, as defined in
 Section~\ref{subsec:benchmark_performance_measures}.
 
 Returned-solution success is assessed at the primary threshold
-$\tau_{\mathrm{primary}}=10^{-8}$. Aggregate success rates include
-only complete conditions with results from all 20 trials. Each
-condition receives equal weight, as defined in
+$\tau_{\mathrm{primary}}=10^{-8}$. The native success-rate tables
+report each complete condition separately, using its 20 terminal trial
+results. Aggregate summaries, such as the noise-robustness comparison,
+give each complete condition equal weight, as defined in
 Equation~\eqref{eq:benchmark_aggregate_success}.
 The secondary threshold $\tau_{\mathrm{secondary}}=10^{-2}$ is used
 in additional reliability diagnostics.
 
-For each condition, uncertainty in the returned-solution success rate
-is summarized using a 95\% Wilson interval. Aggregate success rates
+For each condition, the reliability diagnostics calculate a 95\% Wilson
+interval. The native tables present the success percentages without
+intervals to keep the configuration grid readable. Aggregate success rates
 use percentile 95\% intervals calculated from 1,000 bootstrap
 resamples. Resampling is performed over whole conditions, keeping
 the 20 trials within each selected condition together.
@@ -236,9 +238,13 @@ independent benchmark records satisfy the current evaluation-budget
 and validity checks. Each mode contributes 960 conditions and 19,200
 outcomes, including confirmed execution failures.
 
-The model and prompt tables report equally weighted returned-solution
-success rates across eligible conditions. Raw gaps are not averaged
-across functions because their scales differ.
+The success-rate tables report the percentage of successful trials for
+each champion separately. Each block fixes the model, synthesis mode,
+dimension, and noise level; functions form the rows and prompt strategies
+form the columns. No cell pools different functions, dimensions, or noise
+levels. Since each cell contains 20 trials, one successful trial corresponds
+to five percentage points. Raw gaps are not averaged across functions
+because their scales differ.
 
 In the native comparisons, each noise level uses its own synthesized
 champion. These comparisons therefore describe matched synthesis and evaluation
@@ -250,7 +256,7 @@ best-queried clean gaps, while the ECDF shows attainment over the adaptive
 target set. Reaching the display floor or full adaptive-target attainment
 does not establish that every trial returns a solution meeting $10^{-8}$.
 Explicit results are presented first, followed by Implicit results and
-aggregate returned-solution success rates. Each function panel uses its
+condition-specific returned-solution success rates. Each function panel uses its
 own selected champions.
 
 The Explicit experiments provide task information about the observation
@@ -263,8 +269,9 @@ dimension, and noise vary between examples, they illustrate search
 behavior rather than provide a controlled comparison of models or modes.
 Appendix~\ref{app:benchmark_profiles} provides the remaining matched
 profiles for all three models, $D\in\{2,5\}$, and the selected noise
-levels. The aggregate tables cover all four experimental dimensions and
-noise levels, including $\sigma=0.1$. Adaptive target sets vary by noise
+levels. Appendix~\ref{app:benchmark_success_rates} reports individual
+success rates for all four experimental dimensions and noise levels,
+including $\sigma=0.1$. Adaptive target sets vary by noise
 level, so ECDF heights across these sets do not represent a common
 absolute accuracy.
 
@@ -348,77 +355,93 @@ fraction of targets.
 \FloatBarrier
 
 Table~\ref{tab:explicit_summary} complements the selected search profiles
-with returned-solution success rates at $\Delta f\leq10^{-8}$.
-Baseline success rates are similar across models under Explicit-Clean
-conditions, but lower and more varied under Explicit-Noisy conditions.
+with returned-solution success rates at $\Delta f\leq10^{-8}$ for the
+same three configurations. In the Qwen2.5-Coder-32B-Instruct clean,
+two-dimensional example, Thinking and Vectorization succeed on Sphere
+in all 20 trials, whereas Baseline and Guided do not reach this threshold
+with their returned solutions. At $D=5$ and $\sigma=0.05$, the selected
+Qwen2.5-Coder-14B-Instruct Guided champion succeeds on Sphere in all
+trials, but none of the displayed generated champions returns a successful
+solution on the other four functions. For DeepSeek-Coder-V2-Lite-Instruct
+at $D=5$ and $\sigma=0.2$, Thinking and Vectorization both achieve
+100\% on Sphere; strict returned-solution success is much less frequent
+on the remaining functions. These percentages concern the returned
+point, not the best point recorded during search or attainment of the
+easier adaptive targets.
+
+\paragraph{Reading a success-rate entry.}
+Consider the Qwen2.5-Coder-32B-Instruct Explicit Baseline champion for
+Rosenbrock ($f_8$), $D=2$, and $\sigma=0$ in
+Table~\ref{tab:explicit_summary}. The same selected program is run on
+BBOB instances 1--20. After each run, its returned point is evaluated
+using the clean objective, and the gap is measured against that
+instance's own optimum, as in Equation~\eqref{eq:benchmark_final_gap}.
+Nineteen trials have a returned-solution gap at most $10^{-8}$.
+Applying Equation~\eqref{eq:benchmark_return_reliability} gives
+\begin{equation}
+    \widehat p_{c,10^{-8}}^{\mathrm{return}}
+    = \frac{19}{20}
+    = 0.95,
+    \qquad \text{success rate} = 95\%.
+    \label{eq:experiment_success_rate_example}
+\end{equation}
+The remaining trial, on instance 16, returns a finite clean gap of
+approximately $0.930$, so it does not meet the target. It is an
+unsuccessful trial at this threshold, not an execution failure. If a
+trial instead fails to execute or returns an invalid solution, it also
+counts as unsuccessful and remains in the denominator of 20. Thus,
+the table entry measures one fixed champion's returned-solution success
+across different instances; it does not pool different champions or
+different noise levels.
 
 \begin{table}[htbp]
     \centering
-    \caption{Returned-solution success rates for Explicit synthesis at
-    $\Delta f\leq10^{-8}$. Each included condition contains 20 trials.
-    Rates and bootstrap confidence limits are expressed as percentages.}
+    \caption{Returned-solution success rates (\%) for the selected Explicit
+    configurations illustrated in this chapter. Each cell reports the percentage
+    of 20 trials with $\Delta f\leq10^{-8}$ for one generated champion.}
     \label{tab:explicit_summary}
-
-    \scriptsize
-    \renewcommand{\arraystretch}{1.2}
-    \setlength{\tabcolsep}{3pt}
-
-    \begin{tabularx}{\textwidth}{
-        >{\raggedright\arraybackslash}X
-        l r r l
-    }
+    \small
+    \renewcommand{\arraystretch}{1.15}
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}X r r r r}
         \hline
-        Model & Strategy &
-        \shortstack[r]{Successful\\trials / total} &
-        \shortstack[r]{Success rate\\(\%)} &
-        \shortstack[l]{95\% bootstrap\\CI (\%)} \\
+        Function & Baseline & Thinking & Vectorization & Guided \\
         \hline
-        \multicolumn{5}{l}{\textbf{Explicit-Clean ($\sigma=0$)}} \\
+        \multicolumn{5}{l}{\textbf{Qwen2.5-Coder-32B-Instruct}, $D=2$, $\sigma=0$} \\
         \hline
-        \shortstack[l]{Qwen2.5-Coder\\14B-Instruct} & Baseline & 137/400 & 34.25 & [17.99, 51.51] \\
-         & Thinking & 141/400 & 35.25 & [17.98, 53.51] \\
-         & Vectorization & 172/400 & 43.00 & [23.24, 62.02] \\
-         & Guided & 96/400 & 24.00 & [8.49, 42.75] \\
-        \hline
-        \shortstack[l]{Qwen2.5-Coder\\32B-Instruct} & Baseline & 145/400 & 36.25 & [15.00, 56.76] \\
-         & Thinking & 184/400 & 46.00 & [25.00, 67.00] \\
-         & Vectorization & 245/400 & 61.25 & [42.25, 80.50] \\
-         & Guided & 79/400 & 19.75 & [5.24, 37.76] \\
-        \hline
-        \shortstack[l]{DeepSeek-Coder\\V2-Lite-Instruct} & Baseline & 144/400 & 36.00 & [18.00, 55.51] \\
-         & Thinking & 79/400 & 19.75 & [5.25, 36.50] \\
-         & Vectorization & 109/400 & 27.25 & [10.98, 46.75] \\
-         & Guided & 120/400 & 30.00 & [14.75, 46.00] \\
+        Sphere ($f_1$) & 0 & 100 & 100 & 0 \\
+        Rosenbrock ($f_8$) & 95 & 35 & 100 & 35 \\
+        Discus ($f_{11}$) & 0 & 0 & 100 & 0 \\
+        Rastrigin ($f_{15}$) & 0 & 100 & 100 & 0 \\
+        Gallagher 101 ($f_{21}$) & 95 & 100 & 100 & 100 \\
         \hline
 
-        \multicolumn{5}{l}{\textbf{Explicit-Noisy ($\sigma\in\{0.05,0.1,0.2\}$)}} \\
+        \multicolumn{5}{l}{\textbf{Qwen2.5-Coder-14B-Instruct}, $D=5$, $\sigma=0.05$} \\
         \hline
-        \shortstack[l]{Qwen2.5-Coder\\14B-Instruct} & Baseline & 85/1200 & 7.08 & [2.17, 12.75] \\
-         & Thinking & 34/1200 & 2.83 & [0.17, 6.83] \\
-         & Vectorization & 129/1200 & 10.75 & [4.41, 17.83] \\
-         & Guided & 195/1200 & 16.25 & [8.25, 25.92] \\
+        Sphere ($f_1$) & 0 & 0 & 0 & 100 \\
+        Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
+        Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
+        Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
+        Gallagher 101 ($f_{21}$) & 0 & 0 & 0 & 0 \\
         \hline
-        \shortstack[l]{Qwen2.5-Coder\\32B-Instruct} & Baseline & 157/1200 & 13.08 & [6.08, 21.00] \\
-         & Thinking & 106/1200 & 8.83 & [3.50, 15.67] \\
-         & Vectorization & 147/1200 & 12.25 & [5.50, 20.59] \\
-         & Guided & 176/1200 & 14.67 & [7.33, 23.42] \\
+
+        \multicolumn{5}{l}{\textbf{DeepSeek-Coder-V2-Lite-Instruct}, $D=5$, $\sigma=0.2$} \\
         \hline
-        \shortstack[l]{DeepSeek-Coder\\V2-Lite-Instruct} & Baseline & 225/1200 & 18.75 & [10.00, 28.42] \\
-         & Thinking & 110/1200 & 9.17 & [3.17, 16.34] \\
-         & Vectorization & 212/1200 & 17.67 & [9.50, 27.67] \\
-         & Guided & 242/1200 & 20.17 & [11.33, 29.09] \\
+        Sphere ($f_1$) & 0 & 100 & 100 & 0 \\
+        Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
+        Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
+        Rastrigin ($f_{15}$) & 0 & 5 & 0 & 0 \\
+        Gallagher 101 ($f_{21}$) & 20 & 0 & 0 & 0 \\
         \hline
     \end{tabularx}
 
     \smallskip
-    \parbox{\textwidth}{\scriptsize
-        Clean and Noisy sections report matched synthesis and evaluation noise.
-        Success rates average condition-level rates equally; because each
-        condition contains 20 trials, they also equal the successful-trial
-        proportions shown. Baseline rows compare models; the remaining rows
-        compare prompt strategies within each model. Intervals use 1,000
-        condition-bootstrap resamples, initializing seed 20260923
-        separately for each row.}
+    \parbox{\textwidth}{\footnotesize
+        Each block fixes the model, synthesis mode, dimension, and native noise
+        level. Values are percentages: 100 means 20 successes out of 20 trials,
+        95 means 19, and 0 means none. Failed executions count as unsuccessful
+        trials. These are point estimates, not confidence intervals. The complete
+        configuration grid is provided in Appendix~\ref{app:benchmark_success_rates}.}
 \end{table}
 
 \FloatBarrier
@@ -507,75 +530,83 @@ substantial variation across trials.
 
 \FloatBarrier
 
-Table~\ref{tab:implicit_summary} summarizes returned-solution success
-across functions, dimensions, and all native noise levels. Under the
-Baseline scaffold, DeepSeek-Coder-V2-Lite-Instruct has the highest
-aggregate success rate, followed by Qwen2.5-Coder-14B-Instruct and
-Qwen2.5-Coder-32B-Instruct. The reported intervals overlap.
+Table~\ref{tab:implicit_summary} reports returned-solution success for
+the same three Implicit configurations as the figures. For
+Qwen2.5-Coder-14B-Instruct at $D=2$ and $\sigma=0.05$, Guided succeeds
+in every trial on Rosenbrock and Discus, while Baseline succeeds in every
+trial on Rosenbrock and Rastrigin. DeepSeek-Coder-V2-Lite-Instruct at
+$D=2$ and $\sigma=0.2$ shows a different pattern: Guided achieves
+100\% on Sphere, Baseline and Thinking achieve 100\% on Rosenbrock,
+and Vectorization achieves 100\% on Discus. For Qwen2.5-Coder-32B-Instruct
+at $D=5$ and $\sigma=0.2$, Guided and Vectorization achieve 100\% on
+Sphere, but no strategy returns a solution within the strict threshold
+on Rosenbrock, Discus, or Rastrigin. Progress in the search profiles
+therefore need not translate into returned-solution success.
 
 \begin{table}[htbp]
     \centering
-    \caption{Returned-solution success rates for Implicit synthesis at
-    $\Delta f\leq10^{-8}$. Each included condition contains 20 trials.
-    Rates and bootstrap confidence limits are expressed as percentages.}
+    \caption{Returned-solution success rates (\%) for the selected Implicit
+    configurations illustrated in this chapter. Each cell reports the percentage
+    of 20 trials with $\Delta f\leq10^{-8}$ for one generated champion.}
     \label{tab:implicit_summary}
+    \small
+    \renewcommand{\arraystretch}{1.15}
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}X r r r r}
+        \hline
+        Function & Baseline & Thinking & Vectorization & Guided \\
+        \hline
+        \multicolumn{5}{l}{\textbf{Qwen2.5-Coder-14B-Instruct}, $D=2$, $\sigma=0.05$} \\
+        \hline
+        Sphere ($f_1$) & 0 & 0 & 100 & 90 \\
+        Rosenbrock ($f_8$) & 100 & 0 & 0 & 100 \\
+        Discus ($f_{11}$) & 0 & 0 & 0 & 100 \\
+        Rastrigin ($f_{15}$) & 100 & 0 & 0 & 0 \\
+        Gallagher 101 ($f_{21}$) & 75 & 85 & 100 & 95 \\
+        \hline
 
-    \scriptsize
-    \renewcommand{\arraystretch}{1.2}
-    \setlength{\tabcolsep}{3pt}
+        \multicolumn{5}{l}{\textbf{DeepSeek-Coder-V2-Lite-Instruct}, $D=2$, $\sigma=0.2$} \\
+        \hline
+        Sphere ($f_1$) & 0 & 0 & 0 & 100 \\
+        Rosenbrock ($f_8$) & 100 & 100 & 0 & 0 \\
+        Discus ($f_{11}$) & 0 & 0 & 100 & 40 \\
+        Rastrigin ($f_{15}$) & 0 & 55 & 80 & 0 \\
+        Gallagher 101 ($f_{21}$) & 60 & 85 & 70 & 15 \\
+        \hline
 
-    \begin{tabularx}{\textwidth}{
-        >{\raggedright\arraybackslash}X
-        l r r l
-    }
+        \multicolumn{5}{l}{\textbf{Qwen2.5-Coder-32B-Instruct}, $D=5$, $\sigma=0.2$} \\
         \hline
-        Model & Strategy &
-        \shortstack[r]{Successful\\trials / total} &
-        \shortstack[r]{Success rate\\(\%)} &
-        \shortstack[l]{95\% bootstrap\\CI (\%)} \\
-        \hline
-        \shortstack[l]{Qwen2.5-Coder\\14B-Instruct} & Baseline & 379/1600 & 23.69 & [15.88, 33.00] \\
-         & Thinking & 221/1600 & 13.81 & [7.25, 21.44] \\
-         & Vectorization & 428/1600 & 26.75 & [18.00, 35.88] \\
-         & Guided & 412/1600 & 25.75 & [17.25, 34.38] \\
-        \hline
-        \shortstack[l]{Qwen2.5-Coder\\32B-Instruct} & Baseline & 313/1600 & 19.56 & [12.06, 28.38] \\
-         & Thinking & 313/1600 & 19.56 & [12.25, 28.45] \\
-         & Vectorization & 431/1600 & 26.94 & [18.37, 36.38] \\
-         & Guided & 415/1600 & 25.94 & [18.12, 34.06] \\
-        \hline
-        \shortstack[l]{DeepSeek-Coder\\V2-Lite-Instruct} & Baseline & 552/1600 & 34.50 & [25.31, 44.13] \\
-         & Thinking & 263/1600 & 16.44 & [9.87, 23.44] \\
-         & Vectorization & 438/1600 & 27.38 & [18.81, 36.75] \\
-         & Guided & 547/1600 & 34.19 & [24.81, 42.45] \\
+        Sphere ($f_1$) & 0 & 0 & 100 & 100 \\
+        Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
+        Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
+        Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
+        Gallagher 101 ($f_{21}$) & 10 & 0 & 45 & 0 \\
         \hline
     \end{tabularx}
 
     \smallskip
-    \parbox{\textwidth}{\scriptsize
-        All rows pool the four native noise levels, $\sigma\in\{0,0.05,0.1,0.2\}$.
-        Success rates average condition-level rates equally; because each
-        condition contains 20 trials, they also equal the successful-trial
-        proportions shown. Baseline rows compare models; the remaining rows
-        compare prompt strategies within each model. Intervals use 1,000
-        condition-bootstrap resamples, initializing seed 20260923
-        separately for each row.}
+    \parbox{\textwidth}{\footnotesize
+        Each block fixes the model, synthesis mode, dimension, and native noise
+        level. Values are percentages: 100 means 20 successes out of 20 trials,
+        95 means 19, and 0 means none. Failed executions count as unsuccessful
+        trials. These are point estimates, not confidence intervals. The complete
+        configuration grid is provided in Appendix~\ref{app:benchmark_success_rates}.}
 \end{table}
 
 \FloatBarrier
 
-Vectorization has the highest aggregate success rate for both Qwen
-models under Implicit and Explicit-Clean synthesis. Baseline leads
-for DeepSeek-Coder-V2-Lite-Instruct, although its Implicit rate is
-only slightly higher than Guided's. These rankings summarize the
-included conditions and need not hold for every function or dimension.
+The condition-specific tables expose differences that pooled percentages
+would conceal: a strategy can succeed consistently on one function and
+fail to reach the threshold on another under the same model, dimension,
+and noise level. A zero entry means that none of the 20 returned solutions
+meets $10^{-8}$; it does not establish that every execution failed or that
+the search made no progress.
 
-The Implicit table pools all four noise levels, while the Explicit
-table separates clean and noisy conditions. Assessing the contribution
-of explicit environment information therefore requires comparisons
-over matching conditions, as defined in
-Section~\ref{sec:independent_benchmark}. The selected profiles and
-pooled tables do not establish an overall advantage for either mode.
+The selected Explicit and Implicit blocks do not all match in model,
+dimension, and noise. They therefore do not establish an overall advantage
+for either mode. Appendix~\ref{app:benchmark_success_rates} provides the
+full configuration grid for comparisons over matching conditions, as
+defined in Section~\ref{sec:independent_benchmark}.
 
 \FloatBarrier
 

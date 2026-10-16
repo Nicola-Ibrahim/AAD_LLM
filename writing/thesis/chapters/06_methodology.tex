@@ -1657,6 +1657,11 @@ A benchmark condition $c$ fixes the optimizer, BBOB function, dimension,
 and evaluation noise level. Each condition has 20 configured trials,
 using different instances of the same function and their assigned
 random seeds.
+For a generated optimizer, the selected champion's source code remains
+fixed across these trials; the trials are not separate synthesized
+algorithms or repetitions on a single instance. Each trial's clean gap
+is measured relative to its own instance optimum $f_r^*$, rather than
+by comparing raw objective values across instances.
 
 For search success, let $\mathcal R_c^{\mathrm{search}}$ be the nonempty
 set of included trials. Using the target-hitting time $T_{r,\tau}$
