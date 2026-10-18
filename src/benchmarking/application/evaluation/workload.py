@@ -88,6 +88,7 @@ class EvaluationWorkload:
             expected_code_hash=expected_code_hash,
             expected_trials=self.n_runs,
             expected_budget=dim * self.config.budget_multiplier,
+            trial_schedule=self.config.trial_schedule,
         )
 
     # ── Workload Auditing Helpers & Builders ────────────────────────────────────

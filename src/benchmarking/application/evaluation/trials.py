@@ -17,10 +17,12 @@ from benchmarking.domain.evaluation import (
     CHAMPION_RETURN_VALIDATION_VERSION,
     ERROR_DEFINITION,
     EVALUATION_SCHEMA_VERSION,
+    executed_trial_count,
 )
 from benchmarking.domain.services.condition_status import inspect_condition
 from benchmarking.domain.services.resolvers import ModelNames
 from benchmarking.domain.services.returned_point import validate_returned_point
+from benchmarking.domain.trial_schedule import matching_trial_indices, select_scheduled_trials
 from shared.application.interfaces.problem_factory import ProblemFactory
 from shared.domain.noise_model import NoiseModelEnum
 from shared.domain.problem import BaseProblem
@@ -54,6 +56,7 @@ class EvaluationTrialRunner:
         self.observation_trace_points = config.observation_trace_points
         self.force_rerun = config.force_rerun
         self.random_seed = config.random_seed
+        self.first_instance_id = config.first_instance_id
 
     def _execute_trial_runs(
         self,
@@ -79,6 +82,12 @@ class EvaluationTrialRunner:
         evals_list: list[int] = []
         observed_objectives: list[list[dict[str, float | int]]] = []
         can_resume = False
+        schedule = tuple(
+            (instance, self.random_seed + instance)
+            for instance in range(self.first_instance_id, self.first_instance_id + self.n_runs)
+        )
+        completed_identities: set[tuple[int, int]] = set()
+        trace_run_indices: list[int | None] = []
 
         if not self.force_rerun and self.state_repo.solver_directory_exists(target_dir):
             prov = self.state_repo.read_provenance(target_dir)
@@ -89,32 +98,51 @@ class EvaluationTrialRunner:
                 expected_code_hash=expected_code_hash,
                 expected_trials=self.n_runs,
                 expected_budget=dim * self.budget_multiplier,
+                trial_schedule=schedule,
             )
             if inspection.reason in {"complete", "partial", "not_started"}:
                 existing_runs = inspection.reusable_trials
-                clean_errors = prov.get("clean_errors", [])[:existing_runs]
-                best_objectives = prov.get("best_objectives", [])[:existing_runs]
-                true_optima = prov.get("true_optima", [])[:existing_runs]
-                instance_ids = prov.get("instance_ids", [])[:existing_runs]
-                trial_seeds = prov.get("trial_seeds", [])[:existing_runs]
-                runtimes = prov.get("runtimes", [])[:existing_runs]
-                evals_list = prov.get("evaluations_used", [])[:existing_runs]
-                observed_objectives = prov.get("observed_objectives", [])[:existing_runs]
+                recorded = executed_trial_count(prov)
+                if any(
+                    len(prov.get(key, [])) < recorded for key in ("instance_ids", "trial_seeds")
+                ):
+                    raise ValueError(
+                        f"Cannot safely resume {target_dir}: recorded trials lack instance/seed identities. "
+                        "Existing results have not been removed."
+                    )
+                clean_errors = prov.get("clean_errors", [])[:recorded]
+                best_objectives = prov.get("best_objectives", [])[:recorded]
+                true_optima = prov.get("true_optima", [])[:recorded]
+                instance_ids = prov.get("instance_ids", [])[:recorded]
+                trial_seeds = prov.get("trial_seeds", [])[:recorded]
+                runtimes = prov.get("runtimes", [])[:recorded]
+                evals_list = prov.get("evaluations_used", [])[:recorded]
+                observed_objectives = prov.get("observed_objectives", [])[:recorded]
+                trace_run_indices = [
+                    trial.get("trace_run_index")
+                    for trial in prov.get("trial_records", [])[:recorded]
+                ]
+                trace_run_indices += [None] * (recorded - len(trace_run_indices))
+                completed_identities = {
+                    (instance_ids[i], trial_seeds[i])
+                    for i in matching_trial_indices(prov, schedule)
+                }
                 # Historical trials have no observation sidecar; preserve their
                 # positions so resumed trial indices do not become misaligned.
-                observed_objectives += [[] for _ in range(existing_runs - len(observed_objectives))]
+                observed_objectives += [[] for _ in range(recorded - len(observed_objectives))]
                 if existing_runs >= self.n_runs:
-                    self.logger.cached(existing_runs, prov.get("median_error"))
+                    selected = select_scheduled_trials(prov, schedule)
+                    self.logger.cached(existing_runs, selected["median_error"])
                     return {
                         "status": "CACHED",
-                        "median_clean_error": prov.get("median_error"),
-                        "best_objectives": prov.get("best_objectives", []),
-                        "true_optima": prov.get("true_optima", []),
-                        "clean_errors": clean_errors,
+                        "median_clean_error": selected["median_error"],
+                        "best_objectives": selected.get("best_objectives", []),
+                        "true_optima": selected.get("true_optima", []),
+                        "clean_errors": selected["clean_errors"],
                         "n_runs": existing_runs,
                     }
+                can_resume = recorded > 0
                 if existing_runs > 0:
-                    can_resume = True
                     self.logger.resuming(existing_runs, self.n_runs)
 
         if not can_resume:
@@ -127,18 +155,17 @@ class EvaluationTrialRunner:
             instance_ids, trial_seeds = [], []
             runtimes, evals_list = [], []
             observed_objectives = []
-            start_run_idx = 1
             is_incremental = False
         else:
-            start_run_idx = existing_runs + 1
             is_incremental = True
 
         noise_model = NoiseModelEnum.NONE if noise_std == 0.0 else NoiseModelEnum.HETEROSCEDASTIC
+        next_trace_index = self.state_repo.get_trace_run_count(target_dir)
 
         with self.state_repo.open_run_logger(target_dir, algo_name, is_incremental) as logger_ioh:
-            for run_idx in range(start_run_idx, self.n_runs + 1):
-                instance_id = run_idx
-                trial_seed = self.random_seed + run_idx
+            for run_idx, (instance_id, trial_seed) in enumerate(schedule, start=1):
+                if (instance_id, trial_seed) in completed_identities:
+                    continue
                 random.seed(trial_seed)
                 np.random.seed(trial_seed)
 
@@ -181,6 +208,8 @@ class EvaluationTrialRunner:
                 best_objectives.append(best_objective)
                 runtimes.append(rt)
                 evals_list.append(evals_used)
+                trace_run_indices.append(next_trace_index if evals_used > 0 else None)
+                next_trace_index += int(evals_used > 0)
                 observed_objectives.append(
                     [
                         {
@@ -196,13 +225,23 @@ class EvaluationTrialRunner:
                     best_clean=best_error,
                     runtime=rt,
                     evals_used=evals_used,
+                    instance_id=instance_id,
+                    trial_seed=trial_seed,
                     best_objective=best_objective,
                     true_optimum=true_optimum,
                 )
                 prob.reset()
 
-        median_err = float(np.median(clean_errors)) if clean_errors else float("inf")
-        self.logger.condition_complete(len(clean_errors), median_err)
+        active_indices = matching_trial_indices(
+            {
+                "clean_errors": clean_errors,
+                "instance_ids": instance_ids,
+                "trial_seeds": trial_seeds,
+            },
+            schedule,
+        )
+        median_err = float(np.median([clean_errors[i] for i in active_indices]))
+        self.logger.condition_complete(len(active_indices), median_err)
         prov_data = {
             **prov_metadata,
             "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
@@ -217,6 +256,8 @@ class EvaluationTrialRunner:
             "true_optima": true_optima,
             "best_objectives": best_objectives,
             "n_runs": len(clean_errors),
+            "requested_instance_ids": [instance for instance, _ in schedule],
+            "requested_trial_seeds": [seed for _, seed in schedule],
             "median_error": median_err,
             "median_clean_error": median_err,
             "errors": clean_errors,
@@ -230,6 +271,7 @@ class EvaluationTrialRunner:
                     "best_objective": best_objectives[idx - 1],
                     "error": clean_errors[idx - 1],
                     "evaluations_used": evals_list[idx - 1],
+                    "trace_run_index": trace_run_indices[idx - 1],
                 }
                 for idx in range(1, len(clean_errors) + 1)
             ],
@@ -240,14 +282,15 @@ class EvaluationTrialRunner:
             "evaluated_at": datetime.now(timezone.utc).isoformat(),
         }
         self.state_repo.write_provenance(target_dir, prov_data)
+        selected = select_scheduled_trials(prov_data, schedule)
         return {
             "status": "SUCCESS",
             "median_clean_error": median_err,
             "median_error": median_err,
-            "best_objectives": best_objectives,
-            "true_optima": true_optima,
-            "clean_errors": clean_errors,
-            "n_runs": len(clean_errors),
+            "best_objectives": selected["best_objectives"],
+            "true_optima": selected["true_optima"],
+            "clean_errors": selected["clean_errors"],
+            "n_runs": selected["n_runs"],
         }
 
     # ── Champion & Baseline Trial Callables ──────────────────────────────────────

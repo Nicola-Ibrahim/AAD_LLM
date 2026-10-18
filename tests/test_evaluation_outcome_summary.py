@@ -72,7 +72,11 @@ def test_stale_results_and_baselines_do_not_suggest_synthesis() -> None:
     }
     state = MagicMock()
     state.eval_dir = Path("/traces")
-    state.read_provenance.return_value = {"clean_errors": [float("inf")] * 20}
+    state.read_provenance.return_value = {
+        "clean_errors": [float("inf")] * 20,
+        "instance_ids": list(range(2, 22)),
+        "trial_seeds": list(range(44, 64)),
+    }
     table = summarize_evaluations(workload, selection, state, EvaluationConfig())
     assert table.loc[table["Rerun candidate"], "Experiment ID"].tolist() == [7]
     assert table.loc[table["Category"] == "missing_or_stale", "Valid trials"].tolist() == [0]
@@ -107,7 +111,11 @@ def test_partial_execution_failure_rates_include_all_executed_trials() -> None:
     selection.flatten_champions.return_value = {"current": {"experiment_id": 7}}
     state = MagicMock()
     state.eval_dir = Path("/traces")
-    state.read_provenance.return_value = {"clean_errors": [float("inf")] * 11 + [0.008] * 9}
+    state.read_provenance.return_value = {
+        "clean_errors": [float("inf")] * 11 + [0.008] * 9,
+        "instance_ids": list(range(2, 22)),
+        "trial_seeds": list(range(44, 64)),
+    }
 
     table = summarize_evaluations(workload, selection, state, EvaluationConfig())
 

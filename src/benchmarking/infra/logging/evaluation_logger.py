@@ -129,6 +129,8 @@ class EvaluationLogger(EvaluationLoggerInterface):
         best_clean: float,
         runtime: float,
         evals_used: int,
+        instance_id: int,
+        trial_seed: int,
         best_objective: float | None = None,
         true_optimum: float | None = None,
     ) -> None:
@@ -147,6 +149,8 @@ class EvaluationLogger(EvaluationLoggerInterface):
 
         self.logger.info(
             f"  {Colors.GRAY}•{Colors.RESET} {Colors.BOLD}⚡ Trial {trial_idx}/{total_trials}{Colors.RESET} | "
+            f"Instance: {Colors.BRIGHT_CYAN}{instance_id}{Colors.RESET} | "
+            f"Seed: {Colors.BRIGHT_CYAN}{trial_seed}{Colors.RESET} | "
             f"{score_details}Δy Error: {err_str} | "
             f"Evals: {Colors.CYAN}{evals_used:,}{Colors.RESET} | "
             f"Time: {Colors.YELLOW}{runtime:.3f}s{Colors.RESET}"

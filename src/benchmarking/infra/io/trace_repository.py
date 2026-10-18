@@ -3,6 +3,7 @@
 import json
 import re
 import shutil
+from collections import defaultdict, deque
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -16,6 +17,7 @@ from benchmarking.domain.evaluation import (
     executed_trial_count,
 )
 from benchmarking.domain.services.condition_status import inspect_condition
+from benchmarking.domain.trial_schedule import TrialIdentity, matching_trial_indices
 from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
 from shared.config import RESULTS_DIR
 
@@ -155,12 +157,15 @@ class IOHTraceReader(EvaluationTraceReader):
         noise_stds: list[float] | None = None,
         solvers: list[str] | None = None,
         solver_resolver: Callable[[str], str] | None = None,
+        trial_schedule: tuple[TrialIdentity, ...] = (),
     ) -> EvaluationDataset:
         """Scans evaluations directory and loads all .dat runs organized in a strongly-typed EvaluationDataset."""
         dataset = EvaluationDataset()
 
         if not self.eval_dir.exists():
             return dataset
+        records = self.load_provenance_records()
+        by_directory = {Path(r["trace_directory"]).resolve(): r for r in records}
 
         for json_path in self.eval_dir.glob("**/*.json"):
             if "provenance" in json_path.name:
@@ -217,12 +222,47 @@ class IOHTraceReader(EvaluationTraceReader):
                 dat_p = sc.get("path")
                 if isinstance(dat_p, str) and dat_p and (json_path.parent / dat_p).exists():
                     parsed_runs = self.parse_dat_file(json_path.parent / dat_p)
-                    for r in parsed_runs:
-                        dataset.add_run(cond, solver_name, r)
+                    if not trial_schedule:
+                        for run in parsed_runs:
+                            dataset.add_run(cond, solver_name, run)
+                        continue
+                    record = by_directory.get(json_path.parent.resolve(), {})
+                    selected_indices = set(matching_trial_indices(record, trial_schedule))
+                    explicit_indices = {
+                        trial["trace_run_index"]: index
+                        for index, trial in enumerate(record.get("trial_records", []))
+                        if trial.get("trace_run_index") is not None
+                    }
+                    explicit_records = set(explicit_indices.values())
+                    indices_by_instance: dict[int, deque[int]] = defaultdict(deque)
+                    for index, (instance, used) in enumerate(
+                        zip(record.get("instance_ids", []), record.get("evaluations_used", []))
+                    ):
+                        if (
+                            index < executed_trial_count(record)
+                            and used > 0
+                            and index not in explicit_records
+                        ):
+                            indices_by_instance[instance].append(index)
+                    logged_runs = [r for r in sc.get("runs", []) if r.get("evals", 0) > 0]
+                    # Missing/misaligned trace identities must not be guessed from trial counts.
+                    if len(logged_runs) != len(parsed_runs):
+                        continue
+                    for trace_index, (logged, run) in enumerate(zip(logged_runs, parsed_runs)):
+                        candidates = indices_by_instance[logged.get("instance")]
+                        index = explicit_indices.get(trace_index)
+                        if index is None:
+                            if not candidates:
+                                continue
+                            index = candidates.popleft()
+                        if index in selected_indices and record["instance_ids"][
+                            index
+                        ] == logged.get("instance"):
+                            dataset.add_run(cond, solver_name, run)
 
         # Only confirmed pre-query execution failures get empty trace entries.
         # Missing trace files for otherwise evaluated trials stay missing.
-        for record in self.load_provenance_records():
+        for record in records:
             dim, noise_std, p_id = (
                 int(record["dim"]),
                 float(record["noise_std"]),
@@ -237,7 +277,12 @@ class IOHTraceReader(EvaluationTraceReader):
             if solvers and solver_name not in solvers:
                 continue
             condition = EvaluationCondition(dim=dim, noise_std=noise_std, problem_id=p_id)
-            for error, used in zip(record["clean_errors"], record.get("evaluations_used", [])):
+            selected_indices = set(matching_trial_indices(record, trial_schedule))
+            for index, (error, used) in enumerate(
+                zip(record["clean_errors"], record.get("evaluations_used", []))
+            ):
+                if index not in selected_indices:
+                    continue
                 if float(error) == float("inf") and used == 0:
                     dataset.add_run(
                         condition,
@@ -269,6 +314,17 @@ class EvaluationStateRepository(EvaluationStateStore):
     @staticmethod
     def solver_directory_exists(solver_dir: Path) -> bool:
         return solver_dir.is_dir()
+
+    def get_trace_run_count(self, solver_dir: Path) -> int:
+        count = 0
+        for path in solver_dir.glob("IOHprofiler*.json"):
+            metadata = json.loads(path.read_text(encoding="utf-8"))
+            count += sum(
+                int(run.get("evals", 0) > 0)
+                for scenario in metadata.get("scenarios", [])
+                for run in scenario.get("runs", [])
+            )
+        return count
 
     @contextmanager
     def open_run_logger(

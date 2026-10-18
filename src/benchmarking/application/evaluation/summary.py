@@ -9,6 +9,7 @@ from benchmarking.application.evaluation_config import EvaluationConfig
 from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
 from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.services.evaluation_outcomes import summarize_trial_outcomes
+from benchmarking.domain.trial_schedule import select_scheduled_trials
 
 
 def summarize_evaluations(
@@ -40,7 +41,7 @@ def summarize_evaluations(
         )
         provenance = state.read_provenance(directory) or {}
         outcome = summarize_trial_outcomes(
-            provenance,
+            select_scheduled_trials(provenance, config.trial_schedule),
             config.target_eval_runs,
             config.reliability.primary_target,
             config.reliability.secondary_target,
@@ -76,7 +77,7 @@ def summarize_evaluations(
                 "Dim": int(condition["dim"]),
                 "Noise": float(condition["noise_std"]),
                 "Solver Type": condition["solver_type"],
-                "Recorded trials": outcome.recorded_trials,
+                "Recorded trials": condition.get("recorded_trials", outcome.recorded_trials),
                 "Executed trials": outcome.executed_trials,
                 "Valid trials": outcome.executed_trials - outcome.failed_trials if reusable else 0,
                 "Expected trials": config.target_eval_runs,

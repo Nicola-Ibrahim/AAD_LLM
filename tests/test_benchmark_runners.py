@@ -431,7 +431,15 @@ def test_evaluation_logger(tmp_path: Path):
         problem_id=1,
         problem_name="Sphere",
     )
-    logger.trial(trial_idx=1, total_trials=10, best_clean=1e-5, runtime=0.2, evals_used=500)
+    logger.trial(
+        trial_idx=1,
+        total_trials=10,
+        best_clean=1e-5,
+        runtime=0.2,
+        evals_used=500,
+        instance_id=2,
+        trial_seed=44,
+    )
     logger.cached(runs_count=10, median_error=1e-5)
     logger.resuming(existing_runs=3, target_runs=10)
     logger.condition_complete(n_runs=10, median_error=1e-5)

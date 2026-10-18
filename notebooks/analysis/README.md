@@ -134,6 +134,15 @@ The grid-policy version is recorded in new result provenance.
 
 ## Preserved evaluation campaigns
 
+Current analysis selects instances 2–21 with seeds `42 + instance_id`, excluding
+the synthesis instance 1 without deleting it. Historical 1–20 results provide
+19 reusable scheduled trials. Complete terminal summaries require the missing
+instance 21; available search traces remain separate from terminal completeness.
+Configuration-based numeric cache signatures distinguish the new schedule from
+old snapshots. After completing evaluation, recalculate and export analysis
+before using new figures or tables; previously exported files are not changed
+automatically.
+
 The old proportional-budget campaign is backed up under
 `results/archives/2026-10-11_proportional_budget/`, including traces, statistics,
 figures, reports and champion exports. Its `manifest.json` identifies recorded

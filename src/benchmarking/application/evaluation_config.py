@@ -5,6 +5,7 @@ Defines validated settings for benchmark execution and analysis workflows.
 
 from pydantic import BaseModel, Field, field_validator
 
+from benchmarking.domain.trial_schedule import TrialIdentity
 from shared.domain.bbob import BBOBFunction
 
 
@@ -36,6 +37,22 @@ class EvaluationConfig(BaseModel):
         default=42,
         description="Base seed for reproducible optimizer randomness and benchmark noise.",
     )
+    first_instance_id: int = Field(
+        default=2,
+        ge=1,
+        description="First evaluation instance; instance 1 is reserved for synthesis.",
+    )
+
+    @property
+    def trial_schedule(self) -> tuple[TrialIdentity, ...]:
+        """Distinct instances paired with stable seeds, independent of trial position."""
+        return tuple(
+            (instance, self.random_seed + instance)
+            for instance in range(
+                self.first_instance_id, self.first_instance_id + self.target_eval_runs
+            )
+        )
+
     budget_multiplier: int = Field(
         default=10_000,
         ge=1,

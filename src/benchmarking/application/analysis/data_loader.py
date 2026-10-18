@@ -15,6 +15,7 @@ from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.services.condition_status import inspect_condition
 from benchmarking.domain.services.resolvers import ModelNames
 from benchmarking.domain.services.transfer import TransferAnalysisEngine
+from benchmarking.domain.trial_schedule import select_scheduled_trials
 from benchmarking.domain.vos import EvaluationDataset
 
 ChampionIdentity = tuple[str, int, int, str]
@@ -129,6 +130,7 @@ class AnalysisDataLoader:
             problems=problems,
             noise_stds=noise_stds,
             solver_resolver=names.resolve_folder_solver_name,
+            trial_schedule=config.trial_schedule,
         )
         solvers = [
             s
@@ -166,7 +168,7 @@ class AnalysisDataLoader:
             )
 
         records = [
-            r
+            select_scheduled_trials(r, config.trial_schedule)
             for r in self.trace_reader.load_provenance_records()
             if selected(r)
             and ("baseline" in r or r.get("model") in model_labels)
@@ -177,6 +179,7 @@ class AnalysisDataLoader:
                 expected_code_hash=None,
                 expected_trials=config.target_eval_runs,
                 expected_budget=int(r["dim"]) * config.budget_multiplier,
+                trial_schedule=config.trial_schedule,
             ).reason
             in {"complete", "partial", "not_started"}
         ]
@@ -211,7 +214,7 @@ class AnalysisDataLoader:
                 and not str(r.get("solver_folder", "")).endswith("_implicit")
             ]
             transfer = [
-                r
+                select_scheduled_trials(r, config.trial_schedule)
                 for r in self.transfer_reader.load_provenance_records() + diagonals
                 if selected(r)
                 and r.get("budget") == int(r["dim"]) * config.budget_multiplier

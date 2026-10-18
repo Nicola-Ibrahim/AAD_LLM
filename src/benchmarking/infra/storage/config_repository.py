@@ -72,6 +72,7 @@ class EvaluationConfigRepository:
             benchmarking=bench_cfg,
             target_eval_runs=int(bench_cfg.get("target_eval_runs", 20)),
             random_seed=int(bench_cfg.get("random_seed", 42)),
+            first_instance_id=int(bench_cfg.get("first_instance_id", 2)),
             budget_multiplier=int(bench_cfg.get("budget_multiplier", 10000)),
             eval_timeout_seconds=float(bench_cfg.get("eval_timeout_seconds", 30.0)),
             observation_trace_points=int(bench_cfg.get("observation_trace_points", 64)),

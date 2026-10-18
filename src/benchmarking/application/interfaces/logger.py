@@ -41,6 +41,8 @@ class EvaluationLoggerInterface(ABC):
         best_clean: float,
         runtime: float,
         evals_used: int,
+        instance_id: int,
+        trial_seed: int,
         best_objective: float | None,
         true_optimum: float | None,
     ) -> None: ...

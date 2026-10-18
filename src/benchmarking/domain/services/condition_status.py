@@ -10,6 +10,11 @@ from benchmarking.domain.evaluation import (
     EVALUATION_SCHEMA_VERSION,
     executed_trial_count,
 )
+from benchmarking.domain.trial_schedule import (
+    TrialIdentity,
+    matching_trial_indices,
+    select_scheduled_trials,
+)
 
 ConditionState = Literal["MISSING_CODE", "PENDING", "NEEDS_RERUN", "COMPLETED"]
 
@@ -32,6 +37,7 @@ def inspect_condition(
     expected_code_hash: str | None,
     expected_trials: int,
     expected_budget: int | None,
+    trial_schedule: tuple[TrialIdentity, ...] = (),
 ) -> ConditionStatus:
     """Inspect validity; None budget supports budget-agnostic historical readers.
 
@@ -64,12 +70,19 @@ def inspect_condition(
         )
     if expected_budget is not None and provenance.get("budget") != expected_budget:
         return ConditionStatus("NEEDS_RERUN", recorded, 0, expected_trials, None, "stale_budget")
-    complete = recorded >= expected_trials
+    reusable = len(matching_trial_indices(provenance, trial_schedule))
+    if trial_schedule:
+        median_error = (
+            select_scheduled_trials(provenance, trial_schedule)["median_error"]
+            if reusable
+            else None
+        )
+    complete = reusable >= expected_trials
     return ConditionStatus(
         "COMPLETED" if complete else "PENDING",
         recorded,
-        recorded,
+        reusable,
         expected_trials,
         median_error,
-        "complete" if complete else "partial" if recorded else "not_started",
+        "complete" if complete else "partial" if reusable else "not_started",
     )

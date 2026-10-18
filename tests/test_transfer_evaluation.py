@@ -136,6 +136,9 @@ class MemoryState:
     def write_provenance(self, path: Path, data: dict[str, object]) -> None:
         self.records[path] = data
 
+    def get_trace_run_count(self, path: Path) -> int:
+        return sum(used > 0 for used in self.records.get(path, {}).get("evaluations_used", []))
+
     def open_run_logger(self, path: Path, algorithm: str, incremental: bool) -> nullcontext:
         return nullcontext(object())
 
@@ -241,8 +244,8 @@ def test_frozen_target_execution_pairing_and_baseline_reuse(
     for record in transfer:
         assert record["clean_errors"] == pytest.approx([0.001] * 3)
         assert record["true_optima"] == [record["target_problem_id"] * 10.0] * 3
-        assert record["instance_ids"] == [1, 2, 3]
-        assert record["trial_seeds"] == [43, 44, 45]
+        assert record["instance_ids"] == [2, 3, 4]
+        assert record["trial_seeds"] == [44, 45, 46]
         assert record["source_noise_std"] == record["target_noise_std"] == 0.0
     assert len([r for r in records.values() if "baseline" in r]) == 2
     assert all(
@@ -316,7 +319,7 @@ def test_historical_skipped_tail_resumes(transfer_service: EvaluationService) ->
     service.trials.run_champion_trials(champion, target_problem_id=8, verbose=False)
     assert executor.execute_algorithm.call_count == count + 1
     assert executor.execute_algorithm.call_args.kwargs["problem"].problem_id == 8
-    assert record["instance_ids"] == [1, 2, 3]
+    assert record["instance_ids"] == [2, 3, 4]
 
 
 def test_workflow_flags_and_baseline_targets(transfer_service: EvaluationService) -> None:

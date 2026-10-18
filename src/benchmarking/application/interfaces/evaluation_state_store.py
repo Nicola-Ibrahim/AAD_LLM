@@ -23,6 +23,11 @@ class EvaluationStateStore(ABC):
     def write_provenance(self, solver_dir: Path, data: dict[str, object]) -> None: ...
 
     @abstractmethod
+    def get_trace_run_count(self, solver_dir: Path) -> int:
+        """Count nonempty trace runs, including interrupted attempts without terminal records."""
+        ...
+
+    @abstractmethod
     def open_run_logger(
         self, target_dir: Path, algorithm_name: str, incremental: bool
     ) -> ContextManager[object]: ...

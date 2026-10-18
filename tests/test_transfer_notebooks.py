@@ -64,6 +64,8 @@ def inputs(tmp_path: Path) -> AnalysisSnapshot:
     native = dict(
         evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
         budget=20_000,
+        instance_ids=list(range(2, 22)),
+        trial_seeds=list(range(44, 64)),
         return_validation_version=CHAMPION_RETURN_VALIDATION_VERSION,
         error_definition=ERROR_DEFINITION,
         model=model,
@@ -82,6 +84,8 @@ def inputs(tmp_path: Path) -> AnalysisSnapshot:
     baseline = dict(
         evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
         budget=20_000,
+        instance_ids=list(range(2, 22)),
+        trial_seeds=list(range(44, 64)),
         error_definition=ERROR_DEFINITION,
         baseline="pso",
         problem_id=1,

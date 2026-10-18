@@ -50,9 +50,9 @@ flowchart TD
     Workload["Discover conditions<br/>current champions + independent baselines"] --> Status["inspect_condition<br/>code, schema, hash and executed-trial count"]
     Status -->|missing code| Missing["Report synthesis/code gap<br/>not an optimization failure"]
     Status -->|complete and valid| Cached["Reuse current trials"]
-    Status -->|partial or not started| Resume["Retain valid prefix<br/>run remaining trials"]
+    Status -->|partial or not started| Resume["Retain valid instance–seed pairs<br/>run missing pairs only"]
     Status -->|stale schema, hash or champion validation| Restart["Restart this condition<br/>do not reuse stale trials"]
-    Resume --> Trials["Execute scheduled trials<br/>instance r, seed base+r, budget dimension × 10,000"]
+    Resume --> Trials["Execute scheduled trials<br/>instances 2–21, seed base+instance, budget dimension × 10,000"]
     Restart --> Trials
     Trials --> Provenance["Persist terminal errors + provenance<br/>clean traces + sampled noisy observations"]
     Cached --> Analysis["Read-only audit and analysis<br/>terminal completeness ≠ trace availability"]
@@ -62,6 +62,16 @@ flowchart TD
 This is normal resumption with `force_rerun=false`. Force rerun deliberately
 bypasses cache reuse. Historical skipped tails are excluded from reusable trials;
 confirmed execution failures remain observations.
+Trial reuse matches the recorded instance ID and seed, not the length of the
+terminal-error array. With the default `first_instance_id=2`, a historical
+condition containing instances 1–20 reuses instances 2–20 and runs only instance
+21 (seed 63). Instance 1 stays in the stored history but is excluded from active
+coverage, terminal summaries, convergence, and ECDF calculations. After migration
+there may be 21 historical terminal records but exactly 20 scheduled observations.
+Missing instance/seed metadata is never inferred from array position. Execution
+stops rather than deleting otherwise-valid unidentified historical records.
+New terminal records retain their trace-run positions so interrupted/orphan trace
+attempts cannot be mistaken for the newly completed trial.
 Results with a different or unrecorded objective-query budget are stale and
 restart rather than resuming. This includes classical baselines. Analysis
 excludes those results until they have been evaluated under the configured budget.
@@ -92,10 +102,12 @@ are not failures and are excluded from aggregates.
 | Uncertainty | Wilson condition intervals; deterministic condition-cluster aggregate bootstrap. |
 | Budget | Benchmark attaches `set_budget`; excess queries warn and return the last value. Synthesis does not itself attach that cap. |
 | Timeout | Per-candidate `func_timeout`; session process workers are not a per-candidate security sandbox. |
-| Default benchmark trials | 20; instance `r`, seed `42+r`, budget `dimension * 10000`, champion timeout 30 seconds. |
+| Default benchmark trials | 20; instances 2–21, seed `42+instance_id`, budget `dimension * 10000`, champion timeout 30 seconds. |
 
 Defaults come from [benchmark configuration](../configs/benchmark.toml).
-Synthesis uses instance 1: benchmark trials are not exclusively held-out instances.
+Synthesis uses instance 1; the current benchmark schedule excludes that instance.
+Instances 2–20 were used by the previous benchmark protocol, so this migration
+does not make them previously unobserved tests or undo benchmark-guided reruns.
 Repeated champion trials do not measure repeated LLM discovery.
 [Analysis notebooks](../notebooks/analysis/README.md) own PNG-only figures and exports.
 
@@ -188,7 +200,8 @@ Noise strategy selection and magnitude are configuration-driven.
 
 [Benchmark configuration](../configs/benchmark.toml) currently requests 20 trials
 per condition, budget `dimension * 10000`, and a 30-second execution timeout.
-Trial `r` uses instance `r` and seed `random_seed + r`; the default base seed is 42.
+Trial `r` uses instance `first_instance_id + r - 1` and seed
+`random_seed + instance_id`; the defaults give instances 2–21 and seeds 44–63.
 Synthesis uses instance 1, so the benchmark is not exclusively held-out-instance
 testing. Repeated champion trials are not independent synthesis replicates.
 

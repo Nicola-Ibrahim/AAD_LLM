@@ -14,12 +14,16 @@ def test_trial_values_use_three_decimals_without_field_padding():
         best_clean=81.46921,
         runtime=0.1236,
         evals_used=50_000,
+        instance_id=2,
+        trial_seed=44,
         best_objective=79.12349,
         true_optimum=-2.34567,
     )
 
     output = stream.getvalue()
     assert "Trial 1/20" in output
+    assert "Instance: \033[96m2\033[0m" in output
+    assert "Seed: \033[96m44\033[0m" in output
     assert "f-opt: \033[95m-2.346\033[0m" in output
     assert "Best f: \033[96m79.123\033[0m" in output
     assert "Δy Error: \033[92m81.469\033[0m" in output

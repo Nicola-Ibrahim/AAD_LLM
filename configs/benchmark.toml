@@ -9,6 +9,9 @@ target_eval_runs = 20
 
 # Trials use paired BBOB instance IDs and optimizer/noise seeds derived from this base.
 random_seed = 42
+first_instance_id = 2
+# Twenty held-out-instance trials: IDs 2..21, seed = random_seed + instance_id.
+# Existing valid trials 2..20 are reused; only missing instance/seed pairs execute.
 
 # Objective-evaluation budget per dimension: budget = dim * budget_multiplier.
 # 2D=20,000; 3D=30,000; 5D=50,000; 10D=100,000.

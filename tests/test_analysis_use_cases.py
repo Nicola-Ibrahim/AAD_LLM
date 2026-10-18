@@ -336,6 +336,8 @@ def test_loader_eligibility_and_dynamic_models(state, expected_native):
     record = dict(
         evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
         budget=20_000,
+        instance_ids=list(range(2, 22)),
+        trial_seeds=list(range(44, 64)),
         return_validation_version=CHAMPION_RETURN_VALIDATION_VERSION,
         error_definition=ERROR_DEFINITION,
         evaluation_kind="native",
