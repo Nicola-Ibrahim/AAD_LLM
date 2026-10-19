@@ -56,15 +56,19 @@ them may be perturbed. Figures~\ref{fig:f8_noise_distortion} and
 \ref{fig:f21_noise_distortion} visualize this mechanism, but cannot
 establish that noise caused every poor outcome.
 
-The generated-program case study in
-Section~\ref{sec:generated_program_cases} shows why poor outcomes should not
-be attributed to observation noise alone. Eleven instances fail because
-an offset-sensitive selection rule produces an empty population.
-Although those trials evaluate points before failing, they return no
-valid solution. Conversely, the nine finite returns do not meet the
-primary accuracy target. Search progress, valid completion, and
-returned-solution success therefore describe different aspects of
-performance.
+The generated-program comparison in
+Section~\ref{sec:generated_program_cases} distinguishes explicit noise
+handling from implementation reliability. The genetic algorithm averages
+five observations per candidate, but still retains an optimistic historical
+incumbent. The contrasting evolution strategy has twelve early failures
+in the current benchmark; source inspection and historical diagnostics
+identify an offset-sensitive filter that can produce an empty population.
+Although failed trials query points before terminating, they return no
+valid solution. None of the eight finite returns meets the primary
+accuracy target. Search progress, valid completion, and returned-solution
+success therefore describe different aspects of performance. The examples
+use different experimental conditions and do not establish a causal
+performance advantage for averaging or for either LLM.
 
 \section{Limitations}
 \label{sec:discussion_limitations}

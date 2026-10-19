@@ -307,15 +307,17 @@ noise levels, including $\sigma=0.1$.
     \label{fig:explicit_qwen32_clean}
 \end{figure}
 
-Figure~\ref{fig:explicit_qwen32_clean} contrasts faster early convergence
-with stronger final target attainment. CMA-ES reaches small gaps sooner
-on Sphere and Rosenbrock, and leads target attainment on Discus, where
-Vectorization eventually also reaches the full target set. On Rastrigin,
-Thinking and Vectorization achieve substantial later improvements and
-full target attainment, while CMA-ES plateaus. On Gallagher, all four
-generated champions attain a greater final fraction of targets than
-CMA-ES, although PSO improves earlier. Baseline's limited attainment on Sphere contrasts with its stronger
-results on Rosenbrock and Gallagher.
+Figure~\ref{fig:explicit_qwen32_clean} shows differences between
+early convergence and final target attainment. CMA-ES reaches small
+median gaps earlier on Sphere and Rosenbrock and attains the full
+target set first on Discus, where Vectorization also reaches full
+attainment later. On Rastrigin, Thinking and Vectorization improve
+substantially later in the search and attain the full target set,
+while CMA-ES plateaus. On Gallagher, all four generated champions
+achieve higher final target attainment than CMA-ES, although PSO
+reaches intermediate targets earlier. Baseline attains relatively
+few targets on Sphere but nearly the full target set on Rosenbrock
+and Gallagher.
 
 The next profile examines a five-dimensional noisy condition,
 where generated search is more limited on several functions.
@@ -333,15 +335,17 @@ where generated search is more limited on several functions.
     \label{fig:explicit_qwen14_noisy}
 \end{figure}
 
-Figure~\ref{fig:explicit_qwen14_noisy} shows Guided's strongest results
-on Sphere and Rosenbrock. On Sphere, it reaches a very small median gap
-and attains nearly all adaptive targets, although CMA-ES and PSO improve
-earlier. On Rosenbrock, Guided achieves the highest final target
-attainment among the generated champions, while Thinking attains few
-targets. Classical baselines lead elsewhere: CMA-ES reaches a much
-smaller median gap on Discus, and DE achieves the smallest median gap
-and highest final target attainment on Rastrigin. On Gallagher, all
-generated champions attain fewer targets than DE and PSO.
+Figure~\ref{fig:explicit_qwen14_noisy} shows Guided's strongest
+results on Sphere and Rosenbrock. On Sphere, it reaches a very small
+median gap and attains nearly all adaptive targets, although CMA-ES
+and PSO improve earlier. On Rosenbrock, Guided achieves the smallest
+final median gap and the highest final target attainment among all
+displayed optimizers, while Thinking attains few targets. CMA-ES
+performs best on Discus, reaching a much smaller median gap and
+higher final target attainment than the other optimizers. DE achieves
+the smallest final median gaps and the highest final target
+attainment on Rastrigin and Gallagher. On Gallagher, all generated
+champions attain fewer targets than both DE and PSO.
 
 The DeepSeek profile provides a contrasting noisy example, with
 favorable generated search on Sphere and Rastrigin alongside weaker
@@ -361,41 +365,40 @@ results on Rosenbrock and Discus.
 \end{figure}
 
 In Figure~\ref{fig:explicit_deepseek_noisy}, Thinking and Vectorization
-reach very small median gaps on Sphere. They show full adaptive-target
-attainment, while Baseline and Guided retain larger gaps.
- The classical references perform better on
-Rosenbrock, and DE achieves the lowest median gap and highest final
-target attainment on Discus. Vectorization is strongest on Rastrigin,
-where its later improvement produces the lowest final median gap and
-slightly higher target attainment than the classical references.
-On Gallagher, Guided plateaus early, whereas Thinking and Vectorization
-continue improving; DE nevertheless attains the greatest final
-fraction of targets.
+reach very small median gaps on Sphere and attain nearly all adaptive
+targets, while Baseline and Guided retain larger gaps. CMA-ES reaches
+small gaps earlier and attains the full target set. The classical
+references achieve smaller final median gaps and higher target
+attainment on Rosenbrock. On Discus, DE achieves the smallest final
+median gap and the highest target attainment. Vectorization performs
+best on Rastrigin, where its later improvement produces the smallest
+final median gap and slightly higher target attainment than the
+classical references. On Gallagher, Guided plateaus early, while
+Thinking and Vectorization continue improving. DE attains targets
+earlier than Vectorization, but their final attainment is similar.
 
 \FloatBarrier
 
-Table~\ref{tab:explicit_summary} complements the selected search profiles
-with returned-solution success rates at $\Delta f\leq10^{-8}$ for the
-same three configurations. For Qwen2.5-Coder-32B-Instruct at $D=2$ and $\sigma=0$, Thinking and Vectorization succeed on Sphere
-in all 20 trials, whereas Baseline and Guided do not reach this threshold
-with their returned solutions. At $D=5$ and $\sigma=0.05$, the selected
-Qwen2.5-Coder-14B-Instruct Guided champion succeeds on Sphere in all
-trials, but none of the displayed generated champions returns a successful
-solution on the other four functions. For DeepSeek-Coder-V2-Lite-Instruct
-at $D=5$ and $\sigma=0.2$, Thinking and Vectorization both achieve
-100\% on Sphere; strict returned-solution success is much less frequent
-on the remaining functions. These percentages concern the returned
-point, not the best point recorded during search or attainment of the
-easier adaptive targets.
+Table~\ref{tab:explicit_summary} reports returned-solution success
+rates at $\Delta f\leq10^{-8}$ for the three Explicit configurations
+shown above. For Qwen2.5-Coder-32B-Instruct at $D=2$ and $\sigma=0$,
+Thinking and Vectorization succeed on Sphere in all 20 trials,
+whereas Baseline and Guided record no successes. For
+Qwen2.5-Coder-14B-Instruct at $D=5$ and $\sigma=0.05$, Guided
+succeeds on Sphere in every trial, but no generated champion meets
+the threshold on the other four functions. For
+DeepSeek-Coder-V2-Lite-Instruct at $D=5$ and $\sigma=0.2$,
+Thinking and Vectorization achieve 100\% success on Sphere.
+Elsewhere, only Thinking on Rastrigin and Baseline on Gallagher
+record successes, at 5\% and 20\%, respectively.
 
-Consider the Qwen2.5-Coder-32B-Instruct Explicit Baseline champion for
-Rosenbrock ($f_8$), $D=2$, and $\sigma=0$ in
-Table~\ref{tab:explicit_summary}. The same selected program is run on
-BBOB instances 2--21. After each run, its returned point is evaluated
-using the clean objective, and the gap is measured against that
-instance's own optimum, as in Equation~\eqref{eq:benchmark_final_gap}.
-Nineteen trials have a returned-solution gap at most $10^{-8}$.
-Applying Equation~\eqref{eq:benchmark_return_reliability} gives
+For example, the Qwen2.5-Coder-32B-Instruct Explicit Baseline
+champion for Rosenbrock ($f_8$), $D=2$, and $\sigma=0$ succeeds
+in 19 of the 20 trials on BBOB instances 2--21. Each trial's
+returned point is assessed using the clean objective and that
+instance's optimum, as defined in
+Equation~\eqref{eq:benchmark_final_gap}. Applying
+Equation~\eqref{eq:benchmark_return_reliability} gives
 \begin{equation}
     \widehat p_{c,10^{-8}}^{\mathrm{return}}
     = \frac{19}{20}
@@ -403,14 +406,11 @@ Applying Equation~\eqref{eq:benchmark_return_reliability} gives
     \qquad \text{success rate} = 95\%.
     \label{eq:experiment_success_rate_example}
 \end{equation}
-The remaining trial, on instance 16, returns a finite clean gap of
-approximately $0.930$, so it does not meet the target. It is an
-unsuccessful trial at this threshold, not an execution failure. If a
-trial instead fails to execute or returns an invalid solution, it also
-counts as unsuccessful and remains in the denominator of 20. Thus,
-the table entry measures one fixed champion's returned-solution success
-across different instances; it does not pool different champions or
-different noise levels.
+An unsuccessful trial may return a valid solution above the
+threshold or fail to return a valid solution; both remain in the
+denominator. These percentages measure the returned solutions,
+rather than the best points evaluated during search or attainment
+of the adaptive targets.
 
 \begin{table}[htbp]
     \centering
@@ -483,17 +483,19 @@ Qwen2.5-Coder-32B-Instruct at $D=5$.
     \label{fig:implicit_qwen14_noisy}
 \end{figure}
 
-Figure~\ref{fig:implicit_qwen14_noisy} shows different strengths across
-the prompt strategies. Guided and Vectorization reach very small median
-gaps and full adaptive-target attainment on Sphere, while Baseline
-plateaus. Several generated champions also attain the full target set
-on Rosenbrock, although at different evaluation counts. On Discus,
-Guided reaches full target attainment, whereas Vectorization retains
-a large median gap and attains few targets. Baseline shows the strongest
-later improvement on Rastrigin and is the only displayed optimizer
-to attain the full target set. On Gallagher, all four generated
-champions achieve higher final target attainment than the classical
-references.
+Figure~\ref{fig:implicit_qwen14_noisy} shows different strengths
+across the prompt strategies. Guided and Vectorization reach very
+small median gaps and full adaptive-target attainment on Sphere,
+while Baseline plateaus. On Rosenbrock, Baseline and Guided attain
+the full target set, although CMA-ES reaches small median gaps
+earlier. On Discus, Guided reaches full target attainment, whereas
+Vectorization retains a large median gap and attains few targets.
+Baseline improves substantially later in the search on Rastrigin
+and is the only displayed optimizer to attain the full target set.
+On Gallagher, all four generated champions achieve higher final
+target attainment than the classical references, with Baseline
+and Vectorization reaching full attainment.
+
 
 The next Implicit profile highlights how median convergence and
 target attainment can favor different strategies.
@@ -511,16 +513,17 @@ target attainment can favor different strategies.
     \label{fig:implicit_deepseek_noisy}
 \end{figure}
 
-In Figure~\ref{fig:implicit_deepseek_noisy}, Guided reaches a very small median gap on Sphere,
-whereas Vectorization plateaus. On Discus, Vectorization instead
-achieves the smallest median gap and full adaptive-target attainment,
-while Thinking retains large errors and attains few targets.
-Baseline and Thinking reach full target attainment on Rosenbrock.
-On Rastrigin, Vectorization achieves the lowest final median gap,
-but Guided attains the greatest final fraction of targets, illustrating
-the different information provided by the two measures. On Gallagher,
-all four generated champions attain more targets than CMA-ES,
-with Baseline reaching full attainment. 
+In Figure~\ref{fig:implicit_deepseek_noisy}, Guided reaches a very
+small median gap on Sphere, whereas Vectorization plateaus.
+Baseline and Thinking attain the full target set on Rosenbrock.
+On Discus, Vectorization achieves the smallest final median gap
+and full adaptive-target attainment, while Thinking retains a
+large gap and attains few targets. On Rastrigin, Vectorization
+achieves the smallest final median gap, but Guided attains the
+greatest final fraction of targets, illustrating the different
+information provided by the two measures. On Gallagher, all four
+generated champions achieve higher final target attainment than
+CMA-ES, with Baseline reaching full attainment.
 
 The final Implicit profile examines a five-dimensional condition,
 where later improvements change some of the relative rankings.
@@ -539,29 +542,30 @@ where later improvements change some of the relative rankings.
 \end{figure}
 
 In Figure~\ref{fig:implicit_qwen32_noisy}, Guided and Vectorization
-reach much smaller median gaps on Sphere than Thinking, although CMA-ES attains the targets earlier.
-No displayed optimizer reaches full adaptive-target attainment on
-Rosenbrock. On Discus, Guided improves later but finishes with a smaller
-median gap and greater target attainment than DE. DE performs strongest
-on Rastrigin, achieving both the lowest final median gap and the highest
-final attainment. On Gallagher, Vectorization has the highest final
-target attainment, although its broad interquartile band indicates
-substantial variation across trials.
+reach much smaller median gaps on Sphere than Thinking, although
+CMA-ES attains the targets earlier. No displayed optimizer reaches
+full adaptive-target attainment on Rosenbrock. On Discus, Guided
+improves more slowly than DE but finishes with a slightly smaller
+median gap and higher target attainment. DE performs best on
+Rastrigin, achieving the smallest final median gap and the highest
+final target attainment. On Gallagher, Vectorization achieves the
+highest final target attainment, while its broad IQR band in the
+convergence plot indicates substantial variation across trials.
 
 \FloatBarrier
 
-Table~\ref{tab:implicit_summary} reports returned-solution success for
-the same three Implicit configurations as the figures. For
-Qwen2.5-Coder-14B-Instruct at $D=2$ and $\sigma=0.05$, Guided succeeds
-in every trial on Rosenbrock and Discus, while Baseline succeeds in every
-trial on Rosenbrock and Rastrigin. DeepSeek-Coder-V2-Lite-Instruct at
-$D=2$ and $\sigma=0.2$ shows a different pattern: Guided achieves
-100\% on Sphere, Baseline and Thinking achieve 100\% on Rosenbrock,
-and Vectorization achieves 100\% on Discus. For Qwen2.5-Coder-32B-Instruct
-at $D=5$ and $\sigma=0.2$, Guided and Vectorization achieve 100\% on
-Sphere, but no strategy returns a solution within the strict threshold
-on Rosenbrock, Discus, or Rastrigin. Progress in the search profiles
-therefore need not translate into returned-solution success.
+Table~\ref{tab:implicit_summary} reports returned-solution success
+rates at $\Delta f\leq10^{-8}$ for the three Implicit configurations
+shown above. For Qwen2.5-Coder-14B-Instruct at $D=2$ and
+$\sigma=0.05$, Guided succeeds in every trial on Rosenbrock and
+Discus, while Baseline succeeds in every trial on Rosenbrock and
+Rastrigin. For DeepSeek-Coder-V2-Lite-Instruct at $D=2$ and
+$\sigma=0.2$, Guided achieves 100\% success on Sphere, Baseline
+and Thinking achieve 100\% on Rosenbrock, and Vectorization achieves
+100\% on Discus. For Qwen2.5-Coder-32B-Instruct at $D=5$ and
+$\sigma=0.2$, Guided and Vectorization achieve 100\% success on
+Sphere, but no generated champion meets the threshold on Rosenbrock,
+Discus, or Rastrigin.
 
 \begin{table}[htbp]
     \centering
@@ -615,229 +619,238 @@ therefore need not translate into returned-solution success.
 
 \FloatBarrier
 
-The condition-specific tables expose differences that pooled percentages
-would conceal: a strategy can succeed consistently on one function and
-fail to reach the threshold on another under the same model, dimension,
-and noise level. A zero entry means that none of the 20 returned solutions
-meets $10^{-8}$; it does not establish that every execution failed or that
-the search made no progress.
+The condition-specific tables show that a strategy can succeed
+consistently on one function yet record no successes on another
+under the same model, dimension, and noise level. A zero entry
+means that no trial returns a valid solution meeting
+$\Delta f\leq10^{-8}$; it does not imply that every execution
+failed or that the search made no progress.
 
-The selected Explicit and Implicit blocks do not all match in model,
-dimension, and noise. They therefore do not establish an overall advantage
-for either mode. Appendix~\ref{app:benchmark_success_rates} provides the
-full configuration grid for comparisons over matching conditions, as
-defined in Section~\ref{sec:independent_benchmark}.
-
-\FloatBarrier
-
-%==============================================================================
-\section{Noise Robustness}
-\label{sec:noise_robustness}
-%==============================================================================
-
-The native comparisons use a different champion at each noise level.
-The noise-robustness evaluation is designed to test unchanged Explicit
-Baseline champions synthesized at $\sigma_{\mathrm{synth}}=0$ under $\sigma_{\mathrm{eval}}\in\{0,0.05,0.1,0.2\}$, keeping the selected
-code, function, and dimension fixed. Champions are not reselected
-between noise levels, although their search procedures may adapt during
-each run. This is not a test of transfer between functions or dimensions.
-Figure~\ref{fig:cross_evaluation_success_rate} shows the available
-returned-solution success results alongside the classical baselines,
-separately for each dimension.
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{images/experiments/05_noise_robustness/success_rate_vs_noise.png}
-    \caption[Returned-solution success across evaluation noise]{%
-    \textbf{Returned-solution success across evaluation noise.}
-    Success rates at $\Delta f\leq10^{-8}$ for Explicit
-    Baseline champions synthesized at $\sigma_{\mathrm{synth}}=0$
-    and classical baselines. Panels separate
-    dimensions. Points average available functions with equal weight;
-    error bars show 95\% condition-bootstrap intervals.
-    Missing observations are not plotted.}
-    \label{fig:cross_evaluation_success_rate}
-\end{figure}
+The selected Explicit and Implicit configurations do not all match
+in model, dimension, and noise level, so these examples do not
+establish an overall advantage for either mode.
+Appendix~\ref{app:benchmark_success_rates} provides the full
+configuration grid for comparisons under matching conditions,
+as defined in Section~\ref{sec:independent_benchmark}.
 
 \FloatBarrier
+% %==============================================================================
+% \section{Noise Robustness}
+% \label{sec:noise_robustness}
+% %==============================================================================
 
-CMA-ES success decreases as noise increases, with larger clean-to-noisy
-reductions in five and ten dimensions. PSO changes less across noise
-levels, although its success rates are lower in higher dimensions.
-DE remains near zero at the strict $10^{-8}$ threshold; this does not
-imply an absence of search progress. The broad bootstrap intervals
-indicate uncertainty across the included conditions.
+% The native comparisons use a different champion at each noise level.
+% The noise-robustness evaluation is designed to test unchanged Explicit
+% Baseline champions synthesized at $\sigma_{\mathrm{synth}}=0$ under $\sigma_{\mathrm{eval}}\in\{0,0.05,0.1,0.2\}$, keeping the selected
+% code, function, and dimension fixed. Champions are not reselected
+% between noise levels, although their search procedures may adapt during
+% each run. This is not a test of transfer between functions or dimensions.
+% Figure~\ref{fig:cross_evaluation_success_rate} shows the available
+% returned-solution success results alongside the classical baselines,
+% separately for each dimension.
 
-Generated champions are shown only at $\sigma=0$. Their missing
-positive-noise results prevent an assessment of their noise robustness
-and must not be interpreted as zero success.
+% \begin{figure}[htbp]
+%     \centering
+%     \includegraphics[width=\textwidth]{images/experiments/05_noise_robustness/success_rate_vs_noise.png}
+%     \caption[Returned-solution success across evaluation noise]{%
+%     \textbf{Returned-solution success across evaluation noise.}
+%     Success rates at $\Delta f\leq10^{-8}$ for Explicit
+%     Baseline champions synthesized at $\sigma_{\mathrm{synth}}=0$
+%     and classical baselines. Panels separate
+%     dimensions. Points average available functions with equal weight;
+%     error bars show 95\% condition-bootstrap intervals.
+%     Missing observations are not plotted.}
+%     \label{fig:cross_evaluation_success_rate}
+% \end{figure}
+
+% \FloatBarrier
+
+% CMA-ES success decreases as noise increases, with larger clean-to-noisy
+% reductions in five and ten dimensions. PSO changes less across noise
+% levels, although its success rates are lower in higher dimensions.
+% DE remains near zero at the strict $10^{-8}$ threshold; this does not
+% imply an absence of search progress. The broad bootstrap intervals
+% indicate uncertainty across the included conditions.
+
+% Generated champions are shown only at $\sigma=0$. Their missing
+% positive-noise results prevent an assessment of their noise robustness
+% and must not be interpreted as zero success.
 
 %==============================================================================
-\section{Generated-Program Case Studies}
+\section{Contrasting Generated Algorithm Designs}
 \label{sec:generated_program_cases}
 %==============================================================================
 
-The performance comparisons show where selected optimizers succeed
-or fail, but do not explain the decisions responsible for those outcomes. The following two selected
-champions illustrate distinct behaviors; they have different benchmark
-conditions and are not a controlled head-to-head comparison.
-These cases examine reliability and implementation behavior rather
-than demonstrate the emergence of a noise-handling mechanism.
-The complete selected programs are reproduced with line numbers in
-Appendix~\ref{app:generated_programs};
-the excerpts below identify the decisions examined in this section.
+The aggregate results describe performance, but do not show how the
+generated programs make decisions. This section examines two selected
+champions produced through LLaMEA: a genetic algorithm with repeated
+observation averaging, and an evolution strategy with an instance-sensitive
+selection rule. These are qualitative examples of generated designs and
+implementation weaknesses, not a controlled performance comparison.
+They differ in LLM, prompt condition, function, dimension, and noise level;
+their success rates therefore cannot isolate the effect of any one
+mechanism or establish an advantage of one model or prompt condition.
+The programs implement established algorithm families rather than
+demonstrate the invention of a new optimizer. Their complete, unchanged
+source is reproduced in Appendix~\ref{app:generated_programs}.
 
-A DeepSeek-Coder-V2-Lite-Instruct Explicit Baseline champion for $f_1$
-at $D=2$ and $\sigma_{\mathrm{synth}}=0$ is a generated
-particle-swarm optimizer (experiment 2063, iteration 2). It maintains
-personal-best positions and updates them when a new observation improves
-the corresponding value:
-\begin{lstlisting}[style=championprogram,firstnumber=41,basicstyle=\ttfamily\footnotesize]
-improvement_mask = new_values < personal_best_values
-personal_best_positions[improvement_mask] = particles[improvement_mask].copy()
-personal_best_values[improvement_mask] = new_values[improvement_mask]
+\subsection{Genetic Search with Observation Averaging}
+\label{subsec:generated_ga_case}
+
+Qwen2.5-Coder-32B-Instruct generated
+\texttt{ImprovedNoisyGeneticAlgorithm}, the Explicit Vectorization champion
+for Gallagher 101 peaks ($f_{21}$), $D=2$, and $\sigma=0.2$
+(experiment 1298, iteration 6). Unlike the PSO, DE, and CMA-ES reference
+optimizers, this program uses a genetic-algorithm structure: a population
+of 100 individuals, five-member tournament selection, coordinate-wise
+arithmetic crossover, Gaussian mutation, and 10\% elitism. Crossover is
+applied with probability 0.7; mutated coordinates are clipped to the bounds.
+The Gaussian mutation perturbs candidate coordinates and is distinct from
+the heteroscedastic observation noise supplied by the objective.
+
+Its observation-aggregation mechanism is explicit. Each candidate is
+evaluated five times, and selection uses the arithmetic mean:
+\begin{lstlisting}[style=championprogram,firstnumber=70,basicstyle=\ttfamily\footnotesize]
+    def evaluate_population(self, population, problem):
+        fitnesses = []
+        for candidate in population:
+            evaluations = [problem(candidate) for _ in range(self.evaluations_per_candidate)]
+            fitnesses.append(np.mean(evaluations))
+        return np.array(fitnesses)
 \end{lstlisting}
-Its 20 benchmark instances all meet the returned-solution target
-$\Delta f\leq10^{-8}$ within the $D=2$ budget of 20,000 evaluations.
-The comparison in line 41 of
-Listing~\ref{lst:generated_pso_complete} accepts an improvement by comparing
-two objective values directly. Adding the same constant to both values
-preserves their ordering. Similarly, the global incumbent is selected by
-an \texttt{argmin}, which is unchanged by a common additive offset. This
-avoids the sign-sensitive parent-selection rule found in the next example.
-The implementation can nevertheless request calls beyond the remaining
-budget when evaluating a complete particle batch; the benchmark wrapper
-limits actual objective evaluations. Its success applies to this clean, two-dimensional condition.
+For a fixed point $x$, averaging five independent observations under the
+specified Gaussian noise model preserves the clean objective as the
+expected value and reduces the observation variance to one fifth of the
+single-call variance. The standard deviation is reduced by a factor of
+$\sqrt{5}$, but is not eliminated. Retained elites are also re-evaluated
+when the next population is assessed.
 
-In contrast, the DeepSeek-Coder-V2-Lite-Instruct Implicit Baseline champion for noisy $f_1$ at
-$D=5$ and $\sigma=0.05$ is \texttt{ImprovedSES} (experiment 2139,
-iteration 9). Its recorded synthesis gap is approximately
-$1.294\times10^{-8}$ on instance 1, whose optimum is $79.48$.
-Selection on this instance therefore identified a near-optimal candidate
-without testing whether its selection rule remained valid for other
-objective offsets. Its parent filter, in lines 32--33 of
-Listing~\ref{lst:generated_ses_complete}, includes the following lines:
+This reduction has an evaluation cost. Each population assessment consumes
+$100\times5=500$ objective calls. The 20,000-call benchmark allowance
+therefore permits 40 population assessments, including initialization;
+the resulting 4,000 candidate assessments need not involve distinct points
+because elites may recur.
+The internal counter includes all five calls per assessment of a candidate.
+The unchanged champion returns finite solutions in all 20 held-out trials:
+15 meet the primary threshold $\Delta f\leq10^{-8}$ (75\%), and 19 meet
+the secondary threshold $\Delta f\leq10^{-2}$ (95\%). Every trial uses
+20,000 actual objective evaluations. Its recorded synthesis gap is zero,
+but that single selection measurement does not imply success on every
+held-out instance.
+
+The code also adjusts mutation probability using population diversity:
+\begin{lstlisting}[style=championprogram,firstnumber=65,basicstyle=\ttfamily\footnotesize]
+            diversity = np.mean(np.std(population, axis=0))
+            self.mutation_rate = 0.1 + 0.3 * (diversity / (ub - lb)).mean()
+\end{lstlisting}
+This changes exploration according to the spread of coordinates; it does
+not estimate observation-noise variance. Likewise, the replication count
+remains fixed at five regardless of uncertainty or the remaining budget.
+Averaging can stabilize comparisons, but allows fewer candidate assessments
+than single-observation evaluation at the same call budget.
+
+A further limitation is the historical incumbent. Lines 61--62 of
+Listing~\ref{lst:generated_ga_complete} replace the stored best only when a
+new averaged value is lower. Although elites receive new observations,
+the stored best value is not revised upward when re-evaluation is less
+favorable. An unusually low noisy average can therefore remain the
+reference for later improvements. Averaging reduces observation variability
+without removing this optimistic-selection effect. No paired ablation
+disabling averaging was performed, so the observed success rates do not
+quantify its causal contribution. The source demonstrates an implemented
+noise-handling mechanism, not that the LLM understands noise or that the
+mechanism is sufficient for general noise robustness.
+
+\subsection{Evolutionary Search with an Offset-Sensitive Filter}
+\label{subsec:generated_ses_case}
+
+The contrasting example is \texttt{ImprovedSES}, generated by
+DeepSeek-Coder-V2-Lite-Instruct and selected as the Implicit Baseline
+champion for Sphere ($f_1$), $D=5$, and $\sigma=0.05$
+(experiment 2139, iteration 9). Its recorded synthesis gap is approximately
+$1.294\times10^{-8}$ on the synthesis instance, whose optimum is $79.48$.
+The program selects parents, adds clipped Gaussian mutants, and reduces
+mutation strength with its internal evaluation counter. After more than
+ten history entries, a condition on recent population minima can halve
+the mutation strength. This is a history-based search heuristic, not an
+estimate of measurement uncertainty. Surviving points can be evaluated
+again, but their repeated observations are not combined into an averaged
+fitness; the incumbent is retained using individual noisy observations.
+
+Its parent filter, in lines 32--33 of
+Listing~\ref{lst:generated_ses_complete}, is:
 \begin{lstlisting}[style=championprogram,firstnumber=32,basicstyle=\ttfamily\footnotesize]
 good_candidates_index = fitnesses[idx] < self.best_y * 1.1
 parents = parents[good_candidates_index]
 \end{lstlisting}
-Of its 20 benchmark trials on instances 2--21, eight return finite clean
-optimality gaps and twelve fail after 150 actual objective evaluations;
-the median returned-solution gap
-is therefore infinite. All twelve failed trials have negative instance
-optimum values, whereas the eight finite-return trials have positive
-optimum values. Finite return is distinct from solving the problem:
-none of the 20 trials meets the primary $10^{-8}$ target, and five meet
-the secondary $10^{-2}$ target. The finite-return rate is $40\%$, while
-the primary and secondary success rates are $0\%$ and $25\%$.
-Table~\ref{tab:ses_instance_diagnostics} contrasts representative archived
-trials from the earlier instance 1--20 schedule. Instance 1 is retained
-here only to explain the diagnostic comparison, not as part of the
-current benchmark denominator. Failed trials still have finite best-queried
-clean gaps in the search history because the program evaluated points
-before failing to return.
+Of the 20 held-out trials, eight return finite clean gaps and twelve
+fail after 150 actual objective evaluations. The median returned-solution
+gap is therefore infinite. All twelve failures have negative instance
+optimum values, while all eight finite-return trials have positive ones.
+None meets the primary threshold, and five meet the secondary threshold:
+the finite-return rate is 40\%, with primary and secondary success rates
+of 0\% and 25\%. These terminal outcomes differ from search progress;
+even failed trials queried points with finite clean gaps before the
+program failed to return.
 
-\begin{table}[htbp]
-    \centering
-    \caption{Representative archived trials of \texttt{ImprovedSES} on
-    $f_1$, $D=5$, $\sigma=0.05$. Query gaps are obtained from the IOH
-    histories; returned gaps and actual evaluation counts are terminal
-    measurements. Instance 1 belongs to the historical diagnostic, not
-    the current instances 2--21 assessment. The infinite returned gap
-    denotes execution failure.}
-    \label{tab:ses_instance_diagnostics}
-    \small
-    \setlength{\tabcolsep}{4pt}
-    \begin{tabular}{rrrrrl}
-        \hline
-        Instance & $f^*$ & Best queried gap & Returned gap & Evaluations & Outcome \\
-        \hline
-        1 & $79.480$ & $0.007006$ & $0.007006$ & 50,000 & Finite return \\
-        3 & $-247.110$ & $5.783063$ & $\infty$ & 150 & Failed \\
-        7 & $-1000.000$ & $10.411892$ & $\infty$ & 150 & Failed \\
-        16 & $6.480$ & $0.006523$ & $0.006523$ & 50,000 & Finite return \\
-        \hline
-    \end{tabular}
-\end{table}
-
-\FloatBarrier
-
-The rule is sensitive to the absolute objective offset. Let
-$\widetilde f(x)$ denote the noisy observation and $s$ the stored best
-observation. Adding a constant $c$ to the objective changes the acceptance
-condition as follows:
+The filter depends on the absolute objective offset. For noisy observation
+$\widetilde f(x)$, stored best observation $s$, and common additive
+constant $c$,
 \begin{equation}
     \widetilde f(x)+c < 1.1(s+c)
     \quad\Longleftrightarrow\quad
     \widetilde f(x)<1.1s+0.1c.
     \label{eq:ses_offset_sensitivity}
 \end{equation}
-The same shift leaves clean objective gaps and the heteroscedastic noise
-scale unchanged when $f^*$ is shifted with the objective. Nevertheless,
-it changes which parents this program accepts. In particular, multiplying
-a negative incumbent by $1.1$ makes the cutoff more negative, rather than
-allowing a candidate to be slightly worse than that incumbent.
-For positive incumbents the cutoff is more permissive, and its allowance
-depends on the objective offset as well as the quality of the solution.
-Thus a change in instance optimum is a valid benchmark condition that
-exposes a weakness in the program's selection rule.
+Shifting both the objective and its optimum leaves clean gaps and the
+heteroscedastic noise scale unchanged, but changes which parents survive.
+For a negative incumbent, multiplication by 1.1 makes the cutoff more
+negative rather than allowing a slightly worse candidate. For a positive
+incumbent the cutoff is more permissive. Selection on a single synthesis
+instance did not expose this dependence on objective offset.
 
-The full source explains the observed 150-evaluation failure. At $D=5$,
-the initial population contains 50 points. The first pass evaluates those
-50 points and then evaluates 50 parents and mutants. The initial
-infinite incumbent allows all 25 selected parents to survive. After
-100 objective calls, the program has a finite incumbent. The next pass
-re-evaluates the 50-point population; if the parent filter now rejects
-every candidate, the new population is empty. Line 41 then calls
-\texttt{np.argmin} on an empty array before reaching the return statement,
-despite the earlier stored best point.
+At $D=5$, the first pass evaluates 50 initial points followed by 50
+parents and mutants. The initial infinite incumbent permits all 25
+selected parents to survive. After these 100 calls, the incumbent is
+finite. The next pass evaluates the 50-point population; if every parent
+is rejected, the new population is empty. Line 41 then calls
+\texttt{np.argmin} on an empty array before returning the stored best
+point. Each current failure consumes only $150/50{,}000=0.3\%$ of its
+benchmark allowance, so it is not caused by budget exhaustion.
 
-An additional diagnostic executed the unchanged source with the historical
-instance 1--20 schedule and its recorded seeds, stopping surviving searches
-after at most 200 objective calls. It reproduced the empty-population \texttt{ValueError}
-at 150 calls on all eleven previously failed instances. For instance 3,
-the stored best observation after the first pass was approximately
-$-241.626$, giving a cutoff of $-265.789$ and zero surviving parents.
-For instance 1, the corresponding observation was $87.588$, its cutoff
-was $96.347$, and five parents survived. These exception details and local-state values come from the additional
-diagnostic, not the archived terminal records.
+Bounded diagnostics on the historical trial schedule reproduced this
+empty-population error in its eleven failed trials. Adding or subtracting
+a constant offset, while preserving the early queried coordinates and
+underlying noise realizations, respectively removed or reproduced the
+early failure. These checks support the offset-based explanation but do
+not establish convergence of the shifted runs. The historical measurements,
+including a synthesis-instance trial excluded from the current summaries,
+and the diagnostic details are retained in
+Section~\ref{app:ses_diagnostics} of Appendix~\ref{app:generated_programs},
+including Table~\ref{tab:ses_instance_diagnostics}.
 
-To isolate the role of the offset, the same diagnostic added $326.59$ to
-the observations on instance 3, retaining the initial population and
-optimizer/noise seeds. The first 150 queried coordinates and underlying
-noise observations were identical; only the returned scalar offset was
-changed before selection. Its shifted optimum became $79.48$, and the search continued
-to the 200-call diagnostic limit. Conversely, subtracting $326.59$ from
-instance 1 made its optimum $-247.11$ and reproduced the empty-population
-failure at 150 calls. These bounded checks identify offset sensitivity in
-the early selection logic; they do not establish final convergence of the
-shifted runs or replace the archived benchmark measurements.
+A separate defect concerns evaluation accounting. Let $P=50$ be the nominal
+population size, $n$ the current population size, and $m$ the new size.
+The two evaluation batches consume $n+m$ calls, but lines 22 and 39
+advance the internal counter by $P+m-n$, an error of $P-2n$.
+For the first 100 calls, the counter advances by only 50; with a stable
+ten-point population, 20 calls advance it by 50. This affects both the
+mutation schedule and stopping condition. The archived synthesis iteration
+records 1,999,268 evaluations against its $10^6$ allowance. Independent
+benchmarking instead caps actual evaluations at 50,000 for this condition.
+Its smaller budget also prevents interpreting differences between synthesis
+and finite benchmark gaps as instance effects alone.
 
-A second weakness appears in lines 22 and 39 of
-Listing~\ref{lst:generated_ses_complete}. If $P=50$ is the fixed nominal
-population size, $n$ the current population size, and $m$ the new population
-size, the two batches consume $n+m$ objective calls. The internal counter
-instead advances by $P+m-n$, differing by $P-2n$. It undercounts when
-$n=P$ and can overcount after the population shrinks. For example, the
-first 100 actual calls advance the counter by only 50; with a stable
-ten-point population, 20 calls advance it by 50. The mutation schedule and
-stopping condition depend on this incorrect counter, so the defect can
-also alter search behavior in trials that return a finite solution.
-The archived synthesis iteration records 1,999,268 objective evaluations
-against its configured allowance of $10^6$, exposing historical budget
-noncompliance that the low recorded synthesis gap alone does not reveal.
-Independent benchmarking caps actual IOH evaluations at 50,000 for this
-condition; its counts should therefore be used instead of the program's
-counter when assessing effort. The much smaller independent search allowance
-also means that the synthesis gap and the finite benchmark gaps cannot be
-interpreted as a contrast of instance effects alone.
+\subsection{Interpretation of the Code Comparison}
 
-Each of the twelve early failures in the current benchmark consumes only
-$0.3\%$ of the benchmark budget. The diagnostic reproduced the
-empty-population error for the eleven failures in the historical
-schedule, providing a source-level explanation for the failure pattern;
-none of the twelve current failures exhausts its evaluation budget.
-Although observation noise can change candidate ordering, additional budget does not repair the
-offset-dependent filter or supply the missing empty-population guard.
-This case illustrates why a small synthesis gap must be assessed alongside
-execution reliability and returned-solution accuracy across instances.
+The genetic algorithm explicitly aggregates repeated measurements, whereas
+\texttt{ImprovedSES} combines mutation adaptation with single-observation
+selection and a fragile acceptance filter. The examples show that a
+generated program can contain a recognizable noise-handling mechanism
+without eliminating noisy-selection bias, and that a small synthesis gap
+can coexist with basic execution and accounting defects. They illustrate
+design choices and limitations in particular generated programs, not
+representative frequencies across all champions or causal differences
+between the LLMs. Reliable interpretation therefore requires examining
+source behavior alongside held-out returned-solution accuracy and
+execution failures.
