@@ -59,9 +59,11 @@ Each function is considered at
 \end{equation}
 
 Synthesis uses BBOB instance 1 for each function and dimension.
-Independent benchmarking uses instances 1--20, with one trial per
-instance. Instance 1 is therefore shared with synthesis, while
-instances 2--20 provide additional landscape realizations.
+Independent benchmarking uses instances 2--21, with one trial per
+instance. Instance 1 is excluded from the benchmark summaries, so all
+20 evaluation instances are distinct from the synthesis instance.
+This assesses generalization to unseen instances of the same function
+and dimension, not to unseen function families or dimensions.
 
 The experiments use the heteroscedastic Gaussian noise model defined in
 Chapter~\ref{chap:methodology}, with
@@ -141,15 +143,19 @@ BBOB functions implemented in IOH \cite{deNobel2024,Hansen2021COCO}.
 The distinction between synthesis and independent benchmarking is
 described in Section~\ref{sec:benchmark_method}.
 
-Each benchmark condition comprises 20 trials, using BBOB instance $r$
-and optimizer/noise seed $42+r$ for $r=1,\ldots,20$. All optimizers
+Each benchmark condition comprises 20 trials. Trial $r$, for
+$r=1,\ldots,20$, uses BBOB instance $i_r=r+1$ and optimizer/noise
+seed $42+i_r$, giving instances 2--21 and seeds 44--63. All optimizers
 receive the same evaluation budget at a given dimension:
 $B_{\mathrm{eval}}=10{,}000D$, corresponding to 20,000, 30,000,
 50,000 and 100,000 evaluations for $D=2,3,5,10$, respectively.
 The proportional scaling with dimension is consistent with the budget
 scaling discussed in the COCO experimental procedure
 \cite{Hansen2016Procedure}; the multiplier 10,000 is chosen for this
-study.
+study. This is a dimension-proportional budget, not a fixed allowance
+of $10^6$ evaluations per benchmark trial. The latter allowance applies
+to synthesis candidates, as described in
+Section~\ref{sec:experimental_design}.
 
 Every objective evaluation counts toward the budget, including the
 initial evaluation and repeated measurements of the same point.
@@ -219,7 +225,10 @@ together.
 
 All native benchmark conditions are complete, their recorded code
 hashes match the selected champions, and their records satisfy the
-evaluation-budget and validity checks.
+evaluation-budget and validity checks. These summaries include only
+the 20 instance--seed pairs specified above. Historical results for
+instance 1 remain available for archival diagnostics but do not
+contribute to the current success rates or search profiles.
 
 Model comparisons use the Baseline scaffold to keep the prompt
 strategy fixed, while prompt-strategy comparisons are made within
@@ -252,7 +261,11 @@ solution meeting $\Delta f\leq10^{-8}$. Adaptive target sets also
 vary by noise level, so ECDF heights across noise levels do not
 represent the same absolute accuracy.
 The plots carry the last recorded search values forward after
-a run ends.
+a run ends, up to the dimension-specific budget. The evaluation axes
+therefore end at 20,000 for $D=2$ and 50,000 for $D=5$ in the
+displayed profiles, rather than at $10^6$. Equal horizontal positions
+represent equal numbers of objective evaluations; the maximum
+allowance differs between dimensions.
 
 The success-rate tables report the percentage of trials whose
 returned solutions meet the primary threshold. Each block fixes
@@ -378,7 +391,7 @@ easier adaptive targets.
 Consider the Qwen2.5-Coder-32B-Instruct Explicit Baseline champion for
 Rosenbrock ($f_8$), $D=2$, and $\sigma=0$ in
 Table~\ref{tab:explicit_summary}. The same selected program is run on
-BBOB instances 1--20. After each run, its returned point is evaluated
+BBOB instances 2--21. After each run, its returned point is evaluated
 using the clean objective, and the gap is measured against that
 instance's own optimum, as in Equation~\eqref{eq:benchmark_final_gap}.
 Nineteen trials have a returned-solution gap at most $10^{-8}$.
@@ -415,7 +428,7 @@ different noise levels.
         \multicolumn{5}{l}{\textbf{Qwen2.5-Coder-32B-Instruct}, $D=2$, $\sigma=0$} \\
         \hline
         Sphere ($f_1$) & 0 & 100 & 100 & 0 \\
-        Rosenbrock ($f_8$) & 95 & 35 & 100 & 35 \\
+        Rosenbrock ($f_8$) & 95 & 35 & 100 & 30 \\
         Discus ($f_{11}$) & 0 & 0 & 100 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 100 & 100 & 0 \\
         Gallagher 101 ($f_{21}$) & 95 & 100 & 100 & 100 \\
@@ -569,7 +582,7 @@ therefore need not translate into returned-solution success.
         Rosenbrock ($f_8$) & 100 & 0 & 0 & 100 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 100 \\
         Rastrigin ($f_{15}$) & 100 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 75 & 85 & 100 & 95 \\
+        Gallagher 101 ($f_{21}$) & 75 & 85 & 100 & 90 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{DeepSeek-Coder-V2-Lite-Instruct}, $D=2$, $\sigma=0.2$} \\
@@ -578,7 +591,7 @@ therefore need not translate into returned-solution success.
         Rosenbrock ($f_8$) & 100 & 100 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 100 & 40 \\
         Rastrigin ($f_{15}$) & 0 & 55 & 80 & 0 \\
-        Gallagher 101 ($f_{21}$) & 60 & 85 & 70 & 15 \\
+        Gallagher 101 ($f_{21}$) & 60 & 85 & 65 & 10 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Qwen2.5-Coder-32B-Instruct}, $D=5$, $\sigma=0.2$} \\
@@ -708,24 +721,30 @@ Listing~\ref{lst:generated_ses_complete}, includes the following lines:
 good_candidates_index = fitnesses[idx] < self.best_y * 1.1
 parents = parents[good_candidates_index]
 \end{lstlisting}
-Of its 20 benchmark trials, nine return finite clean optimality gaps and eleven
-fail after 150 actual objective evaluations; the median returned-solution gap
-is therefore infinite. All eleven failed trials have negative instance
-optimum values, whereas the nine finite-return trials have positive
+Of its 20 benchmark trials on instances 2--21, eight return finite clean
+optimality gaps and twelve fail after 150 actual objective evaluations;
+the median returned-solution gap
+is therefore infinite. All twelve failed trials have negative instance
+optimum values, whereas the eight finite-return trials have positive
 optimum values. Finite return is distinct from solving the problem:
-none of the 20 trials meets the primary $10^{-8}$ target, and six meet
-the secondary $10^{-2}$ target. The finite-return rate is $45\%$, while
-the primary and secondary success rates are $0\%$ and $30\%$.
-Table~\ref{tab:ses_instance_diagnostics} contrasts representative recorded
-trials. Failed trials still have finite best-queried clean gaps in the search
-history because the program evaluated points before failing to return.
+none of the 20 trials meets the primary $10^{-8}$ target, and five meet
+the secondary $10^{-2}$ target. The finite-return rate is $40\%$, while
+the primary and secondary success rates are $0\%$ and $25\%$.
+Table~\ref{tab:ses_instance_diagnostics} contrasts representative archived
+trials from the earlier instance 1--20 schedule. Instance 1 is retained
+here only to explain the diagnostic comparison, not as part of the
+current benchmark denominator. Failed trials still have finite best-queried
+clean gaps in the search history because the program evaluated points
+before failing to return.
 
 \begin{table}[htbp]
     \centering
     \caption{Representative archived trials of \texttt{ImprovedSES} on
     $f_1$, $D=5$, $\sigma=0.05$. Query gaps are obtained from the IOH
     histories; returned gaps and actual evaluation counts are terminal
-    measurements. The infinite returned gap denotes execution failure.}
+    measurements. Instance 1 belongs to the historical diagnostic, not
+    the current instances 2--21 assessment. The infinite returned gap
+    denotes execution failure.}
     \label{tab:ses_instance_diagnostics}
     \small
     \setlength{\tabcolsep}{4pt}
@@ -773,9 +792,9 @@ every candidate, the new population is empty. Line 41 then calls
 \texttt{np.argmin} on an empty array before reaching the return statement,
 despite the earlier stored best point.
 
-An additional diagnostic executed the unchanged source with the recorded
-instance and seed schedule, stopping surviving searches after at most 200
-objective calls. It reproduced the empty-population \texttt{ValueError}
+An additional diagnostic executed the unchanged source with the historical
+instance 1--20 schedule and its recorded seeds, stopping surviving searches
+after at most 200 objective calls. It reproduced the empty-population \texttt{ValueError}
 at 150 calls on all eleven previously failed instances. For instance 3,
 the stored best observation after the first pass was approximately
 $-241.626$, giving a cutoff of $-265.789$ and zero surviving parents.
@@ -813,10 +832,12 @@ counter when assessing effort. The much smaller independent search allowance
 also means that the synthesis gap and the finite benchmark gaps cannot be
 interpreted as a contrast of instance effects alone.
 
-Each of the eleven early failures consumes only $0.3\%$ of the
-benchmark budget. The reproduced empty-population error, rather than
-budget exhaustion, explains these failures. Although observation noise
-can change candidate ordering, additional budget does not repair the
+Each of the twelve early failures in the current benchmark consumes only
+$0.3\%$ of the benchmark budget. The diagnostic reproduced the
+empty-population error for the eleven failures in the historical
+schedule, providing a source-level explanation for the failure pattern;
+none of the twelve current failures exhausts its evaluation budget.
+Although observation noise can change candidate ordering, additional budget does not repair the
 offset-dependent filter or supply the missing empty-population guard.
 This case illustrates why a small synthesis gap must be assessed alongside
 execution reliability and returned-solution accuracy across instances.

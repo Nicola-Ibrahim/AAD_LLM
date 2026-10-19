@@ -25,7 +25,8 @@ these tables do not report aggregate bootstrap intervals.
 The complete grid contains three models, two modes, four dimensions, four
 noise levels, five functions, and four strategies. It covers 38,400 terminal
 outcomes. The independent evaluation allowance is $10{,}000D$, with instances
-1--20 and the trial settings described in Section~\ref{sec:independent_benchmark}.
+2--21 and the trial settings described in Section~\ref{sec:independent_benchmark}.
+Instance 1, used during synthesis, is excluded from every cell.
 
 \section{Explicit Synthesis}
 
@@ -47,19 +48,19 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0$}} \\
         \hline
         Sphere ($f_1$) & 5 & 100 & 100 & 0 \\
-        Rosenbrock ($f_8$) & 25 & 50 & 40 & 0 \\
+        Rosenbrock ($f_8$) & 30 & 50 & 40 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
-        Rastrigin ($f_{15}$) & 0 & 100 & 95 & 25 \\
+        Rastrigin ($f_{15}$) & 0 & 100 & 95 & 20 \\
         Gallagher 101 ($f_{21}$) & 15 & 0 & 95 & 25 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.05$}} \\
         \hline
         Sphere ($f_1$) & 0 & 100 & 75 & 0 \\
-        Rosenbrock ($f_8$) & 0 & 50 & 0 & 0 \\
+        Rosenbrock ($f_8$) & 0 & 55 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 65 & 0 & 10 & 90 \\
+        Gallagher 101 ($f_{21}$) & 65 & 0 & 15 & 85 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.1$}} \\
@@ -68,7 +69,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 100 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 0 & 0 & 0 & 0 \\
+        Gallagher 101 ($f_{21}$) & 0 & 0 & 0 & 5 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.2$}} \\
@@ -101,7 +102,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 55 & 100 & 0 & 0 \\
         Discus ($f_{11}$) & 100 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 15 & 35 & 0 & 5 \\
-        Gallagher 101 ($f_{21}$) & 10 & 70 & 100 & 100 \\
+        Gallagher 101 ($f_{21}$) & 10 & 65 & 100 & 100 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.05$}} \\
@@ -109,23 +110,23 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Sphere ($f_1$) & 100 & 0 & 100 & 100 \\
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
-        Rastrigin ($f_{15}$) & 35 & 0 & 0 & 0 \\
+        Rastrigin ($f_{15}$) & 40 & 0 & 0 & 0 \\
         Gallagher 101 ($f_{21}$) & 0 & 10 & 55 & 0 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.1$}} \\
         \hline
         Sphere ($f_1$) & 0 & 0 & 100 & 0 \\
-        Rosenbrock ($f_8$) & 0 & 0 & 5 & 0 \\
+        Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 95 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 0 & 0 & 55 & 75 \\
+        Gallagher 101 ($f_{21}$) & 0 & 0 & 55 & 70 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.2$}} \\
         \hline
         Sphere ($f_1$) & 0 & 0 & 0 & 0 \\
-        Rosenbrock ($f_8$) & 70 & 0 & 0 & 0 \\
+        Rosenbrock ($f_8$) & 65 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 20 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
         Gallagher 101 ($f_{21}$) & 0 & 0 & 25 & 0 \\
@@ -148,11 +149,11 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \hline
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0$}} \\
         \hline
-        Sphere ($f_1$) & 50 & 100 & 0 & 0 \\
+        Sphere ($f_1$) & 45 & 100 & 0 & 0 \\
         Rosenbrock ($f_8$) & 100 & 0 & 100 & 100 \\
         Discus ($f_{11}$) & 10 & 0 & 100 & 0 \\
         Rastrigin ($f_{15}$) & 25 & 5 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 75 & 0 & 50 & 0 \\
+        Gallagher 101 ($f_{21}$) & 75 & 0 & 45 & 0 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.05$}} \\
@@ -175,7 +176,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.2$}} \\
         \hline
-        Sphere ($f_1$) & 35 & 0 & 80 & 100 \\
+        Sphere ($f_1$) & 30 & 0 & 80 & 100 \\
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
@@ -199,11 +200,11 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \hline
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0$}} \\
         \hline
-        Sphere ($f_1$) & 100 & 0 & 75 & 100 \\
+        Sphere ($f_1$) & 100 & 0 & 70 & 100 \\
         Rosenbrock ($f_8$) & 0 & 100 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 0 & 30 & 5 & 25 \\
+        Gallagher 101 ($f_{21}$) & 0 & 30 & 5 & 30 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.05$}} \\
@@ -255,7 +256,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0$}} \\
         \hline
         Sphere ($f_1$) & 0 & 100 & 100 & 0 \\
-        Rosenbrock ($f_8$) & 95 & 35 & 100 & 35 \\
+        Rosenbrock ($f_8$) & 95 & 35 & 100 & 30 \\
         Discus ($f_{11}$) & 0 & 0 & 100 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 100 & 100 & 0 \\
         Gallagher 101 ($f_{21}$) & 95 & 100 & 100 & 100 \\
@@ -276,12 +277,12 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 100 & 80 & 0 & 90 \\
+        Gallagher 101 ($f_{21}$) & 100 & 75 & 0 & 90 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.2$}} \\
         \hline
-        Sphere ($f_1$) & 0 & 0 & 0 & 60 \\
+        Sphere ($f_1$) & 0 & 0 & 0 & 65 \\
         Rosenbrock ($f_8$) & 25 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 90 \\
@@ -308,7 +309,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Sphere ($f_1$) & 100 & 100 & 100 & 0 \\
         Rosenbrock ($f_8$) & 100 & 0 & 100 & 0 \\
         Discus ($f_{11}$) & 100 & 100 & 5 & 100 \\
-        Rastrigin ($f_{15}$) & 35 & 85 & 100 & 0 \\
+        Rastrigin ($f_{15}$) & 30 & 85 & 100 & 0 \\
         Gallagher 101 ($f_{21}$) & 100 & 100 & 95 & 0 \\
         \hline
 
@@ -335,8 +336,8 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Sphere ($f_1$) & 0 & 0 & 100 & 0 \\
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 95 & 0 & 0 \\
-        Rastrigin ($f_{15}$) & 0 & 0 & 45 & 0 \\
-        Gallagher 101 ($f_{21}$) & 70 & 0 & 0 & 90 \\
+        Rastrigin ($f_{15}$) & 0 & 0 & 50 & 0 \\
+        Gallagher 101 ($f_{21}$) & 70 & 0 & 0 & 95 \\
         \hline
     \end{tabularx}
 \end{table}
@@ -359,13 +360,13 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Sphere ($f_1$) & 0 & 0 & 100 & 0 \\
         Rosenbrock ($f_8$) & 0 & 0 & 100 & 0 \\
         Discus ($f_{11}$) & 0 & 100 & 0 & 0 \\
-        Rastrigin ($f_{15}$) & 0 & 0 & 5 & 0 \\
-        Gallagher 101 ($f_{21}$) & 90 & 0 & 90 & 75 \\
+        Rastrigin ($f_{15}$) & 5 & 0 & 5 & 0 \\
+        Gallagher 101 ($f_{21}$) & 90 & 0 & 85 & 75 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.05$}} \\
         \hline
-        Sphere ($f_1$) & 100 & 0 & 30 & 0 \\
+        Sphere ($f_1$) & 100 & 0 & 25 & 0 \\
         Rosenbrock ($f_8$) & 10 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
@@ -408,8 +409,8 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0$}} \\
         \hline
         Sphere ($f_1$) & 0 & 100 & 0 & 0 \\
-        Rosenbrock ($f_8$) & 0 & 0 & 20 & 75 \\
-        Discus ($f_{11}$) & 0 & 0 & 10 & 0 \\
+        Rosenbrock ($f_8$) & 0 & 0 & 20 & 80 \\
+        Discus ($f_{11}$) & 0 & 0 & 15 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
         Gallagher 101 ($f_{21}$) & 10 & 0 & 0 & 10 \\
         \hline
@@ -465,15 +466,15 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Sphere ($f_1$) & 100 & 5 & 0 & 0 \\
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 95 \\
         Discus ($f_{11}$) & 100 & 100 & 0 & 40 \\
-        Rastrigin ($f_{15}$) & 0 & 10 & 0 & 15 \\
-        Gallagher 101 ($f_{21}$) & 100 & 0 & 100 & 65 \\
+        Rastrigin ($f_{15}$) & 0 & 15 & 0 & 15 \\
+        Gallagher 101 ($f_{21}$) & 100 & 0 & 100 & 60 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.05$}} \\
         \hline
         Sphere ($f_1$) & 5 & 0 & 0 & 100 \\
         Rosenbrock ($f_8$) & 0 & 0 & 95 & 100 \\
-        Discus ($f_{11}$) & 100 & 0 & 0 & 40 \\
+        Discus ($f_{11}$) & 100 & 0 & 0 & 45 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 95 & 0 \\
         Gallagher 101 ($f_{21}$) & 5 & 90 & 0 & 0 \\
         \hline
@@ -483,7 +484,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Sphere ($f_1$) & 0 & 0 & 0 & 0 \\
         Rosenbrock ($f_8$) & 90 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
-        Rastrigin ($f_{15}$) & 0 & 0 & 0 & 20 \\
+        Rastrigin ($f_{15}$) & 0 & 0 & 0 & 25 \\
         Gallagher 101 ($f_{21}$) & 10 & 95 & 95 & 5 \\
         \hline
 
@@ -493,7 +494,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 0 & 95 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 85 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 100 \\
-        Gallagher 101 ($f_{21}$) & 100 & 0 & 80 & 0 \\
+        Gallagher 101 ($f_{21}$) & 100 & 0 & 75 & 0 \\
         \hline
     \end{tabularx}
 \end{table}
@@ -513,11 +514,11 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \hline
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0$}} \\
         \hline
-        Sphere ($f_1$) & 0 & 100 & 70 & 100 \\
+        Sphere ($f_1$) & 0 & 100 & 65 & 100 \\
         Rosenbrock ($f_8$) & 50 & 0 & 100 & 0 \\
         Discus ($f_{11}$) & 10 & 0 & 0 & 5 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 85 & 5 & 90 & 45 \\
+        Gallagher 101 ($f_{21}$) & 85 & 5 & 90 & 40 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.05$}} \\
@@ -526,7 +527,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 15 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 45 & 90 & 5 & 60 \\
+        Gallagher 101 ($f_{21}$) & 40 & 90 & 5 & 55 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.1$}} \\
@@ -535,7 +536,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 0 & 0 & 100 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 95 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 85 & 0 & 20 & 65 \\
+        Gallagher 101 ($f_{21}$) & 85 & 0 & 15 & 65 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.2$}} \\
@@ -544,7 +545,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 90 \\
-        Gallagher 101 ($f_{21}$) & 0 & 0 & 0 & 45 \\
+        Gallagher 101 ($f_{21}$) & 0 & 0 & 0 & 40 \\
         \hline
     \end{tabularx}
 \end{table}
@@ -567,7 +568,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Sphere ($f_1$) & 100 & 100 & 65 & 0 \\
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 100 & 0 & 0 & 0 \\
-        Rastrigin ($f_{15}$) & 0 & 0 & 0 & 40 \\
+        Rastrigin ($f_{15}$) & 0 & 0 & 0 & 35 \\
         Gallagher 101 ($f_{21}$) & 75 & 0 & 20 & 25 \\
         \hline
 
@@ -577,16 +578,16 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 0 & 0 & 100 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 80 & 0 & 25 & 65 \\
+        Gallagher 101 ($f_{21}$) & 80 & 0 & 25 & 60 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.1$}} \\
         \hline
         Sphere ($f_1$) & 100 & 0 & 100 & 100 \\
-        Rosenbrock ($f_8$) & 90 & 0 & 0 & 0 \\
+        Rosenbrock ($f_8$) & 95 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 5 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 65 & 40 & 15 & 5 \\
+        Gallagher 101 ($f_{21}$) & 65 & 45 & 15 & 5 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.2$}} \\
@@ -637,7 +638,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 0 & 0 & 40 & 0 \\
+        Gallagher 101 ($f_{21}$) & 0 & 0 & 45 & 0 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.2$}} \\
@@ -672,7 +673,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \hline
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0$}} \\
         \hline
-        Sphere ($f_1$) & 5 & 0 & 60 & 100 \\
+        Sphere ($f_1$) & 5 & 0 & 55 & 100 \\
         Rosenbrock ($f_8$) & 0 & 0 & 100 & 0 \\
         Discus ($f_{11}$) & 100 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
@@ -685,7 +686,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 100 & 0 & 0 & 100 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 100 \\
         Rastrigin ($f_{15}$) & 100 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 75 & 85 & 100 & 95 \\
+        Gallagher 101 ($f_{21}$) & 75 & 85 & 100 & 90 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.1$}} \\
@@ -694,12 +695,12 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 100 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 100 & 0 \\
-        Gallagher 101 ($f_{21}$) & 25 & 70 & 95 & 85 \\
+        Gallagher 101 ($f_{21}$) & 25 & 75 & 95 & 85 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.2$}} \\
         \hline
-        Sphere ($f_1$) & 0 & 0 & 20 & 55 \\
+        Sphere ($f_1$) & 0 & 0 & 25 & 55 \\
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 100 & 0 & 10 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
@@ -727,13 +728,13 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 0 & 20 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 85 & 70 \\
-        Gallagher 101 ($f_{21}$) & 100 & 0 & 100 & 40 \\
+        Gallagher 101 ($f_{21}$) & 100 & 0 & 100 & 35 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.05$}} \\
         \hline
-        Sphere ($f_1$) & 30 & 0 & 100 & 0 \\
-        Rosenbrock ($f_8$) & 65 & 0 & 0 & 75 \\
+        Sphere ($f_1$) & 35 & 0 & 100 & 0 \\
+        Rosenbrock ($f_8$) & 70 & 0 & 0 & 75 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 80 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 95 & 65 \\
         Gallagher 101 ($f_{21}$) & 0 & 45 & 100 & 5 \\
@@ -741,11 +742,11 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.1$}} \\
         \hline
-        Sphere ($f_1$) & 100 & 0 & 0 & 0 \\
-        Rosenbrock ($f_8$) & 0 & 0 & 15 & 0 \\
+        Sphere ($f_1$) & 95 & 0 & 0 & 0 \\
+        Rosenbrock ($f_8$) & 0 & 0 & 20 & 0 \\
         Discus ($f_{11}$) & 100 & 0 & 100 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 85 & 10 & 0 & 0 \\
+        Gallagher 101 ($f_{21}$) & 80 & 10 & 0 & 0 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.2$}} \\
@@ -754,7 +755,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 0 & 0 & 100 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 95 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 50 & 100 & 0 & 100 \\
+        Gallagher 101 ($f_{21}$) & 45 & 100 & 0 & 100 \\
         \hline
     \end{tabularx}
 \end{table}
@@ -796,7 +797,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 5 & 0 & 100 & 0 \\
         Discus ($f_{11}$) & 100 & 0 & 100 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 65 & 0 & 0 & 0 \\
+        Gallagher 101 ($f_{21}$) & 70 & 0 & 0 & 0 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.2$}} \\
@@ -825,7 +826,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \hline
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0$}} \\
         \hline
-        Sphere ($f_1$) & 0 & 100 & 0 & 85 \\
+        Sphere ($f_1$) & 0 & 100 & 0 & 80 \\
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
@@ -836,7 +837,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \hline
         Sphere ($f_1$) & 0 & 0 & 0 & 0 \\
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
-        Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
+        Discus ($f_{11}$) & 0 & 5 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
         Gallagher 101 ($f_{21}$) & 0 & 0 & 0 & 0 \\
         \hline
@@ -884,23 +885,23 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 80 \\
-        Gallagher 101 ($f_{21}$) & 0 & 50 & 95 & 100 \\
+        Gallagher 101 ($f_{21}$) & 0 & 50 & 100 & 100 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.05$}} \\
         \hline
-        Sphere ($f_1$) & 100 & 85 & 100 & 75 \\
-        Rosenbrock ($f_8$) & 100 & 0 & 65 & 100 \\
+        Sphere ($f_1$) & 100 & 90 & 100 & 75 \\
+        Rosenbrock ($f_8$) & 100 & 0 & 60 & 100 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 100 & 85 & 95 \\
-        Gallagher 101 ($f_{21}$) & 0 & 10 & 95 & 95 \\
+        Gallagher 101 ($f_{21}$) & 0 & 15 & 95 & 95 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.1$}} \\
         \hline
         Sphere ($f_1$) & 100 & 100 & 100 & 0 \\
         Rosenbrock ($f_8$) & 0 & 0 & 100 & 0 \\
-        Discus ($f_{11}$) & 65 & 0 & 100 & 0 \\
+        Discus ($f_{11}$) & 70 & 0 & 100 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
         Gallagher 101 ($f_{21}$) & 95 & 95 & 100 & 0 \\
         \hline
@@ -935,14 +936,14 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 0 & 65 & 25 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 5 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 55 & 55 & 0 & 0 \\
+        Gallagher 101 ($f_{21}$) & 55 & 50 & 0 & 0 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.05$}} \\
         \hline
         Sphere ($f_1$) & 5 & 0 & 0 & 95 \\
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
-        Discus ($f_{11}$) & 0 & 75 & 0 & 0 \\
+        Discus ($f_{11}$) & 0 & 70 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
         Gallagher 101 ($f_{21}$) & 45 & 0 & 0 & 95 \\
         \hline
@@ -952,8 +953,8 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Sphere ($f_1$) & 0 & 0 & 100 & 100 \\
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 75 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
-        Rastrigin ($f_{15}$) & 0 & 0 & 35 & 0 \\
-        Gallagher 101 ($f_{21}$) & 0 & 0 & 15 & 0 \\
+        Rastrigin ($f_{15}$) & 0 & 0 & 30 & 0 \\
+        Gallagher 101 ($f_{21}$) & 0 & 0 & 10 & 0 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.2$}} \\
@@ -962,7 +963,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 75 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 95 \\
-        Gallagher 101 ($f_{21}$) & 45 & 0 & 20 & 90 \\
+        Gallagher 101 ($f_{21}$) & 40 & 0 & 20 & 90 \\
         \hline
     \end{tabularx}
 \end{table}
@@ -983,10 +984,10 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0$}} \\
         \hline
         Sphere ($f_1$) & 0 & 100 & 0 & 0 \\
-        Rosenbrock ($f_8$) & 0 & 100 & 0 & 55 \\
-        Discus ($f_{11}$) & 0 & 0 & 0 & 30 \\
+        Rosenbrock ($f_8$) & 0 & 100 & 0 & 50 \\
+        Discus ($f_{11}$) & 0 & 0 & 0 & 25 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 5 \\
-        Gallagher 101 ($f_{21}$) & 0 & 5 & 60 & 80 \\
+        Gallagher 101 ($f_{21}$) & 0 & 5 & 65 & 85 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.05$}} \\
@@ -995,12 +996,12 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 0 & 100 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 5 \\
-        Gallagher 101 ($f_{21}$) & 80 & 0 & 0 & 0 \\
+        Gallagher 101 ($f_{21}$) & 75 & 0 & 0 & 0 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.1$}} \\
         \hline
-        Sphere ($f_1$) & 90 & 0 & 75 & 0 \\
+        Sphere ($f_1$) & 90 & 0 & 70 & 0 \\
         Rosenbrock ($f_8$) & 100 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 100 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
@@ -1062,7 +1063,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \hline
         Sphere ($f_1$) & 0 & 100 & 0 & 0 \\
         Rosenbrock ($f_8$) & 0 & 0 & 0 & 0 \\
-        Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
+        Discus ($f_{11}$) & 0 & 0 & 0 & 5 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
         Gallagher 101 ($f_{21}$) & 0 & 0 & 0 & 0 \\
         \hline
@@ -1088,29 +1089,29 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \hline
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0$}} \\
         \hline
-        Sphere ($f_1$) & 0 & 45 & 100 & 100 \\
-        Rosenbrock ($f_8$) & 0 & 0 & 0 & 70 \\
+        Sphere ($f_1$) & 0 & 40 & 100 & 100 \\
+        Rosenbrock ($f_8$) & 0 & 0 & 0 & 75 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 100 \\
         Rastrigin ($f_{15}$) & 0 & 30 & 0 & 50 \\
-        Gallagher 101 ($f_{21}$) & 100 & 20 & 85 & 90 \\
+        Gallagher 101 ($f_{21}$) & 100 & 15 & 85 & 90 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.05$}} \\
         \hline
-        Sphere ($f_1$) & 100 & 45 & 0 & 0 \\
+        Sphere ($f_1$) & 100 & 40 & 0 & 0 \\
         Rosenbrock ($f_8$) & 100 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 45 \\
         Rastrigin ($f_{15}$) & 100 & 0 & 65 & 0 \\
-        Gallagher 101 ($f_{21}$) & 15 & 50 & 65 & 45 \\
+        Gallagher 101 ($f_{21}$) & 15 & 50 & 65 & 40 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.1$}} \\
         \hline
-        Sphere ($f_1$) & 100 & 45 & 0 & 100 \\
+        Sphere ($f_1$) & 100 & 40 & 0 & 100 \\
         Rosenbrock ($f_8$) & 0 & 0 & 100 & 95 \\
         Discus ($f_{11}$) & 100 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 80 \\
-        Gallagher 101 ($f_{21}$) & 0 & 80 & 95 & 5 \\
+        Gallagher 101 ($f_{21}$) & 0 & 75 & 95 & 5 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.2$}} \\
@@ -1119,7 +1120,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 100 & 100 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 100 & 40 \\
         Rastrigin ($f_{15}$) & 0 & 55 & 80 & 0 \\
-        Gallagher 101 ($f_{21}$) & 60 & 85 & 70 & 15 \\
+        Gallagher 101 ($f_{21}$) & 60 & 85 & 65 & 10 \\
         \hline
     \end{tabularx}
 \end{table}
@@ -1140,15 +1141,15 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0$}} \\
         \hline
         Sphere ($f_1$) & 10 & 0 & 100 & 100 \\
-        Rosenbrock ($f_8$) & 55 & 0 & 90 & 100 \\
+        Rosenbrock ($f_8$) & 50 & 0 & 90 & 100 \\
         Discus ($f_{11}$) & 100 & 0 & 100 & 0 \\
-        Rastrigin ($f_{15}$) & 55 & 95 & 0 & 100 \\
-        Gallagher 101 ($f_{21}$) & 40 & 0 & 50 & 100 \\
+        Rastrigin ($f_{15}$) & 55 & 90 & 0 & 100 \\
+        Gallagher 101 ($f_{21}$) & 35 & 0 & 50 & 100 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.05$}} \\
         \hline
-        Sphere ($f_1$) & 95 & 0 & 100 & 0 \\
+        Sphere ($f_1$) & 90 & 0 & 100 & 0 \\
         Rosenbrock ($f_8$) & 100 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 90 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 25 \\
@@ -1160,8 +1161,8 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Sphere ($f_1$) & 100 & 100 & 90 & 0 \\
         Rosenbrock ($f_8$) & 0 & 0 & 100 & 100 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
-        Rastrigin ($f_{15}$) & 90 & 75 & 0 & 0 \\
-        Gallagher 101 ($f_{21}$) & 40 & 20 & 0 & 100 \\
+        Rastrigin ($f_{15}$) & 95 & 75 & 0 & 0 \\
+        Gallagher 101 ($f_{21}$) & 45 & 20 & 0 & 100 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.2$}} \\
@@ -1194,7 +1195,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 65 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 15 \\
-        Gallagher 101 ($f_{21}$) & 0 & 0 & 25 & 65 \\
+        Gallagher 101 ($f_{21}$) & 0 & 0 & 20 & 65 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.05$}} \\
@@ -1203,7 +1204,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         Rosenbrock ($f_8$) & 100 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 25 \\
-        Gallagher 101 ($f_{21}$) & 0 & 0 & 60 & 80 \\
+        Gallagher 101 ($f_{21}$) & 0 & 0 & 55 & 75 \\
         \hline
 
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.1$}} \\
@@ -1218,9 +1219,9 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.2$}} \\
         \hline
         Sphere ($f_1$) & 0 & 80 & 80 & 20 \\
-        Rosenbrock ($f_8$) & 0 & 0 & 80 & 0 \\
+        Rosenbrock ($f_8$) & 0 & 0 & 75 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 100 & 100 \\
-        Rastrigin ($f_{15}$) & 0 & 10 & 0 & 0 \\
+        Rastrigin ($f_{15}$) & 0 & 15 & 0 & 0 \\
         Gallagher 101 ($f_{21}$) & 15 & 0 & 0 & 0 \\
         \hline
     \end{tabularx}
@@ -1241,7 +1242,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \hline
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0$}} \\
         \hline
-        Sphere ($f_1$) & 100 & 0 & 30 & 0 \\
+        Sphere ($f_1$) & 100 & 0 & 35 & 0 \\
         Rosenbrock ($f_8$) & 100 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 0 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
@@ -1260,7 +1261,7 @@ outcomes. The independent evaluation allowance is $10{,}000D$, with instances
         \multicolumn{5}{l}{\textbf{Noise level $\sigma=0.1$}} \\
         \hline
         Sphere ($f_1$) & 0 & 0 & 100 & 0 \\
-        Rosenbrock ($f_8$) & 10 & 0 & 0 & 0 \\
+        Rosenbrock ($f_8$) & 5 & 0 & 0 & 0 \\
         Discus ($f_{11}$) & 100 & 0 & 0 & 0 \\
         Rastrigin ($f_{15}$) & 0 & 0 & 0 & 0 \\
         Gallagher 101 ($f_{21}$) & 5 & 30 & 0 & 0 \\
