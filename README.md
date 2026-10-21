@@ -54,7 +54,7 @@ flowchart TD
 
     click Researcher "https://github.com/nicola-ibrahim/aad_llm/tree/main/notebooks"
     click Synthesis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/run.py"
-    click Benchmark "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation/run.py"
+    click Benchmark "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/benchmark/run.py"
     click Analysis "https://github.com/nicola-ibrahim/aad_llm/tree/main/notebooks/analysis"
     click Runtime "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/execution/executor.py"
     click Persistence "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/database/engine.py"
@@ -102,7 +102,7 @@ subgraph group_runtime["Candidate execution"]
 end
 
 subgraph group_benchmark["Benchmarking and audit"]
-  node_evaluation["Champion and baseline trials<br/>[run.py]"]
+  node_benchmark["Champion and baseline trials<br/>[run.py]"]
   node_baselines["Classical optimizers<br/>[baselines.py]"]
   node_champions["Champion selection"]
   node_audit["Coverage and run audit<br/>[audit.py]"]
@@ -126,7 +126,7 @@ node_researcher(("Notebook researcher"))
 node_llm_service{{"LLM provider"}}
 
 node_researcher -->|"starts campaign"| node_campaign
-node_researcher -->|"runs trials"| node_evaluation
+node_researcher -->|"runs trials"| node_benchmark
 node_researcher -->|"audits coverage"| node_audit
 node_researcher -->|"analyses results"| node_analysis
 node_campaign -->|"plans matrix"| node_campaign_plan
@@ -142,8 +142,8 @@ node_candidate_evaluator -->|"creates objective"| node_problem_factory
 node_problem_factory -->|"applies noise"| node_noise_model
 node_single_synthesis -->|"persists code"| node_code_store
 node_single_synthesis -->|"records iterations"| node_synthesis_store
-node_evaluation -->|"runs baselines"| node_baselines
-node_evaluation -->|"writes traces"| node_trace_repo
+node_benchmark -->|"runs baselines"| node_baselines
+node_benchmark -->|"writes traces"| node_trace_repo
 node_champions -->|"reads candidates"| node_synthesis_store
 node_audit -->|"checks trace coverage"| node_trace_repo
 node_analysis -->|"reads traces"| node_trace_repo
@@ -165,11 +165,11 @@ click node_noise_model "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/
 click node_code_store "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/code/repository.py"
 click node_synthesis_store "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis/repository.py"
 click node_database "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/database/engine.py"
-click node_evaluation "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation/run.py"
+click node_benchmark "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/benchmark/run.py"
 click node_baselines "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/solvers/baselines.py"
 click node_champions "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/select_champions.py"
 click node_trace_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/io/trace_repository.py"
-click node_audit "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation/audit.py"
+click node_audit "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/benchmark/audit.py"
 click node_analysis "https://github.com/nicola-ibrahim/aad_llm/tree/main/src/benchmarking/application/analysis"
 click node_analysis_services "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/ecdf.py"
 click node_transfer "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/transfer.py"
@@ -184,7 +184,7 @@ classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
 classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
 class node_campaign,node_campaign_plan,node_synth_config,node_single_synthesis toneBlue
 class node_llamea,node_prompts,node_llm_client,node_candidate_evaluator,node_guarded_executor,node_problem_factory,node_noise_model toneAmber
-class node_evaluation,node_baselines,node_champions,node_audit toneMint
+class node_benchmark,node_baselines,node_champions,node_audit toneMint
 class node_analysis,node_analysis_services,node_transfer,node_figures toneRose
 class node_code_store,node_synthesis_store,node_database,node_trace_repo,node_researcher,node_llm_service toneIndigo
 ```
@@ -214,11 +214,11 @@ imports; analysis belongs to benchmarking, not a third bounded context.
 - [code store](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/code/repository.py)
 - [synthesis store](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis/repository.py)
 - [database](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/database/engine.py)
-- [evaluation](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation/run.py)
+- [benchmark](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/benchmark/run.py)
 - [baselines](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/solvers/baselines.py)
 - [champions](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/select_champions.py)
 - [trace repo](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/io/trace_repository.py)
-- [audit](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/evaluation/audit.py)
+- [audit](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/benchmark/audit.py)
 - [analysis](https://github.com/nicola-ibrahim/aad_llm/tree/main/src/benchmarking/application/analysis)
 - [analysis services](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/ecdf.py)
 - [transfer](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/transfer.py)
@@ -264,7 +264,7 @@ jupyter notebook
 ```
 
 Open the notebooks in the order below. The synthesis configuration has a large
-default experiment matrix and a nominal one-million-evaluation candidate budget;
+default experiment matrix and a fixed 100,000-call candidate budget;
 adjust `configs/synthesis.toml` before running a quick experiment.
 
 ## Notebook workflow
@@ -273,7 +273,7 @@ adjust `configs/synthesis.toml` before running a quick experiment.
    heteroscedastic noise behaviour.
 2. [02_synthesis.ipynb](notebooks/02_synthesis.ipynb) — run LLaMEA synthesis
    campaigns across the configured problem matrix.
-3. [03_evaluation.ipynb](notebooks/03_evaluation.ipynb) — independently run
+3. [03_benchmark.ipynb](notebooks/03_benchmark.ipynb) — independently run
    champions and classical baselines over repeated trials.
 4. [04_audit.ipynb](notebooks/04_audit.ipynb) — audit matrix coverage, pending
    work, failures, and resumable runs.
@@ -296,7 +296,7 @@ Run only the sections you need and use condition filters for smaller sweeps.
 Noise robustness and cross-function generalization are separate secondary
 analyses, outside the native champion ranking. Cross-function evaluation is
 opt-in, uses frozen clean champions, and writes isolated transfer traces.
-See [the evaluation protocol](docs/evaluation_protocol.md) for execution switches,
+See [the benchmark protocol](docs/benchmark_protocol.md) for execution switches,
 scoring, storage, and thesis interpretation.
 
 ## Configuration

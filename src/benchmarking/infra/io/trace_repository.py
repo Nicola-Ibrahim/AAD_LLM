@@ -11,27 +11,27 @@ from pathlib import Path
 import ioh
 import numpy as np
 
-from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
-from benchmarking.application.interfaces.evaluation_trace_reader import EvaluationTraceReader
-from benchmarking.domain.evaluation import (
+from benchmarking.application.interfaces.benchmark_state_store import BenchmarkStateStore
+from benchmarking.application.interfaces.benchmark_trace_reader import BenchmarkTraceReader
+from benchmarking.domain.benchmark_results import (
     executed_trial_count,
 )
 from benchmarking.domain.services.condition_status import inspect_condition
 from benchmarking.domain.trial_schedule import TrialIdentity, matching_trial_indices
-from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
+from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 from shared.config import RESULTS_DIR
 
 
-class IOHTraceReader(EvaluationTraceReader):
+class IOHTraceReader(BenchmarkTraceReader):
     """Read-only infrastructure reader managing filesystem access to IOHprofiler `.dat` and `.json` logs."""
 
-    def __init__(self, eval_dir: Path = RESULTS_DIR / "ioh_traces") -> None:
-        self._eval_dir = Path(eval_dir)
+    def __init__(self, benchmark_dir: Path = RESULTS_DIR / "ioh_traces") -> None:
+        self._benchmark_dir = Path(benchmark_dir)
 
     @property
-    def eval_dir(self) -> Path:
+    def benchmark_dir(self) -> Path:
         """Directory containing IOH traces."""
-        return self._eval_dir
+        return self._benchmark_dir
 
     @staticmethod
     def parse_dat_file(dat_path: Path) -> list[RunTrace]:
@@ -121,7 +121,7 @@ class IOHTraceReader(EvaluationTraceReader):
     def load_provenance_records(self) -> list[dict[str, object]]:
         """Load current terminal-result records, excluding historical skipped tails."""
         records: list[dict[str, object]] = []
-        for path in sorted(self.eval_dir.rglob("provenance.json")):
+        for path in sorted(self.benchmark_dir.rglob("provenance.json")):
             try:
                 record = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
@@ -150,7 +150,7 @@ class IOHTraceReader(EvaluationTraceReader):
             )
         return records
 
-    def load_evaluation_traces(
+    def load_benchmark_traces(
         self,
         dims: list[int] | None = None,
         problems: list[int] | None = None,
@@ -158,16 +158,16 @@ class IOHTraceReader(EvaluationTraceReader):
         solvers: list[str] | None = None,
         solver_resolver: Callable[[str], str] | None = None,
         trial_schedule: tuple[TrialIdentity, ...] = (),
-    ) -> EvaluationDataset:
-        """Scans evaluations directory and loads all .dat runs organized in a strongly-typed EvaluationDataset."""
-        dataset = EvaluationDataset()
+    ) -> BenchmarkDataset:
+        """Scans evaluations directory and loads all .dat runs organized in a strongly-typed BenchmarkDataset."""
+        dataset = BenchmarkDataset()
 
-        if not self.eval_dir.exists():
+        if not self.benchmark_dir.exists():
             return dataset
         records = self.load_provenance_records()
         by_directory = {Path(r["trace_directory"]).resolve(): r for r in records}
 
-        for json_path in self.eval_dir.glob("**/*.json"):
+        for json_path in self.benchmark_dir.glob("**/*.json"):
             if "provenance" in json_path.name:
                 continue
 
@@ -180,7 +180,7 @@ class IOHTraceReader(EvaluationTraceReader):
                 continue
             meta: dict[str, object] = raw_metadata
 
-            path_str = str(json_path.relative_to(self.eval_dir))
+            path_str = str(json_path.relative_to(self.benchmark_dir))
             dim_m = re.search(r"(\d+)D", path_str)
             dim = int(dim_m.group(1)) if dim_m else None
             noise_m = re.search(r"std_([\d\.]+)", path_str)
@@ -218,7 +218,7 @@ class IOHTraceReader(EvaluationTraceReader):
                 if p_id is None or dim is None:
                     continue
 
-                cond = EvaluationCondition(dim=dim, noise_std=noise_std, problem_id=p_id)
+                cond = BenchmarkCondition(dim=dim, noise_std=noise_std, problem_id=p_id)
                 dat_p = sc.get("path")
                 if isinstance(dat_p, str) and dat_p and (json_path.parent / dat_p).exists():
                     parsed_runs = self.parse_dat_file(json_path.parent / dat_p)
@@ -276,7 +276,7 @@ class IOHTraceReader(EvaluationTraceReader):
             solver_name = solver_resolver(folder) if solver_resolver else folder
             if solvers and solver_name not in solvers:
                 continue
-            condition = EvaluationCondition(dim=dim, noise_std=noise_std, problem_id=p_id)
+            condition = BenchmarkCondition(dim=dim, noise_std=noise_std, problem_id=p_id)
             selected_indices = set(matching_trial_indices(record, trial_schedule))
             for index, (error, used) in enumerate(
                 zip(record["clean_errors"], record.get("evaluations_used", []))
@@ -295,16 +295,16 @@ class IOHTraceReader(EvaluationTraceReader):
         return dataset
 
 
-class EvaluationStateRepository(EvaluationStateStore):
+class BenchmarkStateRepository(BenchmarkStateStore):
     """Infrastructure repository managing read/write operations for benchmark evaluation provenance and log merging."""
 
-    def __init__(self, eval_dir: Path = RESULTS_DIR / "ioh_traces") -> None:
-        self._eval_dir = Path(eval_dir)
+    def __init__(self, benchmark_dir: Path = RESULTS_DIR / "ioh_traces") -> None:
+        self._benchmark_dir = Path(benchmark_dir)
 
     @property
-    def eval_dir(self) -> Path:
+    def benchmark_dir(self) -> Path:
         """Directory containing evaluation traces and provenance."""
-        return self._eval_dir
+        return self._benchmark_dir
 
     def remove_solver_traces(self, solver_dir: Path) -> None:
         """Remove one stale solver condition directory before a clean evaluation."""

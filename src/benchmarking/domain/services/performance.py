@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from benchmarking.domain.enums import BBOBFunction
-from benchmarking.domain.vos import EvaluationDataset, RunTrace
+from benchmarking.domain.vos import BenchmarkDataset, RunTrace
 
 
 class PerformanceMetricsEngine:
@@ -59,7 +59,7 @@ class PerformanceMetricsEngine:
 
     def compute_hardness_success_rates(
         self,
-        benchmark_data: EvaluationDataset,
+        benchmark_data: BenchmarkDataset,
         dim: int,
         solvers_list: list[str],
         noise_level: float,

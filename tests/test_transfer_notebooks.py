@@ -18,17 +18,17 @@ from benchmarking.application.analysis.analyze_noise_robustness import AnalyzeNo
 from benchmarking.application.analysis.analyze_performance import AnalyzePerformance
 from benchmarking.application.analysis.analyze_reliability import AnalyzeReliability
 from benchmarking.application.analysis.data_loader import AnalysisDataLoader, AnalysisSnapshot
-from benchmarking.application.evaluation_config import EvaluationConfig
-from benchmarking.domain.evaluation import (
+from benchmarking.application.benchmark_config import BenchmarkConfig
+from benchmarking.domain.benchmark_results import (
+    BENCHMARK_SCHEMA_VERSION,
     CHAMPION_RETURN_VALIDATION_VERSION,
     ERROR_DEFINITION,
-    EVALUATION_SCHEMA_VERSION,
 )
 from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
 from benchmarking.domain.services.performance import PerformanceMetricsEngine
 from benchmarking.domain.services.reliability import ReliabilityEngine
 from benchmarking.domain.services.transfer import TransferAnalysisEngine
-from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
+from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 from benchmarking.infra.storage.analysis_results_store import AnalysisResultsStore
 from benchmarking.infra.storage.model_registry import configured_model_names
 from bootstrap.analysis import AnalysisUseCases
@@ -50,19 +50,19 @@ def inputs(tmp_path: Path) -> AnalysisSnapshot:
     model = "qwen2.5-coder-14b-instruct-q4_k_m.gguf"
     names = configured_model_names()
     label = names.get_clean_model_label(model) + " / baseline"
-    dataset = EvaluationDataset()
+    dataset = BenchmarkDataset()
     for noise in [0.0, 0.05]:
         for solver in [label, "PSO"]:
             for _ in range(20):
                 dataset.add_run(
-                    EvaluationCondition(dim=2, noise_std=noise, problem_id=1),
+                    BenchmarkCondition(dim=2, noise_std=noise, problem_id=1),
                     solver,
                     RunTrace(evaluations=np.array([1, 100]), raw_objectives=np.array([1.0, 0.0])),
                 )
     code = "frozen optimizer"
     code_hash = hashlib.sha256(code.encode()).hexdigest()
     native = dict(
-        evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
+        evaluation_schema_version=BENCHMARK_SCHEMA_VERSION,
         budget=100_000,
         instance_ids=list(range(2, 22)),
         trial_seeds=list(range(44, 64)),
@@ -82,7 +82,7 @@ def inputs(tmp_path: Path) -> AnalysisSnapshot:
     )
     noise_record = dict(native, noise_std=0.05, evaluation_kind="noise_robustness")
     baseline = dict(
-        evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
+        evaluation_schema_version=BENCHMARK_SCHEMA_VERSION,
         budget=100_000,
         instance_ids=list(range(2, 22)),
         trial_seeds=list(range(44, 64)),
@@ -97,7 +97,7 @@ def inputs(tmp_path: Path) -> AnalysisSnapshot:
     )
     baseline_noise = dict(baseline, noise_std=0.05)
     reader = MagicMock()
-    reader.load_evaluation_traces.return_value = dataset
+    reader.load_benchmark_traces.return_value = dataset
     reader.load_provenance_records.return_value = [native, noise_record, baseline, baseline_noise]
     repository = MagicMock()
     repository.get_synthesis_dataframes.return_value = (
@@ -132,7 +132,7 @@ def inputs(tmp_path: Path) -> AnalysisSnapshot:
         code_reader,
         champions,
         names,
-        EvaluationConfig(cross_function_problem_ids=[1, 8]),
+        BenchmarkConfig(cross_function_problem_ids=[1, 8]),
         TransferAnalysisEngine(),
     )
     return loader.load(dims=None, problems=None, noise_stds=None, include_transfer=True)
@@ -171,7 +171,7 @@ def png_exports(tmp_path: Path, monkeypatch) -> list[tuple[go.Figure, str]]:
 
 
 def test_modified_notebook_cells_compile() -> None:
-    for name in ["03_evaluation.ipynb"] + NOTEBOOKS:
+    for name in ["03_benchmark.ipynb"] + NOTEBOOKS:
         for index, cell in enumerate(notebook_cells(name)):
             if cell["cell_type"] == "code":
                 source = "".join(
@@ -388,7 +388,7 @@ def test_snapshot_preserves_missing_values_empty_strings_and_table_index(inputs,
 
 @pytest.mark.parametrize("workflow", ["reliability", "noise_robustness", "performance"])
 def test_snapshot_preserves_empty_workflow_results(inputs, tmp_path, workflow):
-    empty = replace(inputs, dataset=EvaluationDataset(), native_records=[], noise_records=[])
+    empty = replace(inputs, dataset=BenchmarkDataset(), native_records=[], noise_records=[])
     result = getattr(use_cases(empty), workflow).execute(dims=None, problems=None, noise_stds=None)
     store = AnalysisResultsStore(tmp_path / "analysis")
     assert_saved_equal(result, store.load(store.save(result)))

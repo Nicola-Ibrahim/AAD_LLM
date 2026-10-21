@@ -8,13 +8,13 @@ import tomllib
 from pathlib import Path
 from typing import cast
 
-from benchmarking.application.evaluation_config import EvaluationConfig
+from benchmarking.application.benchmark_config import BenchmarkConfig
 from shared.config import CONFIGS_DIR
 
 TomlTable = dict[str, object]
 
 
-class EvaluationConfigRepository:
+class BenchmarkConfigRepository:
     """Infrastructure repository for reading and parsing benchmark.toml and baselines.toml."""
 
     def __init__(
@@ -43,15 +43,19 @@ class EvaluationConfigRepository:
             if isinstance(metadata, dict)
         }
 
-    def load_config(self) -> EvaluationConfig:
-        """Loads and parses the benchmark.toml configuration into an EvaluationConfig model."""
+    def load_config(self) -> BenchmarkConfig:
+        """Loads and parses the benchmark.toml configuration into an BenchmarkConfig model."""
         cfg: TomlTable = {}
         if self.config_path.exists():
             with open(self.config_path, "rb") as f:
                 cfg = cast(TomlTable, tomllib.load(f))
 
-        raw_bench_cfg = cfg.get("benchmarking") or cfg.get("evaluation") or {}
+        if cfg and "benchmarking" not in cfg:
+            raise ValueError("Benchmark configuration requires a [benchmarking] section.")
+        raw_bench_cfg = cfg.get("benchmarking", {})
         bench_cfg = cast(TomlTable, raw_bench_cfg) if isinstance(raw_bench_cfg, dict) else {}
+        if unknown := bench_cfg.keys() - BenchmarkConfig.model_fields.keys():
+            raise ValueError(f"Unknown benchmark settings: {sorted(unknown)}")
         if bench_cfg and "budget" not in bench_cfg:
             raise ValueError("Set benchmarking.budget to a fixed objective-call allowance.")
         baselines_data = self.load_baselines()
@@ -70,19 +74,19 @@ class EvaluationConfigRepository:
         raw_reliability = bench_cfg.get("reliability", {})
         reliability = cast(TomlTable, raw_reliability) if isinstance(raw_reliability, dict) else {}
 
-        return EvaluationConfig(
+        return BenchmarkConfig(
             benchmarking=bench_cfg,
-            target_eval_runs=int(bench_cfg.get("target_eval_runs", 20)),
+            trials_per_condition=int(bench_cfg.get("trials_per_condition", 20)),
             random_seed=int(bench_cfg.get("random_seed", 42)),
             first_instance_id=int(bench_cfg.get("first_instance_id", 2)),
             budget=bench_cfg.get("budget", 100_000),
-            eval_timeout_seconds=float(bench_cfg.get("eval_timeout_seconds", 30.0)),
+            trial_timeout_seconds=float(bench_cfg.get("trial_timeout_seconds", 30.0)),
             observation_trace_points=int(bench_cfg.get("observation_trace_points", 64)),
             force_rerun=bool(bench_cfg.get("force_rerun", False)),
             fill_missing_only=bool(bench_cfg.get("fill_missing_only", True)),
             classical_baselines=classical_baselines,
             baseline_labels=baseline_labels,
-            cross_eval_clean_champions=bool(bench_cfg.get("cross_eval_clean_champions", True)),
+            noise_robustness_enabled=bool(bench_cfg.get("noise_robustness_enabled", True)),
             cross_function_enabled=bool(bench_cfg.get("cross_function_enabled", False)),
             cross_function_problem_ids=bench_cfg.get(
                 "cross_function_problem_ids", [1, 8, 11, 15, 21]

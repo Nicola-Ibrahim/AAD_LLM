@@ -4,8 +4,8 @@ from benchmarking.domain.base import ValueObject
 from benchmarking.domain.enums import (
     BBOB_CLASSES_ORDER,
     BBOBFunction,
+    BenchmarkStrategy,
     ClassicalSolver,
-    EvaluationStrategy,
 )
 from benchmarking.domain.services import (
     CLASSICAL_SOLVERS_MAP,
@@ -18,8 +18,8 @@ from benchmarking.domain.services import (
     ReliabilityEngine,
 )
 from benchmarking.domain.vos import (
-    EvaluationCondition,
-    EvaluationDataset,
+    BenchmarkCondition,
+    BenchmarkDataset,
     RunTrace,
     SolverRunCollection,
 )
@@ -27,11 +27,11 @@ from benchmarking.domain.vos import (
 __all__ = [
     "ValueObject",
     "ClassicalSolver",
-    "EvaluationStrategy",
-    "EvaluationCondition",
+    "BenchmarkStrategy",
+    "BenchmarkCondition",
     "RunTrace",
     "SolverRunCollection",
-    "EvaluationDataset",
+    "BenchmarkDataset",
     "HypothesisTestingEngine",
     "EcdfConvergenceEngine",
     "PerformanceMetricsEngine",

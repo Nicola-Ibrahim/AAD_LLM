@@ -7,16 +7,16 @@ from pathlib import Path
 
 import numpy as np
 
+from benchmarking.application.benchmark.types import BaselineRunnerResolver, ExecutorBuilder
+from benchmarking.application.benchmark_config import BenchmarkConfig
 from benchmarking.application.champions import Champion
-from benchmarking.application.evaluation.types import BaselineRunnerResolver, ExecutorBuilder
-from benchmarking.application.evaluation_config import EvaluationConfig
+from benchmarking.application.interfaces.benchmark_state_store import BenchmarkStateStore
 from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
-from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
-from benchmarking.application.interfaces.logger import EvaluationLoggerInterface
-from benchmarking.domain.evaluation import (
+from benchmarking.application.interfaces.logger import BenchmarkLoggerInterface
+from benchmarking.domain.benchmark_results import (
+    BENCHMARK_SCHEMA_VERSION,
     CHAMPION_RETURN_VALIDATION_VERSION,
     ERROR_DEFINITION,
-    EVALUATION_SCHEMA_VERSION,
     executed_trial_count,
 )
 from benchmarking.domain.services.condition_status import inspect_condition
@@ -29,19 +29,19 @@ from shared.domain.problem import BaseProblem
 from shared.domain.scoring import objective_gap
 
 
-class EvaluationTrialRunner:
+class BenchmarkTrialRunner:
     """Resume and execute benchmark conditions across independent trials."""
 
     def __init__(
         self,
-        state_repo: EvaluationStateStore,
-        logger: EvaluationLoggerInterface,
+        state_repo: BenchmarkStateStore,
+        logger: BenchmarkLoggerInterface,
         problem_factory: ProblemFactory,
         executor_factory: ExecutorBuilder,
         baseline_resolver: BaselineRunnerResolver,
         code_reader: CandidateCodeReader,
         model_names: ModelNames,
-        config: EvaluationConfig,
+        config: BenchmarkConfig,
     ) -> None:
         self.state_repo = state_repo
         self.logger = logger
@@ -50,9 +50,9 @@ class EvaluationTrialRunner:
         self.baseline_resolver = baseline_resolver
         self.code_reader = code_reader
         self.model_names = model_names
-        self.n_runs = config.target_eval_runs
+        self.n_runs = config.trials_per_condition
         self.config = config
-        self.trial_timeout_seconds = config.eval_timeout_seconds
+        self.trial_timeout_seconds = config.trial_timeout_seconds
         self.observation_trace_points = config.observation_trace_points
         self.force_rerun = config.force_rerun
         self.random_seed = config.random_seed
@@ -242,7 +242,7 @@ class EvaluationTrialRunner:
         self.logger.condition_complete(len(active_indices), median_err)
         prov_data = {
             **prov_metadata,
-            "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
+            "evaluation_schema_version": BENCHMARK_SCHEMA_VERSION,
             "error_definition": ERROR_DEFINITION,
             "all_trials_executed": True,
             "problem_id": p_id,
@@ -324,10 +324,12 @@ class EvaluationTrialRunner:
         code_hash = hashlib.sha256(code_str.strip().encode("utf-8")).hexdigest()
         model_slug = self.model_names.get_model_slug(llm_name)
         folder = solver_folder or f"{model_slug}_{strat}"
-        target_dir = self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder
+        target_dir = (
+            self.state_repo.benchmark_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder
+        )
         if target_problem_id is not None and p_id != source_problem_id:
             target_dir = (
-                self.state_repo.eval_dir.parent
+                self.state_repo.benchmark_dir.parent
                 / "cross_function_traces"
                 / f"source_f{source_problem_id}"
                 / f"{dim}D"
@@ -399,7 +401,11 @@ class EvaluationTrialRunner:
         self.logger.verbose = verbose
         baseline_fn = self.baseline_resolver(baseline_slug)
         target_dir = (
-            self.state_repo.eval_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / baseline_slug
+            self.state_repo.benchmark_dir
+            / f"{dim}D"
+            / f"std_{noise_std}"
+            / f"f{p_id}"
+            / baseline_slug
         )
 
         prov_metadata = {"baseline": baseline_slug}

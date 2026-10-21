@@ -5,10 +5,10 @@ from pathlib import Path
 from typing import ContextManager
 
 
-class EvaluationStateStore(ABC):
+class BenchmarkStateStore(ABC):
     @property
     @abstractmethod
-    def eval_dir(self) -> Path: ...
+    def benchmark_dir(self) -> Path: ...
 
     @abstractmethod
     def solver_directory_exists(self, solver_dir: Path) -> bool: ...

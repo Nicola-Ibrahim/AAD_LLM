@@ -1,18 +1,19 @@
-"""Tests for EvaluationService (Application Layer: Empirical Execution Engine)."""
+"""Tests for BenchmarkService (Application Layer: Empirical Execution Engine)."""
 
 import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
-from benchmarking.application.evaluation.run import EvaluationService
+from benchmarking.application.benchmark.run import BenchmarkService
 from benchmarking.infra.io.code_reader import FilesystemCodeReader
-from benchmarking.infra.io.trace_repository import EvaluationStateRepository, IOHTraceReader
-from benchmarking.infra.logging import EvaluationLogger
+from benchmarking.infra.io.trace_repository import BenchmarkStateRepository, IOHTraceReader
+from benchmarking.infra.logging import BenchmarkLogger
 from benchmarking.infra.solvers.baselines import get_baseline_runner, run_cmaes, run_de, run_pso
 from benchmarking.infra.storage import (
+    BenchmarkConfigRepository,
     ChampionsReadRepository,
-    EvaluationConfigRepository,
     SQLiteSynthesisReadRepository,
 )
 from benchmarking.infra.storage.model_registry import configured_model_names
@@ -24,10 +25,10 @@ from shared.infra.problems.bbob import BBOBProblem
 from shared.infra.problems.factory import BBOBProblemFactory
 
 
-def build_evaluation_service(**kwargs):
+def build_benchmark_service(**kwargs):
     project_root = kwargs.pop("project_root", PROJECT_ROOT)
     config_repo = kwargs.pop("config_repo")
-    return EvaluationService(
+    return BenchmarkService(
         **kwargs,
         config=config_repo.load_config(),
         problem_factory=BBOBProblemFactory(),
@@ -90,19 +91,16 @@ def test_baselines_callables():
 
 
 def test_service_baseline_execution(tmp_path: Path):
-    """Test EvaluationService executing classical baselines, caching, and dashboard."""
-    eval_dir = tmp_path / "evaluations"
+    """Test BenchmarkService executing classical baselines, caching, and dashboard."""
+    benchmark_dir = tmp_path / "benchmarks"
     cfg_file = tmp_path / "benchmark.toml"
     cfg_file.write_text(
         """
 [benchmarking]
-target_eval_runs = 2
+trials_per_condition = 2
 budget = 100
-eval_timeout_seconds = 30.0
+trial_timeout_seconds = 30.0
 classical_baselines = ["cmaes", "de", "pso"]
-target_problems = [1]
-target_dims = [2]
-target_noise_levels = [0.0]
 """,
         encoding="utf-8",
     )
@@ -110,11 +108,11 @@ target_noise_levels = [0.0]
     session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
-    state_repo = EvaluationStateRepository(eval_dir=eval_dir)
-    config_repo = EvaluationConfigRepository(config_path=cfg_file)
-    logger = EvaluationLogger()
+    state_repo = BenchmarkStateRepository(benchmark_dir=benchmark_dir)
+    config_repo = BenchmarkConfigRepository(config_path=cfg_file)
+    logger = BenchmarkLogger()
 
-    service = build_evaluation_service(
+    service = build_benchmark_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
@@ -128,7 +126,7 @@ target_noise_levels = [0.0]
     assert len(res["clean_errors"]) == 2
     assert res["median_clean_error"] is not None
 
-    prov_file = eval_dir / "2D" / "std_0.0" / "f1" / "pso" / "provenance.json"
+    prov_file = benchmark_dir / "2D" / "std_0.0" / "f1" / "pso" / "provenance.json"
     assert prov_file.exists()
     prov_data = json.loads(prov_file.read_text(encoding="utf-8"))
     assert prov_data["baseline"] == "pso"
@@ -149,13 +147,13 @@ target_noise_levels = [0.0]
 
     # The configured allowance is identical at another problem dimension.
     service.trials.run_baseline_trials(dim=5, noise_std=0.0, p_id=1, baseline_slug="pso")
-    higher_dim_provenance = eval_dir / "5D" / "std_0.0" / "f1" / "pso" / "provenance.json"
+    higher_dim_provenance = benchmark_dir / "5D" / "std_0.0" / "f1" / "pso" / "provenance.json"
     assert json.loads(higher_dim_provenance.read_text())["budget"] == 150
 
 
 def test_service_champion_execution(tmp_path: Path):
-    """Test EvaluationService executing LLM champion code, compilation, caching, and dashboard."""
-    eval_dir = tmp_path / "evaluations"
+    """Test BenchmarkService executing LLM champion code, compilation, caching, and dashboard."""
+    benchmark_dir = tmp_path / "benchmarks"
     project_root = tmp_path / "project"
     project_root.mkdir()
 
@@ -163,13 +161,10 @@ def test_service_champion_execution(tmp_path: Path):
     cfg_file.write_text(
         """
 [benchmarking]
-target_eval_runs = 2
+trials_per_condition = 2
 budget = 100
-eval_timeout_seconds = 5.0
+trial_timeout_seconds = 5.0
 classical_baselines = ["cmaes", "de", "pso"]
-target_problems = [1]
-target_dims = [2]
-target_noise_levels = [0.0]
 """,
         encoding="utf-8",
     )
@@ -177,8 +172,8 @@ target_noise_levels = [0.0]
     session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
-    state_repo = EvaluationStateRepository(eval_dir=eval_dir)
-    config_repo = EvaluationConfigRepository(config_path=cfg_file)
+    state_repo = BenchmarkStateRepository(benchmark_dir=benchmark_dir)
+    config_repo = BenchmarkConfigRepository(config_path=cfg_file)
 
     # Create dummy champion algorithm script conforming to (problem, budget) contract
     dummy_code = """
@@ -205,8 +200,8 @@ class RandomOptimizer:
     code_path.parent.mkdir()
     code_path.write_text(dummy_code, encoding="utf-8")
 
-    logger = EvaluationLogger()
-    service = build_evaluation_service(
+    logger = BenchmarkLogger()
+    service = build_benchmark_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
@@ -232,7 +227,7 @@ class RandomOptimizer:
     assert len(res["clean_errors"]) == 2
     assert res["median_clean_error"] is not None
 
-    prov_file = eval_dir / "2D" / "std_0.0" / "f1" / "qwen_14b_baseline" / "provenance.json"
+    prov_file = benchmark_dir / "2D" / "std_0.0" / "f1" / "qwen_14b_baseline" / "provenance.json"
     assert prov_file.exists()
     prov_data = json.loads(prov_file.read_text(encoding="utf-8"))
     assert prov_data["algorithm_name"] == "RandomOptimizer"
@@ -251,7 +246,7 @@ class RandomOptimizer:
 
 def test_service_incremental_resumption(tmp_path: Path):
     """Test incremental resumption: scaling from 2 runs to 4 runs without full re-execution."""
-    eval_dir = tmp_path / "evaluations"
+    benchmark_dir = tmp_path / "benchmarks"
     project_root = tmp_path / "project"
     project_root.mkdir()
 
@@ -259,13 +254,10 @@ def test_service_incremental_resumption(tmp_path: Path):
     cfg_file_2runs.write_text(
         """
 [benchmarking]
-target_eval_runs = 2
+trials_per_condition = 2
 budget = 100
-eval_timeout_seconds = 5.0
+trial_timeout_seconds = 5.0
 classical_baselines = ["cmaes", "de", "pso"]
-target_problems = [1]
-target_dims = [2]
-target_noise_levels = [0.0]
 """,
         encoding="utf-8",
     )
@@ -274,13 +266,10 @@ target_noise_levels = [0.0]
     cfg_file_4runs.write_text(
         """
 [benchmarking]
-target_eval_runs = 4
+trials_per_condition = 4
 budget = 100
-eval_timeout_seconds = 5.0
+trial_timeout_seconds = 5.0
 classical_baselines = ["cmaes", "de", "pso"]
-target_problems = [1]
-target_dims = [2]
-target_noise_levels = [0.0]
 """,
         encoding="utf-8",
     )
@@ -288,11 +277,11 @@ target_noise_levels = [0.0]
     session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
-    trace_repo = IOHTraceReader(eval_dir=eval_dir)
-    state_repo = EvaluationStateRepository(eval_dir=eval_dir)
-    config_repo_2 = EvaluationConfigRepository(config_path=cfg_file_2runs)
-    config_repo_4 = EvaluationConfigRepository(config_path=cfg_file_4runs)
-    logger = EvaluationLogger()
+    trace_repo = IOHTraceReader(benchmark_dir=benchmark_dir)
+    state_repo = BenchmarkStateRepository(benchmark_dir=benchmark_dir)
+    config_repo_2 = BenchmarkConfigRepository(config_path=cfg_file_2runs)
+    config_repo_4 = BenchmarkConfigRepository(config_path=cfg_file_4runs)
+    logger = BenchmarkLogger()
 
     dummy_code = """
 import numpy as np
@@ -320,8 +309,8 @@ class IncrementalOptimizer:
         "code_path": "algorithms/inc_champ.py",
     }
 
-    # Step 1: Initial run with target_eval_runs=2
-    service_initial = build_evaluation_service(
+    # Step 1: Initial run with trials_per_condition=2
+    service_initial = build_benchmark_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
@@ -333,11 +322,11 @@ class IncrementalOptimizer:
     assert res_1["status"] == "SUCCESS"
     assert len(res_1["clean_errors"]) == 2
 
-    solver_dir = eval_dir / "2D" / "std_0.0" / "f1" / "qwen_14b_baseline"
+    solver_dir = benchmark_dir / "2D" / "std_0.0" / "f1" / "qwen_14b_baseline"
     assert trace_repo.get_run_count(solver_dir) == 2
 
-    # Step 2: Resume with target_eval_runs=4
-    service_resumed = build_evaluation_service(
+    # Step 2: Resume with trials_per_condition=4
+    service_resumed = build_benchmark_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
@@ -362,7 +351,7 @@ class IncrementalOptimizer:
     assert base_res_1["status"] == "SUCCESS"
     assert len(base_res_1["clean_errors"]) == 2
 
-    pso_dir = eval_dir / "2D" / "std_0.0" / "f1" / "pso"
+    pso_dir = benchmark_dir / "2D" / "std_0.0" / "f1" / "pso"
     assert trace_repo.get_run_count(pso_dir) == 2
 
     base_res_2 = service_resumed.trials.run_baseline_trials(
@@ -373,49 +362,49 @@ class IncrementalOptimizer:
     assert trace_repo.get_run_count(pso_dir) == 4
 
 
-def test_evaluation_config_repository_edge_cases(tmp_path: Path):
-    """Test EvaluationConfigRepository handling missing, empty, or NoneType configuration sections."""
+def test_benchmark_config_repository_edge_cases(tmp_path: Path):
+    """Test BenchmarkConfigRepository handling missing, empty, or NoneType configuration sections."""
     # 1. Non-existent files
-    repo_missing = EvaluationConfigRepository(
+    repo_missing = BenchmarkConfigRepository(
         config_path=tmp_path / "nonexistent_bench.toml",
         baselines_path=tmp_path / "nonexistent_base.toml",
     )
     cfg_missing = repo_missing.load_config()
-    assert cfg_missing.target_eval_runs == 20
+    assert cfg_missing.trials_per_condition == 20
     assert "cmaes" in cfg_missing.baseline_labels
 
     # 2. Empty TOML file
     empty_cfg_file = tmp_path / "empty_bench.toml"
     empty_cfg_file.write_text("", encoding="utf-8")
-    repo_empty = EvaluationConfigRepository(config_path=empty_cfg_file)
+    repo_empty = BenchmarkConfigRepository(config_path=empty_cfg_file)
     cfg_empty = repo_empty.load_config()
-    assert cfg_empty.target_eval_runs == 20
+    assert cfg_empty.trials_per_condition == 20
 
     # 3. File with empty [benchmarking] section
     bench_empty_file = tmp_path / "bench_empty.toml"
     bench_empty_file.write_text("[benchmarking]\n", encoding="utf-8")
-    repo_bench_empty = EvaluationConfigRepository(config_path=bench_empty_file)
+    repo_bench_empty = BenchmarkConfigRepository(config_path=bench_empty_file)
     cfg_bench_empty = repo_bench_empty.load_config()
-    assert cfg_bench_empty.target_eval_runs == 20
+    assert cfg_bench_empty.trials_per_condition == 20
     assert cfg_bench_empty.budget == 100_000
 
-    # 4. File with [evaluation] section fallback
+    # 4. An obsolete section is rejected, not silently interpreted as a benchmark.
     eval_file = tmp_path / "eval_fallback.toml"
-    eval_file.write_text("[evaluation]\ntarget_eval_runs = 5\nbudget = 100\n", encoding="utf-8")
-    repo_eval = EvaluationConfigRepository(config_path=eval_file)
-    cfg_eval = repo_eval.load_config()
-    assert cfg_eval.target_eval_runs == 5
+    eval_file.write_text("[evaluation]\ntrials_per_condition = 5\nbudget = 100\n", encoding="utf-8")
+    repo_eval = BenchmarkConfigRepository(config_path=eval_file)
+    with pytest.raises(ValueError, match="benchmarking"):
+        repo_eval.load_config()
 
 
-def test_evaluation_logger(tmp_path: Path):
-    """Verify EvaluationLogger formatting and verbosity controls."""
+def test_benchmark_logger(tmp_path: Path):
+    """Verify BenchmarkLogger formatting and verbosity controls."""
     import io
 
-    from benchmarking.infra.logging import EvaluationLogger
+    from benchmarking.infra.logging import BenchmarkLogger
 
-    # 1. EvaluationLogger capturing output
+    # 1. BenchmarkLogger capturing output
     buf = io.StringIO()
-    logger = EvaluationLogger(verbose=True, stream=buf)
+    logger = BenchmarkLogger(verbose=True, stream=buf)
     logger.header("Test Header", subtitle="Testing logger")
     logger.info("Informational message")
     logger.success("Success message")
@@ -457,33 +446,30 @@ def test_evaluation_logger(tmp_path: Path):
 
     # 2. Quiet mode (verbose=False)
     buf_quiet = io.StringIO()
-    quiet_logger = EvaluationLogger(verbose=False, stream=buf_quiet)
+    quiet_logger = BenchmarkLogger(verbose=False, stream=buf_quiet)
     quiet_logger.header("Quiet Header")
     quiet_logger.info("Quiet info")
     assert buf_quiet.getvalue() == ""
 
 
-def test_evaluation_service_run_verbose_control(tmp_path: Path):
-    """Verify that verbose flag on EvaluationService.run_* methods controls output dynamically."""
+def test_benchmark_service_run_verbose_control(tmp_path: Path):
+    """Verify that verbose flag on BenchmarkService.run_* methods controls output dynamically."""
     import io
 
-    from benchmarking.infra.logging import EvaluationLogger
+    from benchmarking.infra.logging import BenchmarkLogger
 
     buf = io.StringIO()
-    custom_logger = EvaluationLogger(verbose=True, stream=buf)
+    custom_logger = BenchmarkLogger(verbose=True, stream=buf)
 
-    eval_dir = tmp_path / "evaluations"
+    benchmark_dir = tmp_path / "benchmarks"
     cfg_file = tmp_path / "benchmark.toml"
     cfg_file.write_text(
         """
 [benchmarking]
-target_eval_runs = 2
+trials_per_condition = 2
 budget = 100
-eval_timeout_seconds = 30.0
+trial_timeout_seconds = 30.0
 classical_baselines = ["cmaes"]
-target_problems = [1]
-target_dims = [2]
-target_noise_levels = [0.0]
 """,
         encoding="utf-8",
     )
@@ -491,10 +477,10 @@ target_noise_levels = [0.0]
     session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
-    state_repo = EvaluationStateRepository(eval_dir=eval_dir)
-    config_repo = EvaluationConfigRepository(config_path=cfg_file)
+    state_repo = BenchmarkStateRepository(benchmark_dir=benchmark_dir)
+    config_repo = BenchmarkConfigRepository(config_path=cfg_file)
 
-    service = build_evaluation_service(
+    service = build_benchmark_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
@@ -513,9 +499,9 @@ target_noise_levels = [0.0]
     assert "CMA-ES" in buf.getvalue()
 
 
-def test_cross_eval_clean_champions_workload_audit(tmp_path: Path):
+def test_noise_robustness_workload_audit(tmp_path: Path):
     """Verify that clean champions are audited across multiple target noise levels when cross_eval is enabled."""
-    eval_dir = tmp_path / "evaluations"
+    benchmark_dir = tmp_path / "benchmarks"
     project_root = tmp_path / "project"
     project_root.mkdir()
 
@@ -523,11 +509,11 @@ def test_cross_eval_clean_champions_workload_audit(tmp_path: Path):
     cfg_file.write_text(
         """
 [benchmarking]
-target_eval_runs = 2
+trials_per_condition = 2
 budget = 100
-eval_timeout_seconds = 5.0
+trial_timeout_seconds = 5.0
 classical_baselines = ["cmaes"]
-cross_eval_clean_champions = true
+noise_robustness_enabled = true
 target_noise_stds = [0.0, 0.05, 0.1]
 """,
         encoding="utf-8",
@@ -559,11 +545,11 @@ target_noise_stds = [0.0, 0.05, 0.1]
 
     sqlite_repo = EmptyConditionsRepository()
     champions_repo = FixtureChampionsRepository(champions_json)
-    state_repo = EvaluationStateRepository(eval_dir=eval_dir)
-    config_repo = EvaluationConfigRepository(config_path=cfg_file)
-    logger = EvaluationLogger()
+    state_repo = BenchmarkStateRepository(benchmark_dir=benchmark_dir)
+    config_repo = BenchmarkConfigRepository(config_path=cfg_file)
+    logger = BenchmarkLogger()
 
-    service = build_evaluation_service(
+    service = build_benchmark_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
@@ -591,7 +577,7 @@ target_noise_stds = [0.0, 0.05, 0.1]
 
 def test_cross_eval_default_behavior_without_toml_flags(tmp_path: Path):
     """Verify that cross-eval is enabled by default even with minimal benchmark.toml."""
-    eval_dir = tmp_path / "evaluations"
+    benchmark_dir = tmp_path / "benchmarks"
     project_root = tmp_path / "project"
     project_root.mkdir()
 
@@ -599,9 +585,9 @@ def test_cross_eval_default_behavior_without_toml_flags(tmp_path: Path):
     cfg_file.write_text(
         """
 [benchmarking]
-target_eval_runs = 2
+trials_per_condition = 2
 budget = 100
-eval_timeout_seconds = 5.0
+trial_timeout_seconds = 5.0
 classical_baselines = ["cmaes"]
 """,
         encoding="utf-8",
@@ -643,11 +629,11 @@ classical_baselines = ["cmaes"]
 
     sqlite_repo = EmptyConditionsRepository()
     champions_repo = FixtureChampionsRepository(champions_json)
-    state_repo = EvaluationStateRepository(eval_dir=eval_dir)
-    config_repo = EvaluationConfigRepository(config_path=cfg_file)
-    logger = EvaluationLogger()
+    state_repo = BenchmarkStateRepository(benchmark_dir=benchmark_dir)
+    config_repo = BenchmarkConfigRepository(config_path=cfg_file)
+    logger = BenchmarkLogger()
 
-    service = build_evaluation_service(
+    service = build_benchmark_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
@@ -656,8 +642,8 @@ classical_baselines = ["cmaes"]
         project_root=project_root,
     )
 
-    # Defaults to True for cross_eval_clean_champions
-    assert service.config.cross_eval_clean_champions is True
+    # Defaults to True for noise_robustness_enabled
+    assert service.config.noise_robustness_enabled is True
 
     df_native = service.workload.audit_champions_workload()
     assert len(df_native) == 2  # clean champion and noisy champion
@@ -678,19 +664,16 @@ classical_baselines = ["cmaes"]
 
 
 def test_evaluation_service_seeds_trials_independently(tmp_path: Path):
-    """Verify that EvaluationService configures independent noise seeds across trials."""
-    eval_dir = tmp_path / "evaluations"
+    """Verify that BenchmarkService configures independent noise seeds across trials."""
+    benchmark_dir = tmp_path / "benchmarks"
     cfg_file = tmp_path / "benchmark.toml"
     cfg_file.write_text(
         """
 [benchmarking]
-target_eval_runs = 3
+trials_per_condition = 3
 budget = 50
-eval_timeout_seconds = 10.0
+trial_timeout_seconds = 10.0
 classical_baselines = ["pso"]
-target_problems = [1]
-target_dims = [2]
-target_noise_levels = [0.2]
 """,
         encoding="utf-8",
     )
@@ -698,11 +681,11 @@ target_noise_levels = [0.2]
     session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
-    state_repo = EvaluationStateRepository(eval_dir=eval_dir)
-    config_repo = EvaluationConfigRepository(config_path=cfg_file)
-    logger = EvaluationLogger()
+    state_repo = BenchmarkStateRepository(benchmark_dir=benchmark_dir)
+    config_repo = BenchmarkConfigRepository(config_path=cfg_file)
+    logger = BenchmarkLogger()
 
-    service = build_evaluation_service(
+    service = build_benchmark_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
@@ -716,7 +699,7 @@ target_noise_levels = [0.2]
     # With distinct seeds under noisy evaluations, PSO trajectories should vary across runs
     assert len(set(res["clean_errors"])) > 1
     provenance = json.loads(
-        (eval_dir / "2D/std_0.2/f1/pso/provenance.json").read_text(encoding="utf-8")
+        (benchmark_dir / "2D/std_0.2/f1/pso/provenance.json").read_text(encoding="utf-8")
     )
     assert len(provenance["observed_objectives"]) == 3
     assert all(samples for samples in provenance["observed_objectives"])

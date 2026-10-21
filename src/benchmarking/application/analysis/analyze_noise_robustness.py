@@ -23,7 +23,7 @@ class AnalyzeNoiseRobustness:
             self.engine.frozen_noise_records(snapshot.noise_records),
             rel.primary_target,
             rel.secondary_target,
-            snapshot.config.target_eval_runs,
+            snapshot.config.trials_per_condition,
         )
         aggregate = self.engine.aggregate_noise(
             table, rel.primary_prompt_strategy, rel.bootstrap_samples, rel.bootstrap_seed

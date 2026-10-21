@@ -4,7 +4,7 @@ from collections.abc import Mapping
 
 import numpy as np
 
-from benchmarking.domain.evaluation import executed_trial_count
+from benchmarking.domain.benchmark_results import executed_trial_count
 
 TrialIdentity = tuple[int, int]  # BBOB instance ID, optimizer/noise seed.
 

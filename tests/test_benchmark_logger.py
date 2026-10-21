@@ -2,12 +2,12 @@
 
 from io import StringIO
 
-from benchmarking.infra.logging.evaluation_logger import EvaluationLogger
+from benchmarking.infra.logging.benchmark_logger import BenchmarkLogger
 
 
 def test_trial_values_use_three_decimals_without_field_padding():
     stream = StringIO()
-    logger = EvaluationLogger(stream=stream)
+    logger = BenchmarkLogger(stream=stream)
     logger.trial(
         trial_idx=1,
         total_trials=20,
@@ -34,7 +34,7 @@ def test_trial_values_use_three_decimals_without_field_padding():
 
 def test_cached_and_completed_errors_use_three_decimals():
     stream = StringIO()
-    logger = EvaluationLogger(stream=stream)
+    logger = BenchmarkLogger(stream=stream)
     logger.cached(3, 0.123456)
     logger.condition_complete(3, 0.987654)
 
@@ -45,7 +45,7 @@ def test_cached_and_completed_errors_use_three_decimals():
 
 def test_noise_level_preserves_configured_precision_without_repeated_noise_label():
     stream = StringIO()
-    logger = EvaluationLogger(stream=stream)
+    logger = BenchmarkLogger(stream=stream)
     logger.condition_start(
         1,
         2,

@@ -1,4 +1,4 @@
-"""Evaluation Telemetry & Console Logger.
+"""Benchmark Telemetry & Console Logger.
 
 Provides structured, colorized, emoji-enhanced telemetry for empirical
 benchmark trials, condition progress, caching notices, and batch summaries
@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from typing import TextIO
 
 from benchmarking.application.champions import GenerationMode
-from benchmarking.application.interfaces.logger import EvaluationLoggerInterface
+from benchmarking.application.interfaces.logger import BenchmarkLoggerInterface
 
 
 class Colors:
@@ -35,20 +35,20 @@ class Colors:
     GRAY = "\033[90m"
 
 
-class EvaluationFormatter(logging.Formatter):
+class BenchmarkFormatter(logging.Formatter):
     """Clean formatter outputting message text directly without verbose log headers."""
 
     def format(self, record: logging.LogRecord) -> str:
         return record.getMessage()
 
 
-class EvaluationLogger(EvaluationLoggerInterface):
-    """Specialized evaluation logger utilizing standard Python logging.Logger with custom colorization and emojis."""
+class BenchmarkLogger(BenchmarkLoggerInterface):
+    """Benchmark logger with colored values and aligned trial telemetry."""
 
     def __init__(
         self,
         verbose: bool = True,
-        logger_name: str = "benchmarking.evaluation",
+        logger_name: str = "benchmarking.benchmark",
         stream: TextIO | None = None,
     ) -> None:
         self.logger = logging.getLogger(logger_name)
@@ -56,7 +56,7 @@ class EvaluationLogger(EvaluationLoggerInterface):
         self._stream = stream or sys.stdout
 
         self._handler = logging.StreamHandler(self._stream)
-        self._handler.setFormatter(EvaluationFormatter())
+        self._handler.setFormatter(BenchmarkFormatter())
 
         self.logger.handlers.clear()
         self.logger.addHandler(self._handler)
@@ -96,7 +96,7 @@ class EvaluationLogger(EvaluationLoggerInterface):
         mode: GenerationMode | str | None = None,
         strategy: str | None = None,
     ) -> None:
-        """Logs the start of an evaluation condition."""
+        """Logs the start of a benchmark condition."""
         noise_color = Colors.GREEN if noise_std == 0.0 else Colors.BRIGHT_YELLOW
         p_name = f" ({problem_name})" if problem_name else ""
         icon = "🏆" if solver_type.lower() == "champion" else "⚙️"

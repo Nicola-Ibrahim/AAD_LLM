@@ -1,23 +1,23 @@
 """Benchmarking infrastructure layer (read repositories, trace reader, hashing)."""
 
 from benchmarking.infra.io import (
-    EvaluationStateRepository,
+    BenchmarkStateRepository,
     IOHTraceReader,
     compute_code_hash,
 )
-from benchmarking.infra.logging import EvaluationLogger
+from benchmarking.infra.logging import BenchmarkLogger
 from benchmarking.infra.storage import (
+    BenchmarkConfigRepository,
     ChampionsReadRepository,
-    EvaluationConfigRepository,
     SQLiteSynthesisReadRepository,
 )
 
 __all__ = [
-    "EvaluationConfigRepository",
+    "BenchmarkConfigRepository",
     "SQLiteSynthesisReadRepository",
     "ChampionsReadRepository",
-    "EvaluationStateRepository",
+    "BenchmarkStateRepository",
     "IOHTraceReader",
-    "EvaluationLogger",
+    "BenchmarkLogger",
     "compute_code_hash",
 ]

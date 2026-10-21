@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from benchmarking.domain.evaluation import executed_trial_count
+from benchmarking.domain.benchmark_results import executed_trial_count
 
 
 @dataclass(frozen=True)

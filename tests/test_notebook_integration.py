@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-from benchmarking.application.evaluation.run import EvaluationService
+from benchmarking.application.benchmark.run import BenchmarkService
 from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
 from benchmarking.infra.io.code_reader import FilesystemCodeReader
@@ -19,10 +19,10 @@ from shared.infra.execution.candidate_executor import create_candidate_executor
 from shared.infra.problems.factory import BBOBProblemFactory
 
 
-def build_evaluation_service(**kwargs):
+def build_benchmark_service(**kwargs):
     project_root = kwargs.pop("project_root", PROJECT_ROOT)
     config_repo = kwargs.pop("config_repo")
-    return EvaluationService(
+    return BenchmarkService(
         **kwargs,
         config=config_repo.load_config(),
         problem_factory=BBOBProblemFactory(),
@@ -162,9 +162,9 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
     print(f"✅ NB02 evolutionary synthesis pipeline verified ({len(tasks)} tasks constructed).")
 
 
-def test_nb03_evaluation_pipeline(tmp_path, db_session_factory):
-    """Verify Notebook 03 (03_evaluation.ipynb: Champion Selection + Evaluations Audit & Dispatch)."""
-    print("Testing NB03 logic with ChampionSelectionService & EvaluationService...")
+def test_nb03_benchmark_pipeline(tmp_path, db_session_factory):
+    """Verify Notebook 03 (03_benchmark.ipynb: Champion Selection + Evaluations Audit & Dispatch)."""
+    print("Testing NB03 logic with ChampionSelectionService & BenchmarkService...")
     from benchmarking.infra.storage import (
         ChampionsReadRepository,
         SQLiteSynthesisReadRepository,
@@ -216,15 +216,15 @@ def test_nb03_evaluation_pipeline(tmp_path, db_session_factory):
             "  • Database in fresh/running state (0 completed experiments). Balance query contract validated."
         )
 
-    from benchmarking.infra.io.trace_repository import EvaluationStateRepository
-    from benchmarking.infra.logging import EvaluationLogger
-    from benchmarking.infra.storage import EvaluationConfigRepository
+    from benchmarking.infra.io.trace_repository import BenchmarkStateRepository
+    from benchmarking.infra.logging import BenchmarkLogger
+    from benchmarking.infra.storage import BenchmarkConfigRepository
 
-    state_repo = EvaluationStateRepository(eval_dir=tmp_path / "traces")
-    config_repo = EvaluationConfigRepository()
-    logger = EvaluationLogger()
+    state_repo = BenchmarkStateRepository(benchmark_dir=tmp_path / "traces")
+    config_repo = BenchmarkConfigRepository()
+    logger = BenchmarkLogger()
 
-    eval_service = build_evaluation_service(
+    benchmark_service = build_benchmark_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
@@ -236,10 +236,10 @@ def test_nb03_evaluation_pipeline(tmp_path, db_session_factory):
     assert champions_path.exists(), "champions.json does not exist!"
     with open(champions_path, "r", encoding="utf-8") as f:
         champions_raw = json.load(f)
-    champions_flat = eval_service.champion_selection.flatten_champions(champions_raw)
+    champions_flat = benchmark_service.champion_selection.flatten_champions(champions_raw)
     assert len(champions_flat) > 0
 
-    df_audit = eval_service.workload.audit_champions_workload()
+    df_audit = benchmark_service.workload.audit_champions_workload()
     assert not df_audit.empty
     print(f"  • Audited champions count: {len(df_audit)}")
     print("✅ NB03 benchmark evaluation pipeline verified.")
@@ -255,18 +255,18 @@ def test_nb03_import_order_isolation():
         "-c",
         "import sys\n"
         "sys.path.insert(0, 'src')\n"
-        "from benchmarking.infra.io.trace_repository import EvaluationStateRepository, IOHTraceReader\n"
+        "from benchmarking.infra.io.trace_repository import BenchmarkStateRepository, IOHTraceReader\n"
         "from benchmarking.infra.storage import (\n"
-        "    EvaluationConfigRepository,\n"
+        "    BenchmarkConfigRepository,\n"
         "    ChampionsReadRepository,\n"
         "    SQLiteSynthesisReadRepository,\n"
         ")\n"
         "from benchmarking.application.select_champions import ChampionSelectionService\n"
-        "from benchmarking.application.evaluation.run import EvaluationService\n"
-        "from benchmarking.infra.logging import EvaluationLogger\n"
-        "repo = EvaluationConfigRepository()\n"
+        "from benchmarking.application.benchmark.run import BenchmarkService\n"
+        "from benchmarking.infra.logging import BenchmarkLogger\n"
+        "repo = BenchmarkConfigRepository()\n"
         "cfg = repo.load_config()\n"
-        "assert cfg.target_eval_runs > 0\n"
+        "assert cfg.trials_per_condition > 0\n"
         "print('NB03 import order verified.')\n",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -278,7 +278,7 @@ def test_nb04_audit_pipeline():
     from bootstrap.audit import build_audit_service
 
     snapshot = build_audit_service().get_audit_data()
-    assert isinstance(snapshot.evaluations, pd.DataFrame)
+    assert isinstance(snapshot.benchmarks, pd.DataFrame)
     assert isinstance(snapshot.synthesis_gaps, pd.DataFrame)
     assert snapshot.coverage_summary.total_cells >= 0
     assert isinstance(snapshot.completed_models, tuple)
@@ -310,7 +310,7 @@ def test_statistical_analysis_pipeline(tmp_path, db_session_factory):
     trace_repo = IOHTraceReader(trace_root)
 
     df_exp, df_iter = sqlite_repo.get_synthesis_dataframes()
-    all_benchmark_data = trace_repo.load_evaluation_traces(
+    all_benchmark_data = trace_repo.load_benchmark_traces(
         solver_resolver=configured_model_names().resolve_folder_solver_name
     )
     assert len(all_benchmark_data) > 0
@@ -725,7 +725,7 @@ def test_campaign_usecase_audit_matrix_standalone():
 if __name__ == "__main__":
     test_nb01_noise_pipeline()
     test_nb02_synthesis_pipeline()
-    test_nb03_evaluation_pipeline()
+    test_nb03_benchmark_pipeline()
     test_nb04_audit_pipeline()
     test_statistical_analysis_pipeline()
     test_custom_minimal_base_logger()

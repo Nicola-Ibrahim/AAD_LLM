@@ -6,9 +6,9 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from benchmarking.application.evaluation.summary import summarize_evaluations
-from benchmarking.application.evaluation_config import EvaluationConfig
-from benchmarking.domain.services.evaluation_outcomes import summarize_trial_outcomes
+from benchmarking.application.benchmark.summary import summarize_benchmarks
+from benchmarking.application.benchmark_config import BenchmarkConfig
+from benchmarking.domain.services.benchmark_outcomes import summarize_trial_outcomes
 
 
 @pytest.mark.parametrize(
@@ -71,13 +71,13 @@ def test_stale_results_and_baselines_do_not_suggest_synthesis() -> None:
         "stale": {"experiment_id": 8},
     }
     state = MagicMock()
-    state.eval_dir = Path("/traces")
+    state.benchmark_dir = Path("/traces")
     state.read_provenance.return_value = {
         "clean_errors": [float("inf")] * 20,
         "instance_ids": list(range(2, 22)),
         "trial_seeds": list(range(44, 64)),
     }
-    table = summarize_evaluations(workload, selection, state, EvaluationConfig())
+    table = summarize_benchmarks(workload, selection, state, BenchmarkConfig())
     assert table.loc[table["Rerun candidate"], "Experiment ID"].tolist() == [7]
     assert table.loc[table["Category"] == "missing_or_stale", "Valid trials"].tolist() == [0]
     current = table.loc[table["Category"] == "all_failed"]
@@ -110,14 +110,14 @@ def test_partial_execution_failure_rates_include_all_executed_trials() -> None:
     selection = MagicMock()
     selection.flatten_champions.return_value = {"current": {"experiment_id": 7}}
     state = MagicMock()
-    state.eval_dir = Path("/traces")
+    state.benchmark_dir = Path("/traces")
     state.read_provenance.return_value = {
         "clean_errors": [float("inf")] * 11 + [0.008] * 9,
         "instance_ids": list(range(2, 22)),
         "trial_seeds": list(range(44, 64)),
     }
 
-    table = summarize_evaluations(workload, selection, state, EvaluationConfig())
+    table = summarize_benchmarks(workload, selection, state, BenchmarkConfig())
 
     assert table.loc[0, "Executed trials"] == 20
     assert table.loc[0, "Valid trials"] == 9

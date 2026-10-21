@@ -1,11 +1,11 @@
 # ==============================================================================
 # Independent Empirical Benchmarking Configuration (Stage 2: Notebooks 03-05)
 # ==============================================================================
-# Settings for systematic multi-trial IOHprofiler evaluations of LLaMEA Champions & Classical Baselines.
+# Settings for multi-trial IOHprofiler benchmarks of LLaMEA champions and classical baselines.
 
 [benchmarking]
-# Target independent benchmark evaluation runs per condition (e.g., 10, 15, 20)
-target_eval_runs = 20
+# Independent benchmark trials per condition.
+trials_per_condition = 20
 
 # Trials use paired BBOB instance IDs and optimizer/noise seeds derived from this base.
 random_seed = 42
@@ -18,7 +18,7 @@ first_instance_id = 2
 budget = 100000
 
 # Per-trial execution wall-clock timeout in seconds
-eval_timeout_seconds = 30.0
+trial_timeout_seconds = 30.0
 
 # Sample the actual noisy objective values seen by each solver at up to this
 # many logarithmic evaluation checkpoints, plus its final real query.
@@ -31,8 +31,8 @@ observation_trace_points = 64
 force_rerun = false
 
 # Frozen clean champions on their original function under added noise.
-cross_eval_clean_champions = true
-# Cross-function generalization is an opt-in, separate evaluation campaign.
+noise_robustness_enabled = true
+# Cross-function generalization is an opt-in, separate benchmark campaign.
 cross_function_enabled = false
 cross_function_problem_ids = [1, 8, 11, 15, 21]
 

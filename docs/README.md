@@ -11,7 +11,7 @@ Use these guides for deeper explanations; each topic has one primary home.
 | --- | --- |
 | How is the modular monolith organized, and who owns each responsibility? | [System architecture](architecture/system_architecture.md) |
 | How are synthesis sessions dispatched, persisted and resumed? | [Execution and recovery](architecture/execution_flow.md) |
-| What is scored, how are budgets/timeouts handled, and how do native/noise/transfer studies differ? | [Evaluation protocol](evaluation_protocol.md) |
+| What is scored, how are budgets/timeouts handled, and how do native/noise/transfer studies differ? | [Benchmark protocol](benchmark_protocol.md) |
 | How do I configure a provider, serve a model and discover its identity? | [Model configuration](configuration/model_configuration.md) |
 | Which analysis notebook should I run, and where do its figures go? | [Analysis workflow guide](../notebooks/analysis/README.md) |
 
@@ -22,7 +22,7 @@ Use these guides for deeper explanations; each topic has one primary home.
 - [Level 0 Mermaid source](architecture/system_overview.mmd): editable workflow overview.
 - [Level 1 Mermaid source](architecture/system_diagram.mmd): editable detailed system diagram.
 - [Synthesis collaboration](architecture/system_architecture.md#synthesis-collaboration): editable Mermaid showing LLaMEA, application workflows, execution and scoring.
-- [Candidate evaluation](evaluation_protocol.md#synthesis-candidate-scoring): editable Mermaid showing validation, clean scoring and failure classification.
+- [Candidate evaluation](benchmark_protocol.md#synthesis-candidate-scoring): editable Mermaid showing validation, clean scoring and failure classification.
 
 The overview and detailed system diagrams appear directly in the project README;
 the focused diagrams appear in their architecture/protocol guides. They describe workflows and

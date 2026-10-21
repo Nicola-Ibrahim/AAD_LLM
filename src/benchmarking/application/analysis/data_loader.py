@@ -7,16 +7,16 @@ from pathlib import Path
 from typing import Literal
 
 from benchmarking.application.analysis.results import AnalysisProvenance
-from benchmarking.application.evaluation_config import EvaluationConfig
+from benchmarking.application.benchmark_config import BenchmarkConfig
+from benchmarking.application.interfaces.benchmark_trace_reader import BenchmarkTraceReader
 from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
-from benchmarking.application.interfaces.evaluation_trace_reader import EvaluationTraceReader
 from benchmarking.application.interfaces.synthesis_read_repository import SynthesisReadRepository
 from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.services.condition_status import inspect_condition
 from benchmarking.domain.services.resolvers import ModelNames
 from benchmarking.domain.services.transfer import TransferAnalysisEngine
 from benchmarking.domain.trial_schedule import select_scheduled_trials
-from benchmarking.domain.vos import EvaluationDataset
+from benchmarking.domain.vos import BenchmarkDataset
 
 ChampionIdentity = tuple[str, int, int, str]
 
@@ -25,8 +25,8 @@ ChampionIdentity = tuple[str, int, int, str]
 class AnalysisSnapshot:
     model_labels: dict[str, str]
     solver_labels: dict[str, str]
-    config: EvaluationConfig
-    dataset: EvaluationDataset
+    config: BenchmarkConfig
+    dataset: BenchmarkDataset
     models_to_solvers: dict[str, list[str]]
     model_slugs: dict[str, str]
     solver_order: list[str]
@@ -62,7 +62,7 @@ class AnalysisSnapshot:
                 "benchmarking",
                 "cross_function_enabled",
                 "cross_function_problem_ids",
-                "cross_eval_clean_champions",
+                "noise_robustness_enabled",
             }
         )
         if workflow == "transfer":
@@ -89,12 +89,12 @@ class AnalysisDataLoader:
     def __init__(
         self,
         synthesis_repo: SynthesisReadRepository,
-        trace_reader: EvaluationTraceReader,
-        transfer_reader: EvaluationTraceReader,
+        trace_reader: BenchmarkTraceReader,
+        transfer_reader: BenchmarkTraceReader,
         code_reader: CandidateCodeReader,
         champion_selection: ChampionSelectionService,
         model_names: ModelNames,
-        config: EvaluationConfig,
+        config: BenchmarkConfig,
         classifier: TransferAnalysisEngine,
     ) -> None:
         self.synthesis_repo = synthesis_repo
@@ -125,7 +125,7 @@ class AnalysisDataLoader:
             for model in completed["llm_name"].dropna().unique()
         }
         model_slugs = {label: names.get_model_slug(raw) for raw, label in model_labels.items()}
-        traces = self.trace_reader.load_evaluation_traces(
+        traces = self.trace_reader.load_benchmark_traces(
             dims=dims,
             problems=problems,
             noise_stds=noise_stds,
@@ -177,7 +177,7 @@ class AnalysisDataLoader:
                 directory_exists=True,
                 provenance=r,
                 expected_code_hash=None,
-                expected_trials=config.target_eval_runs,
+                expected_trials=config.trials_per_condition,
                 expected_budget=config.budget,
                 trial_schedule=config.trial_schedule,
             ).reason
@@ -241,7 +241,7 @@ class AnalysisDataLoader:
         }
         # Current terminal provenance controls identity validity, not the availability
         # or completeness of convergence traces. Never manufacture missing traces.
-        dataset = EvaluationDataset(
+        dataset = BenchmarkDataset(
             conditions_data={
                 condition: {
                     solver: runs

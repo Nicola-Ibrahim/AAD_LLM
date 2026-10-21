@@ -9,12 +9,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from benchmarking.application.evaluation.audit import EvaluationAuditService, SynthesisConditionSpec
-from benchmarking.application.evaluation.run import EvaluationService
-from benchmarking.application.evaluation_config import EvaluationConfig
-from benchmarking.domain.evaluation import (
+from benchmarking.application.benchmark.audit import BenchmarkAuditService, SynthesisConditionSpec
+from benchmarking.application.benchmark.run import BenchmarkService
+from benchmarking.application.benchmark_config import BenchmarkConfig
+from benchmarking.domain.benchmark_results import (
+    BENCHMARK_SCHEMA_VERSION,
     ERROR_DEFINITION,
-    EVALUATION_SCHEMA_VERSION,
 )
 from benchmarking.domain.services.transfer import TransferAnalysisEngine
 from benchmarking.infra.io.trace_repository import IOHTraceReader
@@ -22,7 +22,7 @@ from benchmarking.infra.storage.model_registry import configured_model_names
 from shared.domain.problem import ObservationSample
 
 
-def audit_for(service: EvaluationService) -> EvaluationAuditService:
+def audit_for(service: BenchmarkService) -> BenchmarkAuditService:
     service.workload.sqlite_repo.get_synthesis_dataframes.return_value = (
         pd.DataFrame(
             [
@@ -32,7 +32,7 @@ def audit_for(service: EvaluationService) -> EvaluationAuditService:
         ),
         pd.DataFrame(),
     )
-    return EvaluationAuditService(
+    return BenchmarkAuditService(
         service.workload,
         service.workload.sqlite_repo,
         (
@@ -43,45 +43,45 @@ def audit_for(service: EvaluationService) -> EvaluationAuditService:
 
 
 def test_audit_does_not_substitute_implicit_counts_or_count_synthesis_gaps(
-    transfer_service: EvaluationService,
+    transfer_service: BenchmarkService,
 ) -> None:
     service = transfer_service
     row = service.workload.audit_champions_workload().iloc[0]
     path = Path(row["target_dir"])
     service.trials.state_repo.records[path] = {
-        "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
+        "evaluation_schema_version": BENCHMARK_SCHEMA_VERSION,
         "error_definition": ERROR_DEFINITION,
         "code_hash": "obsolete",
         "clean_errors": [0.0] * 20,
     }
     service.trials.state_repo.records[path.with_name(path.name + "_implicit")] = {
-        "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
+        "evaluation_schema_version": BENCHMARK_SCHEMA_VERSION,
         "error_definition": ERROR_DEFINITION,
         "code_hash": row["code_hash"],
         "clean_errors": [0.0] * 20,
     }
     original = dict(service.trials.state_repo.records)
     snapshot = audit_for(service).get_audit_data()
-    stale = snapshot.evaluations.loc[snapshot.evaluations["key"] == row["key"]].iloc[0]
+    stale = snapshot.benchmarks.loc[snapshot.benchmarks["key"] == row["key"]].iloc[0]
     assert stale["status"] == "NEEDS_RERUN"
     assert stale["runs_found"] == 0
     assert stale["recorded_trials"] == 20
     assert snapshot.coverage_summary.completed_cells == 0
     assert snapshot.coverage_summary.synthesis_gap_cells == 1
-    assert snapshot.coverage_summary.total_cells == len(snapshot.evaluations)
+    assert snapshot.coverage_summary.total_cells == len(snapshot.benchmarks)
     assert snapshot.completed_models == ("new-model",)
     assert service.trials.state_repo.records == original
 
 
 def test_audit_excludes_missing_code_and_keeps_baselines_without_models(
-    transfer_service: EvaluationService,
+    transfer_service: BenchmarkService,
 ) -> None:
     service = transfer_service
     audit = audit_for(service)
     service.workload.code_reader.exists.return_value = False
     snapshot = audit.get_audit_data()
     assert snapshot.coverage_summary.missing_code_cells > 0
-    assert snapshot.coverage_summary.total_cells == int(snapshot.evaluations["eligible"].sum())
+    assert snapshot.coverage_summary.total_cells == int(snapshot.benchmarks["eligible"].sum())
     service.workload.sqlite_repo.get_synthesis_dataframes.return_value = (
         pd.DataFrame(),
         pd.DataFrame(),
@@ -92,12 +92,12 @@ def test_audit_excludes_missing_code_and_keeps_baselines_without_models(
     service.workload.planned_target_conditions = ((2, 0.0, 1),)
     snapshot = audit.get_audit_data()
     assert snapshot.completed_models == ()
-    assert not snapshot.evaluations.empty
-    assert set(snapshot.evaluations["solver_type"]) == {"baseline"}
+    assert not snapshot.benchmarks.empty
+    assert set(snapshot.benchmarks["solver_type"]) == {"baseline"}
 
 
 def test_audit_notebook_runs_without_campaign(
-    transfer_service: EvaluationService,
+    transfer_service: BenchmarkService,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -117,14 +117,14 @@ def test_audit_notebook_runs_without_campaign(
         if cell["cell_type"] == "code":
             code = "".join(cell["source"])
             exec(compile(code, "04_audit.ipynb", "exec"), namespace)
-    assert (tmp_path / "reports/evaluation_coverage_v2.csv").is_file()
+    assert (tmp_path / "reports/benchmark_coverage_v2.csv").is_file()
     assert (tmp_path / "reports/synthesis_gaps_v1.csv").is_file()
     assert transfer_service.trials.state_repo.records == {}
 
 
 class MemoryState:
     def __init__(self, root: Path) -> None:
-        self.eval_dir = root / "ioh_traces"
+        self.benchmark_dir = root / "ioh_traces"
         self.records: dict[Path, dict[str, object]] = {}
 
     def solver_directory_exists(self, path: Path) -> bool:
@@ -176,7 +176,7 @@ class Problem:
 
 
 @pytest.fixture
-def transfer_service(tmp_path: Path) -> EvaluationService:
+def transfer_service(tmp_path: Path) -> BenchmarkService:
     candidates = pd.DataFrame(
         [
             dict(
@@ -213,12 +213,12 @@ def transfer_service(tmp_path: Path) -> EvaluationService:
 
     executor.execute_algorithm.side_effect = execute
     baseline = MagicMock(side_effect=lambda problem, budget: (problem.true_optimum + 0.01, 0.1, 1))
-    return EvaluationService(
+    return BenchmarkService(
         sqlite_repo=synthesis_repo,
         champions_repo=champion_repo,
         state_repo=MemoryState(tmp_path),
-        config=EvaluationConfig(
-            target_eval_runs=3,
+        config=BenchmarkConfig(
+            trials_per_condition=3,
             cross_function_enabled=True,
             cross_function_problem_ids=[1, 8],
             classical_baselines=["pso"],
@@ -233,10 +233,10 @@ def transfer_service(tmp_path: Path) -> EvaluationService:
 
 
 def test_frozen_target_execution_pairing_and_baseline_reuse(
-    transfer_service: EvaluationService,
+    transfer_service: BenchmarkService,
 ) -> None:
     service = transfer_service
-    rows = service.run_cross_function_evaluations(verbose=False)
+    rows = service.run_cross_function_benchmarks(verbose=False)
     assert len(rows) == 6  # Four source-target pairs; two shared baselines.
     records = service.trials.state_repo.records
     transfer = [r for r in records.values() if "code_hash" in r]
@@ -260,12 +260,12 @@ def test_frozen_target_execution_pairing_and_baseline_reuse(
         "frozen code source_8.py",
     }
     count = executor.execute_algorithm.call_count
-    cached = service.run_cross_function_evaluations(verbose=False)
+    cached = service.run_cross_function_benchmarks(verbose=False)
     assert set(cached["status"]) == {"CACHED"}
     assert executor.execute_algorithm.call_count == count
 
 
-def test_failure_does_not_skip_later_instances(transfer_service: EvaluationService) -> None:
+def test_failure_does_not_skip_later_instances(transfer_service: BenchmarkService) -> None:
     service = transfer_service
     executor = service.trials.executor_factory(1)
     executor.execute_algorithm.side_effect = [
@@ -281,7 +281,7 @@ def test_failure_does_not_skip_later_instances(transfer_service: EvaluationServi
 
 @pytest.mark.parametrize("point", [np.array([6.0, 0.0]), np.array([np.nan, 0.0])])
 def test_invalid_champion_return_fails_each_trial(
-    transfer_service: EvaluationService, point: np.ndarray
+    transfer_service: BenchmarkService, point: np.ndarray
 ) -> None:
     service = transfer_service
     executor = service.trials.executor_factory(1)
@@ -293,20 +293,20 @@ def test_invalid_champion_return_fails_each_trial(
 
 
 def test_native_diagonals_are_reused_without_reexecution(
-    transfer_service: EvaluationService,
+    transfer_service: BenchmarkService,
 ) -> None:
     service = transfer_service
     service.run_champions(verbose=False)
     executor = service.trials.executor_factory(1)
     before = executor.execute_algorithm.call_count
-    rows = service.run_cross_function_evaluations(verbose=False)
+    rows = service.run_cross_function_benchmarks(verbose=False)
     assert (
         executor.execute_algorithm.call_count == before + 6
     )  # Two off-diagonal pairs × three trials.
     assert len(rows[rows["status"] == "CACHED"]) == 2
 
 
-def test_historical_skipped_tail_resumes(transfer_service: EvaluationService) -> None:
+def test_historical_skipped_tail_resumes(transfer_service: BenchmarkService) -> None:
     service = transfer_service
     champion = next(iter(service.champion_selection.flatten_champions().values()))
     service.trials.run_champion_trials(champion, target_problem_id=8, verbose=False)
@@ -322,13 +322,13 @@ def test_historical_skipped_tail_resumes(transfer_service: EvaluationService) ->
     assert record["instance_ids"] == [2, 3, 4]
 
 
-def test_workflow_flags_and_baseline_targets(transfer_service: EvaluationService) -> None:
+def test_workflow_flags_and_baseline_targets(transfer_service: BenchmarkService) -> None:
     service = transfer_service
-    service.config.cross_eval_clean_champions = False
+    service.config.noise_robustness_enabled = False
     assert service.workload.audit_noise_robustness_workload().empty
     service.config.cross_function_enabled = False
     assert service.workload.audit_cross_function_workload().empty
-    assert service.run_cross_function_evaluations().empty
+    assert service.run_cross_function_benchmarks().empty
     service.config.cross_function_enabled = True
     assert set(service.workload.audit_workload("cross_function")["problem_id"]) == {1, 8}
     service.config.cross_function_problem_ids = [8]
@@ -384,14 +384,14 @@ def test_noise_records_require_identical_champion_code() -> None:
 
 def test_invalid_transfer_targets_rejected() -> None:
     with pytest.raises(ValueError):
-        EvaluationConfig(cross_function_problem_ids=[0, 25])
+        BenchmarkConfig(cross_function_problem_ids=[0, 25])
 
 
 def test_reader_excludes_skipped_tail_but_retains_actual_prequery_failure(tmp_path: Path) -> None:
     folder = tmp_path / "2D" / "std_0.0" / "f1" / "pso"
     folder.mkdir(parents=True)
     provenance = dict(
-        evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
+        evaluation_schema_version=BENCHMARK_SCHEMA_VERSION,
         error_definition=ERROR_DEFINITION,
         dim=2,
         problem_id=1,
@@ -405,6 +405,6 @@ def test_reader_excludes_skipped_tail_but_retains_actual_prequery_failure(tmp_pa
     reader = IOHTraceReader(tmp_path)
     assert reader.get_run_count(folder) == 2
     assert reader.load_provenance_records()[0]["n_runs"] == 2
-    runs = reader.load_evaluation_traces().get_runs(2, 0.0, 1, "pso")
+    runs = reader.load_benchmark_traces().get_runs(2, 0.0, 1, "pso")
     assert len(runs) == 1  # Actual zero-query failure, not the absent finite-result trace.
     assert not runs[0].is_success()

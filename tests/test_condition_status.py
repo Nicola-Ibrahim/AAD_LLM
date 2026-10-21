@@ -4,10 +4,10 @@ import pandas as pd
 import pytest
 
 from benchmarking.application.select_champions import ChampionSelectionService
-from benchmarking.domain.evaluation import (
+from benchmarking.domain.benchmark_results import (
+    BENCHMARK_SCHEMA_VERSION,
     CHAMPION_RETURN_VALIDATION_VERSION,
     ERROR_DEFINITION,
-    EVALUATION_SCHEMA_VERSION,
 )
 from benchmarking.domain.services.condition_status import inspect_condition
 
@@ -63,7 +63,7 @@ def test_confirmed_failure_counts_but_historical_skipped_tail_does_not() -> None
         expected_budget=1_000_000,
         provenance={
             "budget": 1_000_000,
-            "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
+            "evaluation_schema_version": BENCHMARK_SCHEMA_VERSION,
             "error_definition": ERROR_DEFINITION,
             "clean_errors": [float("inf")] * 20,
             "runtimes": [0.1] * 2 + [0.0] * 18,
@@ -78,7 +78,7 @@ def test_confirmed_failure_counts_but_historical_skipped_tail_does_not() -> None
 @pytest.mark.parametrize("baseline", [False, True])
 def test_lower_or_unknown_budget_is_not_reusable(recorded_budget, baseline):
     provenance = {
-        "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
+        "evaluation_schema_version": BENCHMARK_SCHEMA_VERSION,
         "error_definition": ERROR_DEFINITION,
         "budget": recorded_budget,
         "clean_errors": [0.0] * 20,
@@ -106,7 +106,7 @@ def test_old_champion_results_are_not_reused_after_return_validation_change() ->
     provenance = {
         "model": "model",
         "budget": 1_000_000,
-        "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
+        "evaluation_schema_version": BENCHMARK_SCHEMA_VERSION,
         "error_definition": ERROR_DEFINITION,
         "code_hash": "current",
         "clean_errors": [0.0] * 20,

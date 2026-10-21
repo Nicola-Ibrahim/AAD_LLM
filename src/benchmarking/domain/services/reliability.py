@@ -7,7 +7,7 @@ from collections.abc import Iterable
 import numpy as np
 import pandas as pd
 
-from benchmarking.domain.vos import EvaluationDataset, RunTrace
+from benchmarking.domain.vos import BenchmarkDataset, RunTrace
 
 
 class ReliabilityEngine:
@@ -26,7 +26,7 @@ class ReliabilityEngine:
         return model.strip(), strategy.split(" ", 1)[0].strip().lower()
 
     @classmethod
-    def discover_models(cls, benchmark_data: EvaluationDataset) -> list[str]:
+    def discover_models(cls, benchmark_data: BenchmarkDataset) -> list[str]:
         """Discover LLM labels from loaded traces, including future models automatically."""
         return sorted(
             {parsed[0] for s in benchmark_data.solvers if (parsed := cls.split_solver_name(s))}
@@ -59,7 +59,7 @@ class ReliabilityEngine:
 
     def compute_reliability_table(
         self,
-        benchmark_data: EvaluationDataset,
+        benchmark_data: BenchmarkDataset,
         primary_threshold: float = 1e-8,
         secondary_threshold: float = 1e-2,
         expected_trials: int = 20,
@@ -179,7 +179,7 @@ class ReliabilityEngine:
 
     def compute_checkpoint_table(
         self,
-        benchmark_data: EvaluationDataset,
+        benchmark_data: BenchmarkDataset,
         checkpoint_fractions: list[float],
         budget: int,
         threshold: float = 1e-8,

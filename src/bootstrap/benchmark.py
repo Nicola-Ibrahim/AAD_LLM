@@ -1,17 +1,17 @@
-"""Construct benchmark evaluation and its notebook-facing collaborators."""
+"""Construct the benchmark workflow and its notebook-facing collaborators."""
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from benchmarking.application.evaluation.run import EvaluationService
+from benchmarking.application.benchmark.run import BenchmarkService
 from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.infra.io.code_reader import FilesystemCodeReader
-from benchmarking.infra.io.trace_repository import EvaluationStateRepository
-from benchmarking.infra.logging import EvaluationLogger
+from benchmarking.infra.io.trace_repository import BenchmarkStateRepository
+from benchmarking.infra.logging import BenchmarkLogger
 from benchmarking.infra.solvers.baselines import get_baseline_runner
 from benchmarking.infra.storage import (
+    BenchmarkConfigRepository,
     ChampionsReadRepository,
-    EvaluationConfigRepository,
     SQLiteSynthesisReadRepository,
 )
 from benchmarking.infra.storage.model_registry import configured_model_names
@@ -22,28 +22,28 @@ from shared.infra.problems.factory import BBOBProblemFactory
 
 
 @dataclass(frozen=True)
-class EvaluationWorkflow:
-    service: EvaluationService
+class BenchmarkWorkflow:
+    service: BenchmarkService
     sqlite_repo: SQLiteSynthesisReadRepository
     champion_selection: ChampionSelectionService
 
 
-def build_evaluation_workflow(
+def build_benchmark_workflow(
     project_root: Path = PROJECT_ROOT,
     *,
     planned_target_conditions: tuple[tuple[int, float, int], ...] = (),
-) -> EvaluationWorkflow:
+) -> BenchmarkWorkflow:
     database = Database()
     sqlite_repo = SQLiteSynthesisReadRepository(database.session_factory)
     champions_repo = ChampionsReadRepository(database.session_factory)
-    config = EvaluationConfigRepository().load_config()
-    return EvaluationWorkflow(
-        service=EvaluationService(
+    config = BenchmarkConfigRepository().load_config()
+    return BenchmarkWorkflow(
+        service=BenchmarkService(
             sqlite_repo=sqlite_repo,
             champions_repo=champions_repo,
-            state_repo=EvaluationStateRepository(),
+            state_repo=BenchmarkStateRepository(),
             config=config,
-            logger=EvaluationLogger(),
+            logger=BenchmarkLogger(),
             problem_factory=BBOBProblemFactory(),
             executor_factory=create_candidate_executor,
             baseline_resolver=get_baseline_runner,

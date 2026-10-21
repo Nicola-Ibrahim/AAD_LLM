@@ -4,7 +4,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from benchmarking.domain.enums.benchmark_strategy import EvaluationStrategy
+from benchmarking.domain.enums.benchmark_strategy import BenchmarkStrategy
 from benchmarking.domain.enums.classical_solver import ClassicalSolver
 
 # Recognized classical optimization baselines
@@ -16,7 +16,7 @@ CLASSICAL_SOLVERS_MAP: dict[str, ClassicalSolver] = {
     "pso": ClassicalSolver.PSO,
 }
 
-KNOWN_STRATEGIES: list[EvaluationStrategy] = list(EvaluationStrategy)
+KNOWN_STRATEGIES: list[BenchmarkStrategy] = list(BenchmarkStrategy)
 
 
 @dataclass(frozen=True)

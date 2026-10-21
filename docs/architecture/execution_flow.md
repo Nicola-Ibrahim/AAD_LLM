@@ -31,7 +31,7 @@ Campaign sessions can run concurrently in different workers.
 The infrastructure evaluator calls the application candidate-evaluation use case.
 The shared executor runs generated code; evolution's domain scoring policy
 constructs fitness. Iteration telemetry is persisted through the synthesis
-repository. See [evaluation protocol](../evaluation_protocol.md) for the
+repository. See [evaluation protocol](../benchmark_protocol.md) for the
 actual return, timeout, budget and scoring behavior.
 
 ## Checkpoint recovery
@@ -67,4 +67,4 @@ trial resumption and read-only coverage audit consume the shared benchmark
 condition-status policy, including schema/hash validity and historical skipped
 tails. Partial valid trials resume; stale results do not count as reusable coverage.
 See [system architecture](system_architecture.md) and
-[evaluation protocol](../evaluation_protocol.md).
+[evaluation protocol](../benchmark_protocol.md).

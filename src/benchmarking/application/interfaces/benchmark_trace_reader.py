@@ -5,13 +5,13 @@ from collections.abc import Callable
 from pathlib import Path
 
 from benchmarking.domain.trial_schedule import TrialIdentity
-from benchmarking.domain.vos import EvaluationDataset
+from benchmarking.domain.vos import BenchmarkDataset
 
 
-class EvaluationTraceReader(ABC):
+class BenchmarkTraceReader(ABC):
     @property
     @abstractmethod
-    def eval_dir(self) -> Path: ...
+    def benchmark_dir(self) -> Path: ...
 
     @abstractmethod
     def get_run_count(self, solver_dir: Path) -> int: ...
@@ -20,7 +20,7 @@ class EvaluationTraceReader(ABC):
     def load_provenance_records(self) -> list[dict[str, object]]: ...
 
     @abstractmethod
-    def load_evaluation_traces(
+    def load_benchmark_traces(
         self,
         dims: list[int] | None = None,
         problems: list[int] | None = None,
@@ -28,4 +28,4 @@ class EvaluationTraceReader(ABC):
         solvers: list[str] | None = None,
         solver_resolver: Callable[[str], str] | None = None,
         trial_schedule: tuple[TrialIdentity, ...] = (),
-    ) -> EvaluationDataset: ...
+    ) -> BenchmarkDataset: ...

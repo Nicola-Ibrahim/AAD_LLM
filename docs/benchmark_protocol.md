@@ -1,4 +1,4 @@
-# Evaluation protocol
+# Benchmark protocol
 
 [Documentation map](README.md) · [Project README](../README.md)
 
@@ -264,7 +264,7 @@ questions; neither enters the native champion ranking.
 
 `service.run_noise_robustness()` freezes each clean explicit champion and tests
 added noise on its original function and dimension. The existing
-`cross_eval_clean_champions` configuration key enables/disables this workflow.
+`noise_robustness_enabled` configuration key enables/disables this workflow.
 Historical storage remains `results/ioh_traces/`; it is not moved or deleted.
 Notebook 07 requires matching clean-champion code hashes across noise levels and
 excludes separately synthesized noisy and implicit champions from these overlays.
@@ -275,7 +275,7 @@ targets remain exploratory elsewhere. Figures use `results/figures/05_noise_robu
 
 Enable `benchmarking.cross_function_enabled` in `configs/benchmark.toml`, then set
 `RUN_CROSS_FUNCTION = True` in notebook 03's separate campaign cell, or explicitly
-call `service.run_cross_function_evaluations()`.
+call `service.run_cross_function_benchmarks()`.
 
 Only clean, explicit, baseline-strategy champions enter this workflow. Their code
 is unchanged, their dimension is unchanged, and the clean target functions default

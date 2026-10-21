@@ -1,11 +1,11 @@
-"""Evaluation condition Value Object representing a single (dim, noise_std, problem_id) configuration."""
+"""Benchmark condition: one dimension, noise level and problem configuration."""
 
 from pydantic import Field
 
 from benchmarking.domain.base import ValueObject
 
 
-class EvaluationCondition(ValueObject):
+class BenchmarkCondition(ValueObject):
     """Strongly-typed Value Object identifying an experimental condition on BBOB."""
 
     dim: int = Field(description="Search space dimension (e.g. 2, 3, 5).", ge=1)
@@ -19,7 +19,7 @@ class EvaluationCondition(ValueObject):
         return hash((self.dim, round(self.noise_std, 6), self.problem_id))
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, EvaluationCondition):
+        if not isinstance(other, BenchmarkCondition):
             return False
         return (
             self.dim == other.dim
@@ -29,5 +29,5 @@ class EvaluationCondition(ValueObject):
 
     def __repr__(self) -> str:
         return (
-            f"EvaluationCondition(dim={self.dim}D, noise_std={self.noise_std}, f{self.problem_id})"
+            f"BenchmarkCondition(dim={self.dim}D, noise_std={self.noise_std}, f{self.problem_id})"
         )

@@ -1,4 +1,4 @@
-"""EvaluationDataset Value Object representing complete multi-condition benchmark traces."""
+"""BenchmarkDataset Value Object representing complete multi-condition benchmark traces."""
 
 from collections.abc import ItemsView, Iterator, KeysView, Mapping, ValuesView
 from typing import Any, Self
@@ -7,21 +7,21 @@ import numpy as np
 from pydantic import Field
 
 from benchmarking.domain.base import ValueObject
-from benchmarking.domain.vos.condition import EvaluationCondition
+from benchmarking.domain.vos.condition import BenchmarkCondition
 from benchmarking.domain.vos.run_trace import RunTrace, SolverRunCollection
 
 
-class EvaluationDataset(ValueObject, Mapping[EvaluationCondition, dict[str, list[RunTrace]]]):
+class BenchmarkDataset(ValueObject, Mapping[BenchmarkCondition, dict[str, list[RunTrace]]]):
     """Analytical Value Object encapsulating multi-condition empirical evaluation traces."""
 
-    conditions_data: dict[EvaluationCondition, dict[str, list[RunTrace]]] = Field(
+    conditions_data: dict[BenchmarkCondition, dict[str, list[RunTrace]]] = Field(
         default_factory=dict,
-        description="Map from EvaluationCondition to dictionary of solver names and their run traces.",
+        description="Map from BenchmarkCondition to dictionary of solver names and their run traces.",
     )
 
     def add_run(
         self,
-        condition: EvaluationCondition,
+        condition: BenchmarkCondition,
         solver_name: str,
         run: RunTrace,
     ) -> None:
@@ -63,7 +63,7 @@ class EvaluationDataset(ValueObject, Mapping[EvaluationCondition, dict[str, list
         solver: str,
     ) -> list[RunTrace]:
         """Get the list of run traces for a specific condition and solver."""
-        cond = EvaluationCondition(dim=dim, noise_std=noise_std, problem_id=problem_id)
+        cond = BenchmarkCondition(dim=dim, noise_std=noise_std, problem_id=problem_id)
         return self.conditions_data.get(cond, {}).get(solver, [])
 
     def get_solver_collection(
@@ -85,7 +85,7 @@ class EvaluationDataset(ValueObject, Mapping[EvaluationCondition, dict[str, list
         solvers: list[str] | None = None,
     ) -> Self:
         """Return a filtered sub-dataset."""
-        filtered_data: dict[EvaluationCondition, dict[str, list[RunTrace]]] = {}
+        filtered_data: dict[BenchmarkCondition, dict[str, list[RunTrace]]] = {}
         for cond, s_dict in self.conditions_data.items():
             if dims and cond.dim not in dims:
                 continue
@@ -105,29 +105,29 @@ class EvaluationDataset(ValueObject, Mapping[EvaluationCondition, dict[str, list
 
         return self.__class__(conditions_data=filtered_data)
 
-    def __getitem__(self, key: EvaluationCondition) -> dict[str, list[RunTrace]]:
+    def __getitem__(self, key: BenchmarkCondition) -> dict[str, list[RunTrace]]:
         return self.conditions_data[key]
 
-    def __setitem__(self, key: EvaluationCondition, val: dict[str, list[RunTrace]]) -> None:
+    def __setitem__(self, key: BenchmarkCondition, val: dict[str, list[RunTrace]]) -> None:
         self.conditions_data[key] = val
 
     def __contains__(self, key: object) -> bool:
         return key in self.conditions_data
 
-    def __iter__(self) -> Iterator[EvaluationCondition]:
+    def __iter__(self) -> Iterator[BenchmarkCondition]:
         return iter(self.conditions_data)
 
     def __len__(self) -> int:
         return len(self.conditions_data)
 
-    def items(self) -> ItemsView[EvaluationCondition, dict[str, list[RunTrace]]]:
+    def items(self) -> ItemsView[BenchmarkCondition, dict[str, list[RunTrace]]]:
         return self.conditions_data.items()
 
-    def keys(self) -> KeysView[EvaluationCondition]:
+    def keys(self) -> KeysView[BenchmarkCondition]:
         return self.conditions_data.keys()
 
     def values(self) -> ValuesView[dict[str, list[RunTrace]]]:
         return self.conditions_data.values()
 
-    def get(self, key: EvaluationCondition, default: Any = None) -> Any:
+    def get(self, key: BenchmarkCondition, default: Any = None) -> Any:
         return self.conditions_data.get(key, default)

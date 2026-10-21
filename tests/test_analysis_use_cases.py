@@ -15,23 +15,23 @@ from benchmarking.application.analysis.analyze_noise_robustness import AnalyzeNo
 from benchmarking.application.analysis.analyze_performance import AnalyzePerformance
 from benchmarking.application.analysis.analyze_reliability import AnalyzeReliability
 from benchmarking.application.analysis.data_loader import AnalysisDataLoader, AnalysisSnapshot
-from benchmarking.application.evaluation_config import EvaluationConfig
-from benchmarking.domain.evaluation import (
+from benchmarking.application.benchmark_config import BenchmarkConfig
+from benchmarking.domain.benchmark_results import (
+    BENCHMARK_SCHEMA_VERSION,
     CHAMPION_RETURN_VALIDATION_VERSION,
     ERROR_DEFINITION,
-    EVALUATION_SCHEMA_VERSION,
 )
 from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
 from benchmarking.domain.services.performance import PerformanceMetricsEngine
 from benchmarking.domain.services.reliability import ReliabilityEngine
 from benchmarking.domain.services.resolvers import ModelNames
 from benchmarking.domain.services.transfer import TransferAnalysisEngine
-from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
+from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 
 
 @pytest.fixture
 def snapshot() -> AnalysisSnapshot:
-    dataset = EvaluationDataset()
+    dataset = BenchmarkDataset()
     for dim in [2, 5]:
         for noise in [0.0, 0.05, 0.1]:
             for problem in [1, 8]:
@@ -43,7 +43,7 @@ def snapshot() -> AnalysisSnapshot:
                 ]:
                     for terminal in [0.0, 0.02]:
                         dataset.add_run(
-                            EvaluationCondition(dim=dim, noise_std=noise, problem_id=problem),
+                            BenchmarkCondition(dim=dim, noise_std=noise, problem_id=problem),
                             solver,
                             RunTrace(
                                 evaluations=np.array([1, 5, 10]),
@@ -70,7 +70,7 @@ def snapshot() -> AnalysisSnapshot:
     return AnalysisSnapshot(
         {"raw-model": "Model"},
         {"model_baseline": "Model / baseline"},
-        EvaluationConfig(target_eval_runs=2),
+        BenchmarkConfig(trials_per_condition=2),
         dataset,
         {"Model": [s for s in dataset.solvers if " / " in s]},
         {"Model": "model"},
@@ -137,7 +137,7 @@ def test_profiles_match_existing_calculations_and_load_once(snapshot, mode):
 
 
 def test_profiles_use_configured_fixed_budget(snapshot):
-    snapshot = replace(snapshot, config=EvaluationConfig(budget=1234))
+    snapshot = replace(snapshot, config=BenchmarkConfig(budget=1234))
     result = AnalyzeEcdfAndConvergence(loader_for(snapshot), EcdfConvergenceEngine()).execute(
         mode="explicit", dims=None, problems=None, noise_stds=None
     )
@@ -147,7 +147,7 @@ def test_profiles_use_configured_fixed_budget(snapshot):
 
 
 def test_performance_uses_configured_fixed_budget(snapshot):
-    snapshot = replace(snapshot, config=EvaluationConfig(budget=1234))
+    snapshot = replace(snapshot, config=BenchmarkConfig(budget=1234))
     ecdf = MagicMock(wraps=EcdfConvergenceEngine())
     result = AnalyzePerformance(loader_for(snapshot), ecdf, PerformanceMetricsEngine()).execute(
         dims=None, problems=None, noise_stds=None
@@ -168,7 +168,7 @@ def test_checkpoint_fractions_use_fixed_budget(snapshot):
 
 
 def test_fixed_budget_aligns_profiles_auc_attainment_and_checkpoints(snapshot):
-    snapshot = replace(snapshot, config=EvaluationConfig(budget=100_000, target_eval_runs=2))
+    snapshot = replace(snapshot, config=BenchmarkConfig(budget=100_000, trials_per_condition=2))
     filters = dict(dims=None, problems=None, noise_stds=None)
     profiles = AnalyzeEcdfAndConvergence(loader_for(snapshot), EcdfConvergenceEngine()).execute(
         mode="explicit", **filters
@@ -203,7 +203,7 @@ def test_fixed_budget_aligns_profiles_auc_attainment_and_checkpoints(snapshot):
 
 
 def test_fixed_budget_changes_result_cache_provenance(snapshot):
-    fixed = replace(snapshot, config=EvaluationConfig(budget=1234, target_eval_runs=2))
+    fixed = replace(snapshot, config=BenchmarkConfig(budget=1234, trials_per_condition=2))
     for workflow in ("summary", "profiles", "noise"):
         assert fixed.provenance(workflow) != snapshot.provenance(workflow)
         assert fixed.provenance(workflow).settings["budget"] == 1234
@@ -212,11 +212,11 @@ def test_fixed_budget_changes_result_cache_provenance(snapshot):
 def test_performance_includes_50d(snapshot):
     dataset = snapshot.dataset.model_copy(deep=True)
     dataset.add_run(
-        EvaluationCondition(dim=50, noise_std=0.0, problem_id=1),
+        BenchmarkCondition(dim=50, noise_std=0.0, problem_id=1),
         "Model / baseline",
         RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([1.0, 0.0])),
     )
-    snapshot = replace(snapshot, dataset=dataset, config=EvaluationConfig(budget=100_000))
+    snapshot = replace(snapshot, dataset=dataset, config=BenchmarkConfig(budget=100_000))
     result = AnalyzePerformance(
         loader_for(snapshot), EcdfConvergenceEngine(), PerformanceMetricsEngine()
     ).execute(dims=None, problems=None, noise_stds=None)
@@ -255,7 +255,7 @@ def test_noise_and_performance_match_domain_services(snapshot):
         transfer.frozen_noise_records(snapshot.noise_records),
         rel.primary_target,
         rel.secondary_target,
-        snapshot.config.target_eval_runs,
+        snapshot.config.trials_per_condition,
     )
     pd.testing.assert_frame_equal(noise.conditions, expected)
     pd.testing.assert_frame_equal(
@@ -305,7 +305,7 @@ def test_missing_trace_is_not_a_zero_profile(snapshot):
 def test_empty_inputs_return_explicit_empty_results(snapshot):
     empty = replace(
         snapshot,
-        dataset=EvaluationDataset(),
+        dataset=BenchmarkDataset(),
         native_records=[],
         noise_records=[],
         models_to_solvers={},
@@ -371,15 +371,15 @@ def test_bootstrap_disposes_on_use_case_failure(monkeypatch):
 )
 @pytest.mark.parametrize("fixed_budget", [20_000, 100_000])
 def test_loader_eligibility_and_dynamic_models(state, expected_native, fixed_budget):
-    config = EvaluationConfig(budget=fixed_budget)
+    config = BenchmarkConfig(budget=fixed_budget)
     names = ModelNames([])
     raw = "NewModel-7B-Instruct"
     label = names.get_clean_model_label(raw)
     solver = names.resolve_folder_solver_name("NewModel-7B-Instruct_baseline")
     code = "candidate"
     code_hash = hashlib.sha256(code.encode()).hexdigest()
-    dataset = EvaluationDataset()
-    condition = EvaluationCondition(dim=2, noise_std=0.0, problem_id=1)
+    dataset = BenchmarkDataset()
+    condition = BenchmarkCondition(dim=2, noise_std=0.0, problem_id=1)
     dataset.add_run(
         condition, solver, RunTrace(evaluations=np.array([1]), raw_objectives=np.array([0.0]))
     )
@@ -387,7 +387,7 @@ def test_loader_eligibility_and_dynamic_models(state, expected_native, fixed_bud
         condition, "PSO", RunTrace(evaluations=np.array([1]), raw_objectives=np.array([0.0]))
     )
     record = dict(
-        evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
+        evaluation_schema_version=BENCHMARK_SCHEMA_VERSION,
         budget=config.budget,
         instance_ids=list(range(2, 22)),
         trial_seeds=list(range(44, 64)),
@@ -427,12 +427,12 @@ def test_loader_eligibility_and_dynamic_models(state, expected_native, fixed_bud
         baseline="pso",
         budget=config.budget,
         solver_folder="pso",
-        evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
+        evaluation_schema_version=BENCHMARK_SCHEMA_VERSION,
     )
     baseline.pop("model")
     baseline.pop("code_hash")
     reader = MagicMock()
-    reader.load_evaluation_traces.return_value = dataset
+    reader.load_benchmark_traces.return_value = dataset
     reader.load_provenance_records.return_value = [record, baseline]
     repository = MagicMock()
     repository.get_synthesis_dataframes.return_value = (

@@ -2,12 +2,12 @@
 
 from benchmarking.infra.io.hashing import compute_code_hash
 from benchmarking.infra.io.trace_repository import (
-    EvaluationStateRepository,
+    BenchmarkStateRepository,
     IOHTraceReader,
 )
 
 __all__ = [
-    "EvaluationStateRepository",
+    "BenchmarkStateRepository",
     "IOHTraceReader",
     "compute_code_hash",
 ]

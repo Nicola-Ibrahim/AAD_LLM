@@ -4,19 +4,19 @@ from pathlib import Path
 
 import pandas as pd
 
-from benchmarking.application.evaluation.workload import EvaluationWorkload
-from benchmarking.application.evaluation_config import EvaluationConfig
-from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
+from benchmarking.application.benchmark.workload import BenchmarkWorkload
+from benchmarking.application.benchmark_config import BenchmarkConfig
+from benchmarking.application.interfaces.benchmark_state_store import BenchmarkStateStore
 from benchmarking.application.select_champions import ChampionSelectionService
-from benchmarking.domain.services.evaluation_outcomes import summarize_trial_outcomes
+from benchmarking.domain.services.benchmark_outcomes import summarize_trial_outcomes
 from benchmarking.domain.trial_schedule import select_scheduled_trials
 
 
-def summarize_evaluations(
-    workload: EvaluationWorkload,
+def summarize_benchmarks(
+    workload: BenchmarkWorkload,
     selection: ChampionSelectionService,
-    state: EvaluationStateStore,
-    config: EvaluationConfig,
+    state: BenchmarkStateStore,
+    config: BenchmarkConfig,
 ) -> pd.DataFrame:
     """Use current workload validity; stale and incomplete trials never suggest synthesis."""
     conditions = pd.concat(
@@ -31,7 +31,7 @@ def summarize_evaluations(
         baseline = condition["solver_type"] == "baseline"
         champion = {} if baseline else champions.get(condition.get("raw_key", condition["key"]), {})
         directory = (
-            state.eval_dir
+            state.benchmark_dir
             / f"{condition['dim']}D"
             / f"std_{condition['noise_std']}"
             / f"f{condition['problem_id']}"
@@ -42,7 +42,7 @@ def summarize_evaluations(
         provenance = state.read_provenance(directory) or {}
         outcome = summarize_trial_outcomes(
             select_scheduled_trials(provenance, config.trial_schedule),
-            config.target_eval_runs,
+            config.trials_per_condition,
             config.reliability.primary_target,
             config.reliability.secondary_target,
         )
@@ -80,7 +80,7 @@ def summarize_evaluations(
                 "Recorded trials": condition.get("recorded_trials", outcome.recorded_trials),
                 "Executed trials": outcome.executed_trials,
                 "Valid trials": outcome.executed_trials - outcome.failed_trials if reusable else 0,
-                "Expected trials": config.target_eval_runs,
+                "Expected trials": config.trials_per_condition,
                 "Failed trials": outcome.failed_trials if reusable else 0,
                 "Execution rate": (
                     (outcome.executed_trials - outcome.failed_trials) / outcome.executed_trials
@@ -111,7 +111,7 @@ def summarize_evaluations(
     baseline_errors = (
         table[
             (table["Solver Type"] == "baseline")
-            & (table["Executed trials"] >= config.target_eval_runs)
+            & (table["Executed trials"] >= config.trials_per_condition)
             & (table["Category"] != "missing_or_stale")
         ]
         .groupby(keys)["Median error"]

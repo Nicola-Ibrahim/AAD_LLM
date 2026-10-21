@@ -9,7 +9,7 @@ from benchmarking.application.analysis.results import (
 )
 from benchmarking.domain.services.reliability import ReliabilityEngine
 from benchmarking.domain.services.transfer import TransferAnalysisEngine
-from benchmarking.domain.vos import EvaluationCondition, RunTrace
+from benchmarking.domain.vos import BenchmarkCondition, RunTrace
 
 
 class AnalyzeReliability:
@@ -36,7 +36,7 @@ class AnalyzeReliability:
             snapshot.native_records,
             config.primary_target,
             config.secondary_target,
-            snapshot.config.target_eval_runs,
+            snapshot.config.trials_per_condition,
         ).rename(
             columns={
                 "Target Problem": "Problem ID",
@@ -48,7 +48,7 @@ class AnalyzeReliability:
             snapshot.noise_records,
             config.primary_target,
             config.secondary_target,
-            snapshot.config.target_eval_runs,
+            snapshot.config.trials_per_condition,
         )
         display = native.copy()
         if not display.empty:
@@ -92,9 +92,7 @@ class AnalyzeReliability:
             for baseline in snapshot.classical_solvers:
                 runs = []
                 for dim, noise_std, problem in paired:
-                    condition = EvaluationCondition(
-                        dim=dim, noise_std=noise_std, problem_id=problem
-                    )
+                    condition = BenchmarkCondition(dim=dim, noise_std=noise_std, problem_id=problem)
                     runs.extend(snapshot.dataset.get(condition, {}).get(baseline, []))
                 if not runs:
                     continue

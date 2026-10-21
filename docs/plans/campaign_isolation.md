@@ -77,7 +77,7 @@ protocol, not approval of a new protocol.
 
 - **Evolution** owns synthesis campaigns/sessions, prompting, generated
   iterations, feedback, selection fitness, penalties and stagnation policy.
-- **Benchmarking** owns champion selection, evaluation/resumption, provenance,
+- **Benchmarking** owns champion selection, benchmark/resumption, provenance,
   reliability, ECDF, performance and generalization analysis.
 - **Shared infrastructure/science** owns database connections, common BBOB/noise
   capabilities, objective-gap rules and isolated candidate execution.
@@ -115,9 +115,9 @@ flowchart TD
         end
 
         subgraph Benchmarking["Benchmarking"]
-            Champions("<b>Champion selection and freeze</b><br/>Read-only candidate handoff<br/>evaluation/champions.json + exact code")
+            Champions("<b>Champion selection and freeze</b><br/>Read-only candidate handoff<br/>benchmark/champions.json + exact code")
             Benchmark("<b>Benchmark and analysis workflows</b><br/>Baselines · champion trials · resume · statistics")
-            EvaluationStore[("<b>Benchmark-owned storage</b><br/>evaluation/ioh_traces/ · analysis/ · reports/<br/>evaluation/configs/")]
+            BenchmarkStore[("<b>Benchmark-owned storage</b><br/>benchmark/ioh_traces/ · analysis/ · reports/<br/>benchmark/configs/")]
         end
 
         Figures("<b>Notebook-owned presentation</b><br/>Build and export figures from calculated results<br/>figures/ at campaign root")
@@ -133,7 +133,7 @@ flowchart TD
     Synthesis -->|"write candidates and progress"| SynthesisStore
     SynthesisStore -->|"read recorded candidates"| Champions
     Champions -->|"fixed catalog and copied code"| Benchmark
-    Benchmark -->|"write outcomes and calculated statistics"| EvaluationStore
+    Benchmark -->|"write outcomes and calculated statistics"| BenchmarkStore
     Benchmark -->|"return calculated results"| Figures
     Workspace -->|"snapshot the whole study"| Archive
 
@@ -142,7 +142,7 @@ flowchart TD
     classDef workspace fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81;
     classDef presentation fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337;
     class Synthesis,SynthesisStore synthesis;
-    class Champions,Benchmark,EvaluationStore benchmark;
+    class Champions,Benchmark,BenchmarkStore benchmark;
     class Researcher,Workspace,Archive workspace;
     class Figures presentation;
     style Campaign fill:#faf9fc,stroke:#4f46e5,stroke-width:1.5px,stroke-dasharray:6 4,color:#312e81;
@@ -181,7 +181,7 @@ results/campaigns/<campaign-id>/
     db.sqlite3
     code/
     checkpoints/
-  evaluation/
+  benchmark/
     configs/benchmark.toml
     champions.json
     code/
@@ -191,7 +191,7 @@ results/campaigns/<campaign-id>/
   figures/
 ```
 
-Keep figures outside `evaluation/`; each workflow owns its configuration copies.
+Keep figures outside `benchmark/`; each workflow owns its configuration copies.
 Capture resolved model identity/registry metadata without provider credentials.
 Snapshot the whole study, not just evaluation traces. Record the code revision,
 dependency versions, dates, protocol, hashes and archive format version.
@@ -205,7 +205,7 @@ dependency versions, dates, protocol, hashes and archive format version.
   trace stores and module-level multiprocessing task payloads. Preserve worker
   picklability and current session/WAL settings.
 - First evaluation preparation freezes the selected champion catalog and copies
-  its exact code. Later evaluation/resumption uses this catalog, not a fresh
+  its exact code. Later benchmark/resumption uses this catalog, not a fresh
   selection from a changing synthesis database.
 - Once champions are frozen, reject synthesis writes through that study's
   supported entry points. New synthesis/champions require a new study. Standalone

@@ -3,27 +3,27 @@ from pathlib import Path
 
 import pandas as pd
 
+from benchmarking.application.benchmark_config import BenchmarkConfig
 from benchmarking.application.champions import Champion, GenerationMode
-from benchmarking.application.evaluation_config import EvaluationConfig
+from benchmarking.application.interfaces.benchmark_state_store import BenchmarkStateStore
 from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
-from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
 from benchmarking.application.interfaces.synthesis_read_repository import SynthesisReadRepository
 from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.services.condition_status import ConditionStatus, inspect_condition
 from benchmarking.domain.services.resolvers import ModelNames
 
 
-class EvaluationWorkload:
+class BenchmarkWorkload:
     """Discover conditions and audit pending benchmark work."""
 
     def __init__(
         self,
         sqlite_repo: SynthesisReadRepository,
         champion_selection: ChampionSelectionService,
-        state_repo: EvaluationStateStore,
+        state_repo: BenchmarkStateStore,
         code_reader: CandidateCodeReader,
         model_names: ModelNames,
-        config: EvaluationConfig,
+        config: BenchmarkConfig,
         planned_target_conditions: tuple[tuple[int, float, int], ...] = (),
     ) -> None:
         self.sqlite_repo = sqlite_repo
@@ -33,7 +33,7 @@ class EvaluationWorkload:
         self.model_names = model_names
         self.config = config
         self.planned_target_conditions = planned_target_conditions
-        self.n_runs = config.target_eval_runs
+        self.n_runs = config.trials_per_condition
         self.target_noise_stds = config.target_noise_stds
         self.classical_baselines = config.classical_baselines
         self.baseline_labels = config.baseline_labels
@@ -97,7 +97,7 @@ class EvaluationWorkload:
         self,
         champ_key: str,
         champ: Champion,
-        eval_noise: float,
+        benchmark_noise: float,
         is_noise_robustness: bool,
         target_problem_id: int | None = None,
     ) -> dict[str, object]:
@@ -137,15 +137,19 @@ class EvaluationWorkload:
         display_suffix = " (noise robustness)" if is_noise_robustness else ""
 
         target_dir = (
-            self.state_repo.eval_dir / f"{dim}D" / f"std_{eval_noise}" / f"f{p_id}" / solver_folder
+            self.state_repo.benchmark_dir
+            / f"{dim}D"
+            / f"std_{benchmark_noise}"
+            / f"f{p_id}"
+            / solver_folder
         )
         if target_problem_id is not None and p_id != source_problem_id:
             target_dir = (
-                self.state_repo.eval_dir.parent
+                self.state_repo.benchmark_dir.parent
                 / "cross_function_traces"
                 / f"source_f{source_problem_id}"
                 / f"{dim}D"
-                / f"std_{eval_noise}"
+                / f"std_{benchmark_noise}"
                 / f"f{p_id}"
                 / f"{solver_folder}_{(code_hash or 'missing')[:12]}"
             )
@@ -155,7 +159,7 @@ class EvaluationWorkload:
             target_dir, dim, expected_code_hash=code_hash, code_valid=code_valid
         )
 
-        row_key = f"{champ_key}_eval_std{eval_noise}" if is_noise_robustness else champ_key
+        row_key = f"{champ_key}_eval_std{benchmark_noise}" if is_noise_robustness else champ_key
         solver_type = "noise_robustness" if is_noise_robustness else "champion"
         if target_problem_id is not None:
             solver_type = "cross_function"
@@ -175,7 +179,7 @@ class EvaluationWorkload:
             "code_hash": code_hash,
             "target_dir": str(target_dir),
             "dim": dim,
-            "noise_std": eval_noise,
+            "noise_std": benchmark_noise,
             "mode": mode_enum if not is_noise_robustness else GenerationMode.EXPLICIT,
             "target_runs": self.n_runs,
             "runs_found": inspection.reusable_trials,
@@ -195,7 +199,7 @@ class EvaluationWorkload:
             self._build_champion_audit_row(
                 champ_key=k,
                 champ=c,
-                eval_noise=float(c.get("noise_std", 0.0)),
+                benchmark_noise=float(c.get("noise_std", 0.0)),
                 is_noise_robustness=False,
             )
             for k, c in champions_flat.items()
@@ -209,7 +213,7 @@ class EvaluationWorkload:
 
     def audit_noise_robustness_workload(self) -> pd.DataFrame:
         """Audit frozen clean champions on their original functions with added noise."""
-        if not self.config.cross_eval_clean_champions:
+        if not self.config.noise_robustness_enabled:
             return pd.DataFrame()
         champions_flat = self.champion_selection.flatten_champions()
         target_conditions = self._discover_target_conditions()
@@ -228,7 +232,7 @@ class EvaluationWorkload:
                     self._build_champion_audit_row(
                         champ_key=k,
                         champ=c,
-                        eval_noise=n_std,
+                        benchmark_noise=n_std,
                         is_noise_robustness=True,
                     )
                 )
@@ -268,7 +272,7 @@ class EvaluationWorkload:
             b_name = self.baseline_labels.get(baseline_slug, baseline_slug.upper())
             for dim, noise_std, p_id in target_conditions:
                 target_dir = (
-                    self.state_repo.eval_dir
+                    self.state_repo.benchmark_dir
                     / f"{dim}D"
                     / f"std_{noise_std}"
                     / f"f{p_id}"

@@ -1,7 +1,7 @@
 import numpy as np
 
 from benchmarking.domain.services.reliability import ReliabilityEngine
-from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
+from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 
 
 def _run(values: list[float]) -> RunTrace:
@@ -11,9 +11,9 @@ def _run(values: list[float]) -> RunTrace:
     )
 
 
-def _dataset() -> EvaluationDataset:
-    data = EvaluationDataset()
-    cond = EvaluationCondition(dim=2, noise_std=0.0, problem_id=1)
+def _dataset() -> BenchmarkDataset:
+    data = BenchmarkDataset()
+    cond = BenchmarkCondition(dim=2, noise_std=0.0, problem_id=1)
     data.add_run(cond, "Qwen-14B / baseline", _run([1.0, 1e-3, 1e-9]))
     data.add_run(cond, "Qwen-14B / baseline", _run([1.0, 1e-2, 1e-3]))
     data.add_run(cond, "Qwen-14B / guided", _run([1.0, 1e-9, 1e-9]))

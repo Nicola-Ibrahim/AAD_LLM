@@ -6,7 +6,7 @@ from scipy.stats import kruskal, mannwhitneyu
 from statsmodels.stats.multitest import multipletests
 
 from benchmarking.domain.enums import BBOBFunction
-from benchmarking.domain.vos import EvaluationDataset
+from benchmarking.domain.vos import BenchmarkDataset
 
 
 class HypothesisTestingEngine:
@@ -38,7 +38,7 @@ class HypothesisTestingEngine:
 
     def run_omnibus_kruskal(
         self,
-        benchmark_data: EvaluationDataset,
+        benchmark_data: BenchmarkDataset,
     ) -> pd.DataFrame:
         """Execute omnibus Kruskal-Wallis H-tests across all solvers per problem condition."""
         master_omnibus: list[dict[str, object]] = []
@@ -86,7 +86,7 @@ class HypothesisTestingEngine:
 
     def run_pairwise_fdr(
         self,
-        benchmark_data: EvaluationDataset,
+        benchmark_data: BenchmarkDataset,
         alpha: float = 0.05,
     ) -> pd.DataFrame:
         """Execute pairwise Mann-Whitney U tests with Benjamini-Hochberg FDR correction."""

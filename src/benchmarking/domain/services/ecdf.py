@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from benchmarking.domain.enums import BBOBFunction
-from benchmarking.domain.vos import EvaluationDataset, RunTrace
+from benchmarking.domain.vos import BenchmarkDataset, RunTrace
 
 # ─── Declarative Dispatch Table for AUC-ECDF Grouping Strategies ──────────────
 _AUC_GROUPING_DISPATCH: dict[str, Callable[[pd.DataFrame], pd.DataFrame]] = {
@@ -95,7 +95,7 @@ class EcdfConvergenceEngine:
 
     def compute_auc_ecdf_matrix(
         self,
-        benchmark_data: EvaluationDataset,
+        benchmark_data: BenchmarkDataset,
         solvers: list[str],
         targets: np.ndarray | dict[float, np.ndarray],
         budget: int,
@@ -158,7 +158,7 @@ class EcdfConvergenceEngine:
 
     def compute_adaptive_targets(
         self,
-        benchmark_data: EvaluationDataset,
+        benchmark_data: BenchmarkDataset,
         noise_std: float,
         n_targets: int = 51,
     ) -> np.ndarray:

@@ -1,7 +1,7 @@
 from enum import StrEnum
 
 
-class EvaluationStrategy(StrEnum):
+class BenchmarkStrategy(StrEnum):
     """Enumeration of evolutionary prompt scaffolding strategies recognized in benchmarking."""
 
     BASELINE = "baseline"

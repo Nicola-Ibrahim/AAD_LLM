@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from benchmarking.application.evaluation.workload import EvaluationWorkload
+from benchmarking.application.benchmark.workload import BenchmarkWorkload
 from benchmarking.application.interfaces.synthesis_read_repository import SynthesisReadRepository
 
 
@@ -31,18 +31,18 @@ class AuditCoverageSummary:
 
 @dataclass(frozen=True)
 class AuditSnapshot:
-    evaluations: pd.DataFrame
+    benchmarks: pd.DataFrame
     synthesis_gaps: pd.DataFrame
     coverage_summary: AuditCoverageSummary
     completed_models: tuple[str, ...]
 
 
-class EvaluationAuditService:
+class BenchmarkAuditService:
     """Report the same condition validity used by evaluation without writing traces."""
 
     def __init__(
         self,
-        workload: EvaluationWorkload,
+        workload: BenchmarkWorkload,
         synthesis_reader: SynthesisReadRepository,
         planned_conditions: tuple[SynthesisConditionSpec, ...],
     ) -> None:
@@ -93,23 +93,23 @@ class EvaluationAuditService:
             ],
             columns=["model", "problem_id", "dim", "noise_std", "mode", "strategy", "status"],
         )
-        evaluations = self.workload.audit_workload()
-        if not evaluations.empty:
-            evaluations = evaluations[
-                (evaluations["solver_type"] == "baseline") | evaluations["model"].isin(models)
+        benchmarks = self.workload.audit_workload()
+        if not benchmarks.empty:
+            benchmarks = benchmarks[
+                (benchmarks["solver_type"] == "baseline") | benchmarks["model"].isin(models)
             ].copy()
-            evaluations["evaluation_kind"] = evaluations["solver_type"].replace(
+            benchmarks["evaluation_kind"] = benchmarks["solver_type"].replace(
                 {
                     "champion": "native",
                     "baseline": "native",
                 }
             )
-            evaluations["eligible"] = ~evaluations["is_filtered"] & (
-                evaluations["status"] != "MISSING_CODE"
+            benchmarks["eligible"] = ~benchmarks["is_filtered"] & (
+                benchmarks["status"] != "MISSING_CODE"
             )
-            eligible = evaluations[evaluations["eligible"]]
+            eligible = benchmarks[benchmarks["eligible"]]
         else:
-            eligible = evaluations
+            eligible = benchmarks
         total = len(eligible)
         status = eligible["status"] if total else pd.Series(dtype=str)
         counts = eligible["runs_found"] if total else pd.Series(dtype=int)
@@ -120,10 +120,10 @@ class EvaluationAuditService:
             partial_cells=int(((status == "PENDING") & (counts > 0)).sum()),
             missing_cells=int(((status == "PENDING") & (counts == 0)).sum()),
             stale_cells=int((status == "NEEDS_RERUN").sum()),
-            missing_code_cells=int((evaluations["status"] == "MISSING_CODE").sum())
-            if not evaluations.empty
+            missing_code_cells=int((benchmarks["status"] == "MISSING_CODE").sum())
+            if not benchmarks.empty
             else 0,
             synthesis_gap_cells=len(gaps),
             coverage_pct=100.0 * complete / total if total else 0.0,
         )
-        return AuditSnapshot(evaluations, gaps, summary, models)
+        return AuditSnapshot(benchmarks, gaps, summary, models)

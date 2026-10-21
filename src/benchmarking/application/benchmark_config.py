@@ -1,4 +1,4 @@
-"""Application evaluation configuration models for benchmark execution.
+"""Application configuration models for benchmark execution.
 
 Defines validated settings for benchmark execution and analysis workflows.
 """
@@ -22,18 +22,18 @@ class ReliabilityConfig(BaseModel):
     incomplete_condition_policy: str = "exclude"
 
 
-class EvaluationConfig(BaseModel):
+class BenchmarkConfig(BaseModel):
     """Strongly-typed application configuration for multi-trial benchmarking campaigns.
 
-    Provides typed attributes and validated defaults for evaluation and analysis.
+    Provides typed attributes and validated defaults for benchmarks and analysis.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    target_eval_runs: int = Field(
+    trials_per_condition: int = Field(
         default=20,
         ge=1,
-        description="Number of evaluation trials per condition.",
+        description="Number of benchmark trials per condition.",
     )
     random_seed: int = Field(
         default=42,
@@ -42,7 +42,7 @@ class EvaluationConfig(BaseModel):
     first_instance_id: int = Field(
         default=2,
         ge=1,
-        description="First evaluation instance; instance 1 is reserved for synthesis.",
+        description="First benchmark instance; instance 1 is reserved for synthesis.",
     )
 
     @property
@@ -51,7 +51,7 @@ class EvaluationConfig(BaseModel):
         return tuple(
             (instance, self.random_seed + instance)
             for instance in range(
-                self.first_instance_id, self.first_instance_id + self.target_eval_runs
+                self.first_instance_id, self.first_instance_id + self.trials_per_condition
             )
         )
 
@@ -61,7 +61,7 @@ class EvaluationConfig(BaseModel):
         description="Fixed objective-call allowance per trial, independent of dimension.",
     )
 
-    eval_timeout_seconds: float = Field(
+    trial_timeout_seconds: float = Field(
         default=30.0,
         gt=0.0,
         description="Timeout limit per benchmark trial execution in seconds.",
@@ -77,7 +77,7 @@ class EvaluationConfig(BaseModel):
     )
     fill_missing_only: bool = Field(
         default=True,
-        description="Whether to only execute missing runs up to target_eval_runs.",
+        description="Whether to only execute missing runs up to trials_per_condition.",
     )
     classical_baselines: list[str] = Field(
         default_factory=lambda: ["cmaes", "de", "pso"],
@@ -87,7 +87,7 @@ class EvaluationConfig(BaseModel):
         default_factory=dict,
         description="Mapping of baseline slugs to display labels.",
     )
-    cross_eval_clean_champions: bool = Field(
+    noise_robustness_enabled: bool = Field(
         default=True,
         description="Whether to evaluate clean champions under noisy conditions.",
     )

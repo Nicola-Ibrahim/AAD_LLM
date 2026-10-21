@@ -5,16 +5,16 @@ import pandas as pd
 import pytest
 
 from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
-from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
+from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 
 
 @pytest.mark.parametrize("noise_std", [0.0, 0.05, 0.2])
 @pytest.mark.parametrize("include_failed_trace", [False, True])
 def test_adaptive_target_fallbacks(noise_std: float, include_failed_trace: bool) -> None:
-    dataset = EvaluationDataset()
+    dataset = BenchmarkDataset()
     if include_failed_trace:
         dataset.add_run(
-            EvaluationCondition(dim=2, noise_std=noise_std, problem_id=1),
+            BenchmarkCondition(dim=2, noise_std=noise_std, problem_id=1),
             "Model / baseline",
             RunTrace(evaluations=np.array([1]), raw_objectives=np.array([np.inf])),
         )
@@ -61,9 +61,9 @@ def test_ecdf_only_matches_paired_calculation(kind: str) -> None:
 
 
 def test_auc_preserves_values_without_convergence_statistics(monkeypatch) -> None:
-    dataset = EvaluationDataset()
+    dataset = BenchmarkDataset()
     dataset.add_run(
-        EvaluationCondition(dim=2, noise_std=0.0, problem_id=1),
+        BenchmarkCondition(dim=2, noise_std=0.0, problem_id=1),
         "Model / baseline",
         RunTrace(evaluations=np.array([1, 10, 100]), raw_objectives=np.array([10.0, 1.0, 0.0])),
     )
@@ -98,10 +98,10 @@ def test_auc_preserves_values_without_convergence_statistics(monkeypatch) -> Non
 
 
 def test_auc_excludes_attainment_after_fixed_budget() -> None:
-    dataset = EvaluationDataset()
+    dataset = BenchmarkDataset()
     for dim in [2, 5]:
         dataset.add_run(
-            EvaluationCondition(dim=dim, noise_std=0.0, problem_id=1),
+            BenchmarkCondition(dim=dim, noise_std=0.0, problem_id=1),
             "Model / baseline",
             RunTrace(
                 evaluations=np.array([1, 201]),

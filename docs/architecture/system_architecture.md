@@ -86,7 +86,7 @@ read-only adapters; evolution owns synthesis writes. Database sessions are short
 with worker-local engines and the existing SQLite WAL configuration.
 
 [Execution and recovery](execution_flow.md) ·
-[Evaluation protocol](../evaluation_protocol.md) ·
+[Benchmark protocol](../benchmark_protocol.md) ·
 [Analysis workflows](../../notebooks/analysis/README.md)
 
 <details>
@@ -163,7 +163,7 @@ Its infrastructure `Evaluator` translates LLaMEA solutions into calls to
 collaborations, not imports from application code into infrastructure.
 
 For dispatch and checkpoint steps, see [execution and recovery](execution_flow.md).
-For scoring and execution limitations, see [evaluation protocol](../evaluation_protocol.md).
+For scoring and execution limitations, see [evaluation protocol](../benchmark_protocol.md).
 
 Candidate execution is coordinated by the application: shared infrastructure runs
 generated Python and captures warnings, while the application measures runtime
@@ -175,7 +175,7 @@ generated-code execution.
 
 ## Benchmarking context (`src/benchmarking/`)
 
-- `application/evaluation/` separates workload discovery, per-condition trials,
+- `application/benchmark/` separates workload discovery, per-condition trials,
   batch execution, and coverage auditing. `select_champions.py` owns ranking.
 - `application/analysis/` contains injected analysis use cases. A shared loader
   reads validated snapshots; profile, reliability, noise-robustness and performance
@@ -194,6 +194,15 @@ use the same shared BBOB function definition. Champion selection policy is
 application-owned; repositories return candidate records and persist exports.
 
 ## Audit and analysis boundaries
+
+The independent workflow is named `benchmark`: notebook `03_benchmark.ipynb`
+calls `bootstrap.benchmark.build_benchmark_workflow()`, which composes
+`BenchmarkService`, `BenchmarkConfig` and the benchmark adapters. Configuration
+uses `trials_per_condition`, `trial_timeout_seconds` and
+`noise_robustness_enabled`; old workflow imports are not forwarding aliases.
+Synthesis candidate evaluation and objective-evaluation counts retain their
+scientific names. Recorded provenance keys such as `evaluation_schema_version`,
+`evaluation_kind` and `evaluations_used` retain their existing serialized format.
 
 `bootstrap.audit.build_audit_service()` translates synthesis configuration into
 plain condition specifications. The benchmark audit reports missing champions

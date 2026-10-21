@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from benchmarking.application.evaluation.audit import AuditCoverageSummary
+from benchmarking.application.benchmark.audit import AuditCoverageSummary
 from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.enums import (
     BBOB_CLASSES_ORDER,
@@ -13,7 +13,7 @@ from benchmarking.domain.enums import (
 from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
 from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
 from benchmarking.domain.services.performance import PerformanceMetricsEngine
-from benchmarking.domain.vos import EvaluationCondition, EvaluationDataset, RunTrace
+from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
 from benchmarking.infra.storage.model_registry import configured_model_names
@@ -151,9 +151,9 @@ class TestDomainEngines:
         assert mag_eq == "negligible"
 
     def test_omnibus_and_pairwise_fdr_tests(self, hypothesis_engine):
-        # Strongly-typed EvaluationDataset
-        bench_data = EvaluationDataset()
-        cond = EvaluationCondition(dim=2, noise_std=0.0, problem_id=1)
+        # Strongly-typed BenchmarkDataset
+        bench_data = BenchmarkDataset()
+        cond = BenchmarkCondition(dim=2, noise_std=0.0, problem_id=1)
         for _ in range(5):
             bench_data.add_run(
                 cond,
@@ -199,9 +199,9 @@ class TestDomainEngines:
         assert np.all(q75 >= med)
 
     def test_compute_auc_ecdf_matrix(self, ecdf_engine):
-        bench_data = EvaluationDataset()
-        cond1 = EvaluationCondition(dim=2, noise_std=0.0, problem_id=1)
-        cond2 = EvaluationCondition(dim=3, noise_std=0.05, problem_id=8)
+        bench_data = BenchmarkDataset()
+        cond1 = BenchmarkCondition(dim=2, noise_std=0.0, problem_id=1)
+        cond2 = BenchmarkCondition(dim=3, noise_std=0.05, problem_id=8)
         targets = np.logspace(-8, 2, 10)
 
         for _ in range(3):
@@ -290,7 +290,7 @@ class TestApplicationServicesIntegration:
         from bootstrap.audit import build_audit_service
 
         snapshot = build_audit_service().get_audit_data()
-        assert isinstance(snapshot.evaluations, pd.DataFrame)
+        assert isinstance(snapshot.benchmarks, pd.DataFrame)
         assert isinstance(snapshot.synthesis_gaps, pd.DataFrame)
         assert isinstance(snapshot.coverage_summary, AuditCoverageSummary)
         assert snapshot.coverage_summary.coverage_pct >= 0.0
@@ -303,10 +303,10 @@ class TestApplicationServicesIntegration:
             df_exp, df_iter = sqlite_repo.get_synthesis_dataframes()
             assert isinstance(df_exp, pd.DataFrame)
             assert isinstance(df_iter, pd.DataFrame)
-            traces = trace_repo.load_evaluation_traces(
+            traces = trace_repo.load_benchmark_traces(
                 solver_resolver=configured_model_names().resolve_folder_solver_name
             )
-            assert isinstance(traces, EvaluationDataset)
+            assert isinstance(traces, BenchmarkDataset)
 
 
 class TestConcreteInfraRepositories:
@@ -331,7 +331,7 @@ class TestConcreteInfraRepositories:
 
     def test_trace_reader(self):
         repo = IOHTraceReader(RESULTS_DIR / "ioh_traces")
-        assert hasattr(repo, "load_evaluation_traces")
+        assert hasattr(repo, "load_benchmark_traces")
         assert hasattr(repo, "get_run_count")
         assert hasattr(repo, "parse_dat_file")
 
@@ -339,9 +339,9 @@ class TestConcreteInfraRepositories:
 class TestNoiseSpecificEcdfTargets:
     def test_ecdf_matrix_with_dict_targets(self):
         ecdf_engine = EcdfConvergenceEngine()
-        dataset = EvaluationDataset()
-        cond_clean = EvaluationCondition(dim=2, noise_std=0.0, problem_id=1)
-        cond_noisy = EvaluationCondition(dim=2, noise_std=0.05, problem_id=1)
+        dataset = BenchmarkDataset()
+        cond_clean = BenchmarkCondition(dim=2, noise_std=0.0, problem_id=1)
+        cond_noisy = BenchmarkCondition(dim=2, noise_std=0.05, problem_id=1)
 
         r1 = RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 1e-8]))
         r2 = RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 1e-2]))

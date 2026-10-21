@@ -17,8 +17,8 @@ from benchmarking.domain.services.transfer import TransferAnalysisEngine
 from benchmarking.infra.io.code_reader import FilesystemCodeReader
 from benchmarking.infra.io.trace_repository import IOHTraceReader
 from benchmarking.infra.storage import (
+    BenchmarkConfigRepository,
     ChampionsReadRepository,
-    EvaluationConfigRepository,
     SQLiteSynthesisReadRepository,
 )
 from benchmarking.infra.storage.analysis_results_store import AnalysisResultsStore
@@ -52,7 +52,7 @@ def build_analysis_use_cases() -> Iterator[AnalysisUseCases]:
             FilesystemCodeReader(PROJECT_ROOT),
             ChampionSelectionService(ChampionsReadRepository(database.session_factory)),
             configured_model_names(),
-            EvaluationConfigRepository().load_config(),
+            BenchmarkConfigRepository().load_config(),
             classifier,
         )
         yield AnalysisUseCases(

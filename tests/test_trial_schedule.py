@@ -8,12 +8,12 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from benchmarking.application.evaluation.trials import EvaluationTrialRunner
-from benchmarking.application.evaluation_config import EvaluationConfig
-from benchmarking.domain.evaluation import ERROR_DEFINITION, EVALUATION_SCHEMA_VERSION
+from benchmarking.application.benchmark.trials import BenchmarkTrialRunner
+from benchmarking.application.benchmark_config import BenchmarkConfig
+from benchmarking.domain.benchmark_results import BENCHMARK_SCHEMA_VERSION, ERROR_DEFINITION
 from benchmarking.domain.services.condition_status import inspect_condition
 from benchmarking.domain.trial_schedule import matching_trial_indices, select_scheduled_trials
-from benchmarking.infra.io.trace_repository import EvaluationStateRepository, IOHTraceReader
+from benchmarking.infra.io.trace_repository import BenchmarkStateRepository, IOHTraceReader
 from benchmarking.infra.storage.model_registry import configured_model_names
 from shared.domain.problem import BaseProblem
 from shared.infra.problems.factory import BBOBProblemFactory
@@ -25,7 +25,7 @@ def historical_record() -> dict[str, object]:
         "problem_id": 1,
         "dim": 2,
         "noise_std": 0.0,
-        "evaluation_schema_version": EVALUATION_SCHEMA_VERSION,
+        "evaluation_schema_version": BENCHMARK_SCHEMA_VERSION,
         "error_definition": ERROR_DEFINITION,
         "budget": 20_000,
         "instance_ids": list(range(1, 21)),
@@ -40,7 +40,7 @@ def historical_record() -> dict[str, object]:
 
 
 def test_historical_twenty_runs_are_nineteen_reusable_held_out_trials() -> None:
-    config = EvaluationConfig()
+    config = BenchmarkConfig()
     record = historical_record()
     original = deepcopy(record)
     inspection = inspect_condition(
@@ -64,7 +64,7 @@ def test_historical_twenty_runs_are_nineteen_reusable_held_out_trials() -> None:
 
 
 def test_identity_selection_handles_gaps_wrong_seeds_duplicates_and_unknown_metadata() -> None:
-    schedule = EvaluationConfig(target_eval_runs=3).trial_schedule
+    schedule = BenchmarkConfig(trials_per_condition=3).trial_schedule
     record = {
         "instance_ids": [4, 2, 3, 2],
         "trial_seeds": [46, 44, 999, 44],
@@ -79,14 +79,14 @@ def test_historical_unexecuted_tail_is_not_reused() -> None:
     record["clean_errors"][19] = float("inf")
     record["runtimes"][19] = 0.0
     record["evaluations_used"][19] = 0
-    assert len(matching_trial_indices(record, EvaluationConfig().trial_schedule)) == 18
+    assert len(matching_trial_indices(record, BenchmarkConfig().trial_schedule)) == 18
 
 
 @pytest.mark.parametrize("orphan", [False, True])
 def test_append_only_instance_21_and_filter_ioh_traces(tmp_path: Path, orphan: bool) -> None:
-    config = EvaluationConfig(budget=20_000)
-    state = EvaluationStateRepository(tmp_path / "ioh_traces")
-    folder = state.eval_dir / "2D/std_0.0/f1/pso"
+    config = BenchmarkConfig(budget=20_000)
+    state = BenchmarkStateRepository(tmp_path / "ioh_traces")
+    folder = state.benchmark_dir / "2D/std_0.0/f1/pso"
     folder.mkdir(parents=True)
     record = historical_record()
     state.write_provenance(folder, record)
@@ -118,7 +118,7 @@ def test_append_only_instance_21_and_filter_ioh_traces(tmp_path: Path, orphan: b
         return problem.eval_clean(point), 0.01, problem.evaluations
 
     baseline_spy = MagicMock(side_effect=baseline)
-    runner = EvaluationTrialRunner(
+    runner = BenchmarkTrialRunner(
         state,
         MagicMock(),
         factory,
@@ -141,7 +141,7 @@ def test_append_only_instance_21_and_filter_ioh_traces(tmp_path: Path, orphan: b
     selected = select_scheduled_trials(saved, config.trial_schedule)
     assert selected["instance_ids"] == list(range(2, 22))
     assert result["clean_errors"] == selected["clean_errors"]
-    traces = IOHTraceReader(state.eval_dir).load_evaluation_traces(
+    traces = IOHTraceReader(state.benchmark_dir).load_benchmark_traces(
         trial_schedule=config.trial_schedule
     )
     runs = traces.get_runs(2, 0.0, 1, "pso")

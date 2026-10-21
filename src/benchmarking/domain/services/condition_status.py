@@ -4,10 +4,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
-from benchmarking.domain.evaluation import (
+from benchmarking.domain.benchmark_results import (
+    BENCHMARK_SCHEMA_VERSION,
     CHAMPION_RETURN_VALIDATION_VERSION,
     ERROR_DEFINITION,
-    EVALUATION_SCHEMA_VERSION,
     executed_trial_count,
 )
 from benchmarking.domain.trial_schedule import (
@@ -53,7 +53,7 @@ def inspect_condition(
     if not directory_exists or provenance is None:
         return ConditionStatus("PENDING", recorded, 0, expected_trials, None, "missing_provenance")
     if (
-        provenance.get("evaluation_schema_version") != EVALUATION_SCHEMA_VERSION
+        provenance.get("evaluation_schema_version") != BENCHMARK_SCHEMA_VERSION
         or provenance.get("error_definition") != ERROR_DEFINITION
     ):
         return ConditionStatus("NEEDS_RERUN", recorded, 0, expected_trials, None, "stale_schema")

@@ -1,15 +1,15 @@
 import numpy as np
 import pandas as pd
 
-from benchmarking.application.evaluation.summary import summarize_evaluations
-from benchmarking.application.evaluation.trials import EvaluationTrialRunner
-from benchmarking.application.evaluation.types import BaselineRunnerResolver, ExecutorBuilder
-from benchmarking.application.evaluation.workload import EvaluationWorkload
-from benchmarking.application.evaluation_config import EvaluationConfig
+from benchmarking.application.benchmark.summary import summarize_benchmarks
+from benchmarking.application.benchmark.trials import BenchmarkTrialRunner
+from benchmarking.application.benchmark.types import BaselineRunnerResolver, ExecutorBuilder
+from benchmarking.application.benchmark.workload import BenchmarkWorkload
+from benchmarking.application.benchmark_config import BenchmarkConfig
+from benchmarking.application.interfaces.benchmark_state_store import BenchmarkStateStore
 from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
 from benchmarking.application.interfaces.champion_repository import ChampionRepository
-from benchmarking.application.interfaces.evaluation_state_store import EvaluationStateStore
-from benchmarking.application.interfaces.logger import EvaluationLoggerInterface
+from benchmarking.application.interfaces.logger import BenchmarkLoggerInterface
 from benchmarking.application.interfaces.synthesis_read_repository import SynthesisReadRepository
 from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.enums import BBOBFunction
@@ -17,16 +17,16 @@ from benchmarking.domain.services.resolvers import ModelNames
 from shared.application.interfaces.problem_factory import ProblemFactory
 
 
-class EvaluationService:
+class BenchmarkService:
     """Coordinate workload auditing and benchmark trial execution."""
 
     def __init__(
         self,
         sqlite_repo: SynthesisReadRepository,
         champions_repo: ChampionRepository,
-        state_repo: EvaluationStateStore,
-        config: EvaluationConfig,
-        logger: EvaluationLoggerInterface,
+        state_repo: BenchmarkStateStore,
+        config: BenchmarkConfig,
+        logger: BenchmarkLoggerInterface,
         problem_factory: ProblemFactory,
         executor_factory: ExecutorBuilder,
         baseline_resolver: BaselineRunnerResolver,
@@ -38,7 +38,7 @@ class EvaluationService:
         self.logger = logger
         self.model_names = model_names
         self.config = config
-        self.workload = EvaluationWorkload(
+        self.workload = BenchmarkWorkload(
             sqlite_repo=sqlite_repo,
             champion_selection=self.champion_selection,
             state_repo=state_repo,
@@ -47,7 +47,7 @@ class EvaluationService:
             config=self.config,
             planned_target_conditions=planned_target_conditions,
         )
-        self.trials = EvaluationTrialRunner(
+        self.trials = BenchmarkTrialRunner(
             state_repo=state_repo,
             logger=logger,
             problem_factory=problem_factory,
@@ -60,16 +60,16 @@ class EvaluationService:
 
     def summarize_results(self) -> pd.DataFrame:
         """Inspect current saved outcomes without running or modifying experiments."""
-        return summarize_evaluations(
+        return summarize_benchmarks(
             self.workload, self.champion_selection, self.trials.state_repo, self.config
         )
 
-    def run_evaluations(
+    def run_benchmarks(
         self,
         solver_type: str = "all",
         verbose: bool = True,
     ) -> pd.DataFrame:
-        """Run all pending/partial evaluations matching the configured workload."""
+        """Run all pending/partial benchmarks matching the configured workload."""
         self.logger.verbose = verbose
 
         df_audit = self.workload.audit_workload(solver_type=solver_type)
@@ -86,7 +86,7 @@ class EvaluationService:
 
         total_active = len(active)
         self.logger.header(
-            title=f"Starting Benchmark Evaluations for {solver_type.upper()}",
+            title=f"Starting Benchmarks for {solver_type.upper()}",
             subtitle=f"{total_active} target conditions to evaluate",
         )
         cached_count = 0
@@ -167,7 +167,7 @@ class EvaluationService:
             )
 
         self.logger.summary(
-            title=f"Completed {solver_type.title()} Evaluations",
+            title=f"Completed {solver_type.title()} Benchmarks",
             stats={
                 "Total": total_active,
                 "Cached": cached_count,
@@ -180,23 +180,23 @@ class EvaluationService:
         self,
         verbose: bool = True,
     ) -> pd.DataFrame:
-        """Run all pending/partial native champion evaluations."""
-        return self.run_evaluations(solver_type="champions", verbose=verbose)
+        """Run all pending/partial native champion benchmarks."""
+        return self.run_benchmarks(solver_type="champions", verbose=verbose)
 
     def run_noise_robustness(
         self,
         verbose: bool = True,
     ) -> pd.DataFrame:
         """Run frozen clean champions on their original functions with added noise."""
-        return self.run_evaluations(solver_type="noise_robustness", verbose=verbose)
+        return self.run_benchmarks(solver_type="noise_robustness", verbose=verbose)
 
-    def run_cross_function_evaluations(self, verbose: bool = True) -> pd.DataFrame:
+    def run_cross_function_benchmarks(self, verbose: bool = True) -> pd.DataFrame:
         """Run opt-in cross-function trials and reuse paired clean baselines."""
-        return self.run_evaluations(solver_type="cross_function", verbose=verbose)
+        return self.run_benchmarks(solver_type="cross_function", verbose=verbose)
 
     def run_baselines(
         self,
         verbose: bool = True,
     ) -> pd.DataFrame:
-        """Run all pending/partial baseline evaluations matching the config matrix."""
-        return self.run_evaluations(solver_type="baselines", verbose=verbose)
+        """Run all pending/partial baseline benchmarks matching the config matrix."""
+        return self.run_benchmarks(solver_type="baselines", verbose=verbose)

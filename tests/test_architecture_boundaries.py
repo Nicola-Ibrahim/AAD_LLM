@@ -144,7 +144,7 @@ def test_plotting_does_not_calculate_or_load_scientific_results() -> None:
             "quantile",
             "compute_attainment_band",
             "compute_trajectory_and_ecdf",
-            "load_evaluation_traces",
+            "load_benchmark_traces",
             "load_provenance_records",
         }
         for node in ast.walk(tree):

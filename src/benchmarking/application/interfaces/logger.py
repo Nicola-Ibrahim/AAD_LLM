@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from benchmarking.application.champions import GenerationMode
 
 
-class EvaluationLoggerInterface(ABC):
+class BenchmarkLoggerInterface(ABC):
     @property
     @abstractmethod
     def verbose(self) -> bool: ...
