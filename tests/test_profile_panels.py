@@ -141,7 +141,9 @@ def test_ecdf_and_convergence_share_strategy_palette(mode):
 
 
 @pytest.mark.parametrize("kind", ["convergence", "ecdf"])
-@pytest.mark.parametrize("dim,budget", [(2, 20000), (3, 30000), (5, 50000), (10, 100000)])
+@pytest.mark.parametrize(
+    "dim,budget", [(2, 20000), (3, 30000), (5, 50000), (10, 100000), (2, 100000), (50, 100000)]
+)
 def test_profile_axes_end_at_calculated_budget(kind, dim, budget):
     grid = np.geomspace(1, budget, 300)
     values = np.ones(300)

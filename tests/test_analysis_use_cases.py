@@ -105,7 +105,7 @@ def test_profiles_match_existing_calculations_and_load_once(snapshot, mode):
     )
     for condition in result.conditions:
         assert condition.evaluations[0] == 1
-        assert condition.evaluations[-1] == condition.dim * snapshot.config.budget_multiplier
+        assert condition.evaluations[-1] == snapshot.config.budget
         assert len(condition.evaluations) == 300
         for series in condition.series:
             runs = snapshot.dataset.get_runs(
@@ -136,39 +136,91 @@ def test_profiles_match_existing_calculations_and_load_once(snapshot, mode):
             np.testing.assert_array_equal(series.ecdf, expected_ecdf)
 
 
-def test_profiles_use_configured_proportional_budget(snapshot):
-    snapshot = replace(snapshot, config=EvaluationConfig(budget_multiplier=1234))
+def test_profiles_use_configured_fixed_budget(snapshot):
+    snapshot = replace(snapshot, config=EvaluationConfig(budget=1234))
     result = AnalyzeEcdfAndConvergence(loader_for(snapshot), EcdfConvergenceEngine()).execute(
         mode="explicit", dims=None, problems=None, noise_stds=None
     )
     for condition in result.conditions:
-        assert condition.evaluations[-1] == condition.dim * 1234
-    assert result.provenance.settings["profile_grid_policy"] == "dimension_proportional_v1"
+        assert condition.evaluations[-1] == 1234
+    assert result.provenance.settings["profile_grid_policy"] == "fixed_budget_v3"
 
 
-def test_performance_uses_configured_proportional_budget(snapshot):
-    snapshot = replace(snapshot, config=EvaluationConfig(budget_multiplier=1234))
+def test_performance_uses_configured_fixed_budget(snapshot):
+    snapshot = replace(snapshot, config=EvaluationConfig(budget=1234))
     ecdf = MagicMock(wraps=EcdfConvergenceEngine())
     result = AnalyzePerformance(loader_for(snapshot), ecdf, PerformanceMetricsEngine()).execute(
         dims=None, problems=None, noise_stds=None
     )
-    assert ecdf.compute_auc_ecdf_matrix.call_args.kwargs["max_evals"] is None
-    assert ecdf.compute_auc_ecdf_matrix.call_args.kwargs["budget_multiplier"] == 1234
-    assert result.provenance.settings["auc_grid_policy"] == "dimension_proportional_v1"
+    assert ecdf.compute_auc_ecdf_matrix.call_args.kwargs["budget"] == 1234
+    assert result.provenance.settings["auc_grid_policy"] == "fixed_budget_v3"
 
 
-def test_checkpoint_fractions_use_proportional_budget(snapshot):
+def test_checkpoint_fractions_use_fixed_budget(snapshot):
     table = ReliabilityEngine().compute_checkpoint_table(
         snapshot.dataset,
         checkpoint_fractions=[0.1, 1.0],
-        budget_multiplier=100,
+        budget=200,
     )
-    assert set(table.loc[table["Checkpoint Fraction"] == 0.1, "Checkpoint Evaluations"]) == {20, 50}
-    assert set(table.loc[table["Checkpoint Fraction"] == 1.0, "Checkpoint Evaluations"]) == {
-        200,
-        500,
-    }
+    assert set(table.loc[table["Checkpoint Fraction"] == 0.1, "Checkpoint Evaluations"]) == {20}
+    assert set(table.loc[table["Checkpoint Fraction"] == 1.0, "Checkpoint Evaluations"]) == {200}
     assert set(table["Dim"]) == {2, 5}
+
+
+def test_fixed_budget_aligns_profiles_auc_attainment_and_checkpoints(snapshot):
+    snapshot = replace(snapshot, config=EvaluationConfig(budget=100_000, target_eval_runs=2))
+    filters = dict(dims=None, problems=None, noise_stds=None)
+    profiles = AnalyzeEcdfAndConvergence(loader_for(snapshot), EcdfConvergenceEngine()).execute(
+        mode="explicit", **filters
+    )
+    assert {c.evaluations[-1] for c in profiles.conditions} == {100_000}
+
+    engine = MagicMock(wraps=EcdfConvergenceEngine())
+    performance = AnalyzePerformance(
+        loader_for(snapshot), engine, PerformanceMetricsEngine()
+    ).execute(**filters)
+    assert engine.compute_auc_ecdf_matrix.call_args.kwargs["budget"] == 100_000
+    expected = EcdfConvergenceEngine().compute_auc_ecdf_matrix(
+        snapshot.dataset,
+        snapshot.solver_order,
+        targets=performance.targets,
+        group_by="condition",
+        budget=100_000,
+    )
+    pd.testing.assert_frame_equal(performance.table.drop(columns="Canonical Solver"), expected)
+
+    reliability = AnalyzeReliability(
+        loader_for(snapshot), TransferAnalysisEngine(), ReliabilityEngine()
+    ).execute(**filters)
+    assert reliability.evaluations[-1] == 100_000
+    checkpoints = ReliabilityEngine().compute_checkpoint_table(
+        snapshot.dataset,
+        [0.01, 0.1, 0.5, 1.0],
+        budget=snapshot.config.budget,
+    )
+    assert set(checkpoints["Checkpoint Evaluations"]) == {1000, 10000, 50000, 100000}
+    assert set(checkpoints["Dim"]) == {2, 5}
+
+
+def test_fixed_budget_changes_result_cache_provenance(snapshot):
+    fixed = replace(snapshot, config=EvaluationConfig(budget=1234, target_eval_runs=2))
+    for workflow in ("summary", "profiles", "noise"):
+        assert fixed.provenance(workflow) != snapshot.provenance(workflow)
+        assert fixed.provenance(workflow).settings["budget"] == 1234
+
+
+def test_performance_includes_50d(snapshot):
+    dataset = snapshot.dataset.model_copy(deep=True)
+    dataset.add_run(
+        EvaluationCondition(dim=50, noise_std=0.0, problem_id=1),
+        "Model / baseline",
+        RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([1.0, 0.0])),
+    )
+    snapshot = replace(snapshot, dataset=dataset, config=EvaluationConfig(budget=100_000))
+    result = AnalyzePerformance(
+        loader_for(snapshot), EcdfConvergenceEngine(), PerformanceMetricsEngine()
+    ).execute(dims=None, problems=None, noise_stds=None)
+    assert result.dims == [2, 5, 50]
 
 
 def test_reliability_matches_bootstrap_and_preserves_raw_csv_identifiers(snapshot):
@@ -221,8 +273,7 @@ def test_noise_and_performance_match_domain_services(snapshot):
         snapshot.solver_order,
         targets=performance.targets,
         group_by="condition",
-        max_evals=None,
-        budget_multiplier=snapshot.config.budget_multiplier,
+        budget=snapshot.config.budget,
     )
     pd.testing.assert_frame_equal(performance.table.drop(columns="Canonical Solver"), expected)
     expected_scale, _ = PerformanceMetricsEngine.summarize_auc_results(
@@ -318,7 +369,9 @@ def test_bootstrap_disposes_on_use_case_failure(monkeypatch):
         ("skipped_tail", 1),
     ],
 )
-def test_loader_eligibility_and_dynamic_models(state, expected_native):
+@pytest.mark.parametrize("fixed_budget", [20_000, 100_000])
+def test_loader_eligibility_and_dynamic_models(state, expected_native, fixed_budget):
+    config = EvaluationConfig(budget=fixed_budget)
     names = ModelNames([])
     raw = "NewModel-7B-Instruct"
     label = names.get_clean_model_label(raw)
@@ -335,7 +388,7 @@ def test_loader_eligibility_and_dynamic_models(state, expected_native):
     )
     record = dict(
         evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
-        budget=20_000,
+        budget=config.budget,
         instance_ids=list(range(2, 22)),
         trial_seeds=list(range(44, 64)),
         return_validation_version=CHAMPION_RETURN_VALIDATION_VERSION,
@@ -372,7 +425,7 @@ def test_loader_eligibility_and_dynamic_models(state, expected_native):
     baseline = dict(
         record,
         baseline="pso",
-        budget=20_000,
+        budget=config.budget,
         solver_folder="pso",
         evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
     )
@@ -410,7 +463,7 @@ def test_loader_eligibility_and_dynamic_models(state, expected_native):
         code_reader,
         candidates,
         names,
-        EvaluationConfig(),
+        config,
         TransferAnalysisEngine(),
     )
     result = loader.load(dims=None, problems=None, noise_stds=None)

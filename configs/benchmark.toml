@@ -11,11 +11,11 @@ target_eval_runs = 20
 random_seed = 42
 first_instance_id = 2
 # Twenty held-out-instance trials: IDs 2..21, seed = random_seed + instance_id.
-# Existing valid trials 2..20 are reused; only missing instance/seed pairs execute.
+# Instance sampling is unchanged; a multi-instance synthesis policy is not yet enabled.
 
-# Objective-evaluation budget per dimension: budget = dim * budget_multiplier.
-# 2D=20,000; 3D=30,000; 5D=50,000; 10D=100,000.
-budget_multiplier = 10000
+# Fixed objective-call allowance per trial, shared by champions and baselines.
+# Identical at every dimension: 2D, 10D and 50D each receive 100,000 evaluations.
+budget = 100000
 
 # Per-trial execution wall-clock timeout in seconds
 eval_timeout_seconds = 30.0

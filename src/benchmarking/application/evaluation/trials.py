@@ -51,7 +51,7 @@ class EvaluationTrialRunner:
         self.code_reader = code_reader
         self.model_names = model_names
         self.n_runs = config.target_eval_runs
-        self.budget_multiplier = config.budget_multiplier
+        self.config = config
         self.trial_timeout_seconds = config.eval_timeout_seconds
         self.observation_trace_points = config.observation_trace_points
         self.force_rerun = config.force_rerun
@@ -97,7 +97,7 @@ class EvaluationTrialRunner:
                 provenance=prov,
                 expected_code_hash=expected_code_hash,
                 expected_trials=self.n_runs,
-                expected_budget=dim * self.budget_multiplier,
+                expected_budget=self.config.budget,
                 trial_schedule=schedule,
             )
             if inspection.reason in {"complete", "partial", "not_started"}:
@@ -183,16 +183,14 @@ class EvaluationTrialRunner:
                 trial_seeds.append(trial_seed)
 
                 prob.attach_logger(logger_ioh)
-                prob.set_budget(dim * self.budget_multiplier)
+                prob.set_budget(self.config.budget)
                 if noise_std > 0.0:
                     prob.configure_observation_checkpoints(
-                        dim * self.budget_multiplier, self.observation_trace_points
+                        self.config.budget, self.observation_trace_points
                     )
                 trial_started = time.perf_counter()
                 try:
-                    best_objective, rt, _reported_evals = runner_fn(
-                        prob, dim * self.budget_multiplier
-                    )
+                    best_objective, rt, _reported_evals = runner_fn(prob, self.config.budget)
                     best_objective = float(best_objective)
                     if not np.isfinite(best_objective):
                         best_objective = float("inf")
@@ -250,7 +248,7 @@ class EvaluationTrialRunner:
             "problem_id": p_id,
             "dim": dim,
             "noise_std": noise_std,
-            "budget": dim * self.budget_multiplier,
+            "budget": self.config.budget,
             "instance_ids": instance_ids,
             "trial_seeds": trial_seeds,
             "true_optima": true_optima,

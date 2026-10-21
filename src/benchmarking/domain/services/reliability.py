@@ -181,14 +181,13 @@ class ReliabilityEngine:
         self,
         benchmark_data: EvaluationDataset,
         checkpoint_fractions: list[float],
-        budget_multiplier: int,
+        budget: int,
         threshold: float = 1e-8,
         primary_strategy: str = "baseline",
     ) -> pd.DataFrame:
-        """Compute condition-level target attainment at fixed fractions of each evaluation budget."""
+        """Target attainment at fractions of the explicitly supplied fixed budget."""
         rows: list[dict[str, object]] = []
         for condition, solvers in benchmark_data.items():
-            budget = condition.dim * budget_multiplier
             for solver, runs in solvers.items():
                 parsed = self.split_solver_name(str(solver))
                 if parsed is None or parsed[1] != primary_strategy:

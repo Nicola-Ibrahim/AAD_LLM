@@ -84,7 +84,7 @@ def test_historical_unexecuted_tail_is_not_reused() -> None:
 
 @pytest.mark.parametrize("orphan", [False, True])
 def test_append_only_instance_21_and_filter_ioh_traces(tmp_path: Path, orphan: bool) -> None:
-    config = EvaluationConfig()
+    config = EvaluationConfig(budget=20_000)
     state = EvaluationStateRepository(tmp_path / "ioh_traces")
     folder = state.eval_dir / "2D/std_0.0/f1/pso"
     folder.mkdir(parents=True)

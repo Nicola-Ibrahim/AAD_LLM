@@ -178,7 +178,7 @@ class AnalysisDataLoader:
                 provenance=r,
                 expected_code_hash=None,
                 expected_trials=config.target_eval_runs,
-                expected_budget=int(r["dim"]) * config.budget_multiplier,
+                expected_budget=config.budget,
                 trial_schedule=config.trial_schedule,
             ).reason
             in {"complete", "partial", "not_started"}
@@ -217,7 +217,7 @@ class AnalysisDataLoader:
                 select_scheduled_trials(r, config.trial_schedule)
                 for r in self.transfer_reader.load_provenance_records() + diagonals
                 if selected(r)
-                and r.get("budget") == int(r["dim"]) * config.budget_multiplier
+                and r.get("budget") == config.budget
                 and (
                     r.get("model"),
                     r.get("source_problem_id", r["problem_id"]),

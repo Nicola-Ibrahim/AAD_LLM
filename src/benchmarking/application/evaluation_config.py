@@ -3,7 +3,7 @@
 Defines validated settings for benchmark execution and analysis workflows.
 """
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from benchmarking.domain.trial_schedule import TrialIdentity
 from shared.domain.bbob import BBOBFunction
@@ -27,6 +27,8 @@ class EvaluationConfig(BaseModel):
 
     Provides typed attributes and validated defaults for evaluation and analysis.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     target_eval_runs: int = Field(
         default=20,
@@ -53,11 +55,12 @@ class EvaluationConfig(BaseModel):
             )
         )
 
-    budget_multiplier: int = Field(
-        default=10_000,
+    budget: int = Field(
+        default=100_000,
         ge=1,
-        description="Budget multiplier per dimension (budget = dim * multiplier).",
+        description="Fixed objective-call allowance per trial, independent of dimension.",
     )
+
     eval_timeout_seconds: float = Field(
         default=30.0,
         gt=0.0,

@@ -39,13 +39,12 @@ class AnalyzePerformance:
             snapshot.solver_order,
             targets=targets,
             group_by="condition",
-            max_evals=None,
-            budget_multiplier=snapshot.config.budget_multiplier,
+            budget=snapshot.config.budget,
         )
         table["Canonical Solver"] = table["Solver"].str.replace(
             r" \(noise-adapted\)", "", regex=True
         )
-        scale_dimensions = [dim for dim in (2, 3, 5, 10) if dim in snapshot.dataset.dims]
+        scale_dimensions = sorted(snapshot.dataset.dims)
         model_scale, rankings = self.performance.summarize_auc_results(
             table,
             list(snapshot.models_to_solvers),
@@ -69,7 +68,7 @@ class AnalyzePerformance:
             provenance,
             settings={
                 **provenance.settings,
-                "auc_grid_policy": "dimension_proportional_v1",
+                "auc_grid_policy": "fixed_budget_v3",
                 "auc_grid_points": 200,
             },
         )

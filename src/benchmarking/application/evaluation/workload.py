@@ -87,7 +87,7 @@ class EvaluationWorkload:
             provenance=self.state_repo.read_provenance(target_dir),
             expected_code_hash=expected_code_hash,
             expected_trials=self.n_runs,
-            expected_budget=dim * self.config.budget_multiplier,
+            expected_budget=self.config.budget,
             trial_schedule=self.config.trial_schedule,
         )
 

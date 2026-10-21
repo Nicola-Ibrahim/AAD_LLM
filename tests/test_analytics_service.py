@@ -237,7 +237,9 @@ class TestDomainEngines:
         solvers = ["CMA-ES", "LLaMEA-14B / baseline"]
 
         # 1. Group by dim
-        df_dim = ecdf_engine.compute_auc_ecdf_matrix(bench_data, solvers, targets, group_by="dim")
+        df_dim = ecdf_engine.compute_auc_ecdf_matrix(
+            bench_data, solvers, targets, budget=100_000, group_by="dim"
+        )
         assert not df_dim.empty
         assert "AUC-ECDF (%)" in df_dim.columns
         assert "GroupKey" in df_dim.columns
@@ -246,7 +248,7 @@ class TestDomainEngines:
 
         # 2. Group by noise_std
         df_noise = ecdf_engine.compute_auc_ecdf_matrix(
-            bench_data, solvers, targets, group_by="noise_std"
+            bench_data, solvers, targets, budget=100_000, group_by="noise_std"
         )
         assert not df_noise.empty
         assert "Clean (σ=0.0)" in df_noise["GroupKey"].values
@@ -254,7 +256,7 @@ class TestDomainEngines:
 
         # 3. Problem Grouping
         df_prob = ecdf_engine.compute_auc_ecdf_matrix(
-            bench_data, solvers, targets, group_by="problem_id"
+            bench_data, solvers, targets, budget=100_000, group_by="problem_id"
         )
         assert not df_prob.empty
         assert "Sphere (f1)" in df_prob["GroupKey"].values
@@ -262,7 +264,7 @@ class TestDomainEngines:
 
         # 4. Group by condition (raw)
         df_cond = ecdf_engine.compute_auc_ecdf_matrix(
-            bench_data, solvers, targets, group_by="condition"
+            bench_data, solvers, targets, budget=100_000, group_by="condition"
         )
         assert len(df_cond) == 4  # 2 conditions x 2 solvers
 
@@ -353,7 +355,11 @@ class TestNoiseSpecificEcdfTargets:
         }
 
         df_res = ecdf_engine.compute_auc_ecdf_matrix(
-            dataset, solvers=["TestSolver"], targets=targets_dict, group_by="condition"
+            dataset,
+            solvers=["TestSolver"],
+            targets=targets_dict,
+            budget=100_000,
+            group_by="condition",
         )
         assert len(df_res) == 2
         assert "AUC-ECDF (%)" in df_res.columns

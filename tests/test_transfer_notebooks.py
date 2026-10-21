@@ -63,7 +63,7 @@ def inputs(tmp_path: Path) -> AnalysisSnapshot:
     code_hash = hashlib.sha256(code.encode()).hexdigest()
     native = dict(
         evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
-        budget=20_000,
+        budget=100_000,
         instance_ids=list(range(2, 22)),
         trial_seeds=list(range(44, 64)),
         return_validation_version=CHAMPION_RETURN_VALIDATION_VERSION,
@@ -83,7 +83,7 @@ def inputs(tmp_path: Path) -> AnalysisSnapshot:
     noise_record = dict(native, noise_std=0.05, evaluation_kind="noise_robustness")
     baseline = dict(
         evaluation_schema_version=EVALUATION_SCHEMA_VERSION,
-        budget=20_000,
+        budget=100_000,
         instance_ids=list(range(2, 22)),
         trial_seeds=list(range(44, 64)),
         error_definition=ERROR_DEFINITION,
@@ -203,7 +203,7 @@ def test_summary_exports_only_attainment_png_and_rebuilds_each_time(
     assert builder.call_count == 2
     figure, path = png_exports[0]
     assert path.endswith("fig_10b_fixed_target_attainment.png")
-    assert max(figure.data[0].x) == pytest.approx(2 * inputs.config.budget_multiplier)
+    assert max(figure.data[0].x) == pytest.approx(inputs.config.budget)
     assert png_exports[0][1] == png_exports[1][1]
     assert not list(RESULTS_DIR.rglob(".analysis_cache"))
 

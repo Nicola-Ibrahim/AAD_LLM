@@ -52,6 +52,8 @@ class EvaluationConfigRepository:
 
         raw_bench_cfg = cfg.get("benchmarking") or cfg.get("evaluation") or {}
         bench_cfg = cast(TomlTable, raw_bench_cfg) if isinstance(raw_bench_cfg, dict) else {}
+        if bench_cfg and "budget" not in bench_cfg:
+            raise ValueError("Set benchmarking.budget to a fixed objective-call allowance.")
         baselines_data = self.load_baselines()
         baseline_labels = {
             slug: info.get("display_name", slug.upper()) for slug, info in baselines_data.items()
@@ -73,7 +75,7 @@ class EvaluationConfigRepository:
             target_eval_runs=int(bench_cfg.get("target_eval_runs", 20)),
             random_seed=int(bench_cfg.get("random_seed", 42)),
             first_instance_id=int(bench_cfg.get("first_instance_id", 2)),
-            budget_multiplier=int(bench_cfg.get("budget_multiplier", 10000)),
+            budget=bench_cfg.get("budget", 100_000),
             eval_timeout_seconds=float(bench_cfg.get("eval_timeout_seconds", 30.0)),
             observation_trace_points=int(bench_cfg.get("observation_trace_points", 64)),
             force_rerun=bool(bench_cfg.get("force_rerun", False)),

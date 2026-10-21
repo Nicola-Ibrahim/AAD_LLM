@@ -52,7 +52,7 @@ flowchart TD
     Status -->|complete and valid| Cached["Reuse current trials"]
     Status -->|partial or not started| Resume["Retain valid instance–seed pairs<br/>run missing pairs only"]
     Status -->|stale schema, hash or champion validation| Restart["Restart this condition<br/>do not reuse stale trials"]
-    Resume --> Trials["Execute scheduled trials<br/>instances 2–21, seed base+instance, budget dimension × 10,000"]
+    Resume --> Trials["Execute scheduled trials<br/>instances 2–21, seed base+instance, fixed budget 100,000"]
     Restart --> Trials
     Trials --> Provenance["Persist terminal errors + provenance<br/>clean traces + sampled noisy observations"]
     Cached --> Analysis["Read-only audit and analysis<br/>terminal completeness ≠ trace availability"]
@@ -102,9 +102,22 @@ are not failures and are excluded from aggregates.
 | Uncertainty | Wilson condition intervals; deterministic condition-cluster aggregate bootstrap. |
 | Budget | Benchmark attaches `set_budget`; excess queries warn and return the last value. Synthesis does not itself attach that cap. |
 | Timeout | Per-candidate `func_timeout`; session process workers are not a per-candidate security sandbox. |
-| Default benchmark trials | 20; instances 2–21, seed `42+instance_id`, budget `dimension * 10000`, champion timeout 30 seconds. |
+| Default benchmark trials | 20; instances 2–21, seed `42+instance_id`, fixed budget 100,000 calls per trial, champion timeout 30 seconds. |
 
 Defaults come from [benchmark configuration](../configs/benchmark.toml).
+Both synthesis and benchmarking now configure a fixed allowance of 100,000 calls
+per optimizer execution; synthesis targets dimensions 2, 10 and 50. Only a fixed
+`budget` is supported; execution, readiness checks, provenance filtering and
+analysis grids read that value directly. Existing results are historical,
+not new-protocol results merely because the configuration has changed.
+
+Prepare the new study's storage before running either notebook. The current
+entry points still use the existing active database/code/results paths; editing
+these configuration files does not switch them to the inactive staging area.
+Do not run new-protocol evaluations over the old active results: stale-condition
+execution can replace those condition folders. The verified archive remains
+separate and must not be modified.
+
 Synthesis uses instance 1; the current benchmark schedule excludes that instance.
 Instances 2–20 were used by the previous benchmark protocol, so this migration
 does not make them previously unobserved tests or undo benchmark-guided reruns.
@@ -199,7 +212,7 @@ Noise strategy selection and magnitude are configuration-driven.
 ## Independent benchmarking and reliability
 
 [Benchmark configuration](../configs/benchmark.toml) currently requests 20 trials
-per condition, budget `dimension * 10000`, and a 30-second execution timeout.
+per condition, a fixed budget of 100,000 calls, and a 30-second execution timeout.
 Trial `r` uses instance `first_instance_id + r - 1` and seed
 `random_seed + instance_id`; the defaults give instances 2–21 and seeds 44–63.
 Synthesis uses instance 1, so the benchmark is not exclusively held-out-instance

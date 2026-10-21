@@ -15,11 +15,11 @@
 #   15 : Rastrigin (Strong multi-modal, highly rugged)
 #   21 : Gallagher 101 (Weak multi-modal, deceptive Gaussian peaks)
 problem_targets = [
-  { id = 1,  dimensions = [2, 3, 5, 10] },
-  { id = 8,  dimensions = [2, 3, 5, 10] },
-  { id = 11, dimensions = [2, 3, 5, 10] },
-  { id = 15, dimensions = [2, 3, 5, 10] },
-  { id = 21, dimensions = [2, 3, 5, 10] },
+  { id = 1,  dimensions = [2, 10, 50] },
+  { id = 8,  dimensions = [2, 10, 50] },
+  { id = 11, dimensions = [2, 10, 50] },
+  { id = 15, dimensions = [2, 10, 50] },
+  { id = 21, dimensions = [2, 10, 50] },
 ]
 
 # Evaluated Noise Conditions (Pairs of standard deviation and noise model strategy):
@@ -48,11 +48,11 @@ synthesis_modes = [
 #   • 2-3 = Fast quick-test / dry-run
 iterations = 10
 
-# Function Evaluation Budget: Max objective evaluations per candidate algorithm
-budget = 1000000
+# Fixed objective-call allowance per candidate execution, shared with benchmarking.
+budget = 100000
 
 # Maximum wall-clock execution time allowed per candidate algorithm execution (seconds)
-# Set to 30.0s to allow candidate metaheuristics to complete up to 1,000,000 evaluations without false timeouts
+# Unchanged runtime safeguard; the objective-call allowance is configured separately.
 timeout_seconds = 30.0
 
 # Statistical Replicates: Number of independent repeat runs per unique matrix configuration

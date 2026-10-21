@@ -98,28 +98,24 @@ class EcdfConvergenceEngine:
         benchmark_data: EvaluationDataset,
         solvers: list[str],
         targets: np.ndarray | dict[float, np.ndarray],
+        budget: int,
         group_by: Literal[
             "dim", "problem_id", "noise_std", "dim_noise", "problem_noise", "condition"
         ] = "dim",
-        max_evals: int | None = 1_000_000,
         n_grid_points: int = 200,
-        budget_multiplier: int = 10_000,
     ) -> pd.DataFrame:
         """Compute Area Under the Runtime ECDF (AUC-ECDF) matrix disaggregated by grouping axis.
 
         Returns a long-format DataFrame with percentage AUC values scaled to [0, 100].
-        When max_evals is None, each condition uses dim * budget_multiplier.
+        Every condition uses the explicitly supplied fixed objective-call budget.
         Targets can be a single np.ndarray or a dictionary mapping noise_std to target arrays.
         """
         rows = []
+        c_grid = np.geomspace(1, budget, n_grid_points)
+        log_x = np.log10(c_grid)
+        x_range = float(log_x[-1] - log_x[0])
 
         for cond, s_dict in benchmark_data.items():
-            c_grid = np.geomspace(
-                1, cond.dim * budget_multiplier if max_evals is None else max_evals, n_grid_points
-            )
-            log_x = np.log10(c_grid)
-            x_range = float(log_x[-1] - log_x[0])
-
             if isinstance(targets, dict):
                 c_targets = targets.get(cond.noise_std)
                 if c_targets is None:

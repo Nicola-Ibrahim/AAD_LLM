@@ -68,9 +68,7 @@ class AnalyzeReliability:
         if primary.empty:
             diagnostics.append("No complete current native primary-strategy conditions.")
         else:
-            grid = np.logspace(
-                0, np.log10(int(primary["Dim"].max()) * snapshot.config.budget_multiplier), 200
-            )
+            grid = np.logspace(0, np.log10(snapshot.config.budget), 200)
             grouped_runs: list[tuple[str, bool, list[RunTrace]]] = []
             for model in models:
                 runs: list[RunTrace] = []

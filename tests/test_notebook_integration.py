@@ -14,7 +14,7 @@ from benchmarking.infra.solvers.baselines import get_baseline_runner
 from benchmarking.infra.storage.model_registry import configured_model_names
 from evolution.infra.concurrency.runner import ProcessPoolRunner
 from evolution.infra.concurrency.worker import run_synthesis_worker
-from shared.config import PROJECT_ROOT, RESULTS_DIR
+from shared.config import PROJECT_ROOT
 from shared.infra.execution.candidate_executor import create_candidate_executor
 from shared.infra.problems.factory import BBOBProblemFactory
 
@@ -143,7 +143,8 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
     cfg = config_repo.load_config()
     assert len(cfg.problem_targets) == 5
     assert cfg.problem_ids == [1, 8, 11, 15, 21]
-    assert cfg.dimensions == [2, 3, 5, 10]
+    assert cfg.dimensions == [2, 10, 50]
+    assert cfg.budget == 100_000
 
     matrix_df, summary = campaign_usecase.auditor.audit_matrix()
     assert not matrix_df.empty
@@ -161,16 +162,43 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
     print(f"✅ NB02 evolutionary synthesis pipeline verified ({len(tasks)} tasks constructed).")
 
 
-def test_nb03_evaluation_pipeline():
+def test_nb03_evaluation_pipeline(tmp_path, db_session_factory):
     """Verify Notebook 03 (03_evaluation.ipynb: Champion Selection + Evaluations Audit & Dispatch)."""
     print("Testing NB03 logic with ChampionSelectionService & EvaluationService...")
     from benchmarking.infra.storage import (
         ChampionsReadRepository,
         SQLiteSynthesisReadRepository,
     )
-    from shared.infra.database import Database
+    from shared.infra.database.tables import ExperimentORM, IterationORM
 
-    session_factory = Database().session_factory
+    session_factory = db_session_factory
+    candidate_path = tmp_path / "candidate.py"
+    candidate_path.write_text("# Isolated champion-selection fixture; not executed.\n")
+    with session_factory() as session:
+        experiment = ExperimentORM(
+            problem_id=1,
+            dim=2,
+            mode="explicit",
+            llm_name="fixture-model",
+            noise_std=0.0,
+            noise_model="none",
+            prompt_strategy="baseline",
+            budget=100_000,
+            status="completed",
+        )
+        session.add(experiment)
+        session.flush()
+        session.add(
+            IterationORM(
+                experiment_id=experiment.id,
+                algorithm_name="FixtureOptimizer",
+                final_error=0.0,
+                raw_fitness=0.0,
+                evaluations_used=10,
+                code_path=str(candidate_path),
+            )
+        )
+        session.commit()
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
     champ_service = ChampionSelectionService(champions_repo=champions_repo)
@@ -192,7 +220,7 @@ def test_nb03_evaluation_pipeline():
     from benchmarking.infra.logging import EvaluationLogger
     from benchmarking.infra.storage import EvaluationConfigRepository
 
-    state_repo = EvaluationStateRepository()
+    state_repo = EvaluationStateRepository(eval_dir=tmp_path / "traces")
     config_repo = EvaluationConfigRepository()
     logger = EvaluationLogger()
 
@@ -203,7 +231,7 @@ def test_nb03_evaluation_pipeline():
         config_repo=config_repo,
         logger=logger,
     )
-    champions_path = RESULTS_DIR / "benchmark" / "champions.json"
+    champions_path = tmp_path / "benchmark" / "champions.json"
     champ_service.export_champions(champions_path)
     assert champions_path.exists(), "champions.json does not exist!"
     with open(champions_path, "r", encoding="utf-8") as f:
@@ -256,16 +284,30 @@ def test_nb04_audit_pipeline():
     assert isinstance(snapshot.completed_models, tuple)
 
 
-def test_statistical_analysis_pipeline():
+def test_statistical_analysis_pipeline(tmp_path, db_session_factory):
     """Verify shared statistical calculations and analysis data access."""
     print("\nTesting statistical analysis data access...")
     from benchmarking.infra.io.trace_repository import IOHTraceReader
     from benchmarking.infra.storage import SQLiteSynthesisReadRepository
-    from shared.infra.database import Database
 
-    session_factory = Database().session_factory
+    session_factory = db_session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
-    trace_repo = IOHTraceReader()
+    trace_root = tmp_path / "ioh_traces"
+    for solver, terminal in [("pso", 1), ("de", 3)]:
+        folder = trace_root / "2D/std_0.0/f1" / solver
+        folder.mkdir(parents=True)
+        (folder / "trace.dat").write_text(
+            f"evaluations raw_y\n1 10\n2 {terminal}\nevaluations raw_y\n1 10\n2 {terminal + 1}\n"
+        )
+        (folder / "IOHprofiler_f1.json").write_text(
+            json.dumps(
+                {
+                    "function_id": 1,
+                    "scenarios": [{"dimension": 2, "path": "trace.dat"}],
+                }
+            )
+        )
+    trace_repo = IOHTraceReader(trace_root)
 
     df_exp, df_iter = sqlite_repo.get_synthesis_dataframes()
     all_benchmark_data = trace_repo.load_evaluation_traces(
@@ -276,6 +318,8 @@ def test_statistical_analysis_pipeline():
 
     df_omnibus = HypothesisTestingEngine().run_omnibus_kruskal(all_benchmark_data)
     df_pairwise = HypothesisTestingEngine().run_pairwise_fdr(all_benchmark_data, alpha=0.05)
+    assert not df_omnibus.empty
+    assert not df_pairwise.empty
     print(f"  • Omnibus tests: {len(df_omnibus)} rows")
     print(f"  • Pairwise tests (FDR-corrected): {len(df_pairwise)} rows")
 

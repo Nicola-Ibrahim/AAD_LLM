@@ -28,6 +28,14 @@ The overview and detailed system diagrams appear directly in the project README;
 the focused diagrams appear in their architecture/protocol guides. They describe workflows and
 supporting capabilities, not strict C4 levels or Python import dependencies.
 
+## Deferred proposals
+
+- [Campaign isolation and preservation plan](plans/campaign_isolation.md): **deferred,
+  not implemented**. Includes a Mermaid system overview and execution sequence,
+  future workspace ownership, snapshots and development isolation, plus the
+  immediate manual-preservation procedure and unconfirmed next experiment settings.
+  It does not describe current application behavior.
+
 ## Sources of truth
 
 Implementation guides describe current behavior. [Configuration files](../configs/)

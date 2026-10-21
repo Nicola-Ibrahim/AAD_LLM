@@ -38,7 +38,7 @@ class AnalyzeEcdfAndConvergence:
         conditions: list[ConditionProfile] = []
         diagnostics: list[str] = []
         for dim in dataset.dims:
-            grid = np.geomspace(1, dim * snapshot.config.budget_multiplier, 300)
+            grid = np.geomspace(1, snapshot.config.budget, 300)
             for model, solvers in snapshot.models_to_solvers.items():
                 implicit = [s for s in solvers if "(noise-implicit)" in s]
                 adapted = [s for s in solvers if "(noise-adapted)" in s]
@@ -92,7 +92,7 @@ class AnalyzeEcdfAndConvergence:
             filters={**provenance.filters, "mode": mode},
             settings={
                 **provenance.settings,
-                "profile_grid_policy": "dimension_proportional_v1",
+                "profile_grid_policy": "fixed_budget_v3",
                 "profile_grid_points": 300,
             },
         )

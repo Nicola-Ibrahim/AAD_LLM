@@ -48,7 +48,7 @@ def build_model_scale_figure(results: PerformanceAnalysisResult) -> go.Figure:
         vertical_spacing=0.18 if rows > 1 else 0,
         shared_yaxes=True,
     )
-    dims = [d for d in [2, 3, 5, 10] if d in results.dims]
+    dims = sorted(results.dims)
 
     discovered_models = sorted(results.models_to_solvers, key=_model_size)
     shown_models: set[str] = set()

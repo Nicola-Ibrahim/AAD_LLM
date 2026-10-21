@@ -123,7 +123,7 @@ the requested PNGs, replacing existing files at the established output paths.
 Changing styling requires only another export, not recalculation.
 
 Profile grids and logarithmic x-axes end at the configured objective-query
-allowance, `dimension * budget_multiplier` (currently 10,000 per dimension).
+allowance: a fixed 100,000 calls at every dimension.
 Early termination still carries the last observation forward within that allowance,
 but analysis excludes evaluations recorded with a different budget.
 AUC integrates over each condition's allowance, normalized by its
@@ -143,19 +143,18 @@ old snapshots. After completing evaluation, recalculate and export analysis
 before using new figures or tables; previously exported files are not changed
 automatically.
 
-The old proportional-budget campaign is backed up under
-`results/archives/2026-10-11_proportional_budget/`, including traces, statistics,
-figures, reports and champion exports. Its `manifest.json` identifies recorded
-budgets and verified artifact inventories; its README gives a concrete snapshot
-loading/export example. This folder is a local archive, not another database.
+The retained previous study is backed up under
+`results/archives/2026-10-21_093547_before_new_study/`, including its synthesis
+database, generated code, configurations, traces, statistics, figures and source.
+Its `manifest.json` records verification and database counts; `checksums.json`
+identifies preserved artifacts. Older snapshot folders were explicitly removed.
 
-For historical figures, use `AnalysisResultsStore(archive / "analysis").load(...)`
-with the chosen snapshot directory and export under
-`results/comparisons/proportional_budget/`. Current analysis use cases accept only
-traces matching the configured budget and current champion. Archived numeric
-results are detached from the live database and remain
-usable without relaxing those checks. Never write new evaluations or figures into
-the archive. Copy it to another device/server for an off-machine backup.
+For historical figures, use `AnalysisResultsStore(archive / "results/analysis").load(...)`
+with a chosen numerical snapshot directory and export to a separate comparisons
+directory. Archived numerical results remain detached data; the current execution
+and analysis code has only a fixed-budget policy. New analysis accepts only traces
+matching that budget and the current champion. Never write new evaluations or
+figures into the archive. Copy it to another device/server for an off-machine backup.
 
 The legacy combined figures notebook has been retired. Use the three notebooks
 in this folder; there is no forwarding notebook or duplicated plotting code.

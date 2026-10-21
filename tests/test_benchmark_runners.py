@@ -97,7 +97,7 @@ def test_service_baseline_execution(tmp_path: Path):
         """
 [benchmarking]
 target_eval_runs = 2
-budget_multiplier = 50
+budget = 100
 eval_timeout_seconds = 30.0
 classical_baselines = ["cmaes", "de", "pso"]
 target_problems = [1]
@@ -142,15 +142,15 @@ target_noise_levels = [0.0]
     assert cached_res["status"] == "CACHED"
 
     # A changed allowance invalidates the cache even without force_rerun.
-    service.trials.budget_multiplier = 75
+    service.trials.config.budget = 150
     updated = service.trials.run_baseline_trials(dim=2, noise_std=0.0, p_id=1, baseline_slug="pso")
     assert updated["status"] == "SUCCESS"
     assert json.loads(prov_file.read_text())["budget"] == 150
 
-    # The configured allowance scales with the problem dimension.
+    # The configured allowance is identical at another problem dimension.
     service.trials.run_baseline_trials(dim=5, noise_std=0.0, p_id=1, baseline_slug="pso")
     higher_dim_provenance = eval_dir / "5D" / "std_0.0" / "f1" / "pso" / "provenance.json"
-    assert json.loads(higher_dim_provenance.read_text())["budget"] == 375
+    assert json.loads(higher_dim_provenance.read_text())["budget"] == 150
 
 
 def test_service_champion_execution(tmp_path: Path):
@@ -164,7 +164,7 @@ def test_service_champion_execution(tmp_path: Path):
         """
 [benchmarking]
 target_eval_runs = 2
-budget_multiplier = 50
+budget = 100
 eval_timeout_seconds = 5.0
 classical_baselines = ["cmaes", "de", "pso"]
 target_problems = [1]
@@ -260,7 +260,7 @@ def test_service_incremental_resumption(tmp_path: Path):
         """
 [benchmarking]
 target_eval_runs = 2
-budget_multiplier = 50
+budget = 100
 eval_timeout_seconds = 5.0
 classical_baselines = ["cmaes", "de", "pso"]
 target_problems = [1]
@@ -275,7 +275,7 @@ target_noise_levels = [0.0]
         """
 [benchmarking]
 target_eval_runs = 4
-budget_multiplier = 50
+budget = 100
 eval_timeout_seconds = 5.0
 classical_baselines = ["cmaes", "de", "pso"]
 target_problems = [1]
@@ -397,11 +397,11 @@ def test_evaluation_config_repository_edge_cases(tmp_path: Path):
     repo_bench_empty = EvaluationConfigRepository(config_path=bench_empty_file)
     cfg_bench_empty = repo_bench_empty.load_config()
     assert cfg_bench_empty.target_eval_runs == 20
-    assert cfg_bench_empty.budget_multiplier == 10_000
+    assert cfg_bench_empty.budget == 100_000
 
     # 4. File with [evaluation] section fallback
     eval_file = tmp_path / "eval_fallback.toml"
-    eval_file.write_text("[evaluation]\ntarget_eval_runs = 5\n", encoding="utf-8")
+    eval_file.write_text("[evaluation]\ntarget_eval_runs = 5\nbudget = 100\n", encoding="utf-8")
     repo_eval = EvaluationConfigRepository(config_path=eval_file)
     cfg_eval = repo_eval.load_config()
     assert cfg_eval.target_eval_runs == 5
@@ -478,7 +478,7 @@ def test_evaluation_service_run_verbose_control(tmp_path: Path):
         """
 [benchmarking]
 target_eval_runs = 2
-budget_multiplier = 50
+budget = 100
 eval_timeout_seconds = 30.0
 classical_baselines = ["cmaes"]
 target_problems = [1]
@@ -500,6 +500,7 @@ target_noise_levels = [0.0]
         state_repo=state_repo,
         config_repo=config_repo,
         logger=custom_logger,
+        planned_target_conditions=((2, 0.0, 1),),
     )
 
     # 1. Run with verbose=False -> No output captured in buffer
@@ -523,7 +524,7 @@ def test_cross_eval_clean_champions_workload_audit(tmp_path: Path):
         """
 [benchmarking]
 target_eval_runs = 2
-budget_multiplier = 50
+budget = 100
 eval_timeout_seconds = 5.0
 classical_baselines = ["cmaes"]
 cross_eval_clean_champions = true
@@ -599,7 +600,7 @@ def test_cross_eval_default_behavior_without_toml_flags(tmp_path: Path):
         """
 [benchmarking]
 target_eval_runs = 2
-budget_multiplier = 50
+budget = 100
 eval_timeout_seconds = 5.0
 classical_baselines = ["cmaes"]
 """,
@@ -684,7 +685,7 @@ def test_evaluation_service_seeds_trials_independently(tmp_path: Path):
         """
 [benchmarking]
 target_eval_runs = 3
-budget_multiplier = 25
+budget = 50
 eval_timeout_seconds = 10.0
 classical_baselines = ["pso"]
 target_problems = [1]

@@ -78,7 +78,7 @@ def test_auc_preserves_values_without_convergence_statistics(monkeypatch) -> Non
         ["Model / baseline"],
         np.array([0.5, 5.0]),
         group_by="condition",
-        max_evals=100,
+        budget=100,
         n_grid_points=3,
     )
     expected = pd.DataFrame(
@@ -114,7 +114,7 @@ def test_auc_excludes_attainment_after_fixed_budget() -> None:
         ["Model / baseline"],
         np.array([1.0]),
         group_by="condition",
-        max_evals=200,
+        budget=200,
     )
     np.testing.assert_array_equal(table["AUC-ECDF (%)"], [0.0, 0.0])
     extended = engine.compute_auc_ecdf_matrix(
@@ -122,17 +122,9 @@ def test_auc_excludes_attainment_after_fixed_budget() -> None:
         ["Model / baseline"],
         np.array([1.0]),
         group_by="condition",
-        max_evals=1000,
+        budget=1000,
     )
     assert (extended["AUC-ECDF (%)"] > 0).all()
 
-    proportional = engine.compute_auc_ecdf_matrix(
-        dataset,
-        ["Model / baseline"],
-        np.array([1.0]),
-        group_by="condition",
-        max_evals=None,
-        budget_multiplier=100,
-    )
-    assert proportional.loc[proportional["Dim"] == 2, "AUC-ECDF (%)"].iloc[0] == 0.0
-    assert proportional.loc[proportional["Dim"] == 5, "AUC-ECDF (%)"].iloc[0] > 0.0
+    # Identical traces and targets produce identical fixed-budget AUC across dimensions.
+    assert extended["AUC-ECDF (%)"].nunique() == 1
