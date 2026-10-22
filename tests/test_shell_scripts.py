@@ -225,6 +225,54 @@ def test_busy_database_cannot_be_reset(project: Path) -> None:
     assert not list(database.parent.glob("*.bak"))
 
 
+@pytest.mark.parametrize("command,allowed", [("clear", True), ("reset", False)])
+def test_missing_lsof_only_blocks_file_reset(project: Path, command: str, allowed: bool) -> None:
+    install_python_stub(project)
+    database = make_database(project)
+    hooks = project / "hooks"
+    hooks.write_text(
+        "command() {\n"
+        '  if [[ "${1:-}" == -v && "${2:-}" == lsof ]]; then return 1; fi\n'
+        '  builtin command "$@"\n'
+        "}\n"
+    )
+    result = run_script(
+        project,
+        "db.sh",
+        command,
+        input_text=f"y\n{command.upper()}\n",
+        overrides={"BASH_ENV": str(hooks)},
+    )
+    assert (result.returncode == 0) == allowed, result.stderr
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("SELECT id FROM experiments").fetchall() == (
+            [] if allowed else [(42,)]
+        )
+    assert len(list(database.parent.glob("*.bak"))) == int(allowed)
+
+
+def test_clear_without_lsof_respects_sqlite_writer_lock(project: Path) -> None:
+    install_python_stub(project)
+    database = make_database(project)
+    hooks = project / "hooks"
+    hooks.write_text(
+        "command() {\n"
+        '  if [[ "${1:-}" == -v && "${2:-}" == lsof ]]; then return 1; fi\n'
+        '  builtin command "$@"\n'
+        "}\n"
+    )
+    with sqlite3.connect(database) as writer:
+        writer.execute("PRAGMA journal_mode=WAL")
+        writer.execute("BEGIN IMMEDIATE")
+        result = run_script(
+            project, "db.sh", "clear", input_text="y\nCLEAR\n", overrides={"BASH_ENV": str(hooks)}
+        )
+        assert result.returncode != 0
+        assert "locked" in result.stderr
+        assert writer.execute("SELECT id FROM experiments").fetchall() == [(42,)]
+        assert "All data cleared" not in result.stdout
+
+
 def test_corrupt_database_is_not_deleted(project: Path) -> None:
     install_python_stub(project)
     executable(project / "bin/lsof", "exit 1\n")

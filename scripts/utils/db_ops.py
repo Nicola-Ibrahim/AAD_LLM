@@ -11,6 +11,7 @@ import sys
 from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
+from time import monotonic
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -26,10 +27,21 @@ def cmd_backup(args: argparse.Namespace) -> None:
         f"{source.name}.{datetime.now(UTC):%Y%m%dT%H%M%S%fZ}.{os.getpid()}.bak"
     )
     destination.touch(exist_ok=False)
+    last_progress = monotonic()
+
+    def check_backup_progress(status: int, remaining: int, total: int) -> None:
+        nonlocal last_progress
+        if status not in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
+            last_progress = monotonic()
+        elif monotonic() - last_progress > 10:
+            raise TimeoutError(
+                "Database backup is locked; stop writers and retry. No destructive operation was performed."
+            )
+
     try:
         with closing(sqlite3.connect(f"{source.as_uri()}?mode=ro", uri=True)) as reader:
             with closing(sqlite3.connect(destination)) as writer:
-                reader.backup(writer)
+                reader.backup(writer, pages=1024, progress=check_backup_progress)
                 if writer.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
                     raise RuntimeError("Backup integrity check failed; operation aborted.")
     except Exception:
@@ -60,6 +72,8 @@ def cmd_clear_data(args: argparse.Namespace) -> None:
     try:
         with engine.begin() as conn:
             conn.execute(text("PRAGMA foreign_keys = OFF"))
+            # Acquire SQLite's writer lock before inspecting or clearing tables.
+            conn.exec_driver_sql("BEGIN IMMEDIATE")
             inspector = inspect(conn)
             tables = [t for t in inspector.get_table_names() if t != "alembic_version"]
             for table in tables:

@@ -343,11 +343,12 @@ bash scripts/db.sh
 bash scripts/db.sh upgrade
 ```
 
-Destructive database commands (`clear`, `reset`, and `rollback`) require
-`lsof`, refuse databases with open users, and create an integrity-checked
-timestamped `.bak` beside the database before making changes. Stop notebook
-kernels and workers first. `both` pauses for review before applying its
-generated migration.
+Destructive database commands (`clear`, `reset`, and `rollback`) create an
+integrity-checked timestamped `.bak` beside the database before making changes.
+When available, `lsof` also checks for open connections. Only `reset` requires
+`lsof`, because it deletes the database file; `clear` preserves the schema and
+uses a SQLite write transaction. Stop notebook kernels and workers first.
+`both` pauses for review before applying its generated migration.
 
 Clean generated artifacts and logs with:
 

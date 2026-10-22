@@ -224,11 +224,17 @@ prepare_destructive_operation() {
         return 0
     fi
     [[ -f "$DB_PATH" ]] || { echo "Database does not exist: $DB_PATH" >&2; return 1; }
-    command -v lsof >/dev/null || { echo "Install lsof to check database users before destructive operations." >&2; return 1; }
-    users=$(lsof -t -- "$DB_PATH" "${DB_PATH}-wal" "${DB_PATH}-shm" 2>/dev/null || true)
-    if [[ -n "$users" ]]; then
-        echo "Database is in use. Stop notebooks and workers first." >&2
+    if command -v lsof >/dev/null; then
+        users=$(lsof -t -- "$DB_PATH" "${DB_PATH}-wal" "${DB_PATH}-shm" 2>/dev/null || true)
+        if [[ -n "$users" ]]; then
+            echo "Database is in use. Stop notebooks and workers first." >&2
+            return 1
+        fi
+    elif [[ "$COMMAND" == reset ]]; then
+        echo "Reset deletes the database file and requires lsof to check open connections. Install lsof or use clear to preserve the schema." >&2
         return 1
+    else
+        echo "  lsof unavailable: open connections cannot be inspected. Stop notebooks and workers first; SQLite locking still applies." >&2
     fi
     "${PYTHON_CMD[@]}" "$DB_OPS_PY" backup --db "$DB_PATH"
 }
