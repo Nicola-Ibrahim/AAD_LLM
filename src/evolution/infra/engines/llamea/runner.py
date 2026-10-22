@@ -42,6 +42,14 @@ warnings.filterwarnings(
 )
 
 
+class _InstanceScheduledLLaMEA(LLaMEA):
+    """Do not count an already-evaluated checkpoint parent as a new iteration."""
+
+    def initialize(self) -> None:
+        if not (self.population and self.run_history):
+            super().initialize()
+
+
 class LLaMEASession:
     """Manages the lifecycle and execution of a single LLaMEA synthesis session on an optimization problem.
 
@@ -155,7 +163,12 @@ class LLaMEASession:
             raw_fitness = None
 
         algorithm_name = best_so_far.name or "None"
-        self._print_report(algorithm_name, raw_fitness, best_error)
+        true_optimum = (
+            float(best_so_far.metadata["true_optimum"])
+            if self._config.instance_policy == "per_iteration" and best_error is not None
+            else self._problem.true_optimum
+        )
+        self._print_report(algorithm_name, raw_fitness, best_error, true_optimum)
 
         return SessionResult(
             problem_id=self._problem.problem_id,
@@ -169,7 +182,7 @@ class LLaMEASession:
             llm_name=self._llm_client.model.name,
             best_solution=synthesis_engine.best_so_far,
             error_msg="",
-            problem_profile=evaluator.problem_profile,
+            problem_profile=self._experiment.problem,
         )
 
     def _execute_loop(self) -> tuple[LLaMEA, Evaluator]:
@@ -195,6 +208,28 @@ class LLaMEASession:
 
     def run(self) -> SessionResult:
         """Runs the complete evolution loop for the problem."""
+        if (
+            self._config.instance_policy == "per_iteration"
+            and self._initial_iteration > 0
+            and not self._restart
+        ):
+            try:
+                previous = self._code_repo.load_candidate_instance(
+                    self._experiment_id, self._initial_iteration
+                )
+            except (FileNotFoundError, ValueError) as error:
+                raise ValueError(
+                    "Cannot resume an old fixed-instance session under per_iteration. "
+                    "Use fresh storage or explicitly replace the experiment."
+                ) from error
+            if previous.instance_id != self._problem.instance_id + self._initial_iteration - 1:
+                raise ValueError("The recorded instance schedule does not match this session.")
+            if previous.budget != self._config.budget:
+                raise ValueError("Cannot resume an instance schedule with a different budget.")
+            if not (self._archive_dir / "llamea_config.pkl").is_file():
+                raise ValueError(
+                    "The instance-scheduled session has no checkpoint; explicitly replace it instead."
+                )
         if self._restart:
             records = self._db_repo.load_by_ids([self._experiment_id])
             if not records or records[0].llm_name != self._llm_client.model.name:
@@ -256,9 +291,16 @@ class LLaMEASession:
                     synthesis_engine.logger = SimpleNamespace(dirname=str(self._archive_dir))
                     return synthesis_engine
             except Exception as e:
+                if self._config.instance_policy == "per_iteration" and self._initial_iteration:
+                    raise ValueError(
+                        "Cannot restore the instance-scheduled checkpoint; explicitly replace it instead."
+                    ) from e
                 self._logger.warning(f"Warm start failed, starting fresh: {e}")
 
-        synthesis_engine = LLaMEA(
+        engine_class = (
+            _InstanceScheduledLLaMEA if self._config.instance_policy == "per_iteration" else LLaMEA
+        )
+        synthesis_engine = engine_class(
             f=evaluator,
             llm=self._llm_client,
             n_parents=1,
@@ -306,6 +348,7 @@ class LLaMEASession:
         algorithm_name: str,
         raw_fitness: float | None,
         final_error: float | None,
+        true_optimum: float,
     ) -> None:
         """Prints a structured console report highlighting objective value and error metrics of the best candidate."""
         self._logger.task_complete(
@@ -313,7 +356,7 @@ class LLaMEASession:
             best_algo_name=algorithm_name,
             best_error=final_error,
             raw_obj=raw_fitness,
-            true_opt=self._problem.true_optimum,
+            true_opt=true_optimum,
         )
 
     def _cleanup_archive_dir(self) -> None:

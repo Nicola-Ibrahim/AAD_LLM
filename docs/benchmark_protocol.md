@@ -118,7 +118,25 @@ Do not run new-protocol evaluations over the old active results: stale-condition
 execution can replace those condition folders. The verified archive remains
 separate and must not be modified.
 
-Synthesis uses instance 1; the current benchmark schedule excludes that instance.
+The exploratory synthesis configuration uses `instance_policy = "per_iteration"`:
+the first candidate execution uses instance 1, the second uses instance 2, and so
+on through instance 10, with noise/calibration seed `42 + instance_id`. Failed
+candidate executions also advance this schedule. Each candidate executes only
+once; LLaMEA retains incumbent fitness from earlier instances, so this pilot does
+not provide matched-instance candidate comparisons. No incumbent re-evaluation
+or score normalization is added. Setting the policy to `"fixed"` retains the
+previous single-instance behavior.
+
+Actual instance IDs, noise seeds, true optima and budgets are recorded beside
+each candidate as `iter_N.instance.json`, and in the LLaMEA solution metadata.
+The existing database schema is unchanged; the experiment's instance field
+continues to describe its starting instance, not every candidate's instance.
+Resuming fixed-instance iterations under the new policy is rejected. Completed
+experiments are still skipped; starting the pilot requires fresh storage or an
+explicit replacement request using the existing `rerun_experiment_ids` API.
+The archived `one_instance` study is not modified.
+
+The current benchmark schedule excludes synthesis instances 1–10.
 Instances 2–20 were used by the previous benchmark protocol, so this migration
 does not make them previously unobserved tests or undo benchmark-guided reruns.
 Repeated champion trials do not measure repeated LLM discovery.
@@ -215,8 +233,9 @@ Noise strategy selection and magnitude are configuration-driven.
 per condition, a fixed budget of 100,000 calls, and a 30-second execution timeout.
 Trial `r` uses instance `first_instance_id + r - 1` and seed
 `random_seed + instance_id`; the configuration gives instances 11–30 and seeds 53–72.
-Synthesis uses instance 1, so the benchmark is not exclusively held-out-instance
-testing. Repeated champion trials are not independent synthesis replicates.
+These benchmark instances are disjoint from the exploratory synthesis schedule
+1–10. This does not erase historical benchmark-guided development. Repeated
+champion trials are not independent synthesis replicates.
 
 Native terminal reliability scores the returned point using the clean objective.
 Convergence traces describe the best clean point queried during search; these
@@ -308,10 +327,10 @@ benchmark completion first. Large finite errors above the secondary target are
 performance-review flags, not automatic rerun requests. The summary neither
 launches experiments nor writes or deletes result files.
 
-All workflows retain the existing dimension-scaled budgets, timeout, trial count,
-paired instance IDs 1–20 and seeds derived from the configured base seed. Because
-the synthesis instance is included, this is not exclusively held-out-instance
-evaluation. Baselines are general-purpose references; generated champions were
+Native workflows use the configured fixed budget of 100,000 calls, 20 paired
+benchmark instances 11–30, and seeds derived from the configured base seed.
+Generated champions retain their configured timeout; classical baselines do not
+have an equivalent process timeout. Baselines are general-purpose references; generated champions were
 selected for their source problem. Poor transfer can therefore demonstrate
 specialization without contradicting strong native performance.
 

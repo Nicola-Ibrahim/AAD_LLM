@@ -76,6 +76,10 @@ class CandidateEvaluationService:
         self._executor = executor
         self._consecutive_failures = 0
 
+    def set_problem(self, problem: BaseProblem) -> None:
+        """Change the execution objective while preserving the failure/stagnation history."""
+        self._problem = problem
+
     def evaluate(
         self,
         code: str,

@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 
 from evolution.application.interfaces.code_store import SynthesisCodeStore
+from evolution.application.synthesis.models import CandidateInstance
 from shared.config import DATA_DIR, PROJECT_ROOT
 
 
@@ -53,3 +54,15 @@ class CodeRepository(SynthesisCodeStore):
             raise ValueError(f"Refusing to remove symbolic-link code directory: {code_dir}")
         if code_dir.exists():
             shutil.rmtree(code_dir)
+
+    def save_candidate_instance(self, experiment_id: int, context: CandidateInstance) -> None:
+        directory = self.base_dir / f"experiment_{experiment_id}"
+        directory.mkdir(parents=True, exist_ok=True)
+        target = directory / f"iter_{context.iteration}.instance.json"
+        temporary = target.with_suffix(".json.tmp")
+        temporary.write_text(context.model_dump_json(indent=2) + "\n", encoding="utf-8")
+        temporary.replace(target)
+
+    def load_candidate_instance(self, experiment_id: int, iteration: int) -> CandidateInstance:
+        path = self.base_dir / f"experiment_{experiment_id}" / f"iter_{iteration}.instance.json"
+        return CandidateInstance.model_validate_json(path.read_text(encoding="utf-8"))

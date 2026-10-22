@@ -251,6 +251,7 @@ class SynthesisConfigRepository:
             budget=int(_number(evolution_cfg.get("budget"), 1_000_000)),
             timeout_seconds=timeout_sec,
             iterations=int(_number(evolution_cfg.get("iterations"), 10)),
+            instance_policy=_text(evolution_cfg.get("instance_policy"), "fixed"),
             stagnation_threshold=int(_number(evolution_cfg.get("stagnation_threshold"), 3)),
             convergence_threshold=float(_number(evolution_cfg.get("convergence_threshold"), 1e-6)),
             runs_per_config=int(_number(evolution_cfg.get("runs_per_config"), 1)),

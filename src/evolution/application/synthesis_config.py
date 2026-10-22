@@ -1,5 +1,7 @@
 """Typed synthesis matrix and campaign configuration models owned by the application."""
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from evolution.domain.enums import NoiseEnvironment, PromptStrategy, SynthesisMode
@@ -83,6 +85,7 @@ class SynthesisConfig(BaseModel):
     budget: int = 1_000_000
     timeout_seconds: float = 30.0
     iterations: int = 10
+    instance_policy: Literal["fixed", "per_iteration"] = "fixed"
     stagnation_threshold: int = 3
     convergence_threshold: float = 1e-6
     runs_per_config: int = 1
@@ -118,12 +121,13 @@ class SynthesisConfig(BaseModel):
         all_s = {s for m in self.synthesis_modes for s in m.strategies}
         return sorted(list(all_s), key=lambda x: str(x.value))
 
-    def to_session_config_dict(self) -> dict[str, int | float]:
+    def to_session_config_dict(self) -> dict[str, int | float | str]:
         """Derive a dictionary of session execution configuration parameters."""
         return {
             "budget": self.budget,
             "timeout_seconds": self.timeout_seconds,
             "iterations": self.iterations,
+            "instance_policy": self.instance_policy,
             "stagnation_threshold": self.stagnation_threshold,
             "convergence_threshold": self.convergence_threshold,
         }

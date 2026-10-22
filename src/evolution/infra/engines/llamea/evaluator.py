@@ -15,15 +15,17 @@ from llamea import Solution
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
-from evolution.application.synthesis.models import SessionConfig
+from evolution.application.synthesis.models import CandidateInstance, SessionConfig
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.vos import IterationMetadata, ProblemProfile
 from evolution.infra.engines.llamea.prompts import FeedbackRenderer
 from evolution.infra.logging import SynthesisLogger
 from evolution.infra.storage.code.repository import CodeRepository
+from shared.domain.noise_model import NoiseModelEnum
 from shared.domain.problem import BaseProblem
 from shared.infra.execution import AlgorithmExecutor
 from shared.infra.execution.candidate_executor import AlgorithmExecutorAdapter
+from shared.infra.problems.factory import BBOBProblemFactory
 
 
 class Evaluator:
@@ -44,6 +46,7 @@ class Evaluator:
         initial_iteration: int = 0,
     ) -> None:
         self._problem = problem
+        self._first_instance_id = problem.instance_id
         self._db_repo = db_repo
         self._code_repo = code_repo
         self._config = config
@@ -103,6 +106,17 @@ class Evaluator:
                 experiment_id=self._experiment_id,
             )
             code_path_str = str(code_path)
+        if self._code_repo is not None and self._config.instance_policy == "per_iteration":
+            self._code_repo.save_candidate_instance(
+                self._experiment_id,
+                CandidateInstance(
+                    iteration=self._current_iteration,
+                    instance_id=self._problem.instance_id,
+                    noise_seed=42 + self._problem.instance_id,
+                    true_optimum=self._problem.true_optimum,
+                    budget=self._config.budget,
+                ),
+            )
 
         updated_code = metadata.code.model_copy(update={"code_path": code_path_str})
         final_metadata = metadata.model_copy(
@@ -133,6 +147,32 @@ class Evaluator:
         """
         llm_gen_time = solution.metadata.get("llm_generation_time")
         total_gens = self._config.iterations
+
+        if self._config.instance_policy == "per_iteration":
+            if self._current_iteration >= total_gens:
+                raise ValueError("Instance schedule exhausted; no candidate was executed.")
+            instance_id = self._first_instance_id + self._current_iteration
+            self._problem = BBOBProblemFactory().create(
+                problem_id=self._problem.problem_id,
+                dim=self._problem.dim,
+                noise_std=self._problem.noise_std,
+                noise_model=NoiseModelEnum(self._problem.noise_model),
+                instance_id=instance_id,
+                seed=42 + instance_id,
+            )
+            self._problem.set_budget(self._config.budget)
+            self._candidate_evaluation_service.set_problem(self._problem)
+            solution.metadata.update(
+                instance_id=instance_id,
+                instance_policy="per_iteration",
+                noise_seed=42 + instance_id,
+                true_optimum=self._problem.true_optimum,
+            )
+            self._logger.info(
+                f"  Exp ID: #{self._experiment_id} | Candidate {self._current_iteration + 1}/{total_gens} | "
+                f"Instance: {instance_id} | Noise seed: {42 + instance_id} | "
+                f"f-opt: {self._problem.true_optimum:.3f}"
+            )
 
         result = self._candidate_evaluation_service.evaluate(
             code=solution.code,
