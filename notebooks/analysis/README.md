@@ -134,19 +134,19 @@ The grid-policy version is recorded in new result provenance.
 
 ## Preserved evaluation campaigns
 
-Current analysis selects instances 2–21 with seeds `42 + instance_id`, excluding
-the synthesis instance 1 without deleting it. Historical 1–20 results provide
-19 reusable scheduled trials. Complete terminal summaries require the missing
-instance 21; available search traces remain separate from terminal completeness.
+Current analysis selects instances 11–30 with seeds `42 + instance_id`, excluding
+the synthesis instance 1. Only matching instance–seed pairs enter current results;
+complete terminal summaries require all 20 scheduled trials. Available search
+traces remain separate from terminal completeness.
 Configuration-based numeric cache signatures distinguish the new schedule from
 old snapshots. After completing evaluation, recalculate and export analysis
 before using new figures or tables; previously exported files are not changed
 automatically.
 
 The retained previous study is backed up under
-`results/archives/2026-10-21_093547_before_new_study/`, including its synthesis
+`results/archives/2026-10-22_154910_before_instance_pilot_A/`, including its synthesis
 database, generated code, configurations, traces, statistics, figures and source.
-Its `manifest.json` records verification and database counts; `checksums.json`
+Its `manifest.json` records preservation and verification details; `checksums.json`
 identifies preserved artifacts. Older snapshot folders were explicitly removed.
 
 For historical figures, use `AnalysisResultsStore(archive / "results/analysis").load(...)`

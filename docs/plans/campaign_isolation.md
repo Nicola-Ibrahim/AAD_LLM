@@ -45,8 +45,8 @@ not disk loss; copy verified archives to separate storage as well. Keep the late
 fully verified snapshot. Delete superseded snapshots only on explicit request,
 after checking the retained snapshot's checksums and database integrity.
 
-As of 21 October 2026, the retained archive is
-`results/archives/2026-10-21_093547_before_new_study/`. Older snapshots were removed
+As of 22 October 2026, the retained archive is
+`results/archives/2026-10-22_154910_before_instance_pilot_A/`. Older snapshots were removed
 on request. Separate empty storage was prepared at
 `results/studies/2026-10-21_093547_pending_protocol/`; it is **inactive** and does
 not implement the campaign layout below. The active application's configurations

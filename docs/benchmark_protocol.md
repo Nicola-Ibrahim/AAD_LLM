@@ -52,7 +52,7 @@ flowchart TD
     Status -->|complete and valid| Cached["Reuse current trials"]
     Status -->|partial or not started| Resume["Retain valid instance–seed pairs<br/>run missing pairs only"]
     Status -->|stale schema, hash or champion validation| Restart["Restart this condition<br/>do not reuse stale trials"]
-    Resume --> Trials["Execute scheduled trials<br/>instances 2–21, seed base+instance, fixed budget 100,000"]
+    Resume --> Trials["Execute scheduled trials<br/>instances 11–30, seed base+instance, fixed budget 100,000"]
     Restart --> Trials
     Trials --> Provenance["Persist terminal errors + provenance<br/>clean traces + sampled noisy observations"]
     Cached --> Analysis["Read-only audit and analysis<br/>terminal completeness ≠ trace availability"]
@@ -63,7 +63,7 @@ This is normal resumption with `force_rerun=false`. Force rerun deliberately
 bypasses cache reuse. Historical skipped tails are excluded from reusable trials;
 confirmed execution failures remain observations.
 Trial reuse matches the recorded instance ID and seed, not the length of the
-terminal-error array. With the default `first_instance_id=2`, a historical
+terminal-error array. For example, with `first_instance_id=2`, a historical
 condition containing instances 1–20 reuses instances 2–20 and runs only instance
 21 (seed 63). Instance 1 stays in the stored history but is excluded from active
 coverage, terminal summaries, convergence, and ECDF calculations. After migration
@@ -102,7 +102,7 @@ are not failures and are excluded from aggregates.
 | Uncertainty | Wilson condition intervals; deterministic condition-cluster aggregate bootstrap. |
 | Budget | Benchmark attaches `set_budget`; excess queries warn and return the last value. Synthesis does not itself attach that cap. |
 | Timeout | Per-candidate `func_timeout`; session process workers are not a per-candidate security sandbox. |
-| Default benchmark trials | 20; instances 2–21, seed `42+instance_id`, fixed budget 100,000 calls per trial, champion timeout 30 seconds. |
+| Configured benchmark trials | 20; instances 11–30, seed `42+instance_id`, fixed budget 100,000 calls per trial, champion timeout 30 seconds. |
 
 Defaults come from [benchmark configuration](../configs/benchmark.toml).
 Both synthesis and benchmarking now configure a fixed allowance of 100,000 calls
@@ -214,7 +214,7 @@ Noise strategy selection and magnitude are configuration-driven.
 [Benchmark configuration](../configs/benchmark.toml) currently requests 20 trials
 per condition, a fixed budget of 100,000 calls, and a 30-second execution timeout.
 Trial `r` uses instance `first_instance_id + r - 1` and seed
-`random_seed + instance_id`; the defaults give instances 2–21 and seeds 44–63.
+`random_seed + instance_id`; the configuration gives instances 11–30 and seeds 53–72.
 Synthesis uses instance 1, so the benchmark is not exclusively held-out-instance
 testing. Repeated champion trials are not independent synthesis replicates.
 

@@ -9,8 +9,8 @@ trials_per_condition = 20
 
 # Trials use paired BBOB instance IDs and optimizer/noise seeds derived from this base.
 random_seed = 42
-first_instance_id = 2
-# Twenty held-out-instance trials: IDs 2..21, seed = random_seed + instance_id.
+first_instance_id = 11
+# Twenty held-out-instance trials: IDs 11..30, seed = random_seed + instance_id.
 # Instance sampling is unchanged; a multi-instance synthesis policy is not yet enabled.
 
 # Fixed objective-call allowance per trial, shared by champions and baselines.
