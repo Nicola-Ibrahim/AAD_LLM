@@ -7,7 +7,7 @@
 #   bash scripts/clean.sh [command]
 #
 # Commands:
-#   artifacts        Clean data artifacts (evolution_state, code, ioh_logs)
+#   artifacts        Clean data artifacts (evolution_state, code)
 #   logs             Clean application logs (logs/ directory)
 #   all              Clean both data artifacts and logs
 #   exit             Exit the CLI
@@ -19,7 +19,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Clean signal handling for interrupts (Ctrl+C)
-trap 'echo -e "\n  \033[1;33mExiting.\033[0m"; exit 0' INT
+trap 'echo -e "\n  \033[1;33mInterrupted.\033[0m"; exit 130' INT
+trap 'exit 143' TERM
 
 # ─── Colors ────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -75,17 +76,20 @@ clean_artifacts() {
     echo -e "  This will purge all files inside:"
     echo -e "    • ${BOLD}$PROJECT_ROOT/data/evolution_state${NC}"
     echo -e "    • ${BOLD}$PROJECT_ROOT/data/code${NC}"
-    echo -e "    • ${BOLD}$PROJECT_ROOT/data/ioh_logs${NC}"
+    echo -e "  IOH logs, benchmark results, and the database are preserved."
     echo ""
     
     if confirm "Are you sure you want to delete these artifact directories?"; then
         if confirm_type "CLEAN"; then
+            if [[ -L "$PROJECT_ROOT/data" || -L "$PROJECT_ROOT/data/evolution_state" || -L "$PROJECT_ROOT/data/code" ]]; then
+                echo "Refusing to clean symlinked data directories." >&2
+                return 1
+            fi
             echo -e "\n  ${YELLOW}Cleaning data artifact files...${NC}"
-            find "$PROJECT_ROOT/data/evolution_state" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/evolution_state"/* 2>/dev/null || true
-            find "$PROJECT_ROOT/data/code" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/code"/* 2>/dev/null || true
-            find "$PROJECT_ROOT/data/ioh_logs" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/data/ioh_logs"/* 2>/dev/null || true
-            mkdir -p "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code" "$PROJECT_ROOT/data/ioh_logs"
-            echo -e "  ${GREEN}✓ Evolution state archives, code files, and ioh_logs cleaned.${NC}"
+            mkdir -p "$PROJECT_ROOT/data/evolution_state" "$PROJECT_ROOT/data/code"
+            find "$PROJECT_ROOT/data/evolution_state" -mindepth 1 -delete
+            find "$PROJECT_ROOT/data/code" -mindepth 1 -delete
+            echo -e "  ${GREEN}✓ Evolution state and generated code cleaned.${NC}"
         else
             echo -e "  ${YELLOW}Aborted.${NC}"
         fi
@@ -101,9 +105,20 @@ clean_logs() {
     echo ""
 
     if confirm "Delete log files in $PROJECT_ROOT/logs?"; then
+        if [[ -L "$PROJECT_ROOT/logs" ]]; then
+            echo "Refusing to clean a symlinked logs directory." >&2
+            return 1
+        fi
+        if [[ -f "$PROJECT_ROOT/logs/server.pid" ]]; then
+            local server_pid
+            read -r server_pid < "$PROJECT_ROOT/logs/server.pid"
+            if [[ "$server_pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$server_pid" 2>/dev/null; then
+                echo "Stop the managed model server before cleaning its logs." >&2
+                return 1
+            fi
+        fi
         if [ -d "$PROJECT_ROOT/logs" ]; then
-            find "$PROJECT_ROOT/logs" -mindepth 1 -delete 2>/dev/null || rm -rf "$PROJECT_ROOT/logs"/* 2>/dev/null || true
-            mkdir -p "$PROJECT_ROOT/logs"
+            find "$PROJECT_ROOT/logs" -mindepth 1 -delete
         fi
         echo -e "  ${GREEN}✓ Log files cleaned.${NC}"
     else
@@ -119,7 +134,14 @@ if [[ $# -gt 0 ]]; then
             COMMAND="$1"
             shift
             ;;
+        -h|--help) sed -n '5,14p' "$0"; exit 0 ;;
+        exit|q|quit) exit 0 ;;
+        *) echo "Unknown command: $1 (expected artifacts, logs, or all)." >&2; exit 2 ;;
     esac
+fi
+if [[ $# -gt 0 ]]; then
+    echo "Unexpected argument: $1" >&2
+    exit 2
 fi
 
 # ─── Interactive Menu (if no command given) ────────────────
@@ -129,7 +151,7 @@ if [[ -z "$COMMAND" ]]; then
             print_header
             echo -e "  ${BOLD}Select cleanup scope:${NC}"
             echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
-            echo -e "    ${BOLD}1)${NC} Clean data artifacts (evolution_state, code, ioh_logs)"
+            echo -e "    ${BOLD}1)${NC} Clean data artifacts (evolution_state, code)"
             echo -e "    ${BOLD}2)${NC} Clean log files      (logs/ directory)"
             echo -e "    ${BOLD}3)${NC} Clean ALL           (data artifacts + logs)"
             echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"

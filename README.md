@@ -343,11 +343,21 @@ bash scripts/db.sh
 bash scripts/db.sh upgrade
 ```
 
+Destructive database commands (`clear`, `reset`, and `rollback`) require
+`lsof`, refuse databases with open users, and create an integrity-checked
+timestamped `.bak` beside the database before making changes. Stop notebook
+kernels and workers first. `both` pauses for review before applying its
+generated migration.
+
 Clean generated artifacts and logs with:
 
 ```bash
 bash scripts/clean.sh
 ```
+
+Artifact cleanup removes only generated code and evolution state; it preserves
+IOH logs, the database, and benchmark results. Log cleanup is a separate command
+and refuses to remove logs while the recorded model server is running.
 
 ## Project layout
 

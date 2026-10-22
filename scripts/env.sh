@@ -21,10 +21,29 @@
 set -euo pipefail
 
 # Clean signal handling for interrupts (Ctrl+C)
-trap 'echo -e "\n  \033[1;33mExiting.\033[0m"; exit 0' INT
+trap 'echo -e "\n  \033[1;33mInterrupted.\033[0m"; exit 130' INT
+trap 'exit 143' TERM
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Reject invalid input before creating files or installing anything.
+case "${1:-}" in
+    -h|--help) sed -n '5,19p' "$0"; exit 0 ;;
+    exit|q|quit) exit 0 ;;
+    ""|fresh|sync|quick|inspect|gpu) ;;
+    *) echo "Unknown command: $1" >&2; exit 2 ;;
+esac
+if [[ $# -gt 2 ]]; then
+    echo "Too many arguments." >&2
+    exit 2
+fi
+if [[ $# -eq 2 ]]; then
+    case "$2" in
+        full|all|extras|minimal|core) ;;
+        *) echo "Unknown installation mode: $2" >&2; exit 2 ;;
+    esac
+fi
 
 # ─── Colors ────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -42,7 +61,8 @@ print_header() {
     echo ""
 }
 
-# ─── Ensure .env exists ────────────────────────────────────
+# Only setup commands create .env; inspection is read-only.
+ensure_env_file() {
 if [ ! -f "$PROJECT_ROOT/.env" ]; then
     echo -e "  ${CYAN}[i] Creating default .env file...${NC}"
     printf "%s\n" \
@@ -62,13 +82,7 @@ if [ ! -f "$PROJECT_ROOT/.env" ]; then
         "LLM_SERVER_N_THREADS=8" > "$PROJECT_ROOT/.env"
     echo -e "  ${GREEN}✓ Default .env file created.${NC}"
 fi
-
-# Auto-load environment variables from .env if present
-if [ -r "$PROJECT_ROOT/.env" ]; then
-    set -a
-    source "$PROJECT_ROOT/.env"
-    set +a
-fi
+}
 
 # ─── Parse CLI Command & Mode ──────────────────────────────
 COMMAND=""
@@ -161,6 +175,17 @@ if [[ -z "$COMMAND" ]]; then
 fi
 
 # ─── Helper: Resolve Python ────────────────────────────────
+case "$COMMAND" in
+    fresh|sync|quick) ensure_env_file ;;
+esac
+if [ -r "$PROJECT_ROOT/.env" ]; then
+    set -a
+    source "$PROJECT_ROOT/.env"
+    set +a
+fi
+# uv must always operate on this project, regardless of the caller's directory.
+cd "$PROJECT_ROOT"
+
 resolve_python() {
     if [ -f "$PROJECT_ROOT/.venv/bin/python" ]; then
         echo "$PROJECT_ROOT/.venv/bin/python"
@@ -327,14 +352,19 @@ case "$COMMAND" in
             fi
             echo -e "  ${GREEN}✓ Fresh install complete.${NC}"
         else
-            local python_cmd
-            python_cmd=$(resolve_python)
+            setup_python=$(resolve_python)
+            if [[ -z "$setup_python" ]]; then
+                echo "Python is required to create .venv." >&2
+                exit 1
+            fi
+            "$setup_python" -m venv "$PROJECT_ROOT/.venv"
+            setup_python="$PROJECT_ROOT/.venv/bin/python"
             echo -e "  ${YELLOW}[!] uv not found. Using pip...${NC}"
-            "$python_cmd" -m pip install --upgrade pip
+            "$setup_python" -m pip install --upgrade pip
             if [ "$INSTALL_EXTRAS" = "true" ]; then
-                "$python_cmd" -m pip install -e "$PROJECT_ROOT[gemini,llama,notebook]"
+                "$setup_python" -m pip install -e "$PROJECT_ROOT[gemini,llama,notebook]"
             else
-                "$python_cmd" -m pip install -e "$PROJECT_ROOT"
+                "$setup_python" -m pip install -e "$PROJECT_ROOT"
             fi
             echo -e "  ${GREEN}✓ pip install complete.${NC}"
         fi
@@ -379,13 +409,20 @@ case "$COMMAND" in
             fi
             echo -e "  ${GREEN}✓ Quick sync complete.${NC}"
         else
-            local python_cmd
-            python_cmd=$(resolve_python)
+            setup_python=$(resolve_python)
+            if [[ -z "$setup_python" ]]; then
+                echo "Python is required to create .venv." >&2
+                exit 1
+            fi
+            if [[ ! -x "$PROJECT_ROOT/.venv/bin/python" ]]; then
+                "$setup_python" -m venv "$PROJECT_ROOT/.venv"
+            fi
+            setup_python="$PROJECT_ROOT/.venv/bin/python"
             echo -e "  ${YELLOW}[!] uv not found. Using pip...${NC}"
             if [ "$INSTALL_EXTRAS" = "true" ]; then
-                "$python_cmd" -m pip install -e "$PROJECT_ROOT[gemini,llama,notebook]"
+                "$setup_python" -m pip install -e "$PROJECT_ROOT[gemini,llama,notebook]"
             else
-                "$python_cmd" -m pip install -e "$PROJECT_ROOT"
+                "$setup_python" -m pip install -e "$PROJECT_ROOT"
             fi
             echo -e "  ${GREEN}✓ pip install complete.${NC}"
         fi

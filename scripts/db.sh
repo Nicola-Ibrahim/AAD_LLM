@@ -23,15 +23,29 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Clean signal handling for interrupts (Ctrl+C)
-trap 'echo -e "\n  \033[1;33mExiting.\033[0m"; exit 0' INT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+case "${1:-}" in
+    -h|--help) sed -n '5,18p' "$0"; exit 0 ;;
+    exit|q|quit) exit 0 ;;
+    ""|upgrade|revision|rollback|downgrade|both|revision-upgrade|clear|reset|status) ;;
+    *) echo "Unknown database command: $1" >&2; exit 2 ;;
+esac
+case "${1:-}" in
+    revision|both|revision-upgrade) ;;
+    *) if [[ $# -gt 1 ]]; then echo "Unexpected database arguments." >&2; exit 2; fi ;;
+esac
 
 # ─── Load Environment ──────────────────────────────────────
 ENV_FILE="$PROJECT_ROOT/.env"
+EXPLICIT_DATABASE_URL="${DATABASE_URL:-}"
 if [ -r "$ENV_FILE" ]; then
     set -a
     source "$ENV_FILE"
     set +a
 fi
+if [[ -n "$EXPLICIT_DATABASE_URL" ]]; then export DATABASE_URL="$EXPLICIT_DATABASE_URL"; fi
 
 # ─── Colors ────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -167,32 +181,57 @@ fi
 
 # ─── Resolve Database Path ─────────────────────────────────
 DB_PATH="${DATABASE_URL:-sqlite:///$PROJECT_ROOT/data/db.sqlite3}"
+if [[ "$DB_PATH" != sqlite:///* ]]; then
+    echo "Only file-backed SQLite database URLs are supported." >&2
+    exit 2
+fi
 DB_PATH="${DB_PATH#sqlite:///}"
+if [[ -z "$DB_PATH" || "$DB_PATH" == :memory: ]]; then
+    echo "A SQLite database file path is required." >&2
+    exit 2
+fi
 
 if [[ ! "$DB_PATH" = /* ]]; then
     DB_PATH="$PROJECT_ROOT/$DB_PATH"
 fi
 
-mkdir -p "$(dirname "$DB_PATH")"
 export DATABASE_URL="sqlite:///$DB_PATH"
 
 # ─── Locate Python ─────────────────────────────────────────
-PYTHON_CMD="python3"
+PYTHON_CMD=(python3)
 if [ -f "$PROJECT_ROOT/.venv/bin/python" ]; then
-    PYTHON_CMD="$PROJECT_ROOT/.venv/bin/python"
+    PYTHON_CMD=("$PROJECT_ROOT/.venv/bin/python")
 elif command -v uv &> /dev/null; then
-    PYTHON_CMD="uv run python"
+    PYTHON_CMD=(uv run --project "$PROJECT_ROOT" python)
 fi
 
 DB_OPS_PY="$SCRIPT_DIR/utils/db_ops.py"
 
 # ─── Locate Alembic ────────────────────────────────────────
-ALEMBIC_CMD="alembic"
-if [ -f "$PROJECT_ROOT/.venv/bin/python" ]; then
-    ALEMBIC_CMD="$PROJECT_ROOT/.venv/bin/python -m alembic"
-elif command -v uv &> /dev/null; then
-    ALEMBIC_CMD="uv run alembic"
+ALEMBIC_CMD=("${PYTHON_CMD[@]}" -m alembic)
+
+DB_PATH=$("${PYTHON_CMD[@]}" -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve())' "$DB_PATH")
+export DATABASE_URL="sqlite:///$DB_PATH"
+if [[ "$DB_PATH" == */archives/* && "$COMMAND" != status ]]; then
+    echo "Archived databases must remain untouched." >&2
+    exit 1
 fi
+
+prepare_destructive_operation() {
+    local users
+    if [[ "$COMMAND" == reset && ! -e "$DB_PATH" && ! -e "${DB_PATH}-wal" && ! -e "${DB_PATH}-shm" ]]; then
+        mkdir -p "$(dirname "$DB_PATH")"
+        return 0
+    fi
+    [[ -f "$DB_PATH" ]] || { echo "Database does not exist: $DB_PATH" >&2; return 1; }
+    command -v lsof >/dev/null || { echo "Install lsof to check database users before destructive operations." >&2; return 1; }
+    users=$(lsof -t -- "$DB_PATH" "${DB_PATH}-wal" "${DB_PATH}-shm" 2>/dev/null || true)
+    if [[ -n "$users" ]]; then
+        echo "Database is in use. Stop notebooks and workers first." >&2
+        return 1
+    fi
+    "${PYTHON_CMD[@]}" "$DB_OPS_PY" backup --db "$DB_PATH"
+}
 
 # ─── Print DB info for destructive commands ────────────────
 if [[ "$COMMAND" =~ ^(clear|reset|rollback|downgrade)$ ]]; then
@@ -204,15 +243,17 @@ fi
 case "$COMMAND" in
 
     upgrade)
+        mkdir -p "$(dirname "$DB_PATH")"
         echo -e "  ${GREEN}Applying pending migrations to: $DB_PATH${NC}"
-        (cd "$PROJECT_ROOT" && $ALEMBIC_CMD upgrade head)
+        (cd "$PROJECT_ROOT" && "${ALEMBIC_CMD[@]}" upgrade head)
         echo -e "  ${GREEN}✓ Database is up to date.${NC}"
         ;;
 
     rollback|downgrade)
         echo -e "  ${YELLOW}Rolling back the last migration on: $DB_PATH${NC}"
         if confirm "This will undo the last schema change. Continue?"; then
-            (cd "$PROJECT_ROOT" && $ALEMBIC_CMD downgrade -1)
+            prepare_destructive_operation
+            (cd "$PROJECT_ROOT" && "${ALEMBIC_CMD[@]}" downgrade -1)
             echo -e "  ${GREEN}✓ Rollback complete.${NC}"
         else
             echo "  Aborted."
@@ -221,7 +262,7 @@ case "$COMMAND" in
 
     revision)
         echo -e "  Generating new migration script for: $DB_PATH"
-        (cd "$PROJECT_ROOT" && $ALEMBIC_CMD revision --autogenerate "$@")
+        (cd "$PROJECT_ROOT" && "${ALEMBIC_CMD[@]}" revision --autogenerate "$@")
         echo -e "  ${GREEN}✓ Migration script created.${NC}"
         ;;
 
@@ -231,9 +272,13 @@ case "$COMMAND" in
         if [[ $# -eq 0 ]]; then
             set -- -m "auto_migration"
         fi
-        (cd "$PROJECT_ROOT" && $ALEMBIC_CMD revision --autogenerate "$@")
-        (cd "$PROJECT_ROOT" && $ALEMBIC_CMD upgrade head)
-        echo -e "  ${GREEN}✓ Migration created and applied.${NC}"
+        (cd "$PROJECT_ROOT" && "${ALEMBIC_CMD[@]}" revision --autogenerate "$@")
+        if confirm "Review the generated migration first. Apply it now?"; then
+            (cd "$PROJECT_ROOT" && "${ALEMBIC_CMD[@]}" upgrade head)
+            echo -e "  ${GREEN}✓ Migration created and applied.${NC}"
+        else
+            echo "  Migration created but not applied."
+        fi
         ;;
 
     clear)
@@ -245,8 +290,9 @@ case "$COMMAND" in
         echo ""
         if confirm "Are you sure you want to clear ALL data?"; then
             if confirm_type "CLEAR"; then
+                prepare_destructive_operation
                 echo -e "\n  ${YELLOW}Clearing all rows...${NC}"
-                "$PYTHON_CMD" "$DB_OPS_PY" clear-data --db "$DB_PATH"
+                "${PYTHON_CMD[@]}" "$DB_OPS_PY" clear-data --db "$DB_PATH"
                 echo -e "  ${GREEN}✓ All data cleared. Schema intact.${NC}"
                 echo -e "  ${CYAN}[i] Note: To clean cached data files, use: bash scripts/clean.sh${NC}"
                 echo ""
@@ -267,10 +313,11 @@ case "$COMMAND" in
         echo ""
         if confirm "Are you absolutely sure you want to RESET the database?"; then
             if confirm_type "RESET"; then
+                prepare_destructive_operation
                 echo -e "\n  ${YELLOW}Deleting database file...${NC}"
                 rm -f "$DB_PATH" "${DB_PATH}-wal" "${DB_PATH}-shm"
                 echo -e "  ${YELLOW}Re-applying all migrations...${NC}"
-                (cd "$PROJECT_ROOT" && $ALEMBIC_CMD upgrade head)
+                (cd "$PROJECT_ROOT" && "${ALEMBIC_CMD[@]}" upgrade head)
                 echo -e "  ${GREEN}✓ Database reset complete. Fresh schema applied.${NC}"
                 echo -e "  ${CYAN}[i] Note: To clean cached data files, use: bash scripts/clean.sh${NC}"
                 echo ""
@@ -286,13 +333,17 @@ case "$COMMAND" in
         print_header
         print_db_path
         echo -e "  ${BOLD}Migration Status:${NC}"
-        (cd "$PROJECT_ROOT" && $ALEMBIC_CMD current) || true
+        if [[ -f "$DB_PATH" ]]; then
+            (cd "$PROJECT_ROOT" && "${ALEMBIC_CMD[@]}" current)
+        else
+            echo "  Database not initialized."
+        fi
         echo ""
         echo -e "  ${BOLD}Migration History:${NC}"
-        (cd "$PROJECT_ROOT" && $ALEMBIC_CMD history --verbose) || true
+        (cd "$PROJECT_ROOT" && "${ALEMBIC_CMD[@]}" history --verbose)
         if [[ -f "$DB_PATH" ]]; then
             echo ""
-            "$PYTHON_CMD" "$DB_OPS_PY" table-stats --db "$DB_PATH"
+            "${PYTHON_CMD[@]}" "$DB_OPS_PY" table-stats --db "$DB_PATH"
         fi
         ;;
 

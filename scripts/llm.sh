@@ -24,10 +24,19 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="$PROJECT_ROOT/logs"
 PID_FILE="$LOG_DIR/server.pid"
 LOG_FILE="$LOG_DIR/model_server.log"
-TARGET_DIR="${MODELS_DIR:-$HOME/models}"
+IDENTITY_FILE="$PID_FILE.identity"
+
+case "${1:-}" in
+    -h|--help) sed -n '5,17p' "$0"; exit 0 ;;
+    exit|q|quit) exit 0 ;;
+    ""|start|stop|status|download|cleanup|list) ;;
+    *) echo "Unknown model-server command: $1" >&2; exit 2 ;;
+esac
+if [[ $# -gt 1 ]]; then echo "Unexpected model-server arguments." >&2; exit 2; fi
 
 # Clean signal handling for interrupts (Ctrl+C)
-trap 'echo -e "\n  \033[1;33mExiting.\033[0m"; exit 0' INT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # ─── Colors ────────────────────────────────────────────────
 RED='\033[0;31m'
@@ -39,12 +48,21 @@ NC='\033[0m' # No Color
 
 # ─── Load Environment ──────────────────────────────────────
 if [ -r "$PROJECT_ROOT/.env" ]; then
+    # Existing process environment takes precedence over .env defaults.
+    ENV_OVERRIDES=()
+    for env_key in MODELS_DIR HF_FILE MODEL_REPO MODEL_FILE LLM_SERVER_HOST LLM_SERVER_PORT LLM_SERVER_N_CTX LLM_SERVER_N_THREADS LLM_SERVER_N_GPU_LAYERS LLM_SERVER_VERBOSE; do
+        if [[ -n "${!env_key+x}" ]]; then ENV_OVERRIDES+=("$env_key=${!env_key}"); fi
+    done
     set -a
     source "$PROJECT_ROOT/.env"
     set +a
+    for env_override in ${ENV_OVERRIDES[@]+"${ENV_OVERRIDES[@]}"}; do export "$env_override"; done
 fi
+TARGET_DIR="${MODELS_DIR:-$HOME/models}"
 
 HOST="${LLM_SERVER_HOST:-0.0.0.0}"
+PROBE_HOST="$HOST"
+case "$PROBE_HOST" in 0.0.0.0) PROBE_HOST=127.0.0.1 ;; ::) PROBE_HOST='[::1]' ;; esac
 PORT="${LLM_SERVER_PORT:-1234}"
 N_CTX="${LLM_SERVER_N_CTX:-8192}"
 N_THREADS="${LLM_SERVER_N_THREADS:-8}"
@@ -55,14 +73,33 @@ MODEL_REPO="${MODEL_REPO:-}"
 MODEL_FILE="${MODEL_FILE:-}"
 
 # ─── Locate Python ─────────────────────────────────────────
-PYTHON_CMD="python3"
+PYTHON_CMD=(python3)
 if [ -f "$PROJECT_ROOT/.venv/bin/python" ]; then
-    PYTHON_CMD="$PROJECT_ROOT/.venv/bin/python"
+    PYTHON_CMD=("$PROJECT_ROOT/.venv/bin/python")
 elif command -v uv &> /dev/null; then
-    PYTHON_CMD="uv run python"
+    PYTHON_CMD=(uv run --project "$PROJECT_ROOT" python)
 fi
 
 PRESETS_PY="$SCRIPT_DIR/utils/llm_presets.py"
+
+json_count() {
+    "${PYTHON_CMD[@]}" -c 'import json,sys; print(len(json.load(sys.stdin)))' <<< "$1"
+}
+
+json_field() {
+    "${PYTHON_CMD[@]}" -c 'import json,sys; print(json.load(sys.stdin)[int(sys.argv[1])].get(sys.argv[2], ""))' "$2" "$3" <<< "$1"
+}
+
+server_model() {
+    local response
+    response=$(curl --fail --silent --show-error --connect-timeout 1 --max-time 2 "http://$PROBE_HOST:$PORT/v1/models" 2>/dev/null) || return 1
+    "${PYTHON_CMD[@]}" -c 'import json,sys; value=json.load(sys.stdin)["data"][0]["id"]; assert isinstance(value,str) and value; print(value)' <<< "$response" 2>/dev/null
+}
+
+matching_model() {
+    local active_model="$1"
+    [[ "$active_model" == "$MODEL_PATH" || "$active_model" == "${MODEL_PATH##*/}" ]]
+}
 
 # ─── Helpers ───────────────────────────────────────────────
 print_header() {
@@ -75,23 +112,24 @@ print_header() {
 
 format_kb() {
     local kb=$1
-    "$PYTHON_CMD" -c "
-kb = float('$kb')
+    "${PYTHON_CMD[@]}" -c "
+import sys
+kb = float(sys.argv[1])
 if kb >= 1048576:
     print(f'{kb/1048576:.2f} GB')
 elif kb >= 1024:
     print(f'{kb/1024:.2f} MB')
 else:
     print(f'{kb} KB')
-" 2>/dev/null || echo "${kb} KB"
+" "$kb" 2>/dev/null || echo "${kb} KB"
 }
 
 show_pid_stats() {
     local pid=$1
     if kill -0 "$pid" 2>/dev/null; then
         local cpu="" mem="" rss="" vsz="" elapsed="" started=""
-        read -r cpu mem rss vsz < <(ps -p "$pid" -o %cpu=,%mem=,rss=,vsz= 2>/dev/null || true)
-        read -r elapsed started < <(ps -p "$pid" -o etime=,lstart= 2>/dev/null || true)
+        read -r cpu mem rss vsz < <(ps -p "$pid" -o %cpu=,%mem=,rss=,vsz= 2>/dev/null || true) || true
+        read -r elapsed started < <(ps -p "$pid" -o etime=,lstart= 2>/dev/null || true) || true
         
         if [ -n "$rss" ]; then
             local rss_formatted
@@ -204,47 +242,47 @@ if [[ -z "$COMMAND" ]]; then
 fi
 
 # ─── Stop Logic ────────────────────────────────────────────
-stop_server() {
-    local stopped=0
-    
-    if [ -f "$PID_FILE" ]; then
-        local pid
-        pid=$(cat "$PID_FILE")
-        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            echo -e "  ${CYAN}[i] Stopping server from PID file (PID $pid)...${NC}"
-            kill "$pid" 2>/dev/null || true
-            stopped=1
-        fi
-        rm -f "$PID_FILE"
-    fi
-
-    local pids
-    pids=$(pgrep -f "llama_cpp.server" 2>/dev/null || true)
-    if [ -n "$pids" ]; then
-        echo -e "  ${CYAN}[i] Stopping other active model server processes (PIDs: $pids)...${NC}"
-        kill $pids 2>/dev/null || true
-        stopped=1
-    fi
-
-    if command -v lsof &>/dev/null; then
-        local port_pid
-        port_pid=$(lsof -t -i :"$PORT" 2>/dev/null || true)
-        if [ -n "$port_pid" ]; then
-            echo -e "  ${CYAN}[i] Stopping process holding port $PORT (PID $port_pid)...${NC}"
-            kill "$port_pid" 2>/dev/null || true
-            stopped=1
-        fi
-    fi
-
-    if [ "$stopped" -eq 1 ]; then
-        echo -e "  ${GREEN}✓ Model server stopped cleanly.${NC}"
+managed_server() {
+    local pid="$1" command started
+    [[ "$pid" =~ ^[0-9]+$ && "$pid" -gt 1 ]] || return 1
+    kill -0 "$pid" 2>/dev/null || return 1
+    command=$(ps -p "$pid" -o command=) || return 1
+    [[ "$command" == *"-m llama_cpp.server"* ]] || return 1
+    if [[ -f "$IDENTITY_FILE" ]]; then
+        started=$(ps -p "$pid" -o lstart=) || return 1
+        [[ "$started" == "$(< "$IDENTITY_FILE")" ]] || return 1
     else
-        echo -e "  ${GREEN}✓ No active model server found running.${NC}"
+        [[ "$command" == *"$PROJECT_ROOT/.venv/"* ]] || return 1
     fi
+}
+
+stop_server() {
+    local pid
+    if [[ ! -f "$PID_FILE" ]]; then
+        echo "  No managed server PID file found; other processes are left untouched."
+        return 0
+    fi
+    pid=$(< "$PID_FILE")
+    [[ "$pid" =~ ^[0-9]+$ && "$pid" -gt 1 ]] || { echo "Invalid server PID file." >&2; return 1; }
+    if kill -0 "$pid" 2>/dev/null; then
+        managed_server "$pid" || { echo "PID $pid is not a verified project server; refusing to stop it." >&2; return 1; }
+        kill "$pid"
+        for ((attempt=0; attempt<25; attempt++)); do
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 0.2
+        done
+        if kill -0 "$pid" 2>/dev/null; then
+            echo "Server is still stopping; PID file retained. No forced kill performed." >&2
+            return 1
+        fi
+        echo -e "  ${GREEN}✓ Model server stopped.${NC}"
+    fi
+    rm -f "$PID_FILE" "$IDENTITY_FILE"
 }
 
 # ─── Start Logic ───────────────────────────────────────────
 start_server() {
+    [[ ! -L "$LOG_DIR" ]] || { echo "Refusing to write through a symlinked logs directory." >&2; return 1; }
     mkdir -p "$LOG_DIR"
 
     if [ "${N_GPU_LAYERS:-0}" -eq 0 ] && [ -z "${LLM_SERVER_N_GPU_LAYERS:-}" ]; then
@@ -264,9 +302,9 @@ start_server() {
         fi
     fi
 
-    MODELS_JSON=$("$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --gguf-only --format json)
+    MODELS_JSON=$("${PYTHON_CMD[@]}" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --gguf-only --format json)
     local total_count
-    total_count=$("$PYTHON_CMD" -c "import json; print(len(json.loads('''$MODELS_JSON''')))")
+    total_count=$(json_count "$MODELS_JSON")
     local selected_model=""
     local selected_path=""
 
@@ -275,7 +313,7 @@ start_server() {
             while true; do
                 print_header
                 echo -e "  ${CYAN}[i] Available LLM Models (sorted by parameter size):${NC}"
-                "$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --gguf-only --format card
+                "${PYTHON_CMD[@]}" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --gguf-only --format card
                 
                 echo -e "  ${BOLD}Options:${NC}"
                 echo -e "    - Type the number of the model to serve (e.g. ${CYAN}'1'${NC})."
@@ -292,8 +330,8 @@ start_server() {
                 fi
                 
                 if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$total_count" ]; then
-                    selected_model=$("$PYTHON_CMD" -c "import json; print(json.loads('''$MODELS_JSON''')[$((choice - 1))]['name'])")
-                    selected_path=$("$PYTHON_CMD" -c "import json; print(json.loads('''$MODELS_JSON''')[$((choice - 1))]['path'])")
+                    selected_model=$(json_field "$MODELS_JSON" "$((choice - 1))" name)
+                    selected_path=$(json_field "$MODELS_JSON" "$((choice - 1))" path)
                     break
                 else
                     echo -e "  ${RED}✗ ERROR: Invalid choice '$choice'. Please choose a number between 1 and $total_count.${NC}"
@@ -310,8 +348,8 @@ start_server() {
             selected_model="$HF_FILE"
             selected_path="$TARGET_DIR/$selected_model"
         elif [ "$total_count" -gt 0 ]; then
-            selected_model=$("$PYTHON_CMD" -c "import json; print(json.loads('''$MODELS_JSON''')[0]['name'])")
-            selected_path=$("$PYTHON_CMD" -c "import json; print(json.loads('''$MODELS_JSON''')[0]['path'])")
+            selected_model=$(json_field "$MODELS_JSON" 0 name)
+            selected_path=$(json_field "$MODELS_JSON" 0 path)
             echo -e "  ${CYAN}[i] Non-interactive mode: Automatically selecting first available model: $selected_model${NC}"
         else
             echo -e "  ${RED}✗ ERROR: No GGUF model files found in: $TARGET_DIR${NC}"
@@ -326,21 +364,33 @@ start_server() {
         exit 1
     fi
 
-    if lsof -i :$PORT &>/dev/null; then
+    local active_model
+    if active_model=$(server_model); then
+        matching_model "$active_model" || { echo "Port $PORT serves a different model: $active_model" >&2; return 1; }
+        echo "  Selected model is already responsive on port $PORT."
+        return 0
+    fi
+    if command -v lsof >/dev/null && lsof -iTCP:"$PORT" -sTCP:LISTEN &>/dev/null; then
         echo -e "  ${CYAN}[i] Checking port $PORT occupancy...${NC}"
-        if curl -s "http://localhost:$PORT/v1/models" &>/dev/null; then
-            echo -e "  ${GREEN}✓ Server is already active and responsive on port $PORT.${NC}"
-            echo -e "  No need to launch a new instance."
-            echo ""
-            return 0
-        else
             echo -e "  ${RED}✗ ERROR: Port $PORT is occupied by another process.${NC}"
             echo -e "  Please stop the occupying process first before starting the server."
             echo ""
             exit 1
-        fi
     fi
 
+    if [[ -f "$PID_FILE" ]]; then
+        local previous_pid
+        previous_pid=$(< "$PID_FILE")
+        if [[ ! "$previous_pid" =~ ^[0-9]+$ || "$previous_pid" -le 1 ]]; then
+            echo "Invalid server PID file; inspect it before starting another server." >&2
+            return 1
+        fi
+        if kill -0 "$previous_pid" 2>/dev/null; then
+            echo "A server PID is already recorded. Check status or stop it before starting another." >&2
+            return 1
+        fi
+        rm -f "$PID_FILE" "$IDENTITY_FILE"
+    fi
     echo -e "  ${CYAN}[i] Starting llama-cpp-python server...${NC}"
     echo -e "    ${BOLD}Host:${NC}       $HOST"
     echo -e "    ${BOLD}Port:${NC}       $PORT"
@@ -389,7 +439,7 @@ start_server() {
         fi
     fi
 
-    "$PYTHON_CMD" -m llama_cpp.server \
+    "${PYTHON_CMD[@]}" -m llama_cpp.server \
         --model "$MODEL_PATH" \
         --host "$HOST" \
         --port "$PORT" \
@@ -400,28 +450,37 @@ start_server() {
         > "$LOG_FILE" 2>&1 &
 
     local server_pid=$!
+    OWNED_PID="$server_pid"
+    TAIL_PID=""
+    trap cleanup_started_server EXIT
     echo "$server_pid" > "$PID_FILE"
+    ps -p "$server_pid" -o lstart= > "$IDENTITY_FILE"
     echo -e "  ${CYAN}[i] Spawned background process with PID: $server_pid${NC}"
     echo -ne "  ${CYAN}[i] Waiting for server to become responsive...${NC} "
 
-    for i in {1..30}; do
-        if curl -s "http://localhost:$PORT/v1/models" &>/dev/null; then
+    local deadline=$((SECONDS + 60))
+    while (( SECONDS < deadline )); do
+        kill -0 "$server_pid" 2>/dev/null || { echo "Server exited during startup; inspect $LOG_FILE." >&2; return 1; }
+        if active_model=$(server_model) && matching_model "$active_model"; then
             echo ""
             echo ""
             echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════╗${NC}"
             echo -e "  ${GREEN}✓ Server is ready and responsive!${NC}"
             echo -e "  ${BOLD}API Endpoint:${NC} http://$HOST:$PORT/v1"
-            echo -e "  Press ${YELLOW}Ctrl+C${NC} in this shell to view logs, or stop it later using:"
+            echo -e "  Press ${YELLOW}Ctrl+C${NC} to stop, or use another shell:"
             echo -e "  ${BOLD}bash scripts/llm.sh stop${NC}"
             echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════╝${NC}"
             echo ""
             
-            trap stop_server INT TERM
             tail -f "$LOG_FILE" &
-            local tail_pid=$!
-            wait "$server_pid" 2>/dev/null || true
-            kill "$tail_pid" 2>/dev/null || true
-            return 0
+            TAIL_PID=$!
+            local server_status=0
+            wait "$server_pid" || server_status=$?
+            OWNED_PID=""
+            if [[ -f "$PID_FILE" && "$(< "$PID_FILE")" == "$server_pid" ]]; then
+                rm -f "$PID_FILE" "$IDENTITY_FILE"
+            fi
+            return "$server_status"
         fi
         echo -n "•"
         sleep 2
@@ -433,6 +492,19 @@ start_server() {
     echo -e "    ${BOLD}Log path:${NC} $LOG_FILE"
     echo ""
     exit 1
+}
+
+cleanup_started_server() {
+    # These are direct children created by this invocation, never port/global matches.
+    if [[ -n "${TAIL_PID:-}" ]]; then kill "$TAIL_PID" 2>/dev/null || true; fi
+    if [[ -n "${OWNED_PID:-}" ]]; then
+        kill "$OWNED_PID" 2>/dev/null || true
+        if ! kill -0 "$OWNED_PID" 2>/dev/null; then
+            if [[ -f "$PID_FILE" && "$(< "$PID_FILE")" == "$OWNED_PID" ]]; then
+                rm -f "$PID_FILE" "$IDENTITY_FILE"
+            fi
+        fi
+    fi
 }
 
 # ─── Download Logic ────────────────────────────────────────
@@ -467,8 +539,8 @@ download_model() {
                         TOML_FILE="$PROJECT_ROOT/configs/llms.toml"
 
                         while true; do
-                            CATEGORIES_JSON=$("$PYTHON_CMD" "$PRESETS_PY" list-categories --toml "$TOML_FILE")
-                            CAT_COUNT=$("$PYTHON_CMD" -c "import json; print(len(json.loads('''$CATEGORIES_JSON''')))")
+                            CATEGORIES_JSON=$("${PYTHON_CMD[@]}" "$PRESETS_PY" list-categories --toml "$TOML_FILE")
+                            CAT_COUNT=$(json_count "$CATEGORIES_JSON")
                             if [ "$CAT_COUNT" -eq 0 ]; then
                                 echo -e "  ${RED}✗ ERROR: No model categories found in: $TOML_FILE${NC}"
                                 exit 1
@@ -478,8 +550,8 @@ download_model() {
                             echo -e "  ${BOLD}Select a model family/category:${NC}"
                             echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
                             for ((i=0; i<CAT_COUNT; i++)); do
-                                cat_name=$("$PYTHON_CMD" -c "import json; print(json.loads('''$CATEGORIES_JSON''')[$i]['name'])")
-                                cat_desc=$("$PYTHON_CMD" -c "import json; print(json.loads('''$CATEGORIES_JSON''')[$i]['description'])")
+                                cat_name=$(json_field "$CATEGORIES_JSON" "$i" name)
+                                cat_desc=$(json_field "$CATEGORIES_JSON" "$i" description)
                                 printf "    ${BOLD}%2d)${NC} %-25s - %s\n" "$((i + 1))" "$cat_name" "$cat_desc"
                             done
                             echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
@@ -500,7 +572,7 @@ download_model() {
                                 fi
                                 
                                 if [[ "$cat_choice" =~ ^[0-9]+$ ]] && [ "$cat_choice" -ge 1 ] && [ "$cat_choice" -le "$CAT_COUNT" ]; then
-                                    SELECTED_CAT=$("$PYTHON_CMD" -c "import json; print(json.loads('''$CATEGORIES_JSON''')[$((cat_choice - 1))]['name'])")
+                                    SELECTED_CAT=$(json_field "$CATEGORIES_JSON" "$((cat_choice - 1))" name)
                                     break
                                 else
                                     echo -e "  ${RED}✗ ERROR: Invalid choice '$cat_choice'. Please choose a number between 1 and $CAT_COUNT.${NC}"
@@ -508,15 +580,15 @@ download_model() {
                                 fi
                             done
 
-                            FILTERED_MODELS=$("$PYTHON_CMD" "$PRESETS_PY" list-models --category "$SELECTED_CAT" --toml "$TOML_FILE")
-                            MODEL_COUNT=$("$PYTHON_CMD" -c "import json; print(len(json.loads('''$FILTERED_MODELS''')))")
+                            FILTERED_MODELS=$("${PYTHON_CMD[@]}" "$PRESETS_PY" list-models --category "$SELECTED_CAT" --toml "$TOML_FILE")
+                            MODEL_COUNT=$(json_count "$FILTERED_MODELS")
 
                             print_header
                             echo -e "  ${BOLD}Select model(s) from family '$SELECTED_CAT' to download:${NC}"
                             echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
                             for ((i=0; i<MODEL_COUNT; i++)); do
-                                name=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$i]; print(m.get('name', ''))")
-                                desc=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$i]; print(m.get('description', ''))")
+                                name=$(json_field "$FILTERED_MODELS" "$i" name)
+                                desc=$(json_field "$FILTERED_MODELS" "$i" description)
                                 printf "    ${BOLD}%2d)${NC} %-35s - %s\n" "$((i + 1))" "$name" "$desc"
                             done
                             echo -e "  ${CYAN}----------------------------------------------------------------------${NC}"
@@ -579,8 +651,8 @@ download_model() {
                             fi
 
                             for idx in "${SELECTED_INDICES[@]}"; do
-                                repo=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$idx]; print(m.get('repo', ''))")
-                                file=$("$PYTHON_CMD" -c "import json; m = json.loads('''$FILTERED_MODELS''')[$idx]; print(m.get('file', ''))")
+                                repo=$(json_field "$FILTERED_MODELS" "$idx" repo)
+                                file=$(json_field "$FILTERED_MODELS" "$idx" file)
                                 MODELS_TO_DOWNLOAD+=("$repo|$file")
                             done
                             break
@@ -627,9 +699,10 @@ download_model() {
     mkdir -p "$TARGET_DIR"
     local total_dl=${#MODELS_TO_DOWNLOAD[@]}
 
-    if ! "$PYTHON_CMD" -c "import huggingface_hub" &> /dev/null; then
+    if ! "${PYTHON_CMD[@]}" -c "import huggingface_hub" &> /dev/null; then
         echo -e "  ${CYAN}[i] huggingface_hub not found. Running env.sh...${NC}"
-        bash "$SCRIPT_DIR/env.sh"
+        bash "$SCRIPT_DIR/env.sh" quick
+        if [[ -x "$PROJECT_ROOT/.venv/bin/python" ]]; then PYTHON_CMD=("$PROJECT_ROOT/.venv/bin/python"); fi
     fi
 
     for ((idx=0; idx<total_dl; idx++)); do
@@ -650,7 +723,7 @@ download_model() {
         fi
 
         echo -e "  ${CYAN}[i] Downloading from Hugging Face...${NC}"
-        if DOWNLOADED_PATH=$("$PYTHON_CMD" "$PRESETS_PY" download --repo "$repo_id" --file "$file_name" --target-dir "$TARGET_DIR"); then
+        if DOWNLOADED_PATH=$("${PYTHON_CMD[@]}" "$PRESETS_PY" download --repo "$repo_id" --file "$file_name" --target-dir "$TARGET_DIR"); then
             if [ -f "$DOWNLOADED_PATH" ]; then
                 echo -e "  ${GREEN}✓ Downloaded successfully:${NC} $DOWNLOADED_PATH"
                 echo ""
@@ -686,7 +759,7 @@ case "$COMMAND" in
         echo -e "    ${BOLD}Host:${NC}       $HOST"
         echo -e "    ${BOLD}Port:${NC}       $PORT"
         
-        active_model=$("$PYTHON_CMD" "$PRESETS_PY" get-active-model --url "http://$HOST:$PORT/v1")
+        active_model=$(server_model || echo "Unavailable")
         
         echo -e "    ${BOLD}Active Model:${NC} $active_model"
         echo ""
@@ -696,7 +769,7 @@ case "$COMMAND" in
         if [ -f "$PID_FILE" ]; then
             pid=""
             pid=$(cat "$PID_FILE")
-            if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            if managed_server "$pid"; then
                 echo -e "    ${GREEN}● Active (PID: $pid from server.pid)${NC}"
                 show_pid_stats "$pid"
                 active=1
@@ -704,25 +777,12 @@ case "$COMMAND" in
         fi
 
         if [ "$active" -eq 0 ]; then
-            pids=""
-            pids=$(pgrep -f "llama_cpp.server" 2>/dev/null || true)
-            if [ -n "$pids" ]; then
-                echo -e "    ${GREEN}● Active (PIDs: $pids detected via pgrep)${NC}"
-                for p in $pids; do
-                    echo -e "      ${CYAN}[PID $p Stats]${NC}"
-                    show_pid_stats "$p"
-                done
-                active=1
-            fi
-        fi
-
-        if [ "$active" -eq 0 ]; then
-            echo -e "    ${RED}○ Inactive (No server processes detected)${NC}"
+            echo -e "    ${YELLOW}○ No verified project-managed server process.${NC}"
         fi
 
         echo ""
         echo -e "  ${BOLD}API Responsiveness:${NC}"
-        if curl -s --max-time 3 "http://localhost:$PORT/v1/models" &>/dev/null; then
+        if server_model >/dev/null; then
             echo -e "    ${GREEN}✓ Responsive on http://localhost:$PORT/v1${NC}"
         else
             echo -e "    ${RED}✗ Unresponsive or port closed on http://localhost:$PORT/v1${NC}"
@@ -736,13 +796,22 @@ case "$COMMAND" in
 
     list)
         print_header
-        "$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --format card
+        "${PYTHON_CMD[@]}" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --format card
         ;;
 
     cleanup)
         print_header
-        MODELS_JSON=$("$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --format json)
-        total_count=$("$PYTHON_CMD" -c "import json; print(len(json.loads('''$MODELS_JSON''')))")
+        if [[ -L "$TARGET_DIR" ]]; then echo "Refusing to clean a symlinked model directory." >&2; exit 1; fi
+        "${PYTHON_CMD[@]}" -c '
+from pathlib import Path
+import sys
+root = Path(sys.argv[1]).resolve()
+project = Path(sys.argv[2]).resolve()
+if root in (Path("/"), Path.home(), project) or root in Path.home().parents or root in project.parents:
+    sys.exit("Refusing to clean an unsafe model directory.")
+' "$TARGET_DIR" "$PROJECT_ROOT"
+        MODELS_JSON=$("${PYTHON_CMD[@]}" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --format json)
+        total_count=$(json_count "$MODELS_JSON")
         
         if [ "$total_count" -eq 0 ]; then
             echo -e "  ${GREEN}✓ No downloaded models found to delete in: $TARGET_DIR${NC}"
@@ -751,7 +820,7 @@ case "$COMMAND" in
         fi
 
         while true; do
-            "$PYTHON_CMD" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --format card
+            "${PYTHON_CMD[@]}" "$PRESETS_PY" scan-models --target-dir "$TARGET_DIR" --format card
             
             echo -e "  ${BOLD}Options:${NC}"
             echo -e "    - Type ${CYAN}'all'${NC} (or ${CYAN}'a'${NC}) to delete ALL listed models."
@@ -801,12 +870,25 @@ case "$COMMAND" in
             fi
 
             echo ""
+            read -rp "Type DELETE to remove the selected model files: " confirmation || exit 0
+            if [[ "$confirmation" != DELETE ]]; then echo "  Cancelled. No models were removed."; exit 0; fi
+            # Validate the complete selection before deleting any item.
+            for idx in "${TO_DELETE[@]}"; do
+                path=$(json_field "$MODELS_JSON" "$idx" path)
+                "${PYTHON_CMD[@]}" -c '
+from pathlib import Path
+import sys
+root, item = (Path(value).resolve() for value in sys.argv[1:])
+if item.parent != root or item == root:
+    sys.exit("Refusing to delete a path outside the model directory.")
+' "$TARGET_DIR" "$path"
+            done
             echo -e "  ${RED}${BOLD}Deleting selected models...${NC}"
             for idx in "${TO_DELETE[@]}"; do
-                path=$("$PYTHON_CMD" -c "import json; m = json.loads('''$MODELS_JSON''')[$idx]; print(m['path'])")
-                name=$("$PYTHON_CMD" -c "import json; m = json.loads('''$MODELS_JSON''')[$idx]; print(m['display_name'])")
+                path=$(json_field "$MODELS_JSON" "$idx" path)
+                name=$(json_field "$MODELS_JSON" "$idx" display_name)
                 echo -e "    ${RED}-${NC} Removing: $name"
-                rm -rf "$path"
+                rm -rf -- "$path"
             done
 
             echo ""
