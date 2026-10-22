@@ -149,19 +149,20 @@ def build_hardness_figure(
     results: PerformanceAnalysisResult, summary: HardnessSummary
 ) -> go.Figure:
     model_tag, dim, solvers_list = summary.model, summary.dim, summary.solvers
+    tables = {noise: table for noise, table in summary.tables.items() if not table.empty}
+    if not tables:
+        raise ValueError("No available hardness results to plot.")
     fig = make_subplots(
         rows=1,
-        cols=2,
-        subplot_titles=(
-            f"<b>(A) Deterministic Landscape (σ={results.clean_std}, {dim}D)</b>",
-            f"<b>(B) Noisy Stochastic Landscape (σ={results.noisy_std}, {dim}D)</b>",
-        ),
+        cols=len(tables),
+        subplot_titles=[
+            f"<b>{'Deterministic' if noise == 0 else 'Noisy'} Landscape (σ={noise:g}, {dim}D)</b>"
+            for noise in tables
+        ],
         horizontal_spacing=0.1,
     )
-    for c_idx, noise_level in enumerate([results.clean_std, results.noisy_std], start=1):
-        df_hard = summary.tables[noise_level]
-        if df_hard.empty:
-            continue
+    shown_solvers: set[str] = set()
+    for c_idx, df_hard in enumerate(tables.values(), start=1):
         for solver in solvers_list:
             sub_s = df_hard.loc[df_hard["Solver"] == solver]
             if sub_s.empty:
@@ -175,11 +176,12 @@ def build_hardness_figure(
                         color=get_solver_color(solver),
                         line=dict(color="#0F172A", width=0.8),
                     ),
-                    showlegend=c_idx == 1,
+                    showlegend=solver not in shown_solvers,
                 ),
                 row=1,
                 col=c_idx,
             )
+            shown_solvers.add(solver)
     fig.update_xaxes(
         title_text="<b>Landscape Hardness Class</b>",
         title_font=dict(size=14, family=FONT_FAMILY, color="#0F172A"),
@@ -201,15 +203,13 @@ def build_hardness_figure(
         range=[0, 1.1],
         showgrid=True,
         gridcolor="#F1F5F9",
-        row=1,
-        col=2,
     )
     for anno in fig.layout.annotations:
         anno.update(font=dict(size=15, color="#0F172A", family=FONT_FAMILY))
     fig.update_layout(
         template="plotly_white",
         title=dict(
-            text=f"<b>Empirical Success Rate by BBOB Landscape Hardness — {model_tag.upper()} ({dim}D)</b><br><span style='font-size:13px;color:#475569;font-weight:normal;'>Comparison of Target Precision Hitting Rates Across 5 Problem Classes in Deterministic vs. Noisy Regimes</span>",
+            text=f"<b>Empirical Success Rate by BBOB Landscape Hardness — {model_tag.upper()} ({dim}D)</b><br><span style='font-size:13px;color:#475569;font-weight:normal;'>Search-target success rates for available problem groups and noise levels</span>",
             x=0.02,
             y=0.96,
             font=dict(size=16, color="#1E293B", family=FONT_FAMILY),
@@ -217,7 +217,7 @@ def build_hardness_figure(
         barmode="group",
         bargap=0.25,
         bargroupgap=0.08,
-        width=1240,
+        width=max(900, 620 * len(tables)),
         height=590,
         margin=dict(l=80, r=40, t=100, b=120),
         legend=dict(

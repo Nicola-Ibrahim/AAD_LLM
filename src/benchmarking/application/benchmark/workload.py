@@ -55,22 +55,21 @@ class BenchmarkWorkload:
         if not raw_conditions:
             return []
 
-        # Extract all discovered dimensions, noise standard deviations, and problem IDs
-        unique_dims = {c[0] for c in raw_conditions}
-        unique_pids = {c[2] for c in raw_conditions}
-        if self.config.cross_function_enabled:
-            unique_pids.update(self.config.cross_function_problem_ids)
-        if self.target_noise_stds:
-            target_noises = sorted(list(set(float(n) for n in self.target_noise_stds)))
-        else:
-            target_noises = sorted(list({float(c[1]) for c in raw_conditions} | {0.0}))
-        if self.config.cross_function_enabled:
-            target_noises = sorted(set(target_noises) | {0.0})
-
-        expanded = {
-            (d, float(n), p) for d in unique_dims for n in target_noises for p in unique_pids
+        # Preserve observed tuples: expanding independent axes invents conditions
+        # that may never have been synthesized (including a synthetic clean case).
+        conditions = {
+            (int(dim), float(noise), int(problem)) for dim, noise, problem in raw_conditions
         }
-        return sorted(list(expanded))
+        if self.target_noise_stds:
+            conditions = {c for c in conditions if c[1] in self.target_noise_stds}
+        if self.config.cross_function_enabled:
+            # Optional transfer studies explicitly request clean reference problems.
+            conditions.update(
+                (dim, 0.0, problem)
+                for dim in {c[0] for c in raw_conditions}
+                for problem in self.config.cross_function_problem_ids
+            )
+        return sorted(conditions)
 
     # ── Status Inspection Helper ─────────────────────────────────────────────────
 
@@ -217,7 +216,11 @@ class BenchmarkWorkload:
             return pd.DataFrame()
         champions_flat = self.champion_selection.flatten_champions()
         target_conditions = self._discover_target_conditions()
-        noisy_levels = sorted(list({float(c[1]) for c in target_conditions if c[1] > 0.0}))
+        noisy_levels = sorted(
+            {noise for noise in self.target_noise_stds if noise > 0.0}
+            if self.target_noise_stds
+            else {float(c[1]) for c in target_conditions if c[1] > 0.0}
+        )
         if not noisy_levels:
             return pd.DataFrame()
 

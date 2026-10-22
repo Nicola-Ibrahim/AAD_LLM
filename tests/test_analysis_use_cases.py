@@ -302,6 +302,94 @@ def test_missing_trace_is_not_a_zero_profile(snapshot):
     assert any("CMA-ES" in message for message in result.diagnostics)
 
 
+@pytest.mark.parametrize(
+    "mode,suffix", [("explicit", "noise-adapted"), ("implicit", "noise-implicit")]
+)
+def test_profiles_do_not_export_baseline_only_conditions(snapshot, mode, suffix):
+    solver = f"Model / baseline ({suffix})"
+    dataset = BenchmarkDataset()
+    for condition, solvers in snapshot.dataset.items():
+        for name, runs in solvers.items():
+            if name == "PSO" or (
+                name == solver
+                and condition.dim == 2
+                and condition.noise_std == 0.1
+                and condition.problem_id == 8
+            ):
+                for run in runs:
+                    dataset.add_run(condition, name, run)
+    snapshot = replace(snapshot, dataset=dataset, models_to_solvers={"Model": [solver]})
+    result = AnalyzeEcdfAndConvergence(loader_for(snapshot), EcdfConvergenceEngine()).execute(
+        mode=mode, dims=None, problems=None, noise_stds=None
+    )
+    assert len(result.conditions) == 1
+    condition = result.conditions[0]
+    assert (condition.dim, condition.noise_std, condition.problems) == (2, 0.1, [8])
+    assert {s.solver for s in condition.series} == {solver, "PSO"}
+
+
+def test_profile_with_no_model_traces_is_empty(snapshot):
+    snapshot = replace(snapshot, models_to_solvers={"Missing": ["Missing / baseline"]})
+    result = AnalyzeEcdfAndConvergence(loader_for(snapshot), EcdfConvergenceEngine()).execute(
+        mode="explicit", dims=None, problems=None, noise_stds=None
+    )
+    assert not result.conditions
+    assert any("No model traces" in message for message in result.diagnostics)
+
+
+def test_hardness_uses_only_available_model_noise_levels(snapshot):
+    from notebooks.analysis.plotting.performance import build_hardness_figure
+
+    dataset = BenchmarkDataset(
+        conditions_data={
+            condition: solvers
+            for condition, solvers in snapshot.dataset.items()
+            if condition.noise_std == 0.1
+        }
+    )
+    snapshot = replace(snapshot, dataset=dataset)
+    result = AnalyzePerformance(
+        loader_for(snapshot), EcdfConvergenceEngine(), PerformanceMetricsEngine()
+    ).execute(dims=None, problems=None, noise_stds=None)
+    assert result.hardness
+    for summary in result.hardness:
+        assert set(summary.tables) == {0.1}
+        figure = build_hardness_figure(result, summary)
+        assert len(figure.layout.annotations) == 1
+        assert "σ=0.1" in figure.layout.annotations[0].text
+        assert "Deterministic" not in figure.layout.annotations[0].text
+        assert any(trace.showlegend for trace in figure.data)
+
+
+def test_model_performance_pairs_only_observed_model_conditions(snapshot):
+    dataset = BenchmarkDataset()
+    for condition, solvers in snapshot.dataset.items():
+        for solver, runs in solvers.items():
+            if solver == "PSO" or condition.noise_std == 0.1:
+                for run in runs:
+                    dataset.add_run(condition, solver, run)
+    dataset.add_run(
+        BenchmarkCondition(dim=50, noise_std=0.1, problem_id=15),
+        "PSO",
+        RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([1e12, 1e8])),
+    )
+    snapshot = replace(snapshot, dataset=dataset)
+    result = AnalyzePerformance(
+        loader_for(snapshot), EcdfConvergenceEngine(), PerformanceMetricsEngine()
+    ).execute(dims=None, problems=None, noise_stds=None)
+    assert set(result.targets) == {0.1}
+    np.testing.assert_array_equal(
+        result.targets[0.1],
+        EcdfConvergenceEngine().compute_adaptive_targets(dataset, noise_std=0.1),
+    )
+    assert result.dims == [2, 5]
+    assert not result.table.empty
+    assert set(result.table["Noise Std"]) == {0.1}
+    assert "PSO" in set(result.table["Solver"])
+    assert all(set(summary.tables) == {0.1} for summary in result.hardness)
+    assert snapshot.dataset.get_runs(2, 0.0, 1, "PSO")
+
+
 def test_empty_inputs_return_explicit_empty_results(snapshot):
     empty = replace(
         snapshot,
@@ -433,7 +521,13 @@ def test_loader_eligibility_and_dynamic_models(state, expected_native, fixed_bud
     baseline.pop("code_hash")
     reader = MagicMock()
     reader.load_benchmark_traces.return_value = dataset
-    reader.load_provenance_records.return_value = [record, baseline]
+    standalone_baseline = dict(baseline, noise_std=0.2, dim=50, problem_id=15)
+    dataset.add_run(
+        BenchmarkCondition(dim=50, noise_std=0.2, problem_id=15),
+        "PSO",
+        RunTrace(evaluations=np.array([1]), raw_objectives=np.array([0.0])),
+    )
+    reader.load_provenance_records.return_value = [record, baseline, standalone_baseline]
     repository = MagicMock()
     repository.get_synthesis_dataframes.return_value = (
         pd.DataFrame([{"status": "completed", "llm_name": raw}]),
@@ -470,6 +564,12 @@ def test_loader_eligibility_and_dynamic_models(state, expected_native, fixed_bud
     assert len(result.native_records) == expected_native
     assert result.model_slugs[label] == names.get_model_slug(raw)
     assert result.dataset.get_runs(2, 0.0, 1, "PSO")
+    assert result.dataset.get_runs(50, 0.2, 15, "PSO")
+    for records in [result.reference_records, result.noise_records]:
+        assert any(
+            (r["dim"], r["noise_std"], r["problem_id"], r.get("baseline")) == (50, 0.2, 15, "pso")
+            for r in records
+        )
     assert bool(result.dataset.get_runs(2, 0.0, 1, solver)) == bool(expected_native)
 
 

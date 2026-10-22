@@ -31,6 +31,16 @@ never call scientific engines. Profiles exclude
 stale champion identities; completed terminal trials do not imply that all their
 convergence traces are available.
 
+Native baseline workloads preserve the exact completed database combinations of
+function, dimension and noise; they do not add a clean condition or expand a
+Cartesian product. Profiles require matching model traces before including
+baselines, and hardness panels use only available model noise levels. Analysis
+loads validated benchmark records without reconstructing a synthesis condition
+matrix. Standalone baseline results remain available, but model-specific figures
+and model-performance comparisons use only conditions with model traces and
+their matching baselines.
+Explicitly enabled noise-robustness and transfer studies remain separate.
+
 Calculation and export are separate notebook cells. Required collaborators are
 constructed by bootstrap, not by optional constructor fallbacks:
 

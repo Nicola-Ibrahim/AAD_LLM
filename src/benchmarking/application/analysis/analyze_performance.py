@@ -9,6 +9,7 @@ from benchmarking.application.analysis.results import (
 )
 from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
 from benchmarking.domain.services.performance import PerformanceMetricsEngine
+from benchmarking.domain.vos import BenchmarkDataset
 
 
 class AnalyzePerformance:
@@ -30,12 +31,21 @@ class AnalyzePerformance:
         noise_stds: list[float] | None,
     ) -> PerformanceAnalysisResult:
         snapshot = self.loader.load(dims=dims, problems=problems, noise_stds=noise_stds)
+        # Model comparisons use observed model traces and their paired baselines,
+        # not a condition matrix inferred from synthesis or configuration.
+        dataset = BenchmarkDataset(
+            conditions_data={
+                condition: solvers
+                for condition, solvers in snapshot.dataset.items()
+                if any(" / " in solver and runs for solver, runs in solvers.items())
+            }
+        )
         targets = {
             noise: self.ecdf.compute_adaptive_targets(snapshot.dataset, noise_std=noise)
-            for noise in snapshot.dataset.noise_stds
+            for noise in dataset.noise_stds
         }
         table = self.ecdf.compute_auc_ecdf_matrix(
-            snapshot.dataset,
+            dataset,
             snapshot.solver_order,
             targets=targets,
             group_by="condition",
@@ -44,25 +54,31 @@ class AnalyzePerformance:
         table["Canonical Solver"] = table["Solver"].str.replace(
             r" \(noise-adapted\)", "", regex=True
         )
-        scale_dimensions = sorted(snapshot.dataset.dims)
+        scale_dimensions = dataset.dims
         model_scale, rankings = self.performance.summarize_auc_results(
             table,
             list(snapshot.models_to_solvers),
             snapshot.classical_solvers,
             scale_dimensions,
-            snapshot.dataset.noise_stds,
+            dataset.noise_stds,
         )
         hardness: list[HardnessSummary] = []
-        for dim in snapshot.dataset.dims:
+        for dim in dataset.dims:
             for model, solvers in snapshot.models_to_solvers.items():
                 selected = solvers + snapshot.classical_solvers
                 tables = {
                     noise: self.performance.compute_hardness_success_rates(
-                        snapshot.dataset, dim, selected, noise_level=noise
+                        dataset, dim, selected, noise_level=noise
                     )
-                    for noise in [snapshot.clean_std, snapshot.noisy_std]
+                    for noise in dataset.noise_stds
+                    if any(
+                        dataset.get_runs(dim, noise, problem, solver)
+                        for problem in dataset.problem_ids
+                        for solver in solvers
+                    )
                 }
-                hardness.append(HardnessSummary(model, dim, selected, tables))
+                if tables:
+                    hardness.append(HardnessSummary(model, dim, selected, tables))
         provenance = snapshot.provenance("profiles")
         provenance = replace(
             provenance,

@@ -56,10 +56,18 @@ class AnalyzeEcdfAndConvergence:
                         if noise == 0.0 or not implicit or not adapted:
                             continue
                         selected = adapted + implicit
+                    problem_ids = [
+                        problem
+                        for problem in dataset.problem_ids
+                        if any(dataset.get_runs(dim, noise, problem, solver) for solver in selected)
+                    ]
+                    if not problem_ids:
+                        diagnostics.append(f"No model traces: {model}, {dim}D, σ={noise}, {mode}")
+                        continue
                     if mode != "comparison":
                         selected = selected + ["CMA-ES", "PSO", "DE"]
                     series: list[ProfileSeries] = []
-                    for problem in dataset.problem_ids:
+                    for problem in problem_ids:
                         for solver in selected:
                             runs = dataset.get_runs(dim, noise, problem, solver)
                             if not runs:
@@ -79,7 +87,7 @@ class AnalyzeEcdfAndConvergence:
                             snapshot.model_slugs[model],
                             dim,
                             noise,
-                            dataset.problem_ids,
+                            problem_ids,
                             selected,
                             grid,
                             targets[noise],

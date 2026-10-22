@@ -58,11 +58,16 @@ class AnalysisFigureExporter:
             )
             for kind, filename in outputs.items():
                 target = output / filename
+                description = (
+                    "Median with interquartile bands across available benchmark trials; lower is better."
+                    if kind == "convergence"
+                    else "Adaptive-target ECDFs are exploratory; fixed-target reliability is reported separately."
+                )
                 figure = profiles.build_profile(
                     profile,
                     results.mode,
                     kind=kind,
-                    title=f"<b>{heading} {kind.upper()} — {profile.model} ({profile.dim}D, σ={profile.noise_std:g})</b><br><sup>Adaptive-target ECDFs are exploratory; fixed-target reliability is reported separately.</sup>",
+                    title=f"<b>{heading} {kind.upper()} — {profile.model} ({profile.dim}D, σ={profile.noise_std:g})</b><br><sup>{description}</sup>",
                 )
                 self.export_figure(figure, target)
 

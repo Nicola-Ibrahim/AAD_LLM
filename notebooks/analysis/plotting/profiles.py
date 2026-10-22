@@ -42,18 +42,21 @@ def build_profile(
 ) -> go.Figure:
     """Construct panels exclusively from precomputed scientific arrays."""
     problems = profile.problems
+    if not problems:
+        raise ValueError("A profile figure requires at least one problem.")
     curves = _profile_curves(profile.solvers, mode)
     by_condition = {(s.problem_id, s.solver): s for s in profile.series}
     titles = [
         f"<b>{BBOBFunction.get_name(p)}</b><br><sup>{BBOBFunction.get_class(p)}</sup>"
         for p in problems
     ]
-    rows = ceil(len(titles) / 3)
+    columns = min(3, len(problems))
+    rows = ceil(len(titles) / columns)
     figure = make_subplots(
         rows=rows,
-        cols=3,
+        cols=columns,
         specs=[
-            [{} if row * 3 + col < len(problems) else None for col in range(3)]
+            [{} if row * columns + col < len(problems) else None for col in range(columns)]
             for row in range(rows)
         ],
         subplot_titles=titles,
@@ -74,7 +77,7 @@ def build_profile(
         for tick in ticks
     ]
     for index, problem in enumerate(problems):
-        row, col = divmod(index, 3)
+        row, col = divmod(index, columns)
         for curve in curves:
             series = by_condition.get((problem, curve.solver))
             if series is None:
@@ -97,6 +100,9 @@ def build_profile(
     if kind == "convergence":
         figure.update_yaxes(
             type="log",
+            dtick=1,
+            exponentformat="power",
+            showexponent="all",
             title_text="<b>Median best-queried clean gap Δf</b>",
             showgrid=True,
             gridcolor="#F1F5F9",
@@ -120,7 +126,7 @@ def build_profile(
             text=title, font=dict(size=18, color="#0F172A", family=FONT_FAMILY), x=0.02, y=0.97
         ),
         width=1340,
-        height=max(860, rows * 420),
+        height=680 if rows == 1 else max(860, rows * 420),
         margin=dict(l=70, r=40, t=110, b=120),
         legend=dict(
             orientation="h",

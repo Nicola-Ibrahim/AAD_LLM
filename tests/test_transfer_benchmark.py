@@ -232,6 +232,31 @@ def transfer_service(tmp_path: Path) -> BenchmarkService:
     )
 
 
+@pytest.mark.parametrize(
+    "conditions",
+    [
+        [(10, 0.1, 15)],
+        [(2, 0.05, 1), (10, 0.2, 15), (2, 0.05, 1)],
+    ],
+)
+def test_native_baselines_preserve_exact_database_conditions(transfer_service, conditions):
+    workload = transfer_service.workload
+    workload.config.cross_function_enabled = False
+    workload.sqlite_repo.get_target_conditions.return_value = conditions
+    rows = workload.audit_baselines_workload()
+    assert set(zip(rows["dim"], rows["noise_std"], rows["problem_id"])) == set(conditions)
+    assert len(rows) == len(set(conditions))
+    assert not (rows["noise_std"] == 0.0).any()
+
+
+def test_native_noise_filter_does_not_create_new_conditions(transfer_service):
+    workload = transfer_service.workload
+    workload.config.cross_function_enabled = False
+    workload.sqlite_repo.get_target_conditions.return_value = [(10, 0.1, 15)]
+    workload.target_noise_stds = [0.0, 0.1, 0.2]
+    assert workload._discover_target_conditions() == [(10, 0.1, 15)]
+
+
 def test_frozen_target_execution_pairing_and_baseline_reuse(
     transfer_service: BenchmarkService,
 ) -> None:

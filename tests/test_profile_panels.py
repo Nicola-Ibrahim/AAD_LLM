@@ -39,6 +39,32 @@ def test_profiles_only_plot_individual_functions(kind):
 
 
 @pytest.mark.parametrize("kind", ["convergence", "ecdf"])
+def test_single_problem_uses_full_figure_width(kind):
+    values = np.array([1000.0, 10.0])
+    profile = ConditionProfile(
+        "Model",
+        "model",
+        10,
+        0.1,
+        [15],
+        ["Model / baseline"],
+        np.array([1, 100000]),
+        np.array([1e-8]),
+        [ProfileSeries("Model / baseline", 15, values, values, values, np.array([0.0, 0.5]), 20)],
+    )
+    figure = build_profile(profile, "explicit", kind=kind, title="f15")
+    assert figure.layout.xaxis.domain == (0.0, 1.0)
+    assert "xaxis2" not in figure.layout
+    assert len(figure.layout.annotations) == 1
+    assert figure.layout.height == 680
+    if kind == "convergence":
+        assert figure.layout.yaxis.type == "log"
+        assert figure.layout.yaxis.dtick == 1
+        assert figure.layout.yaxis.exponentformat == "power"
+        np.testing.assert_array_equal(figure.data[-1].y, values)
+
+
+@pytest.mark.parametrize("kind", ["convergence", "ecdf"])
 def test_comparison_legend_separates_strategy_and_mode(kind):
     values = np.array([1.0, 0.5])
     solvers = [

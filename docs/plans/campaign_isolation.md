@@ -47,10 +47,9 @@ after checking the retained snapshot's checksums and database integrity.
 
 As of 22 October 2026, the retained archive is
 `results/archives/2026-10-22_154910_before_instance_pilot_A/`. Older snapshots were removed
-on request. Separate empty storage was prepared at
-`results/studies/2026-10-21_093547_pending_protocol/`; it is **inactive** and does
-not implement the campaign layout below. The active application's configurations
-and storage paths have not been switched.
+on request. The unused `results/studies/` staging directory was also removed
+on request; it contained no experiments or generated research results. The
+campaign layout below remains a deferred proposal, not active storage.
 
 ### Next protocol: pending confirmation
 

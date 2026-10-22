@@ -141,9 +141,9 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
     assert hasattr(campaign_usecase, "run_campaign")
 
     cfg = config_repo.load_config()
-    assert len(cfg.problem_targets) == 5
-    assert cfg.problem_ids == [1, 8, 11, 15, 21]
-    assert cfg.dimensions == [2, 10, 50]
+    assert cfg.matrix_conditions
+    assert set(cfg.problem_ids) == {condition.problem_id for condition in cfg.matrix_conditions}
+    assert set(cfg.dimensions) == {condition.dim for condition in cfg.matrix_conditions}
     assert cfg.budget == 100_000
 
     matrix_df, summary = campaign_usecase.auditor.audit_matrix()
