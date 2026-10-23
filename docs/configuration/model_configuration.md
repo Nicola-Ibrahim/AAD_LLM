@@ -7,8 +7,8 @@ have different owners; model selection is not entirely configuration-free.
 
 ## Provider connections
 
-[LLMClient](../../src/evolution/infra/llm/client.py) supports `local`, `lmstudio`
-and `gemini`. The notebook supplies the provider and optional client arguments.
+[LLMClient](../../src/evolution/infra/llm/client.py) supports `local`, `lmstudio`,
+`upb` and `gemini`. The notebook supplies the provider and optional client arguments.
 Environment variables provide defaults:
 
 | Provider | URL | Model | API key |
@@ -16,6 +16,7 @@ Environment variables provide defaults:
 | Local | `LOCAL_LLM_BASE_URL` | `LOCAL_LLM_MODEL` | `LOCAL_LLM_API_KEY` |
 | LM Studio | `LLM_STUDIO_BASE_URL` | `LLM_STUDIO_MODEL` | `LLM_STUDIO_API_KEY` |
 | Gemini | Provider-managed | `GEMINI_MODEL` | `GOOGLE_API_KEY` |
+| University Paderborn | `UPB_API_BASE` | `UPB_MODEL` | `UPB_API_KEY` |
 
 Local and LM Studio default to `http://localhost:1234/v1`.
 An explicit `model=` argument takes precedence over the model environment variable.
@@ -24,6 +25,43 @@ the first model returned by the endpoint's `/models` response. With validation
 disabled, a model must be supplied. `SKIP_LLM_VALIDATION=True` disables the
 connection probe; it is not a substitute for configuring the model.
 Keep API keys in local environment configuration, not committed documents.
+
+### University gateway through LLaMEA
+
+Set these values in the ignored `.env` file; never put a real key in a notebook:
+
+```dotenv
+LLM_PROVIDER=upb
+UPB_API_BASE=https://ai-gateway.uni-paderborn.de/v1/
+UPB_API_KEY=replace-with-your-private-key
+UPB_MODEL=gwdg.qwen3-30b-a3b-instruct-2507
+```
+
+Notebook 02 continues to construct `LLMClient(llm_provider)`: the existing LLaMEA
+`OpenAI_LLM` adapter issues synthesis requests, not a separate example script.
+Connection checks and model discovery send Bearer authentication. Unlike a local
+single-model server, the gateway requires an explicit model ID: it never silently
+selects the first catalogue entry. List your accessible IDs without generating text:
+
+```python
+print("\n".join(llm.list_models()))
+```
+
+The [gateway catalogue](upb_models.md) records one account's discovery snapshot;
+refresh via `list_models()` because permissions and availability can change.
+Use named models rather than `latest` aliases or routers for reproducible studies.
+For now prefer the documented Qwen3 instruct model; other models, particularly
+reasoning models, need a smoke test for LLaMEA's `temperature` setting and plain-text
+code output before a campaign. Listing is not proof of generation entitlement.
+The gateway catalogue supplies no prices, so no cheapest-model claim follows from it.
+
+Start with `execution.max_workers = 1` in synthesis configuration. This is only a
+concurrency limit, not a request/token rate limiter. Check your gateway quota and
+obtain confirmation that automated research campaigns are permitted before running
+the full matrix. The [university instructions](https://hilfe.uni-paderborn.de/AI-Gateway)
+link applicable terms. No generation call is required to validate connectivity.
+The hosted model is recorded separately from historical GGUF model IDs.
+Restart the notebook kernel after changing providers or model environment settings.
 
 ## Local GGUF server
 

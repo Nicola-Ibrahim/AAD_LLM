@@ -66,8 +66,9 @@ runs_per_config = 1
 # 3. EXECUTION & RECOVERY (How Tasks Run in Parallel)
 # ==============================================================================
 [execution]
-# Process Pool Concurrency: Number of parallel worker processes (0 = os.cpu_count())
-max_workers = 0
+# Start conservatively for the shared gateway; adjust only within the approved quota.
+# This limits parallel sessions, not requests per minute or daily token consumption.
+max_workers = 1
 
 # Fault Tolerance & Auto-Resume:
 auto_resume = true

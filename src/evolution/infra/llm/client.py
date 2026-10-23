@@ -23,6 +23,7 @@ class Provider(StrEnum):
     GEMINI = "gemini"
     LOCAL = "local"
     LMSTUDIO = "lmstudio"
+    UPB = "upb"
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +33,7 @@ class EndpointConfig:
     base_url_env: str
     model_env: str
     display_name: str
+    default_base_url: str
 
 
 _OPENAI_ENDPOINTS: dict[Provider, EndpointConfig] = {
@@ -41,6 +43,7 @@ _OPENAI_ENDPOINTS: dict[Provider, EndpointConfig] = {
         base_url_env="LOCAL_LLM_BASE_URL",
         model_env="LOCAL_LLM_MODEL",
         display_name="local",
+        default_base_url="http://localhost:1234/v1",
     ),
     Provider.LMSTUDIO: EndpointConfig(
         api_key_env="LLM_STUDIO_API_KEY",
@@ -48,6 +51,15 @@ _OPENAI_ENDPOINTS: dict[Provider, EndpointConfig] = {
         base_url_env="LLM_STUDIO_BASE_URL",
         model_env="LLM_STUDIO_MODEL",
         display_name="LM Studio",
+        default_base_url="http://localhost:1234/v1",
+    ),
+    Provider.UPB: EndpointConfig(
+        api_key_env="UPB_API_KEY",
+        default_api_key="",
+        base_url_env="UPB_API_BASE",
+        model_env="UPB_MODEL",
+        display_name="University Paderborn AI Gateway",
+        default_base_url="https://ai-gateway.uni-paderborn.de/v1/",
     ),
 }
 
@@ -81,16 +93,27 @@ class LLMClient:
     def validate_connection(self) -> None:
         """Explicitly probe and validate network reachability to the LLM backend."""
         if config := _OPENAI_ENDPOINTS.get(self.provider):
-            base_url = os.environ.get(config.base_url_env, "http://localhost:1234/v1")
-            self._check_connection(base_url, config.display_name)
+            base_url = os.environ.get(config.base_url_env, config.default_base_url)
+            api_key = os.environ.get(config.api_key_env, config.default_api_key)
+            self._check_connection(base_url, config.display_name, api_key)
+
+    def list_models(self) -> list[str]:
+        """List exact model IDs through the authenticated OpenAI-compatible client."""
+        if self.provider not in _OPENAI_ENDPOINTS:
+            raise ValueError("Model listing requires an OpenAI-compatible provider.")
+        return [model.id for model in self._client.client.models.list()]
 
     @staticmethod
-    def _check_connection(base_url: str, provider_name: str) -> None:
-        """Checks if the local LLM server is reachable at the given base URL."""
+    def _check_connection(base_url: str, provider_name: str, api_key: str) -> None:
+        """Check reachability and credentials without issuing a generation request."""
         models_url = f"{base_url.rstrip('/')}/models"
         try:
             req = urllib.request.Request(
-                models_url, headers={"User-Agent": "AAD-LLM-Connection-Check"}
+                models_url,
+                headers={
+                    "User-Agent": "AAD-LLM-Connection-Check",
+                    "Authorization": f"Bearer {api_key}",
+                },
             )
             with urllib.request.urlopen(req, timeout=10.0):
                 pass
@@ -99,17 +122,22 @@ class LLMClient:
                 f"Could not connect to the {provider_name} LLM server at '{base_url}'.\n"
                 f"Error details: {e}\n"
                 f"Troubleshooting:\n"
-                f"  1. Is your model server running? Start it using: bash scripts/llm.sh\n"
-                f"  2. Check if the port and URL in your .env are correct: {base_url}\n"
-                f"  3. Check if any VPN or proxy is blocking localhost connections."
+                "Check the endpoint URL, API key and network/VPN access. "
+                "For a local server, also check that scripts/llm.sh is running."
             ) from None
 
     @staticmethod
-    def _get_local_model_name(base_url: str) -> str:
+    def _get_local_model_name(base_url: str, api_key: str) -> str:
         """Queries the local server's /models endpoint to get the active model name."""
         models_url = f"{base_url.rstrip('/')}/models"
         try:
-            req = urllib.request.Request(models_url, headers={"User-Agent": "AAD-LLM-Model-Check"})
+            req = urllib.request.Request(
+                models_url,
+                headers={
+                    "User-Agent": "AAD-LLM-Model-Check",
+                    "Authorization": f"Bearer {api_key}",
+                },
+            )
             with urllib.request.urlopen(req, timeout=5.0) as response:
                 data = json.loads(response.read().decode("utf-8"))
                 if (models := data.get("data")) and (model_id := models[0].get("id")):
@@ -147,13 +175,18 @@ class LLMClient:
         raise ValueError(f"Unknown provider '{self.provider}'. Choose from: {list(Provider)}")
 
     def _init_openai_compatible(self, config: EndpointConfig, should_validate: bool) -> OpenAI_LLM:
-        base_url = os.environ.get(config.base_url_env, "http://localhost:1234/v1")
+        base_url = os.environ.get(config.base_url_env, config.default_base_url)
         api_key = os.environ.get(config.api_key_env, config.default_api_key)
         model = self.kwargs.pop("model", None) or os.environ.get(config.model_env)
 
+        if not api_key:
+            raise ValueError(f"Set {config.api_key_env} for {config.display_name}.")
+        if self.provider == Provider.UPB and not model:
+            raise ValueError("Set UPB_MODEL or pass model= with an exact gateway model ID.")
+
         if should_validate:
-            self._check_connection(base_url, config.display_name)
-            model = model or self._get_local_model_name(base_url)
+            self._check_connection(base_url, config.display_name, api_key)
+            model = model or self._get_local_model_name(base_url, api_key)
         elif not model:
             raise ValueError(
                 f"No model specified for {config.display_name} LLM provider. "
