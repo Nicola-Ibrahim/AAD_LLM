@@ -17,7 +17,7 @@ class AlgorithmExecutor:
                  code, name, dim, problem, budget
                                 │
                                 ▼
-              CodeCompiler.compile(code, name, dim)
+              CodeCompiler.compile(code, name, dim) inside timeout
               • AST Parse & Sanitize (empty def bodies)
               • Ban Check: scipy.optimize strictly blocked
               • Isolated Namespace Execution & Class Instantiation
@@ -74,8 +74,7 @@ class AlgorithmExecutor:
         Returns:
             tuple[np.ndarray, float]: The best search point coordinates and its observed fitness.
         """
-        algorithm = self._compiler.compile(code, name, dim)
-        self.last_captured_warnings = list(getattr(self._compiler, "last_compiler_warnings", []))
+        self.last_captured_warnings = []
         captured_warnings = self.last_captured_warnings
 
         def _runner(p: Callable[..., float], b: int) -> Any:
@@ -83,9 +82,13 @@ class AlgorithmExecutor:
                 warnings.simplefilter("always")
                 old_errstate = np.seterr(all="warn")
                 try:
+                    algorithm = self._compiler.compile(code, name, dim)
                     return algorithm(p, b)
                 finally:
                     np.seterr(**old_errstate)
+                    for message in getattr(self._compiler, "last_compiler_warnings", []):
+                        if message not in captured_warnings:
+                            captured_warnings.append(message)
                     for w in recorded:
                         msg = f"{w.category.__name__}: {w.message}"
                         if w.filename == "<string>" or "string" in str(w.filename):

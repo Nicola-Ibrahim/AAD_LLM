@@ -3,18 +3,10 @@ import pandas as pd
 
 from benchmarking.application.benchmark.summary import summarize_benchmarks
 from benchmarking.application.benchmark.trials import BenchmarkTrialRunner
-from benchmarking.application.benchmark.types import BaselineRunnerResolver, ExecutorBuilder
 from benchmarking.application.benchmark.workload import BenchmarkWorkload
 from benchmarking.application.benchmark_config import BenchmarkConfig
-from benchmarking.application.interfaces.benchmark_state_store import BenchmarkStateStore
-from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
-from benchmarking.application.interfaces.champion_repository import ChampionRepository
 from benchmarking.application.interfaces.logger import BenchmarkLoggerInterface
-from benchmarking.application.interfaces.synthesis_read_repository import SynthesisReadRepository
-from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.enums import BBOBFunction
-from benchmarking.domain.services.resolvers import ModelNames
-from shared.application.interfaces.problem_factory import ProblemFactory
 
 
 class BenchmarkService:
@@ -22,47 +14,19 @@ class BenchmarkService:
 
     def __init__(
         self,
-        sqlite_repo: SynthesisReadRepository,
-        champions_repo: ChampionRepository,
-        state_repo: BenchmarkStateStore,
+        workload: BenchmarkWorkload,
+        trials: BenchmarkTrialRunner,
         config: BenchmarkConfig,
         logger: BenchmarkLoggerInterface,
-        problem_factory: ProblemFactory,
-        executor_factory: ExecutorBuilder,
-        baseline_resolver: BaselineRunnerResolver,
-        code_reader: CandidateCodeReader,
-        model_names: ModelNames,
-        planned_target_conditions: tuple[tuple[int, float, int], ...] = (),
     ) -> None:
-        self.champion_selection = ChampionSelectionService(champions_repo=champions_repo)
         self.logger = logger
-        self.model_names = model_names
         self.config = config
-        self.workload = BenchmarkWorkload(
-            sqlite_repo=sqlite_repo,
-            champion_selection=self.champion_selection,
-            state_repo=state_repo,
-            code_reader=code_reader,
-            model_names=model_names,
-            config=self.config,
-            planned_target_conditions=planned_target_conditions,
-        )
-        self.trials = BenchmarkTrialRunner(
-            state_repo=state_repo,
-            logger=logger,
-            problem_factory=problem_factory,
-            executor_factory=executor_factory,
-            baseline_resolver=baseline_resolver,
-            code_reader=code_reader,
-            model_names=model_names,
-            config=self.config,
-        )
+        self.workload = workload
+        self.trials = trials
 
     def summarize_results(self) -> pd.DataFrame:
         """Inspect current saved outcomes without running or modifying experiments."""
-        return summarize_benchmarks(
-            self.workload, self.champion_selection, self.trials.state_repo, self.config
-        )
+        return summarize_benchmarks(self.workload, self.trials.state_repo, self.config)
 
     def run_benchmarks(
         self,
@@ -72,16 +36,10 @@ class BenchmarkService:
         """Run all pending/partial benchmarks matching the configured workload."""
         self.logger.verbose = verbose
 
-        df_audit = self.workload.audit_workload(solver_type=solver_type)
-        if df_audit.empty:
+        tasks = self.workload.discover(solver_type)
+        if not tasks:
             return pd.DataFrame()
-        active = df_audit[~df_audit["is_filtered"] & (df_audit["status"] != "MISSING_CODE")]
-
-        champions_flat = (
-            self.champion_selection.flatten_champions()
-            if solver_type in ("all", "champions", "noise_robustness", "cross_function")
-            else {}
-        )
+        active = [task for task in tasks if task.inspection.status != "MISSING_CODE"]
         results: list[dict[str, object]] = []
 
         total_active = len(active)
@@ -92,47 +50,36 @@ class BenchmarkService:
         cached_count = 0
         executed_count = 0
 
-        for idx, (_, row) in enumerate(active.iterrows(), start=1):
-            stype = row["solver_type"]
-            dim = row["dim"]
-            noise_std = row["noise_std"]
-            p_id = row["problem_id"]
-            s_name = row["display_name"]
+        for idx, task in enumerate(active, start=1):
+            stype = task.solver_type
+            dim = task.dim
+            noise_std = task.noise_std
+            p_id = task.problem_id
 
             self.logger.condition_start(
                 index=idx,
                 total=total_active,
                 solver_type=stype,
-                solver_name=s_name,
+                solver_name=task.display_name,
                 dim=dim,
                 noise_std=noise_std,
                 problem_id=p_id,
                 problem_name=BBOBFunction.get_name(p_id),
-                mode=(row.get("mode") if stype != "baseline" else None),
-                strategy=(row.get("strategy") if stype != "baseline" else None),
+                mode=task.mode if task.champion is not None else None,
+                strategy=task.strategy if task.champion is not None else None,
             )
 
-            if stype != "baseline":
-                raw_k = row.get("raw_key", row["key"])
-                matching = [v for k, v in champions_flat.items() if k == raw_k or k.endswith(raw_k)]
-                if not matching:
-                    matching = [
-                        v
-                        for k, v in champions_flat.items()
-                        if k == row["key"] or k.endswith(row["key"])
-                    ]
-                if not matching:
-                    continue
+            if task.champion is not None:
                 res = self.trials.run_champion_trials(
-                    matching[0],
-                    target_noise_std=row["noise_std"],
-                    solver_folder=row["solver"],
+                    task.champion,
+                    target_noise_std=noise_std,
+                    solver_folder=task.solver,
                     verbose=verbose,
                     target_problem_id=p_id if stype == "cross_function" else None,
                 )
             else:
                 res = self.trials.run_baseline_trials(
-                    baseline_slug=row["solver"],
+                    baseline_slug=task.solver,
                     dim=dim,
                     noise_std=noise_std,
                     p_id=p_id,
@@ -147,10 +94,12 @@ class BenchmarkService:
             results.append(
                 {
                     "solver_type": stype,
-                    "solver": row["solver"],
-                    "display_name": row["display_name"],
+                    "solver": task.solver,
+                    "display_name": task.display_name,
                     "problem_id": p_id,
-                    "source_problem_id": row.get("source_problem_id"),
+                    "source_problem_id": (
+                        task.champion["problem_id"] if task.champion is not None else None
+                    ),
                     "dim": dim,
                     "noise_std": noise_std,
                     "status": res["status"],

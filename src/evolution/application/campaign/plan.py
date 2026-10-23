@@ -4,7 +4,6 @@ from evolution.application.campaign.audit import CampaignAuditor
 from evolution.application.campaign.models import CampaignTask
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
 from evolution.application.interfaces.synthesis_repository import SynthesisRepository
-from evolution.application.synthesis.models import SessionConfig
 from evolution.application.synthesis_config import MatrixCondition, SynthesisConfig
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.vos.problem_profile import ProblemProfile
@@ -146,13 +145,6 @@ class CampaignPlanner:
 
     # -------------------------------------------------------------------------
 
-    def _build_session_config(self, max_iterations: int | None = None) -> SessionConfig:
-        """Constructs a SessionConfig from campaign settings, optionally overriding iterations."""
-        cfg = SessionConfig(**self.config.to_session_config_dict())
-        if max_iterations:
-            cfg = cfg.model_copy(update={"iterations": max_iterations})
-        return cfg
-
     def _build_task_from_summary(
         self,
         exp: ExperimentSummary,
@@ -162,6 +154,18 @@ class CampaignPlanner:
         """Constructs a work item for an existing experiment in the database."""
         if exp.id is None:
             raise ValueError(f"Cannot build task without a valid database id: {exp}")
+        if not restart and exp.iterations:
+            if exp.budget is None or exp.budget != self.config.budget:
+                raise ValueError(
+                    f"Cannot resume experiment #{exp.id}: recorded budget {exp.budget} "
+                    f"does not match configured budget {self.config.budget}. "
+                    "Restore its configuration or explicitly replace the experiment."
+                )
+            if exp.synthesis_seed is None:
+                raise ValueError(
+                    f"Cannot resume experiment #{exp.id}: its synthesis seed is unknown. "
+                    "Explicit replacement is required; no results were removed."
+                )
         noise_std = exp.problem.noise_std or 0.0
         problem = self.problem_factory.create(
             problem_id=exp.problem.problem_id,
@@ -169,12 +173,10 @@ class CampaignPlanner:
             noise_std=noise_std,
             noise_model=exp.problem.noise_model,
             instance_id=exp.problem.instance_id or 1,
-            seed=exp.synthesis_seed
-            if restart and exp.synthesis_seed is not None
-            else 42 + (exp.id or 0),
+            seed=exp.synthesis_seed if exp.synthesis_seed is not None else 42 + (exp.id or 0),
         )
         initial_iter = 0 if restart else (len(exp.iterations) if exp.iterations else 0)
-        cfg = self._build_session_config(exp.max_iterations)
+        cfg = self.config.to_session_config(iterations=exp.max_iterations or self.config.iterations)
         mode_label = f"{exp.mode}_std_{noise_std}"
         key = f"f{exp.problem.problem_id}_{exp.problem.dim}D_{mode_label}_{exp.prompt_strategy}_{tag}_exp{exp.id}"
         return CampaignTask(
@@ -218,7 +220,7 @@ class CampaignPlanner:
             instance_id=1,
             seed=42 + run_idx,
         )
-        fresh_cfg = self._build_session_config()
+        fresh_cfg = self.config.to_session_config(iterations=self.config.iterations)
         exp_id = self.sqlite_repo.create_experiment(
             problem=ProblemProfile(
                 problem_id=problem.problem_id,

@@ -2,6 +2,7 @@ import ast
 import builtins
 import collections
 import functools
+import inspect
 import itertools
 import math
 import random
@@ -20,7 +21,7 @@ from shared.infra.execution.exceptions import CodeValidationException
 class CodeCompiler:
     """
     Responsible for sanitizing, parsing, validating, compiling,
-    and instantiating candidate algorithm code in a secure isolated namespace.
+    and instantiating candidate algorithm code in an isolated namespace.
     """
 
     def sanitize_code(self, code: str) -> str:
@@ -134,11 +135,10 @@ class CodeCompiler:
 
     def _validate_code(self, code: str, isolated_globals: dict[str, Any], name: str = "") -> type:
         """
-        Validate LLM-generated code through four stages:
+        Validate LLM-generated code through three stages:
           1. AST syntax & banned imports check
           2. Execution into isolated namespace
           3. Class resolution
-          4. Instantiation check
 
         Returns the resolved algorithm class if valid.
         Raises CodeValidationException if invalid.
@@ -184,22 +184,11 @@ class CodeCompiler:
                 f"Ensure the code contains a class with a `__call__(self, problem, budget)` method."
             )
 
-        try:
-            _ = algorithm_cls()
-        except TypeError:
-            try:
-                _ = algorithm_cls(dim=3)
-            except Exception as err:
-                raise CodeValidationException(
-                    f"Algorithm class `{algorithm_cls.__name__}.__init__` failed to instantiate: {err}.\n"
-                    f"Fix: `__init__` must accept only `self` with no extra required parameters."
-                ) from err
-
         return algorithm_cls
 
     def _create_isolated_namespace(self) -> dict[str, Any]:
         """
-        Create a secure, isolated namespace with essential math and utility libraries.
+        Create an isolated namespace with essential math and utility libraries.
         Excludes scipy.optimize to ban pre-built solver wrappers while permitting
         utility submodules (scipy.linalg, scipy.stats, scipy.special).
         """
@@ -226,10 +215,21 @@ class CodeCompiler:
         """
         Safely instantiate the algorithm class.
         """
-        try:
-            algorithm = algorithm_cls()
-        except TypeError:
-            algorithm = algorithm_cls(dim)
+        signature = inspect.signature(algorithm_cls)
+        dimension = signature.parameters.get("dim")
+        if dimension is not None:
+            if dimension.kind is inspect.Parameter.POSITIONAL_ONLY:
+                algorithm = algorithm_cls(dim)
+            else:
+                algorithm = algorithm_cls(dim=dim)
+        else:
+            try:
+                signature.bind()
+            except TypeError:
+                signature.bind(dim)
+                algorithm = algorithm_cls(dim)
+            else:
+                algorithm = algorithm_cls()
 
         if hasattr(algorithm, "dim"):
             algorithm.dim = dim

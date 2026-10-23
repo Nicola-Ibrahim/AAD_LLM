@@ -1,4 +1,4 @@
-"""Abstract interface for evaluation trace and provenance state."""
+"""Storage boundary for benchmark directories, traces and provenance."""
 
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -9,6 +9,22 @@ class BenchmarkStateStore(ABC):
     @property
     @abstractmethod
     def benchmark_dir(self) -> Path: ...
+
+    @abstractmethod
+    def condition_directory(
+        self, dim: int, noise_std: float, problem_id: int, solver: str
+    ) -> Path: ...
+
+    @abstractmethod
+    def transfer_directory(
+        self,
+        source_problem_id: int,
+        dim: int,
+        noise_std: float,
+        problem_id: int,
+        solver: str,
+        code_hash: str,
+    ) -> Path: ...
 
     @abstractmethod
     def solver_directory_exists(self, solver_dir: Path) -> bool: ...

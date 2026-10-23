@@ -1,10 +1,13 @@
 """Unit tests for candidate execution and evaluation orchestration."""
 
+from unittest.mock import Mock
+
 import numpy as np
 import pytest
 
 from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.domain.enums import SynthesisMode
+from shared.application.interfaces.candidate_executor import CandidateExecutor
 from shared.domain.problem import BaseProblem
 from shared.infra.execution.candidate_executor import create_candidate_executor
 
@@ -113,6 +116,31 @@ class OptimumFinder:
     assert result.metadata.execution.evaluations_used == 1
     assert result.metadata.convergence.converged is True
     assert result.is_stagnated is False
+
+
+def test_repeated_candidates_keep_the_same_problem_instance() -> None:
+    problem = DummyProblem(true_optimum=42.0)
+    problem.instance_id = 7
+    executor = Mock(spec=CandidateExecutor)
+    executor.last_captured_warnings = []
+    observed_instances: list[int] = []
+
+    def execute_algorithm(**kwargs: object) -> tuple[np.ndarray, float]:
+        observed_instances.append(problem.instance_id)
+        point = np.zeros(problem.dim)
+        return point, problem(point)
+
+    executor.execute_algorithm.side_effect = execute_algorithm
+    evaluator = CandidateEvaluationService(problem=problem, executor=executor, budget=100)
+
+    for _ in range(10):
+        result = evaluator.evaluate(code="class Candidate: pass", name="Candidate")
+        assert not result.is_failure
+        assert result.final_error == 0.0
+        assert result.metadata.execution.evaluations_used == 1
+
+    assert observed_instances == [7] * 10
+    assert executor.execute_algorithm.call_count == 10
 
 
 def test_evaluate_out_of_bounds_candidate():

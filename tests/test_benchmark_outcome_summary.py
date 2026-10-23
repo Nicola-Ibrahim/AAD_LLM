@@ -3,12 +3,41 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pandas as pd
 import pytest
 
+from benchmarking.application.benchmark.models import BenchmarkTask
 from benchmarking.application.benchmark.summary import summarize_benchmarks
 from benchmarking.application.benchmark_config import BenchmarkConfig
+from benchmarking.application.champions import GenerationMode
 from benchmarking.domain.services.benchmark_outcomes import summarize_trial_outcomes
+from benchmarking.domain.services.condition_status import ConditionStatus
+
+
+def task(row: dict[str, object], experiment_id: int | None) -> BenchmarkTask:
+    return BenchmarkTask(
+        key=row["key"],
+        raw_key=row["raw_key"],
+        solver_type=row["solver_type"],
+        solver=row["solver"],
+        display_name=row["model"],
+        model=row["model"],
+        strategy=row["strategy"],
+        problem_id=row["problem_id"],
+        dim=row["dim"],
+        noise_std=row["noise_std"],
+        mode=GenerationMode.EXPLICIT,
+        target_dir=Path(row["target_dir"]),
+        code_hash=None,
+        champion={"experiment_id": experiment_id} if experiment_id is not None else None,
+        inspection=ConditionStatus(
+            "COMPLETED" if row["reason"] == "complete" else "NEEDS_RERUN",
+            20,
+            20 if row["reason"] == "complete" else 0,
+            20,
+            None,
+            row["reason"],
+        ),
+    )
 
 
 @pytest.mark.parametrize(
@@ -63,13 +92,7 @@ def test_stale_results_and_baselines_do_not_suggest_synthesis() -> None:
     )
     baseline = dict(native, key="pso", solver_type="baseline", solver="pso", model="pso")
     workload = MagicMock()
-    workload.audit_champions_workload.return_value = pd.DataFrame([native, stale])
-    workload.audit_baselines_workload.return_value = pd.DataFrame([baseline])
-    selection = MagicMock()
-    selection.flatten_champions.return_value = {
-        "current": {"experiment_id": 7},
-        "stale": {"experiment_id": 8},
-    }
+    workload.discover.side_effect = [[task(native, 7), task(stale, 8)], [task(baseline, None)]]
     state = MagicMock()
     state.benchmark_dir = Path("/traces")
     state.read_provenance.return_value = {
@@ -77,7 +100,7 @@ def test_stale_results_and_baselines_do_not_suggest_synthesis() -> None:
         "instance_ids": list(range(2, 22)),
         "trial_seeds": list(range(44, 64)),
     }
-    table = summarize_benchmarks(workload, selection, state, BenchmarkConfig())
+    table = summarize_benchmarks(workload, state, BenchmarkConfig())
     assert table.loc[table["Rerun candidate"], "Experiment ID"].tolist() == [7]
     assert table.loc[table["Category"] == "missing_or_stale", "Valid trials"].tolist() == [0]
     current = table.loc[table["Category"] == "all_failed"]
@@ -105,10 +128,7 @@ def test_partial_execution_failure_rates_include_all_executed_trials() -> None:
         reason="complete",
     )
     workload = MagicMock()
-    workload.audit_champions_workload.return_value = pd.DataFrame([native])
-    workload.audit_baselines_workload.return_value = pd.DataFrame()
-    selection = MagicMock()
-    selection.flatten_champions.return_value = {"current": {"experiment_id": 7}}
+    workload.discover.side_effect = [[task(native, 7)], []]
     state = MagicMock()
     state.benchmark_dir = Path("/traces")
     state.read_provenance.return_value = {
@@ -117,7 +137,7 @@ def test_partial_execution_failure_rates_include_all_executed_trials() -> None:
         "trial_seeds": list(range(44, 64)),
     }
 
-    table = summarize_benchmarks(workload, selection, state, BenchmarkConfig())
+    table = summarize_benchmarks(workload, state, BenchmarkConfig())
 
     assert table.loc[0, "Executed trials"] == 20
     assert table.loc[0, "Valid trials"] == 9

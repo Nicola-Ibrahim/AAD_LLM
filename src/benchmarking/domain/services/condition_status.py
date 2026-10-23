@@ -38,10 +38,13 @@ def inspect_condition(
     expected_trials: int,
     expected_budget: int | None,
     trial_schedule: tuple[TrialIdentity, ...] = (),
+    expected_execution_version: str | None = None,
 ) -> ConditionStatus:
     """Inspect validity; None budget supports budget-agnostic historical readers.
 
     Execution, readiness and current analysis supply their configured budget.
+    None execution version means a reader does not check append compatibility
+    (for example baselines or a raw historical data reader).
     """
     recorded = executed_trial_count(provenance) if provenance is not None else 0
     median = (
@@ -78,6 +81,17 @@ def inspect_condition(
             else None
         )
     complete = reusable >= expected_trials
+    # A complete historical result remains reusable. Appending new executions
+    # to a partial history requires the same execution behavior, however.
+    if (
+        not complete
+        and recorded > 0
+        and expected_execution_version is not None
+        and provenance.get("candidate_execution_contract") != expected_execution_version
+    ):
+        return ConditionStatus(
+            "NEEDS_RERUN", recorded, 0, expected_trials, None, "incompatible_execution"
+        )
     return ConditionStatus(
         "COMPLETED" if complete else "PENDING",
         recorded,

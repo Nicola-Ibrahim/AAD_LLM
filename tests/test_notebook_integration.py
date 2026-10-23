@@ -7,6 +7,8 @@ from unittest.mock import MagicMock
 import pandas as pd
 
 from benchmarking.application.benchmark.run import BenchmarkService
+from benchmarking.application.benchmark.trials import BenchmarkTrialRunner
+from benchmarking.application.benchmark.workload import BenchmarkWorkload
 from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
 from benchmarking.infra.io.code_reader import FilesystemCodeReader
@@ -22,14 +24,36 @@ from shared.infra.problems.factory import BBOBProblemFactory
 def build_benchmark_service(**kwargs):
     project_root = kwargs.pop("project_root", PROJECT_ROOT)
     config_repo = kwargs.pop("config_repo")
-    return BenchmarkService(
+    config = config_repo.load_config()
+    selection = ChampionSelectionService(kwargs.pop("champions_repo"))
+    state = kwargs.pop("state_repo")
+    logger = kwargs.pop("logger")
+    code_reader = FilesystemCodeReader(project_root)
+    names = configured_model_names()
+    workload = BenchmarkWorkload(
+        sqlite_repo=kwargs.pop("sqlite_repo"),
+        champion_selection=selection,
+        state_repo=state,
+        code_reader=code_reader,
+        model_names=names,
+        config=config,
         **kwargs,
-        config=config_repo.load_config(),
+    )
+    trials = BenchmarkTrialRunner(
+        state_repo=state,
+        logger=logger,
+        config=config,
         problem_factory=BBOBProblemFactory(),
         executor_factory=create_candidate_executor,
         baseline_resolver=get_baseline_runner,
-        code_reader=FilesystemCodeReader(project_root),
-        model_names=configured_model_names(),
+        code_reader=code_reader,
+        model_names=names,
+    )
+    return BenchmarkService(
+        workload=workload,
+        trials=trials,
+        config=config,
+        logger=logger,
     )
 
 
@@ -236,7 +260,7 @@ def test_nb03_benchmark_pipeline(tmp_path, db_session_factory):
     assert champions_path.exists(), "champions.json does not exist!"
     with open(champions_path, "r", encoding="utf-8") as f:
         champions_raw = json.load(f)
-    champions_flat = benchmark_service.champion_selection.flatten_champions(champions_raw)
+    champions_flat = benchmark_service.workload.champion_selection.flatten_champions(champions_raw)
     assert len(champions_flat) > 0
 
     df_audit = benchmark_service.workload.audit_champions_workload()
@@ -277,7 +301,8 @@ def test_nb04_audit_pipeline():
     """Verify Notebook 04 (04_audit.ipynb: Experimental Matrix Audit)."""
     from bootstrap.audit import build_audit_service
 
-    snapshot = build_audit_service().get_audit_data()
+    with build_audit_service() as service:
+        snapshot = service.get_audit_data()
     assert isinstance(snapshot.benchmarks, pd.DataFrame)
     assert isinstance(snapshot.synthesis_gaps, pd.DataFrame)
     assert snapshot.coverage_summary.total_cells >= 0

@@ -1,45 +1,26 @@
 """Read-only post-evaluation summary of current champions and classical baselines."""
 
-from pathlib import Path
-
 import pandas as pd
 
 from benchmarking.application.benchmark.workload import BenchmarkWorkload
 from benchmarking.application.benchmark_config import BenchmarkConfig
 from benchmarking.application.interfaces.benchmark_state_store import BenchmarkStateStore
-from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.services.benchmark_outcomes import summarize_trial_outcomes
 from benchmarking.domain.trial_schedule import select_scheduled_trials
 
 
 def summarize_benchmarks(
     workload: BenchmarkWorkload,
-    selection: ChampionSelectionService,
     state: BenchmarkStateStore,
     config: BenchmarkConfig,
 ) -> pd.DataFrame:
     """Use current workload validity; stale and incomplete trials never suggest synthesis."""
-    conditions = pd.concat(
-        [workload.audit_champions_workload(), workload.audit_baselines_workload()],
-        ignore_index=True,
-    )
-    champions = selection.flatten_champions()
+    conditions = [*workload.discover("champions"), *workload.discover("baselines")]
     rows = []
-    for _, condition in conditions.iterrows():
-        if condition.get("is_filtered", False):
-            continue
-        baseline = condition["solver_type"] == "baseline"
-        champion = {} if baseline else champions.get(condition.get("raw_key", condition["key"]), {})
-        directory = (
-            state.benchmark_dir
-            / f"{condition['dim']}D"
-            / f"std_{condition['noise_std']}"
-            / f"f{condition['problem_id']}"
-            / condition["solver"]
-            if baseline
-            else Path(condition["target_dir"])
-        )
-        provenance = state.read_provenance(directory) or {}
+    for condition in conditions:
+        baseline = condition.champion is None
+        champion = condition.champion or {}
+        provenance = state.read_provenance(condition.target_dir) or {}
         outcome = summarize_trial_outcomes(
             select_scheduled_trials(provenance, config.trial_schedule),
             config.trials_per_condition,
@@ -47,7 +28,7 @@ def summarize_benchmarks(
             config.reliability.secondary_target,
         )
         category = outcome.category
-        reusable = condition["reason"] in {"complete", "partial", "not_started"}
+        reusable = condition.inspection.reason in {"complete", "partial", "not_started"}
         if not reusable:
             category = "missing_or_stale"
         if category == "missing_or_stale":
@@ -68,16 +49,16 @@ def summarize_benchmarks(
             action = "No execution-failure flag"
         rows.append(
             {
-                "Model": condition["model"],
+                "Model": condition.model,
                 "Experiment ID": champion.get("experiment_id"),
-                "Algorithm": champion.get("algorithm_name", condition["solver"]),
-                "Mode": str(condition.get("mode", "")),
-                "Strategy": condition["strategy"],
-                "Problem ID": int(condition["problem_id"]),
-                "Dim": int(condition["dim"]),
-                "Noise": float(condition["noise_std"]),
-                "Solver Type": condition["solver_type"],
-                "Recorded trials": condition.get("recorded_trials", outcome.recorded_trials),
+                "Algorithm": champion.get("algorithm_name", condition.solver),
+                "Mode": str(condition.mode),
+                "Strategy": condition.strategy,
+                "Problem ID": condition.problem_id,
+                "Dim": condition.dim,
+                "Noise": condition.noise_std,
+                "Solver Type": condition.solver_type,
+                "Recorded trials": condition.inspection.recorded_trials,
                 "Executed trials": outcome.executed_trials,
                 "Valid trials": outcome.executed_trials - outcome.failed_trials if reusable else 0,
                 "Expected trials": config.trials_per_condition,

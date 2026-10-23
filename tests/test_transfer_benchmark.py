@@ -11,7 +11,10 @@ import pytest
 
 from benchmarking.application.benchmark.audit import BenchmarkAuditService, SynthesisConditionSpec
 from benchmarking.application.benchmark.run import BenchmarkService
+from benchmarking.application.benchmark.trials import BenchmarkTrialRunner
+from benchmarking.application.benchmark.workload import BenchmarkWorkload
 from benchmarking.application.benchmark_config import BenchmarkConfig
+from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.benchmark_results import (
     BENCHMARK_SCHEMA_VERSION,
     ERROR_DEFINITION,
@@ -106,7 +109,9 @@ def test_audit_notebook_runs_without_campaign(
     import bootstrap.audit
     import shared.config
 
-    monkeypatch.setattr(bootstrap.audit, "build_audit_service", lambda: audit_for(transfer_service))
+    monkeypatch.setattr(
+        bootstrap.audit, "build_audit_service", lambda: nullcontext(audit_for(transfer_service))
+    )
     monkeypatch.setattr(shared.config, "RESULTS_DIR", tmp_path)
     monkeypatch.setattr(go.Figure, "show", lambda self: None)
     notebook = json.loads(
@@ -126,6 +131,28 @@ class MemoryState:
     def __init__(self, root: Path) -> None:
         self.benchmark_dir = root / "ioh_traces"
         self.records: dict[Path, dict[str, object]] = {}
+
+    def condition_directory(self, dim: int, noise_std: float, problem_id: int, solver: str) -> Path:
+        return self.benchmark_dir / f"{dim}D" / f"std_{noise_std}" / f"f{problem_id}" / solver
+
+    def transfer_directory(
+        self,
+        source_problem_id: int,
+        dim: int,
+        noise_std: float,
+        problem_id: int,
+        solver: str,
+        code_hash: str,
+    ) -> Path:
+        return (
+            self.benchmark_dir.parent
+            / "cross_function_traces"
+            / f"source_f{source_problem_id}"
+            / f"{dim}D"
+            / f"std_{noise_std}"
+            / f"f{problem_id}"
+            / f"{solver}_{code_hash[:12]}"
+        )
 
     def solver_directory_exists(self, path: Path) -> bool:
         return path in self.records
@@ -213,22 +240,39 @@ def transfer_service(tmp_path: Path) -> BenchmarkService:
 
     executor.execute_algorithm.side_effect = execute
     baseline = MagicMock(side_effect=lambda problem, budget: (problem.true_optimum + 0.01, 0.1, 1))
-    return BenchmarkService(
+    config = BenchmarkConfig(
+        trials_per_condition=3,
+        cross_function_enabled=True,
+        cross_function_problem_ids=[1, 8],
+        classical_baselines=["pso"],
+    )
+    selection = ChampionSelectionService(champion_repo)
+    state = MemoryState(tmp_path)
+    logger = MagicMock()
+    names = configured_model_names()
+    workload = BenchmarkWorkload(
         sqlite_repo=synthesis_repo,
-        champions_repo=champion_repo,
-        state_repo=MemoryState(tmp_path),
-        config=BenchmarkConfig(
-            trials_per_condition=3,
-            cross_function_enabled=True,
-            cross_function_problem_ids=[1, 8],
-            classical_baselines=["pso"],
-        ),
-        logger=MagicMock(),
+        champion_selection=selection,
+        state_repo=state,
+        config=config,
+        code_reader=code_reader,
+        model_names=names,
+    )
+    trials = BenchmarkTrialRunner(
+        state_repo=state,
+        config=config,
+        logger=logger,
         problem_factory=problem_factory,
         executor_factory=lambda timeout: executor,
         baseline_resolver=lambda slug: baseline,
         code_reader=code_reader,
-        model_names=configured_model_names(),
+        model_names=names,
+    )
+    return BenchmarkService(
+        workload=workload,
+        trials=trials,
+        config=config,
+        logger=logger,
     )
 
 
@@ -253,8 +297,50 @@ def test_native_noise_filter_does_not_create_new_conditions(transfer_service):
     workload = transfer_service.workload
     workload.config.cross_function_enabled = False
     workload.sqlite_repo.get_target_conditions.return_value = [(10, 0.1, 15)]
-    workload.target_noise_stds = [0.0, 0.1, 0.2]
-    assert workload._discover_target_conditions() == [(10, 0.1, 15)]
+    workload.config.target_noise_stds = [0.0, 0.1, 0.2]
+    assert workload._discover_target_conditions({}) == [(10, 0.1, 15)]
+
+
+def test_execution_uses_exact_candidates_and_one_selection_snapshot(transfer_service) -> None:
+    service = transfer_service
+    selection = service.workload.champion_selection
+    candidates = list(selection.flatten_champions().values())
+    selection.flatten_champions = MagicMock(
+        return_value={
+            "prefix_same": candidates[0],
+            "same": candidates[1],
+        }
+    )
+    service.workload.audit_workload = MagicMock(side_effect=AssertionError("Not an execution API"))
+    service.trials.run_champion_trials = MagicMock(return_value={"status": "SUCCESS"})
+
+    results = service.run_champions(verbose=False)
+
+    assert len(results) == 2
+    selection.flatten_champions.assert_called_once_with()
+    calls = service.trials.run_champion_trials.call_args_list
+    assert calls[0].args[0] is candidates[0]
+    assert calls[1].args[0] is candidates[1]
+    service.workload.audit_workload.assert_not_called()
+
+
+def test_readiness_and_resumption_agree_on_incompatible_partial_history(transfer_service) -> None:
+    service = transfer_service
+    service.run_champions(verbose=False)
+    task = service.workload.discover("champions")[0]
+    state = service.trials.state_repo
+    provenance = state.records[task.target_dir]
+    provenance.pop("candidate_execution_contract")
+    service.config.trials_per_condition += 1
+    original = dict(provenance)
+
+    inspection = service.workload.discover("champions")[0].inspection
+    assert inspection.reason == "incompatible_execution"
+    assert inspection.recorded_trials == 3
+    assert inspection.reusable_trials == 0
+    with pytest.raises(ValueError, match="unknown execution contract"):
+        service.run_champions(verbose=False)
+    assert state.records[task.target_dir] == original
 
 
 def test_frozen_target_execution_pairing_and_baseline_reuse(
@@ -298,7 +384,7 @@ def test_failure_does_not_skip_later_instances(transfer_service: BenchmarkServic
         RuntimeError("second"),
         (np.array([0.0, 0.0]), 123.0),
     ]
-    champion = next(iter(service.champion_selection.flatten_champions().values()))
+    champion = next(iter(service.workload.champion_selection.flatten_champions().values()))
     result = service.trials.run_champion_trials(champion, target_problem_id=8, verbose=False)
     assert executor.execute_algorithm.call_count == 3
     assert result["clean_errors"] == [float("inf"), float("inf"), 0.0]
@@ -311,7 +397,7 @@ def test_invalid_champion_return_fails_each_trial(
     service = transfer_service
     executor = service.trials.executor_factory(1)
     executor.execute_algorithm.side_effect = lambda **kwargs: (point, 0.0)
-    champion = next(iter(service.champion_selection.flatten_champions().values()))
+    champion = next(iter(service.workload.champion_selection.flatten_champions().values()))
     result = service.trials.run_champion_trials(champion, target_problem_id=8, verbose=False)
     assert result["clean_errors"] == [float("inf")] * 3
     assert executor.execute_algorithm.call_count == 3
@@ -333,7 +419,7 @@ def test_native_diagonals_are_reused_without_reexecution(
 
 def test_historical_skipped_tail_resumes(transfer_service: BenchmarkService) -> None:
     service = transfer_service
-    champion = next(iter(service.champion_selection.flatten_champions().values()))
+    champion = next(iter(service.workload.champion_selection.flatten_champions().values()))
     service.trials.run_champion_trials(champion, target_problem_id=8, verbose=False)
     record = next(iter(service.trials.state_repo.records.values()))
     record["clean_errors"][2] = float("inf")

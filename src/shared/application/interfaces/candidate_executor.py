@@ -2,8 +2,12 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from typing import Final
 
 import numpy as np
+
+# Persisted identifier: change only when execution behavior changes, not for renaming.
+CANDIDATE_EXECUTION_VERSION: Final[str] = "single_constructor_compile_initialize_call_timeout_v1"
 
 
 class CandidateTimeout(TimeoutError):

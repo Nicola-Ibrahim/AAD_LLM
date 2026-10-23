@@ -289,7 +289,8 @@ class TestApplicationServicesIntegration:
     def test_audit_service(self):
         from bootstrap.audit import build_audit_service
 
-        snapshot = build_audit_service().get_audit_data()
+        with build_audit_service() as service:
+            snapshot = service.get_audit_data()
         assert isinstance(snapshot.benchmarks, pd.DataFrame)
         assert isinstance(snapshot.synthesis_gaps, pd.DataFrame)
         assert isinstance(snapshot.coverage_summary, AuditCoverageSummary)

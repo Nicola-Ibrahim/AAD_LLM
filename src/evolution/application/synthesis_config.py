@@ -1,9 +1,8 @@
 """Typed synthesis matrix and campaign configuration models owned by the application."""
 
-from typing import Literal
-
 from pydantic import BaseModel, ConfigDict, Field
 
+from evolution.application.synthesis.models import SessionConfig
 from evolution.domain.enums import NoiseEnvironment, PromptStrategy, SynthesisMode
 from shared.domain.noise_model import NoiseModelEnum
 
@@ -31,7 +30,7 @@ class NoiseConditionConfig(BaseModel):
 
     std: float
     noise_model: NoiseModelEnum = NoiseModelEnum.NONE
-    mode: str | None = None
+    mode: SynthesisMode | None = None
     modes: list[SynthesisModeConfig] = Field(default_factory=list)
 
     model_config = ConfigDict(frozen=True)
@@ -85,7 +84,6 @@ class SynthesisConfig(BaseModel):
     budget: int = 1_000_000
     timeout_seconds: float = 30.0
     iterations: int = 10
-    instance_policy: Literal["fixed", "per_iteration"] = "fixed"
     stagnation_threshold: int = 3
     convergence_threshold: float = 1e-6
     runs_per_config: int = 1
@@ -106,7 +104,7 @@ class SynthesisConfig(BaseModel):
 
     @property
     def dimensions(self) -> list[int]:
-        return sorted(list({d for t in self.problem_targets for d in t.dimensions}))
+        return sorted({d for t in self.problem_targets for d in t.dimensions})
 
     @property
     def noise_stds(self) -> list[float]:
@@ -119,15 +117,14 @@ class SynthesisConfig(BaseModel):
     @property
     def prompt_strategies(self) -> list[PromptStrategy]:
         all_s = {s for m in self.synthesis_modes for s in m.strategies}
-        return sorted(list(all_s), key=lambda x: str(x.value))
+        return sorted(all_s, key=lambda strategy: strategy.value)
 
-    def to_session_config_dict(self) -> dict[str, int | float | str]:
-        """Derive a dictionary of session execution configuration parameters."""
-        return {
-            "budget": self.budget,
-            "timeout_seconds": self.timeout_seconds,
-            "iterations": self.iterations,
-            "instance_policy": self.instance_policy,
-            "stagnation_threshold": self.stagnation_threshold,
-            "convergence_threshold": self.convergence_threshold,
-        }
+    def to_session_config(self, *, iterations: int) -> SessionConfig:
+        """Pass typed session settings directly to the synthesis workflow."""
+        return SessionConfig(
+            budget=self.budget,
+            timeout_seconds=self.timeout_seconds,
+            iterations=iterations,
+            stagnation_threshold=self.stagnation_threshold,
+            convergence_threshold=self.convergence_threshold,
+        )

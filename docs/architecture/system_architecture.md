@@ -141,6 +141,23 @@ normal synchronous mode. Repositories open and close short-lived sessions per
 operation; application use cases receive repositories rather than a live SQLAlchemy
 session. Synthesis workers create their own `Database` inside the worker process.
 
+Synthesis, benchmark, audit and analysis composition functions are context managers.
+Use live workflows only inside their `with` scope; the owning bootstrap disposes
+the database engine on normal exit, exceptions and notebook interruption. Workers
+retain their own process-local database lifecycle. Detached tables and calculated
+results remain usable after the scope exits. For example:
+
+```python
+with build_synthesis_campaign(llm) as campaign:
+    results = campaign.run_campaign()
+
+with build_benchmark_workflow() as workflow:
+    outcomes = workflow.service.run_champions()
+
+with build_audit_service() as service:
+    audit = service.get_audit_data()
+```
+
 ## Evolution context (`src/evolution/`)
 
 - `application/campaign/` separates audit, task planning, and campaign dispatch.
@@ -203,6 +220,18 @@ uses `trials_per_condition`, `trial_timeout_seconds` and
 Synthesis candidate evaluation and objective-evaluation counts retain their
 scientific names. Recorded provenance keys such as `evaluation_schema_version`,
 `evaluation_kind` and `evaluations_used` retain their existing serialized format.
+
+Inside `application/benchmark/`, `run.py` coordinates injected workload and trial
+collaborators; bootstrap owns their construction. `workload.py` discovers typed
+tasks carrying exact selected champions, then projects them into audit tables.
+`trials.py` resumes and executes those conditions using one record per terminal
+trial rather than parallel mutable columns. `models.py` contains these application
+records and callable dependency types. `summary.py` produces read-only outcome
+summaries; `audit.py` reports coverage. Scientific validity, trial identities and
+outcome calculations remain domain policies; the storage adapter owns native and
+transfer directory layouts. Partial histories with incompatible execution versions
+are reported consistently by readiness and refused by resumption without deletion;
+complete compatible-schema historical results remain reusable.
 
 `bootstrap.audit.build_audit_service()` translates synthesis configuration into
 plain condition specifications. The benchmark audit reports missing champions

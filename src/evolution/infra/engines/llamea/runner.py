@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 from llamea import LLaMEA
 
+from evolution.application.exceptions import SynthesisResumeError
 from evolution.application.interfaces.code_store import SynthesisCodeStore
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
@@ -29,10 +30,10 @@ from evolution.infra.engines.llamea.prompts import (
 )
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
+from shared.application.interfaces.candidate_executor import CANDIDATE_EXECUTION_VERSION
 from shared.config import DATA_DIR
 from shared.domain.problem import BaseProblem
-from shared.infra.execution import AlgorithmExecutor
-from shared.infra.execution.candidate_executor import AlgorithmExecutorAdapter
+from shared.infra.execution.candidate_executor import create_candidate_executor
 
 # Suppress joblib warning when LLaMEA passes timeout to SequentialBackend
 warnings.filterwarnings(
@@ -40,14 +41,6 @@ warnings.filterwarnings(
     category=UserWarning,
     message=r".*SequentialBackend.*does not support timeout.*",
 )
-
-
-class _InstanceScheduledLLaMEA(LLaMEA):
-    """Do not count an already-evaluated checkpoint parent as a new iteration."""
-
-    def initialize(self) -> None:
-        if not (self.population and self.run_history):
-            super().initialize()
 
 
 class LLaMEASession:
@@ -162,13 +155,13 @@ class LLaMEASession:
             best_error = None
             raw_fitness = None
 
-        algorithm_name = best_so_far.name or "None"
-        true_optimum = (
-            float(best_so_far.metadata["true_optimum"])
-            if self._config.instance_policy == "per_iteration" and best_error is not None
-            else self._problem.true_optimum
+        self._logger.task_complete(
+            exp_id=self._experiment_id,
+            best_algo_name=best_so_far.name or "None",
+            best_error=best_error,
+            raw_obj=raw_fitness,
+            true_opt=self._problem.true_optimum,
         )
-        self._print_report(algorithm_name, raw_fitness, best_error, true_optimum)
 
         return SessionResult(
             problem_id=self._problem.problem_id,
@@ -180,9 +173,9 @@ class LLaMEASession:
             run_history=synthesis_engine.run_history,
             experiment_name=self._experiment_name,
             llm_name=self._llm_client.model.name,
-            best_solution=synthesis_engine.best_so_far,
+            best_solution=best_so_far,
             error_msg="",
-            problem_profile=self._experiment.problem,
+            problem_profile=evaluator.problem_profile,
         )
 
     def _execute_loop(self) -> tuple[LLaMEA, Evaluator]:
@@ -197,6 +190,8 @@ class LLaMEASession:
             evaluator = self._setup_evaluator()
             synthesis_engine = self._create_synthesis_engine(evaluator, prompts)
             synthesis_engine.run()
+        except SynthesisResumeError:
+            raise
         except Exception as e:
             self._experiment.fail()
             self._db_repo.mark_failed(self._experiment_id, str(e))
@@ -208,28 +203,16 @@ class LLaMEASession:
 
     def run(self) -> SessionResult:
         """Runs the complete evolution loop for the problem."""
-        if (
-            self._config.instance_policy == "per_iteration"
-            and self._initial_iteration > 0
-            and not self._restart
-        ):
-            try:
-                previous = self._code_repo.load_candidate_instance(
-                    self._experiment_id, self._initial_iteration
-                )
-            except (FileNotFoundError, ValueError) as error:
-                raise ValueError(
-                    "Cannot resume an old fixed-instance session under per_iteration. "
-                    "Use fresh storage or explicitly replace the experiment."
-                ) from error
-            if previous.instance_id != self._problem.instance_id + self._initial_iteration - 1:
-                raise ValueError("The recorded instance schedule does not match this session.")
-            if previous.budget != self._config.budget:
-                raise ValueError("Cannot resume an instance schedule with a different budget.")
+        if self._initial_iteration > 0 and not self._restart:
+            records = self._db_repo.load_by_ids([self._experiment_id])
+            if not records or records[0].budget != self._config.budget:
+                raise ValueError("Cannot resume with a changed or unknown synthesis budget.")
             if not (self._archive_dir / "llamea_config.pkl").is_file():
                 raise ValueError(
-                    "The instance-scheduled session has no checkpoint; explicitly replace it instead."
+                    "Cannot resume without a synthesis checkpoint. Explicitly replace the "
+                    "experiment instead; existing results were not removed."
                 )
+            self._experiment = records[0]
         if self._restart:
             records = self._db_repo.load_by_ids([self._experiment_id])
             if not records or records[0].llm_name != self._llm_client.model.name:
@@ -270,7 +253,8 @@ class LLaMEASession:
         self._print_start_banner()
         synthesis_engine, evaluator = self._execute_loop()
 
-        self._cleanup_archive_dir()
+        if self._archive_dir.exists():
+            shutil.rmtree(self._archive_dir, ignore_errors=True)
         return self._process_session_result(synthesis_engine, evaluator)
 
     def _create_synthesis_engine(self, evaluator: Evaluator, prompts: SynthesisPrompts) -> LLaMEA:
@@ -280,27 +264,36 @@ class LLaMEASession:
         if state_file.exists():
             try:
                 synthesis_engine = load_synthesis_checkpoint(state_file)
-                if synthesis_engine is not None:
-                    synthesis_engine.f = evaluator
-                    synthesis_engine.llm = self._llm_client
-                    self._logger.resuming(
-                        self._experiment_id,
-                        synthesis_engine.generation,
-                        self._config.iterations,
-                    )
-                    synthesis_engine.logger = SimpleNamespace(dirname=str(self._archive_dir))
-                    return synthesis_engine
+                if self._initial_iteration > 0:
+                    saved = synthesis_engine.f
+                    if (
+                        not isinstance(saved, Evaluator)
+                        or saved._config != self._config
+                        or saved._current_iteration != self._initial_iteration
+                        or getattr(saved, "_execution_contract", None)
+                        != CANDIDATE_EXECUTION_VERSION
+                    ):
+                        raise ValueError(
+                            "Saved synthesis settings or iteration count do not match."
+                        )
+                synthesis_engine.f = evaluator
+                synthesis_engine.llm = self._llm_client
+                self._logger.resuming(
+                    self._experiment_id,
+                    synthesis_engine.generation,
+                    self._config.iterations,
+                )
+                synthesis_engine.logger = SimpleNamespace(dirname=str(self._archive_dir))
+                return synthesis_engine
             except Exception as e:
-                if self._config.instance_policy == "per_iteration" and self._initial_iteration:
-                    raise ValueError(
-                        "Cannot restore the instance-scheduled checkpoint; explicitly replace it instead."
+                if self._initial_iteration > 0:
+                    raise SynthesisResumeError(
+                        "Cannot safely restore this synthesis checkpoint. Restore matching "
+                        "settings or explicitly replace the experiment."
                     ) from e
                 self._logger.warning(f"Warm start failed, starting fresh: {e}")
 
-        engine_class = (
-            _InstanceScheduledLLaMEA if self._config.instance_policy == "per_iteration" else LLaMEA
-        )
-        synthesis_engine = engine_class(
+        synthesis_engine = LLaMEA(
             f=evaluator,
             llm=self._llm_client,
             n_parents=1,
@@ -326,9 +319,7 @@ class LLaMEASession:
             timeout_seconds=self._config.timeout_seconds,
             stagnation_threshold=self._config.stagnation_threshold,
             convergence_threshold=self._config.convergence_threshold,
-            executor=AlgorithmExecutorAdapter(
-                AlgorithmExecutor(timeout_seconds=self._config.timeout_seconds)
-            ),
+            executor=create_candidate_executor(self._config.timeout_seconds),
         )
         evaluator = Evaluator(
             problem=self._problem,
@@ -342,27 +333,6 @@ class LLaMEASession:
         evaluator.experiment = self._experiment
         evaluator.logger = self._logger
         return evaluator
-
-    def _print_report(
-        self,
-        algorithm_name: str,
-        raw_fitness: float | None,
-        final_error: float | None,
-        true_optimum: float,
-    ) -> None:
-        """Prints a structured console report highlighting objective value and error metrics of the best candidate."""
-        self._logger.task_complete(
-            exp_id=self._experiment_id,
-            best_algo_name=algorithm_name,
-            best_error=final_error,
-            raw_obj=raw_fitness,
-            true_opt=true_optimum,
-        )
-
-    def _cleanup_archive_dir(self) -> None:
-        """Silently removes the temporary evolution_state checkpoint directory upon successful experiment completion."""
-        if self._archive_dir.exists():
-            shutil.rmtree(self._archive_dir, ignore_errors=True)
 
 
 class LLaMEAEngine(SynthesisEngine):

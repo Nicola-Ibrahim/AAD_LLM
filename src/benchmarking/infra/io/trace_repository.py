@@ -306,6 +306,28 @@ class BenchmarkStateRepository(BenchmarkStateStore):
         """Directory containing evaluation traces and provenance."""
         return self._benchmark_dir
 
+    def condition_directory(self, dim: int, noise_std: float, problem_id: int, solver: str) -> Path:
+        return self.benchmark_dir / f"{dim}D" / f"std_{noise_std}" / f"f{problem_id}" / solver
+
+    def transfer_directory(
+        self,
+        source_problem_id: int,
+        dim: int,
+        noise_std: float,
+        problem_id: int,
+        solver: str,
+        code_hash: str,
+    ) -> Path:
+        return (
+            self.benchmark_dir.parent
+            / "cross_function_traces"
+            / f"source_f{source_problem_id}"
+            / f"{dim}D"
+            / f"std_{noise_std}"
+            / f"f{problem_id}"
+            / f"{solver}_{code_hash[:12]}"
+        )
+
     def remove_solver_traces(self, solver_dir: Path) -> None:
         """Remove one stale solver condition directory before a clean evaluation."""
         if solver_dir.exists():

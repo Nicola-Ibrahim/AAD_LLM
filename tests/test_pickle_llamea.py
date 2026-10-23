@@ -1,10 +1,14 @@
 import pickle
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 from llamea import LLaMEA
 
 from evolution.application import SessionConfig
+from evolution.application.exceptions import SynthesisResumeError
 from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.domain.enums import SynthesisMode
 from evolution.domain.vos import ProblemProfile
@@ -14,6 +18,7 @@ from evolution.infra.engines.llamea.prompts import SynthesisPrompts
 from evolution.infra.llm.client import LLMClient, Provider
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
+from shared.application.interfaces.candidate_executor import CANDIDATE_EXECUTION_VERSION
 from shared.domain.noise import NoNoiseStrategy
 from shared.infra.database import Database
 from shared.infra.database.tables import Base
@@ -27,6 +32,62 @@ def build_candidate_evaluation_service(*, problem, **kwargs):
         executor=create_candidate_executor(kwargs.get("timeout_seconds", 30.0)),
         **kwargs,
     )
+
+
+@pytest.mark.parametrize("mismatch", ["none", "budget", "iterations", "execution_contract"])
+def test_checkpoint_compatibility_does_not_silently_cold_restart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mismatch: str
+) -> None:
+    import evolution.infra.engines.llamea.runner as module
+
+    saved = object.__new__(Evaluator)
+    saved._config = SessionConfig(budget=100 if mismatch != "budget" else 200)
+    saved._current_iteration = 1 if mismatch != "iterations" else 0
+    if mismatch != "execution_contract":
+        saved._execution_contract = CANDIDATE_EXECUTION_VERSION
+    engine = SimpleNamespace(f=saved, generation=1)
+    monkeypatch.setattr(module, "load_synthesis_checkpoint", lambda path: engine)
+    fresh_engine = MagicMock()
+    monkeypatch.setattr(module, "LLaMEA", fresh_engine)
+    session = object.__new__(LLaMEASession)
+    session._archive_dir = tmp_path
+    session._experiment_id = 1
+    session._initial_iteration = 1
+    session._config = SessionConfig(budget=100)
+    session._llm_client = MagicMock()
+    session._logger = MagicMock()
+    (tmp_path / "llamea_config.pkl").write_bytes(b"fixture")
+    evaluator = MagicMock()
+    prompts = SynthesisPrompts(task="task", example="example", format="format")
+    if mismatch == "none":
+        assert session._create_synthesis_engine(evaluator, prompts) is engine
+        assert engine.f is evaluator
+    else:
+        with pytest.raises(ValueError, match="Cannot safely restore"):
+            session._create_synthesis_engine(evaluator, prompts)
+    fresh_engine.assert_not_called()
+
+
+def test_incompatible_resume_does_not_mark_experiment_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import evolution.infra.engines.llamea.runner as module
+
+    session = object.__new__(LLaMEASession)
+    session._problem = MagicMock()
+    session._synthesis_mode = SynthesisMode.EXPLICIT
+    session._prompt_strategy = "baseline"
+    session._config = SessionConfig()
+    session._experiment = MagicMock()
+    session._experiment_id = 1
+    session._db_repo = MagicMock()
+    session._setup_evaluator = MagicMock()
+    session._create_synthesis_engine = MagicMock(side_effect=SynthesisResumeError("incompatible"))
+    monkeypatch.setattr(module, "build_synthesis_prompts", MagicMock())
+    with pytest.raises(SynthesisResumeError, match="incompatible"):
+        session._execute_loop()
+    session._experiment.fail.assert_not_called()
+    session._db_repo.mark_failed.assert_not_called()
 
 
 # Mock logger

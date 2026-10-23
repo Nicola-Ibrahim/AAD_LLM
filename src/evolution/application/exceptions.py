@@ -12,4 +12,8 @@ class OrchestrationError(RuntimeError):
         self.errors = errors
 
 
-__all__ = ["OrchestrationError"]
+class SynthesisResumeError(ValueError):
+    """A saved session cannot be resumed without mixing execution protocols."""
+
+
+__all__ = ["OrchestrationError", "SynthesisResumeError"]

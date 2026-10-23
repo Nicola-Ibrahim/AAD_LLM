@@ -5,6 +5,7 @@ from functools import partial
 from multiprocessing import get_context
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from llamea import Solution
@@ -15,6 +16,7 @@ from evolution.application import (
     SynthesisEngine,
 )
 from evolution.application.exceptions import OrchestrationError
+from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
@@ -264,6 +266,8 @@ def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
         config=SessionConfig(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )
+    logger = Mock(spec=BaseLogger)
+    evaluator.logger = logger
 
     # Run evaluation
     solution = Solution(
@@ -285,6 +289,17 @@ def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
     assert summaries[0].iterations[0].iteration == 1
     assert summaries[0].iterations[0].algorithm_name == "test_search"
     assert summaries[0].iterations[0].error.error_type is None
+    logger.generation.assert_called_once()
+    logged = logger.generation.call_args.kwargs
+    assert logged["gen_idx"] == 1
+    assert logged["total_gens"] == 10
+    assert logged["algo_name"] == "test_search"
+    assert logged["error"] == summaries[0].iterations[0].fitness.final_error
+    assert logged["fitness"] == solution.fitness
+    assert logged["evals_used"] == summaries[0].iterations[0].execution.evaluations_used
+    assert logged["runtime"] == summaries[0].iterations[0].execution.runtime_seconds
+    assert logged["is_failure"] is False
+    assert logged.get("failure_reason", "") == ""
 
 
 def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory):
@@ -309,6 +324,8 @@ def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory
         config=SessionConfig(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )
+    logger = Mock(spec=BaseLogger)
+    evaluator.logger = logger
 
     # Invalid syntax code to trigger compiler failure
     solution = Solution(
@@ -328,6 +345,14 @@ def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory
     assert summaries[0].iterations[0].iteration == 1
     assert summaries[0].iterations[0].algorithm_name == "failed_search"
     assert summaries[0].iterations[0].error.error_type is not None
+    logger.generation.assert_called_once()
+    logged = logger.generation.call_args.kwargs
+    assert logged["gen_idx"] == 1
+    assert logged["algo_name"] == "failed_search"
+    assert logged["error"] is None
+    assert logged["fitness"] is None
+    assert logged["is_failure"] is True
+    assert logged["failure_reason"] == summaries[0].iterations[0].error.error_type
     assert "CodeValidationException" in summaries[0].iterations[0].error.error_type
 
 

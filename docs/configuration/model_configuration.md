@@ -61,6 +61,16 @@ prompt strategies, synthesis modes, iterations and future repeat counts.
 reliability settings. Audit and analysis discover completed models from the
 database rather than treating every registry preset as an evaluated model.
 
+Synthesis and benchmark TOML are validated at the infrastructure boundary before campaign
+planning. Integer settings require integers, boolean settings require TOML
+booleans, and real-valued settings accept integer or floating-point numbers—not
+numeric strings or booleans. Missing settings retain their existing defaults;
+malformed values and unknown keys raise field-specific validation errors rather
+than being silently replaced. Supported single-name/list forms, mode tables and
+configuration aliases are resolved there. Application workflows receive typed
+`SynthesisConfig`, `MatrixCondition`, `SessionConfig` and `BenchmarkConfig` objects, including enum
+values for modes, strategies and noise models; they do not reparse the TOML.
+
 ### Selective synthesis reruns
 
 Keep protocol settings in `synthesis.toml`; pass selections to each campaign call:

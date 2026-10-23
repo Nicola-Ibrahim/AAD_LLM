@@ -1,7 +1,6 @@
 """Data models shared by the single-session and campaign synthesis workflows."""
 
 from dataclasses import dataclass, field
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -15,22 +14,8 @@ class SessionConfig(BaseModel):
     budget: int = Field(default=1_000_000, ge=1)
     timeout_seconds: float = Field(default=30.0, gt=0.0)
     iterations: int = Field(default=10, ge=1)
-    instance_policy: Literal["fixed", "per_iteration"] = "fixed"
     stagnation_threshold: int = Field(default=3, ge=1)
     convergence_threshold: float = Field(default=1e-6, ge=0.0)
-
-    model_config = ConfigDict(frozen=True)
-
-
-class CandidateInstance(BaseModel):
-    """Persist the actual scientific condition without changing the SQLite schema."""
-
-    iteration: int = Field(ge=1)
-    instance_id: int = Field(ge=1)
-    noise_seed: int
-    true_optimum: float
-    budget: int = Field(ge=1)
-    instance_policy: Literal["per_iteration"] = "per_iteration"
 
     model_config = ConfigDict(frozen=True)
 

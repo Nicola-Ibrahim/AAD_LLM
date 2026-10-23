@@ -1,10 +1,15 @@
 """Construct the benchmark workflow and its notebook-facing collaborators."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 from benchmarking.application.benchmark.run import BenchmarkService
+from benchmarking.application.benchmark.trials import BenchmarkTrialRunner
+from benchmarking.application.benchmark.workload import BenchmarkWorkload
 from benchmarking.application.select_champions import ChampionSelectionService
+from benchmarking.domain.services.resolvers import ModelNames
 from benchmarking.infra.io.code_reader import FilesystemCodeReader
 from benchmarking.infra.io.trace_repository import BenchmarkStateRepository
 from benchmarking.infra.logging import BenchmarkLogger
@@ -26,31 +31,54 @@ class BenchmarkWorkflow:
     service: BenchmarkService
     sqlite_repo: SQLiteSynthesisReadRepository
     champion_selection: ChampionSelectionService
+    model_names: ModelNames
 
 
+@contextmanager
 def build_benchmark_workflow(
     project_root: Path = PROJECT_ROOT,
     *,
     planned_target_conditions: tuple[tuple[int, float, int], ...] = (),
-) -> BenchmarkWorkflow:
+) -> Iterator[BenchmarkWorkflow]:
     database = Database()
-    sqlite_repo = SQLiteSynthesisReadRepository(database.session_factory)
-    champions_repo = ChampionsReadRepository(database.session_factory)
-    config = BenchmarkConfigRepository().load_config()
-    return BenchmarkWorkflow(
-        service=BenchmarkService(
+    try:
+        sqlite_repo = SQLiteSynthesisReadRepository(database.session_factory)
+        champions_repo = ChampionsReadRepository(database.session_factory)
+        config = BenchmarkConfigRepository().load_config()
+        selection = ChampionSelectionService(champions_repo)
+        state = BenchmarkStateRepository()
+        logger = BenchmarkLogger()
+        code_reader = FilesystemCodeReader(project_root)
+        model_names = configured_model_names()
+        workload = BenchmarkWorkload(
             sqlite_repo=sqlite_repo,
-            champions_repo=champions_repo,
-            state_repo=BenchmarkStateRepository(),
+            champion_selection=selection,
+            state_repo=state,
+            code_reader=code_reader,
+            model_names=model_names,
             config=config,
-            logger=BenchmarkLogger(),
+            planned_target_conditions=planned_target_conditions,
+        )
+        trials = BenchmarkTrialRunner(
+            state_repo=state,
+            logger=logger,
             problem_factory=BBOBProblemFactory(),
             executor_factory=create_candidate_executor,
             baseline_resolver=get_baseline_runner,
-            code_reader=FilesystemCodeReader(project_root),
-            model_names=configured_model_names(),
-            planned_target_conditions=planned_target_conditions,
-        ),
-        sqlite_repo=sqlite_repo,
-        champion_selection=ChampionSelectionService(champions_repo),
-    )
+            code_reader=code_reader,
+            model_names=model_names,
+            config=config,
+        )
+        yield BenchmarkWorkflow(
+            service=BenchmarkService(
+                workload=workload,
+                trials=trials,
+                config=config,
+                logger=logger,
+            ),
+            sqlite_repo=sqlite_repo,
+            champion_selection=selection,
+            model_names=model_names,
+        )
+    finally:
+        database.dispose()

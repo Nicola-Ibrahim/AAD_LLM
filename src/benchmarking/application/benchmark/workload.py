@@ -1,8 +1,11 @@
+"""Discover executable conditions and project the same work into audit tables."""
+
 import hashlib
 from pathlib import Path
 
 import pandas as pd
 
+from benchmarking.application.benchmark.models import BenchmarkTask
 from benchmarking.application.benchmark_config import BenchmarkConfig
 from benchmarking.application.champions import Champion, GenerationMode
 from benchmarking.application.interfaces.benchmark_state_store import BenchmarkStateStore
@@ -11,10 +14,11 @@ from benchmarking.application.interfaces.synthesis_read_repository import Synthe
 from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.domain.services.condition_status import ConditionStatus, inspect_condition
 from benchmarking.domain.services.resolvers import ModelNames
+from shared.application.interfaces.candidate_executor import CANDIDATE_EXECUTION_VERSION
 
 
 class BenchmarkWorkload:
-    """Discover conditions and audit pending benchmark work."""
+    """Load one champion selection per discovery; audits never drive execution."""
 
     def __init__(
         self,
@@ -33,37 +37,23 @@ class BenchmarkWorkload:
         self.model_names = model_names
         self.config = config
         self.planned_target_conditions = planned_target_conditions
-        self.n_runs = config.trials_per_condition
-        self.target_noise_stds = config.target_noise_stds
-        self.classical_baselines = config.classical_baselines
-        self.baseline_labels = config.baseline_labels
 
-    def _discover_target_conditions(self) -> list[tuple[int, float, int]]:
-        """Discover unique (dim, noise_std, problem_id) conditions directly from SQLite or champions."""
+    def _discover_target_conditions(
+        self, champions: dict[str, Champion]
+    ) -> list[tuple[int, float, int]]:
         raw_conditions = self.sqlite_repo.get_target_conditions()
-
         if not raw_conditions:
-            champions_flat = self.champion_selection.flatten_champions()
             raw_conditions = [
-                (c["dim"], float(c.get("noise_std", 0.0)), c["problem_id"])
-                for c in champions_flat.values()
-                if "dim" in c and "problem_id" in c
+                (c["dim"], c.get("noise_std", 0.0), c["problem_id"]) for c in champions.values()
             ]
-
         if not raw_conditions:
             raw_conditions = list(self.planned_target_conditions)
-        if not raw_conditions:
-            return []
 
-        # Preserve observed tuples: expanding independent axes invents conditions
-        # that may never have been synthesized (including a synthetic clean case).
-        conditions = {
-            (int(dim), float(noise), int(problem)) for dim, noise, problem in raw_conditions
-        }
-        if self.target_noise_stds:
-            conditions = {c for c in conditions if c[1] in self.target_noise_stds}
+        # Keep observed tuples, not a Cartesian product that invents conditions.
+        conditions = set(raw_conditions)
+        if self.config.target_noise_stds:
+            conditions = {c for c in conditions if c[1] in self.config.target_noise_stds}
         if self.config.cross_function_enabled:
-            # Optional transfer studies explicitly request clean reference problems.
             conditions.update(
                 (dim, 0.0, problem)
                 for dim in {c[0] for c in raw_conditions}
@@ -71,268 +61,183 @@ class BenchmarkWorkload:
             )
         return sorted(conditions)
 
-    # ── Status Inspection Helper ─────────────────────────────────────────────────
-
     def inspect_status(
         self,
         target_dir: Path,
-        dim: int,
         expected_code_hash: str | None = None,
         code_valid: bool = True,
+        *,
+        champion: bool = False,
     ) -> ConditionStatus:
         return inspect_condition(
             code_available=code_valid,
             directory_exists=self.state_repo.solver_directory_exists(target_dir),
             provenance=self.state_repo.read_provenance(target_dir),
             expected_code_hash=expected_code_hash,
-            expected_trials=self.n_runs,
+            expected_trials=self.config.trials_per_condition,
             expected_budget=self.config.budget,
             trial_schedule=self.config.trial_schedule,
+            expected_execution_version=CANDIDATE_EXECUTION_VERSION if champion else None,
         )
 
-    # ── Workload Auditing Helpers & Builders ────────────────────────────────────
-
-    def _build_champion_audit_row(
+    def _champion_task(
         self,
-        champ_key: str,
-        champ: Champion,
-        benchmark_noise: float,
-        is_noise_robustness: bool,
+        key: str,
+        champion: Champion,
+        noise_std: float,
+        *,
+        noise_robustness: bool = False,
         target_problem_id: int | None = None,
-    ) -> dict[str, object]:
-        """Build a native, noise-robustness, or source–target transfer audit row."""
-        source_problem_id = champ["problem_id"]
-        p_id = source_problem_id if target_problem_id is None else target_problem_id
-        dim = champ["dim"]
-        strat = champ.get("prompt_strategy", "baseline")
-        llm_name = champ.get("llm_name", "llamea")
-        model_slug = self.model_names.get_model_slug(llm_name)
-        native_noise = float(champ.get("noise_std", 0.0))
-        raw_mode = champ.get("mode")
-        if raw_mode:
-            mode_enum = GenerationMode(raw_mode)
-        elif "_implicit" in champ_key:
-            mode_enum = GenerationMode.IMPLICIT
-        else:
-            mode_enum = GenerationMode.EXPLICIT
-
-        code_path_raw = Path(champ["code_path"])
-        code_valid = self.code_reader.exists(code_path_raw)
+    ) -> BenchmarkTask:
+        source_problem = champion["problem_id"]
+        problem = source_problem if target_problem_id is None else target_problem_id
+        dim = champion["dim"]
+        strategy = champion.get("prompt_strategy", "baseline")
+        model = champion.get("llm_name", "llamea")
+        slug = self.model_names.get_model_slug(model)
+        native_noise = champion.get("noise_std", 0.0)
+        mode = GenerationMode(
+            champion.get("mode") or ("implicit" if "_implicit" in key else "explicit")
+        )
+        suffix = (
+            "_implicit" if mode == GenerationMode.IMPLICIT else "_noisy" if native_noise else ""
+        )
+        solver = f"{slug}_{strategy}{suffix}"
+        code_path = Path(champion["code_path"])
+        code_available = self.code_reader.exists(code_path)
         code_hash = (
-            hashlib.sha256(self.code_reader.read(code_path_raw).strip().encode("utf-8")).hexdigest()
-            if code_valid
+            hashlib.sha256(self.code_reader.read(code_path).strip().encode("utf-8")).hexdigest()
+            if code_available
             else None
         )
-
-        match mode_enum:
-            case GenerationMode.IMPLICIT:
-                solver_folder = f"{model_slug}_{strat}_implicit"
-            case GenerationMode.EXPLICIT:
-                if native_noise == 0.0:
-                    solver_folder = f"{model_slug}_{strat}"
-                else:
-                    solver_folder = f"{model_slug}_{strat}_noisy"
-
-        display_suffix = " (noise robustness)" if is_noise_robustness else ""
-
-        target_dir = (
-            self.state_repo.benchmark_dir
-            / f"{dim}D"
-            / f"std_{benchmark_noise}"
-            / f"f{p_id}"
-            / solver_folder
-        )
-        if target_problem_id is not None and p_id != source_problem_id:
-            target_dir = (
-                self.state_repo.benchmark_dir.parent
-                / "cross_function_traces"
-                / f"source_f{source_problem_id}"
-                / f"{dim}D"
-                / f"std_{benchmark_noise}"
-                / f"f{p_id}"
-                / f"{solver_folder}_{(code_hash or 'missing')[:12]}"
+        directory = self.state_repo.condition_directory(dim, noise_std, problem, solver)
+        if target_problem_id is not None and problem != source_problem:
+            directory = self.state_repo.transfer_directory(
+                source_problem, dim, noise_std, problem, solver, code_hash or "missing"
             )
-        if target_problem_id is not None:
-            display_suffix = f" (f{source_problem_id} → f{p_id})"
-        inspection = self.inspect_status(
-            target_dir, dim, expected_code_hash=code_hash, code_valid=code_valid
-        )
-
-        row_key = f"{champ_key}_eval_std{benchmark_noise}" if is_noise_robustness else champ_key
-        solver_type = "noise_robustness" if is_noise_robustness else "champion"
+        solver_type = "noise_robustness" if noise_robustness else "champion"
+        row_key = f"{key}_eval_std{noise_std}" if noise_robustness else key
+        display_suffix = " (noise robustness)" if noise_robustness else ""
         if target_problem_id is not None:
             solver_type = "cross_function"
-            row_key = f"{champ_key}_target_f{p_id}"
-
-        return {
-            "key": row_key,
-            "raw_key": champ_key,
-            "solver_type": solver_type,
-            "solver": solver_folder,
-            "display_name": f"{llm_name}{display_suffix}",
-            "model": llm_name,
-            "strategy": strat,
-            "problem_id": p_id,
-            "source_problem_id": source_problem_id,
-            "source_noise_std": native_noise,
-            "code_hash": code_hash,
-            "target_dir": str(target_dir),
-            "dim": dim,
-            "noise_std": benchmark_noise,
-            "mode": mode_enum if not is_noise_robustness else GenerationMode.EXPLICIT,
-            "target_runs": self.n_runs,
-            "runs_found": inspection.reusable_trials,
-            "recorded_trials": inspection.recorded_trials,
-            "reason": inspection.reason,
-            "status": inspection.status,
-            "median_error": inspection.median_error,
-            "is_filtered": False,
-        }
-
-    # ── Workload Auditing ────────────────────────────────────────────────────────
-
-    def audit_champions_workload(self, include_noise_robustness: bool = False) -> pd.DataFrame:
-        """Audit LLM champion algorithms (evaluates native environments by default)."""
-        champions_flat = self.champion_selection.flatten_champions()
-        rows = [
-            self._build_champion_audit_row(
-                champ_key=k,
-                champ=c,
-                benchmark_noise=float(c.get("noise_std", 0.0)),
-                is_noise_robustness=False,
-            )
-            for k, c in champions_flat.items()
-        ]
-        df = pd.DataFrame(rows)
-        if include_noise_robustness:
-            df_cross = self.audit_noise_robustness_workload()
-            if not df_cross.empty:
-                df = pd.concat([df, df_cross], ignore_index=True)
-        return df
-
-    def audit_noise_robustness_workload(self) -> pd.DataFrame:
-        """Audit frozen clean champions on their original functions with added noise."""
-        if not self.config.noise_robustness_enabled:
-            return pd.DataFrame()
-        champions_flat = self.champion_selection.flatten_champions()
-        target_conditions = self._discover_target_conditions()
-        noisy_levels = sorted(
-            {noise for noise in self.target_noise_stds if noise > 0.0}
-            if self.target_noise_stds
-            else {float(c[1]) for c in target_conditions if c[1] > 0.0}
+            row_key = f"{key}_target_f{problem}"
+            display_suffix = f" (f{source_problem} → f{problem})"
+        return BenchmarkTask(
+            key=row_key,
+            raw_key=key,
+            solver_type=solver_type,
+            solver=solver,
+            display_name=f"{model}{display_suffix}",
+            model=model,
+            strategy=strategy,
+            problem_id=problem,
+            dim=dim,
+            noise_std=noise_std,
+            mode=GenerationMode.EXPLICIT if noise_robustness else mode,
+            target_dir=directory,
+            inspection=self.inspect_status(directory, code_hash, code_available, champion=True),
+            champion=champion,
+            code_hash=code_hash,
         )
-        if not noisy_levels:
-            return pd.DataFrame()
 
-        rows = []
-        for k, c in champions_flat.items():
-            native_noise = float(c.get("noise_std", 0.0))
-            is_clean = native_noise == 0.0 and c.get("mode") == GenerationMode.EXPLICIT
-            if not is_clean:
-                continue
-            for n_std in noisy_levels:
-                rows.append(
-                    self._build_champion_audit_row(
-                        champ_key=k,
-                        champ=c,
-                        benchmark_noise=n_std,
-                        is_noise_robustness=True,
+    def _baseline_tasks(self, conditions: list[tuple[int, float, int]]) -> list[BenchmarkTask]:
+        tasks = []
+        for solver in self.config.classical_baselines:
+            for dim, noise, problem in conditions:
+                directory = self.state_repo.condition_directory(dim, noise, problem, solver)
+                key = f"f{problem}_{dim}D_std{noise}_{solver}"
+                tasks.append(
+                    BenchmarkTask(
+                        key=key,
+                        raw_key=key,
+                        solver_type="baseline",
+                        solver=solver,
+                        display_name=self.config.baseline_labels.get(solver, solver.upper()),
+                        model=solver,
+                        strategy="classical",
+                        problem_id=problem,
+                        dim=dim,
+                        noise_std=noise,
+                        mode=GenerationMode.EXPLICIT,
+                        target_dir=directory,
+                        inspection=self.inspect_status(directory),
+                        champion=None,
+                        code_hash=None,
                     )
                 )
-        return pd.DataFrame(rows)
+        return tasks
 
-    def audit_cross_function_workload(self) -> pd.DataFrame:
-        """Audit frozen baseline-strategy champions on each clean target function."""
-        if not self.config.cross_function_enabled:
-            return pd.DataFrame()
-        rows = []
-        for key, champion in self.champion_selection.flatten_champions().items():
-            if (
-                float(champion.get("noise_std", 0.0)) != 0.0
-                or champion.get("mode") != GenerationMode.EXPLICIT
-                or champion.get("prompt_strategy", "baseline") != "baseline"
-            ):
-                continue
-            for target in sorted(
-                set(self.config.cross_function_problem_ids) | {champion["problem_id"]}
-            ):
-                rows.append(
-                    self._build_champion_audit_row(
-                        key,
-                        champion,
-                        0.0,
-                        False,
-                        target_problem_id=target,
+    def discover(self, solver_type: str = "all") -> list[BenchmarkTask]:
+        """Return typed tasks with exact candidates, in the existing execution order."""
+        allowed = {"all", "champions", "noise_robustness", "cross_function", "baselines"}
+        if solver_type not in allowed:
+            raise ValueError(f"Unknown benchmark workflow: {solver_type}")
+        champions = self.champion_selection.flatten_champions()
+        tasks = []
+        if solver_type in {"all", "champions"}:
+            tasks.extend(
+                self._champion_task(key, c, c.get("noise_std", 0.0)) for key, c in champions.items()
+            )
+        if solver_type in {"all", "noise_robustness"} and self.config.noise_robustness_enabled:
+            conditions = self._discover_target_conditions(champions)
+            levels = sorted(
+                {n for n in self.config.target_noise_stds if n > 0.0}
+                if self.config.target_noise_stds
+                else {n for _, n, _ in conditions if n > 0.0}
+            )
+            tasks.extend(
+                self._champion_task(key, c, noise, noise_robustness=True)
+                for key, c in champions.items()
+                if c.get("noise_std", 0.0) == 0.0 and c.get("mode") == GenerationMode.EXPLICIT
+                for noise in levels
+            )
+        if solver_type in {"all", "cross_function"} and self.config.cross_function_enabled:
+            transfer = [
+                self._champion_task(key, c, 0.0, target_problem_id=target)
+                for key, c in champions.items()
+                if c.get("noise_std", 0.0) == 0.0
+                and c.get("mode") == GenerationMode.EXPLICIT
+                and c.get("prompt_strategy", "baseline") == "baseline"
+                for target in sorted(
+                    set(self.config.cross_function_problem_ids) | {c["problem_id"]}
+                )
+            ]
+            tasks.extend(transfer)
+            if solver_type == "cross_function" and transfer:
+                dims = {task.dim for task in transfer}
+                problems = {task.problem_id for task in transfer}
+                tasks.extend(
+                    self._baseline_tasks(
+                        [
+                            c
+                            for c in self._discover_target_conditions(champions)
+                            if c[1] == 0.0 and c[0] in dims and c[2] in problems
+                        ]
                     )
                 )
-        return pd.DataFrame(rows)
-
-    def audit_baselines_workload(self) -> pd.DataFrame:
-        """Audit classical baseline algorithms across all target conditions."""
-        target_conditions = self._discover_target_conditions()
-        rows = []
-        for baseline_slug in self.classical_baselines:
-            b_name = self.baseline_labels.get(baseline_slug, baseline_slug.upper())
-            for dim, noise_std, p_id in target_conditions:
-                target_dir = (
-                    self.state_repo.benchmark_dir
-                    / f"{dim}D"
-                    / f"std_{noise_std}"
-                    / f"f{p_id}"
-                    / baseline_slug
-                )
-                inspection = self.inspect_status(
-                    target_dir, dim, expected_code_hash=None, code_valid=True
-                )
-                rows.append(
-                    {
-                        "key": f"f{p_id}_{dim}D_std{noise_std}_{baseline_slug}",
-                        "solver_type": "baseline",
-                        "solver": baseline_slug,
-                        "display_name": b_name,
-                        "model": baseline_slug,
-                        "strategy": "classical",
-                        "problem_id": p_id,
-                        "dim": dim,
-                        "noise_std": noise_std,
-                        "mode": GenerationMode.EXPLICIT,
-                        "target_runs": self.n_runs,
-                        "runs_found": inspection.reusable_trials,
-                        "recorded_trials": inspection.recorded_trials,
-                        "reason": inspection.reason,
-                        "status": inspection.status,
-                        "median_error": inspection.median_error,
-                        "is_filtered": False,
-                    }
-                )
-        return pd.DataFrame(rows)
+        if solver_type in {"all", "baselines"}:
+            tasks.extend(self._baseline_tasks(self._discover_target_conditions(champions)))
+        return tasks
 
     def audit_workload(self, solver_type: str = "all") -> pd.DataFrame:
-        """Audit native, noise-robustness, transfer, and classical workflows."""
-        dfs = []
-        if solver_type in ("all", "champions"):
-            dfs.append(self.audit_champions_workload())
-        if solver_type in ("all", "noise_robustness"):
-            dfs.append(self.audit_noise_robustness_workload())
-        if solver_type in ("all", "cross_function"):
-            transfer = self.audit_cross_function_workload()
-            dfs.append(transfer)
-            if solver_type == "cross_function" and not transfer.empty:
-                # Baselines are independent of the source champion: evaluate once
-                # in their ordinary folders, then reuse for every source row.
-                baselines = self.audit_baselines_workload()
-                dfs.append(
-                    baselines[
-                        (baselines["noise_std"] == 0.0)
-                        & baselines["dim"].isin(transfer["dim"])
-                        & baselines["problem_id"].isin(transfer["problem_id"])
-                    ]
-                )
-        if solver_type in ("all", "baselines"):
-            dfs.append(self.audit_baselines_workload())
+        """Read-only presentation of the same tasks used for execution."""
+        return pd.DataFrame(task.audit_row() for task in self.discover(solver_type))
 
-        if not dfs:
-            return pd.DataFrame()
-        return (
-            pd.concat(dfs, ignore_index=True) if any(not df.empty for df in dfs) else pd.DataFrame()
+    def audit_champions_workload(self, include_noise_robustness: bool = False) -> pd.DataFrame:
+        tasks = self.discover("champions")
+        if include_noise_robustness:
+            tasks.extend(self.discover("noise_robustness"))
+        return pd.DataFrame(task.audit_row() for task in tasks)
+
+    def audit_noise_robustness_workload(self) -> pd.DataFrame:
+        return self.audit_workload("noise_robustness")
+
+    def audit_cross_function_workload(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            task.audit_row()
+            for task in self.discover("cross_function")
+            if task.solver_type == "cross_function"
         )
+
+    def audit_baselines_workload(self) -> pd.DataFrame:
+        return self.audit_workload("baselines")

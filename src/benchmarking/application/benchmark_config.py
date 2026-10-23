@@ -12,6 +12,8 @@ from shared.domain.bbob import BBOBFunction
 class ReliabilityConfig(BaseModel):
     """Fixed, reproducible settings for LLM champion reliability analysis."""
 
+    model_config = ConfigDict(strict=True, extra="forbid")
+
     primary_prompt_strategy: str = "baseline"
     primary_target: float = Field(default=1e-8, gt=0.0)
     secondary_target: float = Field(default=1e-2, gt=0.0)
@@ -28,7 +30,7 @@ class BenchmarkConfig(BaseModel):
     Provides typed attributes and validated defaults for benchmarks and analysis.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(strict=True, extra="forbid")
 
     trials_per_condition: int = Field(
         default=20,

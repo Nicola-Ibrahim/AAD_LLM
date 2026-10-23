@@ -7,6 +7,11 @@ Stored experiment records and provenance—not today's defaults—identify past 
 
 ## Synthesis candidate scoring
 
+Fresh synthesis sessions use BBOB instance 1 for every candidate execution.
+The problem is reset between candidates without changing its instance; resumed
+sessions retain their recorded instance. There is no per-iteration instance
+schedule. Benchmarking independently uses held-out instances 11–30.
+
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"background":"#f2e6ff","lineColor":"#333333","fontFamily":"Arial, Helvetica, sans-serif","edgeLabelBackground":"#f2e6ff"},"flowchart":{"curve":"stepAfter","nodeSpacing":32,"rankSpacing":40}}}%%
 flowchart TD
@@ -101,7 +106,7 @@ are not failures and are excluded from aggregates.
 | Primary / secondary targets | `1e-8` / `1e-2`; baseline strategy for headline model comparisons. |
 | Uncertainty | Wilson condition intervals; deterministic condition-cluster aggregate bootstrap. |
 | Budget | Benchmark attaches `set_budget`; excess queries warn and return the last value. Synthesis does not itself attach that cap. |
-| Timeout | Per-candidate `func_timeout`; session process workers are not a per-candidate security sandbox. |
+| Timeout | Per-candidate `func_timeout` covers compilation, one initialization and the optimizer call; not a per-candidate security sandbox. |
 | Configured benchmark trials | 20; instances 11–30, seed `42+instance_id`, fixed budget 100,000 calls per trial, champion timeout 30 seconds. |
 
 Defaults come from [benchmark configuration](../configs/benchmark.toml).
@@ -118,25 +123,7 @@ Do not run new-protocol evaluations over the old active results: stale-condition
 execution can replace those condition folders. The verified archive remains
 separate and must not be modified.
 
-The exploratory synthesis configuration uses `instance_policy = "per_iteration"`:
-the first candidate execution uses instance 1, the second uses instance 2, and so
-on through instance 10, with noise/calibration seed `42 + instance_id`. Failed
-candidate executions also advance this schedule. Each candidate executes only
-once; LLaMEA retains incumbent fitness from earlier instances, so this pilot does
-not provide matched-instance candidate comparisons. No incumbent re-evaluation
-or score normalization is added. Setting the policy to `"fixed"` retains the
-previous single-instance behavior.
-
-Actual instance IDs, noise seeds, true optima and budgets are recorded beside
-each candidate as `iter_N.instance.json`, and in the LLaMEA solution metadata.
-The existing database schema is unchanged; the experiment's instance field
-continues to describe its starting instance, not every candidate's instance.
-Resuming fixed-instance iterations under the new policy is rejected. Completed
-experiments are still skipped; starting the pilot requires fresh storage or an
-explicit replacement request using the existing `rerun_experiment_ids` API.
-The archived `one_instance` study is not modified.
-
-The current benchmark schedule excludes synthesis instances 1–10.
+Synthesis uses instance 1; the current benchmark schedule excludes that instance.
 Instances 2–20 were used by the previous benchmark protocol, so this migration
 does not make them previously unobserved tests or undo benchmark-guided reruns.
 Repeated champion trials do not measure repeated LLM discovery.
@@ -148,7 +135,8 @@ Repeated champion trials do not measure repeated LLM discovery.
 ## Candidate execution and return contract
 
 Generated optimizers must return `(best_x, best_y)`. Scalar-only returns are rejected.
-The shared executor compiles the candidate, runs it with `func_timeout`, captures
+The shared executor compiles the candidate, initializes it once using the actual
+dimension when required, and calls it within a single `func_timeout` boundary. It captures
 warnings, converts the returned coordinates to a NumPy array, and requires a finite
 scalar `best_y`. Synthesis candidate evaluation checks the returned dimension and
 bounds and evaluates the point on the clean objective. Benchmark champion trials
@@ -159,6 +147,24 @@ Execution is guarded, but this is not a security sandbox. Synthesis campaigns us
 process-pool workers for sessions; individual candidate timeouts use
 `func_timeout`, not a newly spawned, forcibly terminated process per candidate.
 A timeout does not establish that the candidate was otherwise numerically correct.
+This mechanism is not a hard process-kill guarantee for blocking native code.
+Return conversion and clean scoring take place after the timed optimizer execution.
+
+`CANDIDATE_EXECUTION_VERSION` identifies the candidate execution behavior. Its value
+and existing serialized provenance/checkpoint keys are stable: renaming the Python
+constant alone does not invalidate results. Existing complete
+results remain readable and reusable; this change does not automatically rerun them.
+Partial champion results from an older or unknown execution contract cannot be
+extended with new-contract trials. Preserve them and explicitly choose replacement
+or fresh study storage instead of silently mixing execution behavior. New terminal
+trial records also retain exception type, message and traceback (except for timeout
+tracebacks). Missing historical diagnostics stay unknown; they are not reconstructed.
+
+Interrupted synthesis resumes with its recorded noise seed and a compatible recorded
+budget. Configuration changes, missing checkpoints, mismatched checkpoint settings,
+iteration counts or execution contracts stop resumption rather than silently starting
+a fresh search on top of saved results. Unknown historical synthesis seeds require
+explicit replacement. These safeguards do not reset or delete records automatically.
 
 Implementation:
 [executor](../src/shared/infra/execution/executor.py),
@@ -230,12 +236,14 @@ Noise strategy selection and magnitude are configuration-driven.
 ## Independent benchmarking and reliability
 
 [Benchmark configuration](../configs/benchmark.toml) currently requests 20 trials
-per condition, a fixed budget of 100,000 calls, and a 30-second execution timeout.
+per condition, a fixed budget of 100,000 calls, and a 30-second champion execution
+timeout. Classical baselines do not have the equivalent wall-clock timeout.
 Trial `r` uses instance `first_instance_id + r - 1` and seed
 `random_seed + instance_id`; the configuration gives instances 11–30 and seeds 53–72.
-These benchmark instances are disjoint from the exploratory synthesis schedule
-1–10. This does not erase historical benchmark-guided development. Repeated
-champion trials are not independent synthesis replicates.
+Synthesis uses instance 1, so the current benchmark instances are disjoint from
+the synthesis instance. This separation does not undo previous benchmark-guided
+development or reruns. Repeated champion trials are not independent synthesis
+replicates.
 
 Native terminal reliability scores the returned point using the clean objective.
 Convergence traces describe the best clean point queried during search; these
@@ -327,10 +335,11 @@ benchmark completion first. Large finite errors above the secondary target are
 performance-review flags, not automatic rerun requests. The summary neither
 launches experiments nor writes or deletes result files.
 
-Native workflows use the configured fixed budget of 100,000 calls, 20 paired
-benchmark instances 11–30, and seeds derived from the configured base seed.
-Generated champions retain their configured timeout; classical baselines do not
-have an equivalent process timeout. Baselines are general-purpose references; generated champions were
+The current protocol uses a fixed budget of 100,000 calls, 20 benchmark trials,
+paired instance IDs 11–30 and seeds derived from the configured base seed.
+Synthesis uses instance 1 throughout each fresh session. Generated champions
+retain the 30-second timeout; baselines do not have an equivalent timeout.
+Baselines are general-purpose references; generated champions were
 selected for their source problem. Poor transfer can therefore demonstrate
 specialization without contradicting strong native performance.
 

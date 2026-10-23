@@ -1,13 +1,18 @@
 import hashlib
 import random
 import time
-from collections.abc import Callable
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 
-from benchmarking.application.benchmark.types import BaselineRunnerResolver, ExecutorBuilder
+from benchmarking.application.benchmark.models import (
+    BaselineRunner,
+    BaselineRunnerResolver,
+    ExecutorBuilder,
+    RecordedTrial,
+)
 from benchmarking.application.benchmark_config import BenchmarkConfig
 from benchmarking.application.champions import Champion
 from benchmarking.application.interfaces.benchmark_state_store import BenchmarkStateStore
@@ -17,12 +22,15 @@ from benchmarking.domain.benchmark_results import (
     BENCHMARK_SCHEMA_VERSION,
     CHAMPION_RETURN_VALIDATION_VERSION,
     ERROR_DEFINITION,
-    executed_trial_count,
 )
 from benchmarking.domain.services.condition_status import inspect_condition
 from benchmarking.domain.services.resolvers import ModelNames
 from benchmarking.domain.services.returned_point import validate_returned_point
 from benchmarking.domain.trial_schedule import matching_trial_indices, select_scheduled_trials
+from shared.application.interfaces.candidate_executor import (
+    CANDIDATE_EXECUTION_VERSION,
+    CandidateTimeout,
+)
 from shared.application.interfaces.problem_factory import ProblemFactory
 from shared.domain.noise_model import NoiseModelEnum
 from shared.domain.problem import BaseProblem
@@ -50,13 +58,7 @@ class BenchmarkTrialRunner:
         self.baseline_resolver = baseline_resolver
         self.code_reader = code_reader
         self.model_names = model_names
-        self.n_runs = config.trials_per_condition
         self.config = config
-        self.trial_timeout_seconds = config.trial_timeout_seconds
-        self.observation_trace_points = config.observation_trace_points
-        self.force_rerun = config.force_rerun
-        self.random_seed = config.random_seed
-        self.first_instance_id = config.first_instance_id
 
     def _execute_trial_runs(
         self,
@@ -65,72 +67,39 @@ class BenchmarkTrialRunner:
         noise_std: float,
         p_id: int,
         algo_name: str,
-        runner_fn: Callable[[BaseProblem, int], tuple[float, float, int]],
+        runner_fn: BaselineRunner,
         prov_metadata: dict[str, object],
         expected_code_hash: str | None = None,
         verbose: bool = True,
     ) -> dict[str, object]:
         """Generic empirical trial executor handling incremental resumption, IOH logging, and provenance."""
         self.logger.verbose = verbose
-        existing_runs = 0
-        clean_errors: list[float] = []
-        best_objectives: list[float] = []
-        true_optima: list[float] = []
-        instance_ids: list[int] = []
-        trial_seeds: list[int] = []
-        runtimes: list[float] = []
-        evals_list: list[int] = []
-        observed_objectives: list[list[dict[str, float | int]]] = []
+        trials: list[RecordedTrial] = []
         can_resume = False
-        schedule = tuple(
-            (instance, self.random_seed + instance)
-            for instance in range(self.first_instance_id, self.first_instance_id + self.n_runs)
-        )
+        schedule = self.config.trial_schedule
         completed_identities: set[tuple[int, int]] = set()
-        trace_run_indices: list[int | None] = []
 
-        if not self.force_rerun and self.state_repo.solver_directory_exists(target_dir):
+        if not self.config.force_rerun and self.state_repo.solver_directory_exists(target_dir):
             prov = self.state_repo.read_provenance(target_dir)
             inspection = inspect_condition(
                 code_available=True,
                 directory_exists=True,
                 provenance=prov,
                 expected_code_hash=expected_code_hash,
-                expected_trials=self.n_runs,
+                expected_trials=self.config.trials_per_condition,
                 expected_budget=self.config.budget,
                 trial_schedule=schedule,
+                expected_execution_version=prov_metadata.get("candidate_execution_contract"),
             )
+            if inspection.reason == "incompatible_execution":
+                raise ValueError(
+                    "Cannot append champion trials from a different or unknown execution "
+                    "contract. Preserve this study and explicitly rerun the condition if "
+                    "needed; existing results were not removed."
+                )
             if inspection.reason in {"complete", "partial", "not_started"}:
                 existing_runs = inspection.reusable_trials
-                recorded = executed_trial_count(prov)
-                if any(
-                    len(prov.get(key, [])) < recorded for key in ("instance_ids", "trial_seeds")
-                ):
-                    raise ValueError(
-                        f"Cannot safely resume {target_dir}: recorded trials lack instance/seed identities. "
-                        "Existing results have not been removed."
-                    )
-                clean_errors = prov.get("clean_errors", [])[:recorded]
-                best_objectives = prov.get("best_objectives", [])[:recorded]
-                true_optima = prov.get("true_optima", [])[:recorded]
-                instance_ids = prov.get("instance_ids", [])[:recorded]
-                trial_seeds = prov.get("trial_seeds", [])[:recorded]
-                runtimes = prov.get("runtimes", [])[:recorded]
-                evals_list = prov.get("evaluations_used", [])[:recorded]
-                observed_objectives = prov.get("observed_objectives", [])[:recorded]
-                trace_run_indices = [
-                    trial.get("trace_run_index")
-                    for trial in prov.get("trial_records", [])[:recorded]
-                ]
-                trace_run_indices += [None] * (recorded - len(trace_run_indices))
-                completed_identities = {
-                    (instance_ids[i], trial_seeds[i])
-                    for i in matching_trial_indices(prov, schedule)
-                }
-                # Historical trials have no observation sidecar; preserve their
-                # positions so resumed trial indices do not become misaligned.
-                observed_objectives += [[] for _ in range(recorded - len(observed_objectives))]
-                if existing_runs >= self.n_runs:
+                if existing_runs >= self.config.trials_per_condition:
                     selected = select_scheduled_trials(prov, schedule)
                     self.logger.cached(existing_runs, selected["median_error"])
                     return {
@@ -141,28 +110,23 @@ class BenchmarkTrialRunner:
                         "clean_errors": selected["clean_errors"],
                         "n_runs": existing_runs,
                     }
-                can_resume = recorded > 0
+                trials = RecordedTrial.from_provenance(prov)
+                completed_identities = {
+                    trials[i].identity for i in matching_trial_indices(prov, schedule)
+                }
+                can_resume = bool(trials)
                 if existing_runs > 0:
-                    self.logger.resuming(existing_runs, self.n_runs)
+                    self.logger.resuming(existing_runs, self.config.trials_per_condition)
 
-        if not can_resume:
-            if self.state_repo.solver_directory_exists(target_dir):
-                # Stale traces cannot safely be resumed under the current
-                # evaluation schema. Remove only this exact condition folder;
-                # the notebook regenerates the champion export from the DB.
-                self.state_repo.remove_solver_traces(target_dir)
-            clean_errors, best_objectives, true_optima = [], [], []
-            instance_ids, trial_seeds = [], []
-            runtimes, evals_list = [], []
-            observed_objectives = []
-            is_incremental = False
-        else:
-            is_incremental = True
+        if not can_resume and self.state_repo.solver_directory_exists(target_dir):
+            # Preserve the existing force/stale-result policy: replace only this
+            # exact condition. Incompatible partial histories were rejected above.
+            self.state_repo.remove_solver_traces(target_dir)
 
         noise_model = NoiseModelEnum.NONE if noise_std == 0.0 else NoiseModelEnum.HETEROSCEDASTIC
         next_trace_index = self.state_repo.get_trace_run_count(target_dir)
 
-        with self.state_repo.open_run_logger(target_dir, algo_name, is_incremental) as logger_ioh:
+        with self.state_repo.open_run_logger(target_dir, algo_name, can_resume) as logger_ioh:
             for run_idx, (instance_id, trial_seed) in enumerate(schedule, start=1):
                 if (instance_id, trial_seed) in completed_identities:
                     continue
@@ -178,48 +142,69 @@ class BenchmarkTrialRunner:
                     seed=trial_seed,
                 )
                 true_optimum = float(prob.true_optimum)
-                true_optima.append(true_optimum)
-                instance_ids.append(instance_id)
-                trial_seeds.append(trial_seed)
 
                 prob.attach_logger(logger_ioh)
                 prob.set_budget(self.config.budget)
                 if noise_std > 0.0:
                     prob.configure_observation_checkpoints(
-                        self.config.budget, self.observation_trace_points
+                        self.config.budget, self.config.observation_trace_points
                     )
                 trial_started = time.perf_counter()
+                diagnostic: dict[str, str | None] = {
+                    "error_type": None,
+                    "error_message": None,
+                    "error_traceback": None,
+                }
                 try:
                     best_objective, rt, _reported_evals = runner_fn(prob, self.config.budget)
                     best_objective = float(best_objective)
                     if not np.isfinite(best_objective):
                         best_objective = float("inf")
                         best_error = float("inf")
+                        diagnostic.update(
+                            error_type="NonFiniteObjective",
+                            error_message="The solver returned a non-finite objective value.",
+                        )
                     else:
                         best_error = objective_gap(best_objective, true_optimum)
-                except Exception:
+                except Exception as error:
                     best_objective, best_error = float("inf"), float("inf")
                     rt = time.perf_counter() - trial_started
+                    diagnostic.update(
+                        error_type=type(error).__name__,
+                        error_message=str(error),
+                        error_traceback=None
+                        if isinstance(error, CandidateTimeout)
+                        else traceback.format_exc(),
+                    )
 
                 evals_used = int(prob.evaluations)
-                clean_errors.append(best_error)
-                best_objectives.append(best_objective)
-                runtimes.append(rt)
-                evals_list.append(evals_used)
-                trace_run_indices.append(next_trace_index if evals_used > 0 else None)
-                next_trace_index += int(evals_used > 0)
-                observed_objectives.append(
-                    [
-                        {
-                            "evaluations": sample.evaluations,
-                            "observed_y": sample.observed_y,
-                        }
-                        for sample in prob.observation_samples()
-                    ]
+                trials.append(
+                    RecordedTrial(
+                        instance_id=instance_id,
+                        seed=trial_seed,
+                        true_optimum=true_optimum,
+                        best_objective=best_objective,
+                        error=best_error,
+                        runtime=rt,
+                        evaluations_used=evals_used,
+                        trace_run_index=next_trace_index if evals_used > 0 else None,
+                        error_type=diagnostic["error_type"],
+                        error_message=diagnostic["error_message"],
+                        error_traceback=diagnostic["error_traceback"],
+                        observations=[
+                            {
+                                "evaluations": sample.evaluations,
+                                "observed_y": sample.observed_y,
+                            }
+                            for sample in prob.observation_samples()
+                        ],
+                    )
                 )
+                next_trace_index += int(evals_used > 0)
                 self.logger.trial(
                     trial_idx=run_idx,
-                    total_trials=self.n_runs,
+                    total_trials=self.config.trials_per_condition,
                     best_clean=best_error,
                     runtime=rt,
                     evals_used=evals_used,
@@ -232,13 +217,13 @@ class BenchmarkTrialRunner:
 
         active_indices = matching_trial_indices(
             {
-                "clean_errors": clean_errors,
-                "instance_ids": instance_ids,
-                "trial_seeds": trial_seeds,
+                "clean_errors": [trial.error for trial in trials],
+                "instance_ids": [trial.instance_id for trial in trials],
+                "trial_seeds": [trial.seed for trial in trials],
             },
             schedule,
         )
-        median_err = float(np.median([clean_errors[i] for i in active_indices]))
+        median_err = float(np.median([trials[i].error for i in active_indices]))
         self.logger.condition_complete(len(active_indices), median_err)
         prov_data = {
             **prov_metadata,
@@ -249,34 +234,24 @@ class BenchmarkTrialRunner:
             "dim": dim,
             "noise_std": noise_std,
             "budget": self.config.budget,
-            "instance_ids": instance_ids,
-            "trial_seeds": trial_seeds,
-            "true_optima": true_optima,
-            "best_objectives": best_objectives,
-            "n_runs": len(clean_errors),
+            "instance_ids": [trial.instance_id for trial in trials],
+            "trial_seeds": [trial.seed for trial in trials],
+            "true_optima": [trial.true_optimum for trial in trials],
+            "best_objectives": [trial.best_objective for trial in trials],
+            "n_runs": len(trials),
             "requested_instance_ids": [instance for instance, _ in schedule],
             "requested_trial_seeds": [seed for _, seed in schedule],
             "median_error": median_err,
             "median_clean_error": median_err,
-            "errors": clean_errors,
-            "clean_errors": clean_errors,
+            "errors": [trial.error for trial in trials],
+            "clean_errors": [trial.error for trial in trials],
             "trial_records": [
-                {
-                    "trial": idx,
-                    "instance_id": instance_ids[idx - 1],
-                    "seed": trial_seeds[idx - 1],
-                    "true_optimum": true_optima[idx - 1],
-                    "best_objective": best_objectives[idx - 1],
-                    "error": clean_errors[idx - 1],
-                    "evaluations_used": evals_list[idx - 1],
-                    "trace_run_index": trace_run_indices[idx - 1],
-                }
-                for idx in range(1, len(clean_errors) + 1)
+                trial.provenance_row(index) for index, trial in enumerate(trials, start=1)
             ],
-            "runtimes": runtimes,
-            "evaluations_used": evals_list,
-            "observed_objectives": observed_objectives,
-            "observation_trace_points": self.observation_trace_points,
+            "runtimes": [trial.runtime for trial in trials],
+            "evaluations_used": [trial.evaluations_used for trial in trials],
+            "observed_objectives": [trial.observations for trial in trials],
+            "observation_trace_points": self.config.observation_trace_points,
             "evaluated_at": datetime.now(timezone.utc).isoformat(),
         }
         self.state_repo.write_provenance(target_dir, prov_data)
@@ -324,21 +299,13 @@ class BenchmarkTrialRunner:
         code_hash = hashlib.sha256(code_str.strip().encode("utf-8")).hexdigest()
         model_slug = self.model_names.get_model_slug(llm_name)
         folder = solver_folder or f"{model_slug}_{strat}"
-        target_dir = (
-            self.state_repo.benchmark_dir / f"{dim}D" / f"std_{noise_std}" / f"f{p_id}" / folder
-        )
+        target_dir = self.state_repo.condition_directory(dim, noise_std, p_id, folder)
         if target_problem_id is not None and p_id != source_problem_id:
-            target_dir = (
-                self.state_repo.benchmark_dir.parent
-                / "cross_function_traces"
-                / f"source_f{source_problem_id}"
-                / f"{dim}D"
-                / f"std_{noise_std}"
-                / f"f{p_id}"
-                / f"{folder}_{code_hash[:12]}"
+            target_dir = self.state_repo.transfer_directory(
+                source_problem_id, dim, noise_std, p_id, folder, code_hash
             )
 
-        executor = self.executor_factory(self.trial_timeout_seconds)
+        executor = self.executor_factory(self.config.trial_timeout_seconds)
 
         def champion_runner(prob: BaseProblem, budget: int) -> tuple[float, float, int]:
             t0 = time.perf_counter()
@@ -356,6 +323,7 @@ class BenchmarkTrialRunner:
 
         prov_metadata = {
             "model": llm_name,
+            "candidate_execution_contract": CANDIDATE_EXECUTION_VERSION,
             "return_validation_version": CHAMPION_RETURN_VALIDATION_VERSION,
             "model_slug": model_slug,
             "strategy": strat,
@@ -400,13 +368,7 @@ class BenchmarkTrialRunner:
         """Execute empirical trials for a classical baseline algorithm."""
         self.logger.verbose = verbose
         baseline_fn = self.baseline_resolver(baseline_slug)
-        target_dir = (
-            self.state_repo.benchmark_dir
-            / f"{dim}D"
-            / f"std_{noise_std}"
-            / f"f{p_id}"
-            / baseline_slug
-        )
+        target_dir = self.state_repo.condition_directory(dim, noise_std, p_id, baseline_slug)
 
         prov_metadata = {"baseline": baseline_slug}
 

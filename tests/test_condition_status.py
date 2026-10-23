@@ -150,6 +150,36 @@ def test_old_champion_results_are_not_reused_after_return_validation_change() ->
     )
 
 
+@pytest.mark.parametrize("count", [1, 20])
+@pytest.mark.parametrize("version", [None, "old", "current"])
+def test_execution_version_only_blocks_appending_partial_histories(count, version) -> None:
+    result = inspect_condition(
+        code_available=True,
+        directory_exists=True,
+        expected_code_hash=None,
+        expected_trials=20,
+        expected_budget=100_000,
+        expected_execution_version="current",
+        provenance={
+            "evaluation_schema_version": BENCHMARK_SCHEMA_VERSION,
+            "error_definition": ERROR_DEFINITION,
+            "budget": 100_000,
+            "clean_errors": [0.0] * count,
+            "candidate_execution_contract": version,
+        },
+    )
+    if count == 20:
+        assert result.status == "COMPLETED"
+        assert result.reusable_trials == 20
+    elif version == "current":
+        assert result.reason == "partial"
+        assert result.reusable_trials == 1
+    else:
+        assert result.reason == "incompatible_execution"
+        assert result.reusable_trials == 0
+    assert result.recorded_trials == count
+
+
 def test_ranking_is_owned_by_selection_and_preserves_sqlite_null_order() -> None:
     base = dict(
         llm_name="model",

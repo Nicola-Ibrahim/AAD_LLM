@@ -323,3 +323,30 @@ def test_replacement_payload_keeps_id_and_starts_at_generation_one() -> None:
     assert campaign.problem_factory.create.call_args.kwargs["seed"] == 43
     campaign.sqlite_repo.reset_experiment.assert_not_called()
     campaign.sqlite_repo.create_experiment.assert_not_called()
+
+
+def test_resume_preserves_seed_and_budget() -> None:
+    selected = experiment(1401, status="running")
+    selected.iterations = [object()]
+    selected.budget = 100000
+    selected.max_iterations = 10
+    selected.synthesis_seed = 43
+    selected.problem.instance_id = 1
+    campaign = planner(SynthesisConfig(budget=100000), [selected])
+    task = CampaignPlanner._build_task_from_summary(campaign, selected)
+    assert task["initial_iteration"] == 1
+    assert task["config"].budget == selected.budget
+    assert campaign.problem_factory.create.call_args.kwargs["seed"] == 43
+
+
+@pytest.mark.parametrize(("budget", "seed"), [(1000, 43), (None, 43), (100000, None)])
+def test_unsafe_resume_fails_before_problem_creation(budget: int | None, seed: int | None) -> None:
+    selected = experiment(1401, status="running")
+    selected.iterations = [object()]
+    selected.budget = budget
+    selected.synthesis_seed = seed
+    campaign = planner(SynthesisConfig(budget=100000), [selected])
+    with pytest.raises(ValueError, match="Cannot resume"):
+        CampaignPlanner._build_task_from_summary(campaign, selected)
+    campaign.problem_factory.create.assert_not_called()
+    campaign.sqlite_repo.reset_experiment.assert_not_called()

@@ -7,6 +7,9 @@ import pandas as pd
 import pytest
 
 from benchmarking.application.benchmark.run import BenchmarkService
+from benchmarking.application.benchmark.trials import BenchmarkTrialRunner
+from benchmarking.application.benchmark.workload import BenchmarkWorkload
+from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.infra.io.code_reader import FilesystemCodeReader
 from benchmarking.infra.io.trace_repository import BenchmarkStateRepository, IOHTraceReader
 from benchmarking.infra.logging import BenchmarkLogger
@@ -28,14 +31,36 @@ from shared.infra.problems.factory import BBOBProblemFactory
 def build_benchmark_service(**kwargs):
     project_root = kwargs.pop("project_root", PROJECT_ROOT)
     config_repo = kwargs.pop("config_repo")
-    return BenchmarkService(
+    config = config_repo.load_config()
+    selection = ChampionSelectionService(kwargs.pop("champions_repo"))
+    state = kwargs.pop("state_repo")
+    logger = kwargs.pop("logger")
+    code_reader = FilesystemCodeReader(project_root)
+    names = configured_model_names()
+    workload = BenchmarkWorkload(
+        sqlite_repo=kwargs.pop("sqlite_repo"),
+        champion_selection=selection,
+        state_repo=state,
+        code_reader=code_reader,
+        model_names=names,
+        config=config,
         **kwargs,
-        config=config_repo.load_config(),
+    )
+    trials = BenchmarkTrialRunner(
+        state_repo=state,
+        logger=logger,
+        config=config,
         problem_factory=BBOBProblemFactory(),
         executor_factory=create_candidate_executor,
         baseline_resolver=get_baseline_runner,
-        code_reader=FilesystemCodeReader(project_root),
-        model_names=configured_model_names(),
+        code_reader=code_reader,
+        model_names=names,
+    )
+    return BenchmarkService(
+        workload=workload,
+        trials=trials,
+        config=config,
+        logger=logger,
     )
 
 

@@ -8,24 +8,20 @@ Adapts the CandidateEvaluationService service to the LLaMEA Solution callable in
 - Manages state serialization for picklable warm starts.
 """
 
-from typing import Any
-
 from llamea import Solution
 
+from evolution.application.interfaces.code_store import SynthesisCodeStore
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
-from evolution.application.synthesis.models import CandidateInstance, SessionConfig
+from evolution.application.synthesis.models import SessionConfig
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.vos import IterationMetadata, ProblemProfile
 from evolution.infra.engines.llamea.prompts import FeedbackRenderer
 from evolution.infra.logging import SynthesisLogger
-from evolution.infra.storage.code.repository import CodeRepository
-from shared.domain.noise_model import NoiseModelEnum
+from shared.application.interfaces.candidate_executor import CANDIDATE_EXECUTION_VERSION
 from shared.domain.problem import BaseProblem
-from shared.infra.execution import AlgorithmExecutor
-from shared.infra.execution.candidate_executor import AlgorithmExecutorAdapter
-from shared.infra.problems.factory import BBOBProblemFactory
+from shared.infra.execution.candidate_executor import create_candidate_executor
 
 
 class Evaluator:
@@ -39,14 +35,13 @@ class Evaluator:
         self,
         problem: BaseProblem,
         db_repo: SynthesisRepository,
-        code_repo: CodeRepository,
+        code_repo: SynthesisCodeStore,
         experiment_id: int,
         config: SessionConfig,
         candidate_evaluation_service: CandidateEvaluationService,
         initial_iteration: int = 0,
     ) -> None:
         self._problem = problem
-        self._first_instance_id = problem.instance_id
         self._db_repo = db_repo
         self._code_repo = code_repo
         self._config = config
@@ -56,16 +51,7 @@ class Evaluator:
         self._experiment: ExperimentSummary | None = None
         self._candidate_evaluation_service = candidate_evaluation_service
         self._feedback_renderer = FeedbackRenderer()
-
-    @property
-    def candidate_evaluation_service(self) -> CandidateEvaluationService:
-        """Expose the candidate evaluation application service."""
-        return self._candidate_evaluation_service
-
-    @property
-    def feedback_renderer(self) -> FeedbackRenderer:
-        """Expose prompt feedback renderer."""
-        return self._feedback_renderer
+        self._execution_contract = CANDIDATE_EXECUTION_VERSION
 
     @property
     def logger(self) -> BaseLogger:
@@ -106,17 +92,6 @@ class Evaluator:
                 experiment_id=self._experiment_id,
             )
             code_path_str = str(code_path)
-        if self._code_repo is not None and self._config.instance_policy == "per_iteration":
-            self._code_repo.save_candidate_instance(
-                self._experiment_id,
-                CandidateInstance(
-                    iteration=self._current_iteration,
-                    instance_id=self._problem.instance_id,
-                    noise_seed=42 + self._problem.instance_id,
-                    true_optimum=self._problem.true_optimum,
-                    budget=self._config.budget,
-                ),
-            )
 
         updated_code = metadata.code.model_copy(update={"code_path": code_path_str})
         final_metadata = metadata.model_copy(
@@ -135,7 +110,7 @@ class Evaluator:
         if self._experiment is not None:
             self._experiment.record_iteration(final_metadata, self._current_iteration)
 
-    def __call__(self, solution: Solution, explogger: Any | None = None) -> Solution:
+    def __call__(self, solution: Solution, explogger: object | None = None) -> Solution:
         """Execute and score a candidate optimization algorithm solution.
 
         Args:
@@ -146,34 +121,6 @@ class Evaluator:
             Solution: The modified solution object populated with fitness scores and feedback.
         """
         llm_gen_time = solution.metadata.get("llm_generation_time")
-        total_gens = self._config.iterations
-
-        if self._config.instance_policy == "per_iteration":
-            if self._current_iteration >= total_gens:
-                raise ValueError("Instance schedule exhausted; no candidate was executed.")
-            instance_id = self._first_instance_id + self._current_iteration
-            self._problem = BBOBProblemFactory().create(
-                problem_id=self._problem.problem_id,
-                dim=self._problem.dim,
-                noise_std=self._problem.noise_std,
-                noise_model=NoiseModelEnum(self._problem.noise_model),
-                instance_id=instance_id,
-                seed=42 + instance_id,
-            )
-            self._problem.set_budget(self._config.budget)
-            self._candidate_evaluation_service.set_problem(self._problem)
-            solution.metadata.update(
-                instance_id=instance_id,
-                instance_policy="per_iteration",
-                noise_seed=42 + instance_id,
-                true_optimum=self._problem.true_optimum,
-            )
-            self._logger.info(
-                f"  Exp ID: #{self._experiment_id} | Candidate {self._current_iteration + 1}/{total_gens} | "
-                f"Instance: {instance_id} | Noise seed: {42 + instance_id} | "
-                f"f-opt: {self._problem.true_optimum:.3f}"
-            )
-
         result = self._candidate_evaluation_service.evaluate(
             code=solution.code,
             name=solution.name,
@@ -189,44 +136,29 @@ class Evaluator:
                 self._logger.stagnation_warning(
                     self._config.stagnation_threshold, self._config.stagnation_threshold
                 )
-            if not result.is_failure and result.final_error is not None:
-                self._logger.generation(
-                    gen_idx=self._current_iteration,
-                    total_gens=total_gens,
-                    algo_name=solution.name or "Candidate",
-                    error=result.final_error,
-                    fitness=result.fitness_score,
-                    evals_used=result.metadata.execution.evaluations_used,
-                    runtime=result.metadata.execution.runtime_seconds,
-                    is_failure=False,
-                )
-            else:
-                failure_reason = (
-                    result.metadata.error.error_type
-                    if result.metadata.error
-                    else "ExecutionFailure"
-                )
-                self._logger.generation(
-                    gen_idx=self._current_iteration,
-                    total_gens=total_gens,
-                    algo_name=solution.name or "Candidate",
-                    error=None,
-                    fitness=None,
-                    evals_used=result.metadata.execution.evaluations_used,
-                    runtime=result.metadata.execution.runtime_seconds,
-                    is_failure=True,
-                    failure_reason=failure_reason or "ExecutionFailure",
-                )
+            succeeded = not result.is_failure and result.final_error is not None
+            failure_reason = result.metadata.error.error_type if result.metadata.error else None
+            self._logger.generation(
+                gen_idx=self._current_iteration,
+                total_gens=self._config.iterations,
+                algo_name=solution.name or "Candidate",
+                error=result.final_error if succeeded else None,
+                fitness=result.fitness_score if succeeded else None,
+                evals_used=result.metadata.execution.evaluations_used,
+                runtime=result.metadata.execution.runtime_seconds,
+                is_failure=not succeeded,
+                failure_reason="" if succeeded else failure_reason or "ExecutionFailure",
+            )
 
         return solution
 
-    def __getstate__(self) -> dict[str, Any]:
+    def __getstate__(self) -> dict[str, object]:
         state = self.__dict__.copy()
         state["_candidate_evaluation_service"] = None
         state["_logger"] = None
         return state
 
-    def __setstate__(self, state: dict[str, Any]) -> None:
+    def __setstate__(self, state: dict[str, object]) -> None:
         self.__dict__.update(state)
         self._logger = getattr(self, "_logger", None) or SynthesisLogger()
         self._feedback_renderer = getattr(self, "_feedback_renderer", None) or FeedbackRenderer()
@@ -236,9 +168,7 @@ class Evaluator:
             timeout_seconds=self._config.timeout_seconds,
             stagnation_threshold=self._config.stagnation_threshold,
             convergence_threshold=self._config.convergence_threshold,
-            executor=AlgorithmExecutorAdapter(
-                AlgorithmExecutor(timeout_seconds=self._config.timeout_seconds)
-            ),
+            executor=create_candidate_executor(self._config.timeout_seconds),
         )
         if getattr(self, "_db_repo", None) is None:
             print(
