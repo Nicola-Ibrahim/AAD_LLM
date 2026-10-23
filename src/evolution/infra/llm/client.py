@@ -18,6 +18,8 @@ import openai
 from llamea import LLM, Gemini_LLM, OpenAI_LLM
 from llamea.solution import Solution
 
+from evolution.infra.llm.gateway import GatewayLLM, GatewayRequestLimiter
+
 
 class Provider(StrEnum):
     GEMINI = "gemini"
@@ -92,6 +94,9 @@ class LLMClient:
 
     def validate_connection(self) -> None:
         """Explicitly probe and validate network reachability to the LLM backend."""
+        if self.provider == Provider.UPB:
+            self.list_models()
+            return
         if config := _OPENAI_ENDPOINTS.get(self.provider):
             base_url = os.environ.get(config.base_url_env, config.default_base_url)
             api_key = os.environ.get(config.api_key_env, config.default_api_key)
@@ -184,6 +189,30 @@ class LLMClient:
         if self.provider == Provider.UPB and not model:
             raise ValueError("Set UPB_MODEL or pass model= with an exact gateway model ID.")
 
+        if self.provider == Provider.UPB:
+            llm = GatewayLLM(
+                api_key=api_key,
+                model=model,
+                base_url=base_url,
+                limiter=GatewayRequestLimiter.for_model(base_url, model),
+                **self.kwargs,
+            )
+            if should_validate:
+                try:
+                    llm.client.models.list()
+                except openai.APIError as error:
+                    llm.client.close()
+                    status = (
+                        error.status_code
+                        if isinstance(error, openai.APIStatusError)
+                        else type(error).__name__
+                    )
+                    raise ConnectionError(
+                        f"Could not connect to the {config.display_name} LLM server at '{base_url}' "
+                        f"({status}). Check credentials, quota and network/VPN access."
+                    ) from None
+            return llm
+
         if should_validate:
             self._check_connection(base_url, config.display_name, api_key)
             model = model or self._get_local_model_name(base_url, api_key)
@@ -226,8 +255,12 @@ class LLMClient:
                 if hasattr(sol, "add_metadata"):
                     sol.add_metadata("llm_generation_time", elapsed)
                 return sol
-            except Exception:
-                if attempt == max_retries:
+            except Exception as error:
+                # GatewayLLM already owns paced network retries. Keep the existing
+                # outer retries for malformed candidate output, not API failures.
+                if attempt == max_retries or (
+                    self.provider == Provider.UPB and isinstance(error, openai.APIError)
+                ):
                     raise
                 time.sleep(backoff * attempt)
 

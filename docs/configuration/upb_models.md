@@ -25,12 +25,18 @@ Other candidates for a small comparison are `gwdg.meta-llama-3.1-8b-instruct` an
 single-generation smoke test before committing to a complete campaign. Catalogue entries
 are not evidence that any model will outperform the historical champions.
 
-GWDG describes its hosted models as free in its own [Chat AI service](https://docs.hpc.gwdg.de/services/ai-services/chat-ai/index.html),
-but that does not establish the UPB gateway's account-specific pricing or quotas.
-The [linked university terms](https://www.uni-paderborn.de/fileadmin/imt/datenschutz/KI-Chat/KI-Chat_Betriebsregeln.pdf)
-contain restrictions on automated output extraction; obtain clarification for automated
-LLaMEA research campaigns. `max_workers = 1` limits simultaneous sessions only, not overall
-request/token consumption. Current LLaMEA sends a temperature parameter; some reasoning
+The [UPB budget guidance](https://hilfe.uni-paderborn.de/Budgets_im_AI-Chat_und_AI-Gateway)
+confirms that GWDG and KIConnect have no consumption charges; OpenAI draws from the
+$20 per-person monthly allowance. Published provider rates are 10 RPM for GWDG and
+100 RPM for KIConnect/OpenAI, with model-specific TPM limits. The gateway instructions
+recommend throttling and off-peak execution for large evaluations. Applicable terms
+still apply.
+
+Keep `max_workers = 0` (automatic) or your chosen fixed CPU-worker count for either
+local or hosted synthesis. Gateway request pacing is automatic and shared across
+workers on one host: defaults are 8 RPM for GWDG and 80 RPM for KIConnect/OpenAI.
+See [model configuration](model_configuration.md) for overrides, scope and limitations.
+This is not a token/minute or monthly-spending limiter. Current LLaMEA sends a temperature parameter; some reasoning
 models may require a different request adapter and are not automatically interchangeable.
 
 ## gwdg (20)

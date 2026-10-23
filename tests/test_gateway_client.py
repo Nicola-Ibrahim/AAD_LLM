@@ -3,7 +3,6 @@
 import io
 import json
 import pickle
-import urllib.error
 from unittest.mock import MagicMock
 
 import httpx
@@ -14,26 +13,32 @@ from evolution.infra.llm.client import LLMClient, Provider
 
 
 @pytest.fixture
-def gateway_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def gateway_env(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.setenv("UPB_API_KEY", "test-private-key")
     monkeypatch.setenv("UPB_API_BASE", "https://ai-gateway.uni-paderborn.de/v1/")
     monkeypatch.setenv("UPB_MODEL", "gwdg.qwen3-30b-a3b-instruct-2507")
+    monkeypatch.setenv("UPB_RATE_LIMIT_STATE", str(tmp_path / "requests.sqlite3"))
+    monkeypatch.setenv("UPB_REQUESTS_PER_MINUTE", "60000")
 
 
-def test_gateway_validation_sends_authentication(gateway_env, monkeypatch) -> None:
+@pytest.fixture
+def gateway_probe(monkeypatch):
+    probe = MagicMock(return_value=httpx.Response(200, json={"object": "list", "data": []}))
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", lambda self, request: probe(request))
+    return probe
+
+
+def test_gateway_validation_sends_authentication(gateway_env, gateway_probe, monkeypatch) -> None:
     monkeypatch.delenv("SKIP_LLM_VALIDATION", raising=False)
-    probe = MagicMock()
-    monkeypatch.setattr("urllib.request.urlopen", probe)
-
     llm = LLMClient("upb", temperature=0.4)
-    request = probe.call_args.args[0]
-    assert request.full_url == "https://ai-gateway.uni-paderborn.de/v1/models"
-    assert request.get_header("Authorization") == "Bearer test-private-key"
+    request = gateway_probe.call_args.args[0]
+    assert str(request.url) == "https://ai-gateway.uni-paderborn.de/v1/models"
+    assert request.headers["Authorization"] == "Bearer test-private-key"
     assert llm._client.temperature == 0.4
     assert str(llm._client.client.base_url) == "https://ai-gateway.uni-paderborn.de/v1/"
     assert llm.model == "gwdg.qwen3-30b-a3b-instruct-2507"
     llm.validate_connection()
-    assert probe.call_count == 2
+    assert gateway_probe.call_count == 2
 
 
 def test_gateway_model_listing_uses_sdk_authentication(gateway_env) -> None:
@@ -77,28 +82,17 @@ def test_gateway_requires_explicit_credentials_and_model(gateway_env, monkeypatc
         LLMClient("upb")
 
 
-def test_gateway_does_not_discover_first_model(gateway_env, monkeypatch) -> None:
+def test_gateway_does_not_discover_first_model(gateway_env, gateway_probe, monkeypatch) -> None:
     monkeypatch.delenv("SKIP_LLM_VALIDATION", raising=False)
     monkeypatch.delenv("UPB_MODEL")
-    probe = MagicMock()
-    monkeypatch.setattr("urllib.request.urlopen", probe)
     with pytest.raises(ValueError, match="exact gateway model ID"):
         LLMClient("upb")
-    probe.assert_not_called()
+    gateway_probe.assert_not_called()
 
 
-def test_gateway_authentication_failure_is_clear(gateway_env, monkeypatch) -> None:
+def test_gateway_authentication_failure_is_clear(gateway_env, gateway_probe, monkeypatch) -> None:
     monkeypatch.delenv("SKIP_LLM_VALIDATION", raising=False)
-    probe = MagicMock(
-        side_effect=urllib.error.HTTPError(
-            "https://ai-gateway.uni-paderborn.de/v1/models",
-            401,
-            "Unauthorized",
-            {},
-            None,
-        )
-    )
-    monkeypatch.setattr("urllib.request.urlopen", probe)
+    gateway_probe.return_value = httpx.Response(401, json={"error": {"message": "Unauthorized"}})
     with pytest.raises(ConnectionError, match="401") as failure:
         LLMClient("upb")
     assert "test-private-key" not in str(failure.value)
@@ -136,3 +130,5 @@ def test_gateway_worker_pickle_restores_model_and_endpoint_without_embedding_key
     assert restored.provider == Provider.UPB
     assert str(restored._client.client.base_url) == "https://ai-gateway.uni-paderborn.de/v1/"
     assert restored._client.client.api_key == "test-private-key"
+    assert restored._client.limiter.scope == llm._client.limiter.scope
+    assert restored._client.limiter.state_path == llm._client.limiter.state_path

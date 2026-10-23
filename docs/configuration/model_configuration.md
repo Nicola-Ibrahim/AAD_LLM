@@ -55,11 +55,54 @@ reasoning models, need a smoke test for LLaMEA's `temperature` setting and plain
 code output before a campaign. Listing is not proof of generation entitlement.
 The gateway catalogue supplies no prices, so no cheapest-model claim follows from it.
 
-Start with `execution.max_workers = 1` in synthesis configuration. This is only a
-concurrency limit, not a request/token rate limiter. Check your gateway quota and
-obtain confirmation that automated research campaigns are permitted before running
-the full matrix. The [university instructions](https://hilfe.uni-paderborn.de/AI-Gateway)
-link applicable terms. No generation call is required to validate connectivity.
+Keep `execution.max_workers = 0` for automatic CPU-based worker selection, or a fixed
+worker count appropriate to your machine. This same setting works for local and hosted
+models. Worker concurrency does not set the HTTP request rate.
+
+The gateway adapter automatically selects request pacing from the model's provider:
+
+| Provider selection | Request starts per minute | Worker scheduling |
+| --- | ---: | --- |
+| `local` / `lmstudio` | No added throttling | Configured parallel pool |
+| `upb`, model ID beginning `gwdg.` | 8 | Same parallel pool |
+| `upb`, model ID beginning `kiconnect.` | 80 | Same parallel pool |
+| `upb`, model ID beginning `openai.` | 80 | Same parallel pool |
+
+The UPB defaults leave 20% headroom below the published 10/100/100 RPM limits.
+The [university budget guidance](https://hilfe.uni-paderborn.de/Budgets_im_AI-Chat_und_AI-Gateway)
+also confirms that GWDG and KIConnect have no consumption charges; OpenAI use draws
+from the person's $20 monthly allowance. API and Chat share resources. Overnight
+execution can reduce contention but does not waive quotas.
+
+Pacing is shared by worker processes and other project notebooks on the **same host
+and OS account**, grouped by gateway URL and upstream provider, not by model or API
+key. A small SQLite file in the user's private system-temporary directory stores
+only request timestamps and hashed provider scopes. It is runtime coordination state,
+not another synthesis database: no migrations, credentials, generated code, or stored
+experimental results are involved. It is intentionally outside `data/` and `results/`.
+No Redis service or additional process manager is needed.
+
+Every SDK HTTP attempt, including validation and listing, passes through this gate.
+Gateway retries have one owner rather than nested SDK/LLaMEA/wrapper network retries;
+temporary failures use bounded attempts and shared `Retry-After` cooldowns. Permanent
+authentication/request errors and recognized exhausted-budget error codes propagate
+without retrying the same API operation. Already queued independent sessions can still
+encounter the same account error; this is not a campaign-wide budget accounting system.
+Local-client retry behavior and LLaMEA's prompts/code extraction remain unchanged.
+
+If your actual key has a lower or specially approved higher provider quota, set
+`UPB_REQUESTS_PER_MINUTE` once in `.env`. For an unlisted upstream prefix such as
+`pc2.`, `hs-de.` or a router, this value is required rather than guessing a quota.
+For diagnostics/tests, `UPB_RATE_LIMIT_STATE` can override the runtime-state file.
+Use consistent caps across simultaneous jobs. Separate machines do not share this
+gate; allocate the account quota between them. Browser Chat requests are not tracked
+by our code, so headroom cannot guarantee avoidance of all server-side rate limits.
+
+This controls **RPM**, not proactive TPM or monthly spending. Model-specific token
+limits, other account activity and university-wide load can still produce 429 errors.
+Check the gateway's Max TPM/Max RPM fields and remaining budget before a campaign;
+do not shorten scientific prompts or change objective-call budgets to work around quotas.
+No generation call is required to validate connectivity.
 The hosted model is recorded separately from historical GGUF model IDs.
 Restart the notebook kernel after changing providers or model environment settings.
 
