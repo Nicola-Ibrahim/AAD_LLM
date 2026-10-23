@@ -10,7 +10,7 @@ Stored experiment records and provenance—not today's defaults—identify past 
 Fresh synthesis sessions use BBOB instance 1 for every candidate execution.
 The problem is reset between candidates without changing its instance; resumed
 sessions retain their recorded instance. There is no per-iteration instance
-schedule. Benchmarking independently uses held-out instances 11–30.
+schedule. Benchmarking independently uses held-out instances 2–21.
 
 ```mermaid
 %%{init: {"theme":"base","themeVariables":{"background":"#f2e6ff","lineColor":"#333333","fontFamily":"Arial, Helvetica, sans-serif","edgeLabelBackground":"#f2e6ff"},"flowchart":{"curve":"stepAfter","nodeSpacing":32,"rankSpacing":40}}}%%
@@ -57,7 +57,7 @@ flowchart TD
     Status -->|complete and valid| Cached["Reuse current trials"]
     Status -->|partial or not started| Resume["Retain valid instance–seed pairs<br/>run missing pairs only"]
     Status -->|stale schema, hash or champion validation| Restart["Restart this condition<br/>do not reuse stale trials"]
-    Resume --> Trials["Execute scheduled trials<br/>instances 11–30, seed base+instance, fixed budget 100,000"]
+    Resume --> Trials["Execute scheduled trials<br/>instances 2–21, seed base+instance, fixed budget 100,000"]
     Restart --> Trials
     Trials --> Provenance["Persist terminal errors + provenance<br/>clean traces + sampled noisy observations"]
     Cached --> Analysis["Read-only audit and analysis<br/>terminal completeness ≠ trace availability"]
@@ -107,7 +107,7 @@ are not failures and are excluded from aggregates.
 | Uncertainty | Wilson condition intervals; deterministic condition-cluster aggregate bootstrap. |
 | Budget | Benchmark attaches `set_budget`; excess queries warn and return the last value. Synthesis does not itself attach that cap. |
 | Timeout | Per-candidate `func_timeout` covers compilation, one initialization and the optimizer call; not a per-candidate security sandbox. |
-| Configured benchmark trials | 20; instances 11–30, seed `42+instance_id`, fixed budget 100,000 calls per trial, champion timeout 30 seconds. |
+| Configured benchmark trials | 20; instances 2–21, seed `42+instance_id`, fixed budget 100,000 calls per trial, champion timeout 30 seconds. |
 
 Defaults come from [benchmark configuration](../configs/benchmark.toml).
 Both synthesis and benchmarking now configure a fixed allowance of 100,000 calls
@@ -239,7 +239,7 @@ Noise strategy selection and magnitude are configuration-driven.
 per condition, a fixed budget of 100,000 calls, and a 30-second champion execution
 timeout. Classical baselines do not have the equivalent wall-clock timeout.
 Trial `r` uses instance `first_instance_id + r - 1` and seed
-`random_seed + instance_id`; the configuration gives instances 11–30 and seeds 53–72.
+`random_seed + instance_id`; the configuration gives instances 2–21 and seeds 44–63.
 Synthesis uses instance 1, so the current benchmark instances are disjoint from
 the synthesis instance. This separation does not undo previous benchmark-guided
 development or reruns. Repeated champion trials are not independent synthesis
@@ -336,7 +336,7 @@ performance-review flags, not automatic rerun requests. The summary neither
 launches experiments nor writes or deletes result files.
 
 The current protocol uses a fixed budget of 100,000 calls, 20 benchmark trials,
-paired instance IDs 11–30 and seeds derived from the configured base seed.
+paired instance IDs 2–21 and seeds derived from the configured base seed.
 Synthesis uses instance 1 throughout each fresh session. Generated champions
 retain the 30-second timeout; baselines do not have an equivalent timeout.
 Baselines are general-purpose references; generated champions were
