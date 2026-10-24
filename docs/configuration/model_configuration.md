@@ -37,8 +37,10 @@ UPB_API_KEY=replace-with-your-private-key
 UPB_MODEL=gwdg.qwen3-30b-a3b-instruct-2507
 ```
 
-Notebook 02 continues to construct `LLMClient(llm_provider)`: the existing LLaMEA
-`OpenAI_LLM` adapter issues synthesis requests, not a separate example script.
+Notebook 02 resolves `SynthesisCampaignCoordinator`; `EvolutionProvider` creates
+the LLM connection from `LLM_PROVIDER` and owns its cleanup. The notebook does not
+import, construct or call `LLMClient`. The existing LLaMEA `OpenAI_LLM` adapter
+issues synthesis requests, not a separate example script.
 Connection checks and model discovery send Bearer authentication. Unlike a local
 single-model server, the gateway requires an explicit model ID: it never silently
 selects the first catalogue entry. List your accessible IDs without generating text:
@@ -150,7 +152,7 @@ configuration-file dependency.
 | `run_campaign(...)`, `audit_matrix(...)` | `problem_targets`, `noise_conditions`, `synthesis_modes`, `iterations`, `budget`, `timeout_seconds`, `runs_per_config`, `auto_resume`, `skip_completed`, `retry_failed_synthesis` |
 | `run_benchmarks(...)`, `audit_workload(...)`, `summarize_results(...)` | `trials_per_condition`, `random_seed`, `first_instance_id`, `budget`, `trial_timeout_seconds`, `observation_trace_points`, `force_rerun`, `classical_baselines`, `noise_robustness_enabled`, `cross_function_enabled`, `cross_function_problem_ids` |
 | Summary thresholds | `primary_target`, `secondary_target` |
-| Analysis operations | Flat scientific parameters go to the four `analyze_*` module methods; each builds a validated invocation-local configuration |
+| Analysis operations | Setup supplies validated `BenchmarkConfig` and `ReliabilityConfig`; the four use cases accept condition filters through `execute(...)` |
 
 Parameters are keyword-only. Pydantic validates values before planning, discovery,
 dispatch or writes; ordinary model fields and validators describe structured
@@ -160,22 +162,18 @@ infrastructure collaborators are server-managed, not experiment body fields.
 
 Context-owned Dishka providers live in `evolution/infra/di.py` and
 `benchmark/infra/di.py`. The application coordinator receives concrete workload and trial-runner objects.
-Module façades in each context's `infra/module.py` own internal operation scopes.
-Notebook setup owns only module initialization and final shutdown; a future
-FastAPI lifespan can initialize/close the same modules without notebook code.
-Settings are passed through their internal methods, not held as mutable
-configuration or supplied through invocation-time factory callbacks. Dishka
-constructs infrastructure collaborators; it does not replace method parameters. Internal validated
-configuration objects group typed values; callers do not pass a nested
-`config` object.
+Notebook setup resolves ready application services and owns their workflow scope.
+Ordinary cells call those services directly, without forwarding module methods.
+A future FastAPI host can reuse the providers and native Dishka request injection;
+HTTP handlers do not construct services. Dishka supplies constructor dependencies;
+execution settings remain explicit method arguments. Analysis settings are typed
+setup data, fixed for the scope rather than mutated between calls.
 
 For example, a small explicit synthesis request is:
 
 ```python
-from evolution.infra.module import EvolutionModule
-
-evolution_module = EvolutionModule(llm)
-results = evolution_module.run_campaign(
+# campaign is resolved once in notebook setup.
+results = campaign.run_campaign(
     problem_targets=[{"id": 15, "dimensions": [10]}],
     noise_conditions=[{"std": 0.1, "noise_model": "heteroscedastic"}],
     synthesis_modes=[{"mode": "explicit", "strategies": ["baseline"]}],
@@ -187,7 +185,6 @@ results = evolution_module.run_campaign(
     skip_completed=True,
     retry_failed_synthesis=True,
 )
-evolution_module.close()
 
 ```
 

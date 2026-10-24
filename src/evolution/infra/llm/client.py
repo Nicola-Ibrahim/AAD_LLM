@@ -270,6 +270,10 @@ class LLMClient:
         raw_model = getattr(self._client, "model", "unknown") or "unknown"
         return ModelInfo(raw_model)
 
+    def close(self) -> None:
+        """Release the network client owned by this connection."""
+        self._client.client.close()
+
     def __getattr__(self, name: str) -> Any:
         if "_client" not in self.__dict__:
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")

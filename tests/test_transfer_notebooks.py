@@ -1,10 +1,9 @@
 """Independent notebooks, numerical persistence and uncached PNG exports."""
 
-import atexit
 import hashlib
 import json
+from contextlib import nullcontext
 from dataclasses import dataclass, fields, is_dataclass, replace
-from functools import partial
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -30,7 +29,6 @@ from benchmark.domain.services.performance import PerformanceMetricsEngine
 from benchmark.domain.services.reliability import ReliabilityEngine
 from benchmark.domain.services.transfer import TransferAnalysisEngine
 from benchmark.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
-from benchmark.infra.module import BenchmarkModule
 from benchmark.infra.storage.analysis_results_store import AnalysisResultsStore
 from benchmark.infra.storage.model_registry import configured_model_names
 
@@ -185,20 +183,23 @@ def test_modified_notebook_cells_compile() -> None:
                 compile(source, f"{name}:cell{index}", "exec")
 
 
-def test_notebooks_receive_ready_services_without_decorators_or_container_lookup() -> None:
+def test_notebooks_call_use_cases_directly_and_resolve_only_during_setup() -> None:
     for name in ["02_synthesis.ipynb", "03_benchmark.ipynb", "04_audit.ipynb", *NOTEBOOKS]:
         source = "\n".join(
             "".join(cell["source"]) for cell in notebook_cells(name) if cell["cell_type"] == "code"
         )
         assert "@inject" not in source
         assert "FromDishka[" not in source
-        assert "container.get(" not in source
-        assert "as container:" not in source
-        assert "Application(" not in source
+        assert "Module(" not in source
+        assert "WorkflowScope(" in source
         assert "ExitStack" not in source
-        assert "enter_context" not in source
-        assert "Module(" in source
-        assert "atexit.register(" in source
+        assert "partial(" not in source
+        for cell in notebook_cells(name):
+            cell_source = "".join(cell["source"])
+            if "services.get(" in cell_source:
+                assert (
+                    "# Prepare services once; infrastructure owns shutdown cleanup." in cell_source
+                )
 
 
 def test_cross_function_figure_export_removed() -> None:
@@ -280,25 +281,21 @@ def test_profile_provenance_detects_trace_changes(inputs: AnalysisSnapshot) -> N
 def test_notebooks_run_independently(
     name: str, inputs: AnalysisSnapshot, png_exports, monkeypatch, tmp_path: Path
 ) -> None:
-    import benchmark.infra.module as composition
+    import shared.infra.di as composition
 
     analysis = use_cases(inputs)
-    module = MagicMock(spec=BenchmarkModule)
-
-    def execute(use_case, **params):
-        filters = {
-            key: value
-            for key, value in params.items()
-            if key in {"mode", "dims", "problems", "noise_stds"}
-        }
-        return use_case.execute(**filters)
-
-    for workflow in ("ecdf_and_convergence", "reliability", "noise_robustness", "performance"):
-        getattr(module, f"analyze_{workflow}").side_effect = partial(
-            execute, getattr(analysis, workflow)
-        )
-    module.save_analysis_results.side_effect = AnalysisResultsStore(tmp_path / "analysis").save
-    monkeypatch.setattr(composition, "BenchmarkModule", lambda: module)
+    dependencies = {
+        AnalyzeEcdfAndConvergence: analysis.ecdf_and_convergence,
+        AnalyzeReliability: analysis.reliability,
+        AnalyzeNoiseRobustness: analysis.noise_robustness,
+        AnalyzePerformance: analysis.performance,
+        AnalysisResultsStore: AnalysisResultsStore(tmp_path / "analysis"),
+    }
+    monkeypatch.setattr(
+        composition,
+        "container_scope",
+        lambda *args, **kwargs: nullcontext(MagicMock(get=dependencies.__getitem__)),
+    )
     monkeypatch.chdir(ROOT / "notebooks" / "analysis")
     scope = {"display": lambda table: None}
     try:
@@ -309,9 +306,8 @@ def test_notebooks_run_independently(
                 )
                 exec(compile(source, name, "exec"), scope)
     finally:
-        if "benchmark_module" in scope:
-            atexit.unregister(scope["benchmark_module"].close)
-            scope["benchmark_module"].close()
+        if "services" in scope:
+            scope["services"].close()
     assert png_exports
     assert all(path.endswith(".png") for _, path in png_exports)
 

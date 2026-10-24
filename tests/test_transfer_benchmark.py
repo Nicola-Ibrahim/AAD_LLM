@@ -108,14 +108,14 @@ def test_audit_notebook_runs_without_campaign(
 ) -> None:
     import plotly.graph_objects as go
 
-    import benchmark.infra.module as composition
     import shared.config
+    import shared.infra.di as composition
 
     monkeypatch.setattr(
         composition,
-        "BenchmarkModule",
-        lambda **kwargs: SimpleNamespace(
-            audit_coverage=audit_for(transfer_service).get_audit_data, close=MagicMock()
+        "container_scope",
+        lambda *args, **kwargs: nullcontext(
+            SimpleNamespace(get=lambda cls: audit_for(transfer_service))
         ),
     )
     monkeypatch.setattr(shared.config, "RESULTS_DIR", tmp_path)
@@ -124,10 +124,14 @@ def test_audit_notebook_runs_without_campaign(
         (Path(__file__).resolve().parents[1] / "notebooks/04_audit.ipynb").read_text()
     )
     namespace = {"display": lambda value: None}
-    for cell in notebook["cells"]:
-        if cell["cell_type"] == "code":
-            code = "".join(cell["source"])
-            exec(compile(code, "04_audit.ipynb", "exec"), namespace)
+    try:
+        for cell in notebook["cells"]:
+            if cell["cell_type"] == "code":
+                code = "".join(cell["source"])
+                exec(compile(code, "04_audit.ipynb", "exec"), namespace)
+    finally:
+        if "services" in namespace:
+            namespace["services"].close()
     assert (tmp_path / "reports/benchmark_coverage_v2.csv").is_file()
     assert (tmp_path / "reports/synthesis_gaps_v1.csv").is_file()
     assert transfer_service.trials.state_repo.records == {}

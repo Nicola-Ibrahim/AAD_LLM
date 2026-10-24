@@ -33,7 +33,34 @@ from evolution.infra.di import EvolutionProvider
 from evolution.infra.llm.client import LLMClient
 from shared.domain.interfaces.problem_factory import ProblemFactory
 from shared.infra.di import SharedProvider, container_scope
+from shared.infra.lifecycle import WorkflowScope
 from shared.infra.problems.factory import BBOBProblemFactory
+
+
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_provider_owns_configured_llm_connection(monkeypatch, interrupted):
+    client = MagicMock()
+    create_client = MagicMock(return_value=client)
+    monkeypatch.setenv("LLM_PROVIDER", "upb")
+    monkeypatch.setattr(evolution_di, "LLMClient", create_client)
+    monkeypatch.setattr(shared_di, "Database", MagicMock())
+
+    def resolve():
+        with container_scope(EvolutionProvider(), context={}, request_context={}) as scope:
+            campaign = scope.get(SynthesisCampaignCoordinator)
+            assert scope.get(LLMClient) is client
+            assert campaign.model_name == client.model.name
+            create_client.assert_called_once_with("upb")
+            client.close.assert_not_called()
+            if interrupted:
+                raise RuntimeError("interrupted")
+
+    if interrupted:
+        with pytest.raises(RuntimeError, match="interrupted"):
+            resolve()
+    else:
+        resolve()
+    client.close.assert_called_once_with()
 
 
 @pytest.mark.parametrize("context", ["synthesis", "benchmark", "analysis", "worker"])
@@ -92,6 +119,31 @@ def test_repository_construction_failure_still_disposes_database(
             provider(), context={LLMClient: MagicMock()}, request_context={}
         ) as container:
             container.get(dependency)
+    database.dispose.assert_called_once()
+
+
+@pytest.mark.parametrize("construction_fails", [False, True])
+def test_workflow_scope_finalizes_provider_resources(monkeypatch, construction_fails):
+    database = MagicMock()
+    monkeypatch.setattr(shared_di, "Database", lambda: database)
+    if construction_fails:
+        monkeypatch.setattr(
+            evolution_di.SQLiteSynthesisRepository,
+            "__init__",
+            MagicMock(side_effect=RuntimeError("construction")),
+        )
+    scope = WorkflowScope(EvolutionProvider(), context={LLMClient: MagicMock()}, request_context={})
+    try:
+        if construction_fails:
+            with pytest.raises(RuntimeError, match="construction"):
+                scope.get(SynthesisCampaignCoordinator)
+            database.dispose.assert_called_once()
+        else:
+            service = scope.get(SynthesisCampaignCoordinator)
+            assert scope.get(SynthesisCampaignCoordinator) is service
+            database.dispose.assert_not_called()
+    finally:
+        scope.close()
     database.dispose.assert_called_once()
 
 
@@ -253,3 +305,23 @@ def test_reusable_providers_do_not_import_notebook_lifecycle():
         )
         assert not any(name.endswith(".infra.notebook") for name in imports), path
         assert "atexit" not in imports, path
+
+
+def test_numerical_result_storage_needs_no_database_and_returns_detached_data(
+    tmp_path, monkeypatch
+):
+    from benchmark.application.analysis.results import AnalysisProvenance, ProfileAnalysisResult
+    from benchmark.infra.storage.analysis_results_store import AnalysisResultsStore
+
+    create_database = MagicMock(side_effect=AssertionError("database not needed"))
+    monkeypatch.setattr(shared_di, "Database", create_database)
+    result = ProfileAnalysisResult("explicit", [], AnalysisProvenance({}, {}, {}, [], "empty"), ())
+    with container_scope(
+        BenchmarkProvider(results_dir=tmp_path), context={}, request_context={}
+    ) as scope:
+        store = scope.get(AnalysisResultsStore)
+        path = store.save(result)
+        loaded = store.load(path)
+    assert path.exists()
+    assert loaded == result
+    create_database.assert_not_called()

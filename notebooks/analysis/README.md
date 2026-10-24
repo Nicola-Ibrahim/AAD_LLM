@@ -45,10 +45,8 @@ Calculation and export are separate notebook cells. Required collaborators are
 resolved by infrastructure Dishka providers, not optional constructor fallbacks:
 
 ```python
-from benchmark.infra.module import BenchmarkModule
-
-benchmark_module = BenchmarkModule()
-profiles = benchmark_module.analyze_ecdf_and_convergence(
+# profile_analysis and results_store are resolved in notebook setup.
+profiles = profile_analysis.execute(
     mode="explicit",
     dims=[2],
     problems=None,
@@ -63,7 +61,7 @@ then run the optional export cell:
 from notebooks.analysis.plotting.exporter import AnalysisFigureExporter
 from shared.config import RESULTS_DIR
 
-snapshot_path = benchmark_module.save_analysis_results(profiles)
+snapshot_path = results_store.save(profiles)
 exporter = AnalysisFigureExporter(RESULTS_DIR)
 exporter.export_profiles(profiles)
 ```
@@ -71,9 +69,12 @@ exporter.export_profiles(profiles)
 For an individual figure, call `build_profile(condition, profiles.mode,
 kind="ecdf", title="...")` and pass its returned figure and output path to
 `exporter.export_figure(figure, output_path)`.
-Each module operation closes its own scope. The notebook registers one final
-shutdown callback, or call `benchmark_module.close()` when finished. Re-running
-setup closes the previous module. No live use cases or repositories reach notebook cells.
+Setup supplies a validated `BenchmarkConfig` and `ReliabilityConfig` and opens one
+workflow scope for the notebook. Cells use the ready analysis services directly;
+dependency resolution is confined to setup. Infrastructure `WorkflowScope` handles
+normal shutdown cleanup; call `services.close()` to release resources earlier.
+Re-running setup closes the previous scope. Live services are only usable while
+this scope is open.
 Calculated arrays and tables remain usable afterward. Treat result arrays/tables
 as read-only. `None` in condition
 filters means unrestricted; required constructor dependencies never default to it.
@@ -85,7 +86,7 @@ typed return values consumed by plotting.
 
 `AnalyzeEcdfAndConvergence` calculates both convergence (median and IQR) and
 adaptive-target ECDF curves in one pass over their shared interpolated traces.
-Access it through `benchmark_module.analyze_ecdf_and_convergence(...)`. Keeping these
+Call it through `profile_analysis.execute(...)`. Keeping these
 calculations together avoids duplicate loading and interpolation. Statistical
 calculations and CSV exports remain available; unused Markdown report export
 components have been removed.
@@ -106,7 +107,7 @@ them. The printed snapshot path identifies the exact result.
 To reuse a snapshot after a kernel restart, skip calculation and load its printed path:
 
 ```python
-profiles = store.load(store.root / "profiles" / "explicit" / "<printed-signature>")
+profiles = results_store.load(results_store.root / "profiles" / "explicit" / "<printed-signature>")
 AnalysisFigureExporter(RESULTS_DIR).export_profiles(profiles)
 ```
 
@@ -146,7 +147,7 @@ The grid-policy version is recorded in new result provenance.
 
 ## Preserved evaluation campaigns
 
-Current analysis selects instances 11–30 with seeds `42 + instance_id`, excluding
+Current analysis selects instances 2–21 with seeds `42 + instance_id`, excluding
 the synthesis instance 1. Only matching instance–seed pairs enter current results;
 complete terminal summaries require all 20 scheduled trials. Available search
 traces remain separate from terminal completeness.

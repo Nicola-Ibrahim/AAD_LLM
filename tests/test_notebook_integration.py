@@ -289,13 +289,12 @@ def test_nb03_import_order_isolation():
 
 def test_nb04_audit_pipeline():
     """Verify Notebook 04 (04_audit.ipynb: Experimental Matrix Audit)."""
-    from benchmark.infra.module import BenchmarkModule
+    from benchmark.application.trials.audit import BenchmarkAuditService
+    from benchmark.infra.di import BenchmarkProvider
+    from shared.infra.di import container_scope
 
-    module = BenchmarkModule()
-    try:
-        snapshot = module.audit_coverage()
-    finally:
-        module.close()
+    with container_scope(BenchmarkProvider(), context={}, request_context={}) as scope:
+        snapshot = scope.get(BenchmarkAuditService).get_audit_data()
     assert isinstance(snapshot.benchmarks, pd.DataFrame)
     assert isinstance(snapshot.synthesis_gaps, pd.DataFrame)
     assert snapshot.coverage_summary.total_cells >= 0

@@ -66,7 +66,6 @@ src/worker/tasks/            synthesis, benchmark, analysis Celery task adapters
 src/worker/                  outbox dispatcher and reconciler processes
 src/di/                      provider modules and process-local containers
 src/*/infra/di.py             reusable context-owned Dishka registrations
-src/*/infra/module.py         public module façades with internal operation scopes
 notebooks/*.ipynb             notebook-owned initialization; not used by the HTTP server
 ```
 
@@ -100,7 +99,7 @@ Never share a SQLAlchemy `Session`, engine, Redis connection, LLM client, or DI 
 | Champion catalog | `ChampionSelectionService` | Typed filtered projection; no export on GET. |
 | Benchmark coverage/comparisons | `BenchmarkAuditService.get_audit_data()`, `BenchmarkCoordinator.summarize_results()`, condition-status policy | Reuse scientific validity rules; cache or materialize bounded responses. Existing methods return broad DataFrames. |
 | Benchmark run | `BenchmarkCoordinator.run_benchmarks(solver_type=...)` | Worker wrapper; validate `all`, `champions`, `noise_robustness`, `cross_function`, `baselines`. Current use case cannot launch one arbitrary table row. |
-| Analysis calculations | Four `BenchmarkModule.analyze_*` methods | Worker wrapper; initialize/close modules through server/job lifecycle and keep numerical persistence separate. |
+| Analysis calculations | `AnalyzeEcdfAndConvergence`, `AnalyzeReliability`, `AnalyzeNoiseRobustness`, `AnalyzePerformance`: `execute(...)` | Inject use cases at the delivery boundary; own scopes through server/job lifecycle and keep numerical persistence separate. |
 | Saved analysis views | `AnalysisResultsStore.load()` | New manifest catalog and bounded series/table queries keyed by validated snapshot ID. |
 | Jobs/events/SSE | No current use case | New `operations` application layer and adapters. |
 

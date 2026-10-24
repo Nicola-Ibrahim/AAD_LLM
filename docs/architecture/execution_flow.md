@@ -4,10 +4,11 @@
 
 ## Campaign planning
 
-[EvolutionModule](../../src/evolution/infra/module.py) owns a persistent process-local
-root and opens an operation scope for
-`evolution_module.run_campaign(**synthesis_parameters)`. Notebook 02 initializes
-the module and registers final shutdown only. The parameters are defined visibly,
+[SynthesisCampaignCoordinator](../../src/evolution/application/campaign/run.py)
+is resolved once during notebook setup through `EvolutionProvider`.
+Notebook 02 calls `campaign.run_campaign(**synthesis_parameters)` directly and
+owns the workflow scope until setup is replaced or the kernel shuts down.
+The parameters are defined visibly,
 are keyword-only and are Pydantic-validated before planning or writes.
 Worker count is automatic; model identity comes from the connected LLM.
 No container or framework dependency enters application/domain code.

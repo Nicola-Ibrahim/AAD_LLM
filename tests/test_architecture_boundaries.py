@@ -9,9 +9,7 @@ ROOT = Path(__file__).resolve().parents[1] / "src"
 def test_benchmark_context_and_trial_workflow_use_the_public_names() -> None:
     from benchmark.application.trials.coordinator import BenchmarkCoordinator
     from benchmark.application.trials.runner import BenchmarkTrialRunner
-    from benchmark.infra.module import BenchmarkModule
 
-    assert BenchmarkModule.__module__ == "benchmark.infra.module"
     assert BenchmarkCoordinator.__module__ == "benchmark.application.trials.coordinator"
     assert BenchmarkTrialRunner.__module__ == "benchmark.application.trials.runner"
     assert (ROOT / "benchmark" / "application" / "analysis").is_dir()

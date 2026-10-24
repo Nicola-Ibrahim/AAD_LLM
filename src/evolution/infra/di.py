@@ -1,5 +1,6 @@
 """Evolution-owned Dishka bindings for campaigns and process-local synthesis workers."""
 
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -28,8 +29,15 @@ from shared.infra.di import container_scope
 
 class EvolutionProvider(Provider):
     scope = Scope.REQUEST
-    llm = from_context(provides=LLMClient, scope=Scope.APP)
     worker_engine = from_context(provides=SynthesisEngine)
+
+    @provide(scope=Scope.APP)
+    def llm(self) -> Iterator[LLMClient]:
+        client = LLMClient(os.getenv("LLM_PROVIDER", "local"))
+        try:
+            yield client
+        finally:
+            client.close()
 
     repository = provide(
         SQLiteSynthesisRepository, provides=AnyOf[SQLiteSynthesisRepository, SynthesisRepository]
