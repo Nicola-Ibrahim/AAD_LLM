@@ -15,11 +15,11 @@
 #   15 : Rastrigin (Strong multi-modal, highly rugged)
 #   21 : Gallagher 101 (Weak multi-modal, deceptive Gaussian peaks)
 problem_targets = [
-  { id = 1,  dimensions = [50] },
-  { id = 8,  dimensions = [50] },
-  { id = 11, dimensions = [50] },
-  { id = 15, dimensions = [50] },
-  { id = 21, dimensions = [50] },
+  { id = 1,  dimensions = [2, 10, 50] },
+  { id = 8,  dimensions = [2, 10, 50] },
+  { id = 11, dimensions = [2, 10, 50] },
+  { id = 15, dimensions = [2, 10, 50] },
+  { id = 21, dimensions = [2, 10, 50] },
 ]
 
 # Evaluated Noise Conditions (Pairs of standard deviation and noise model strategy):
