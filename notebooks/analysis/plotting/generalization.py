@@ -5,7 +5,7 @@ from math import ceil
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from benchmarking.application.analysis.results import NoiseRobustnessResult
+from benchmark.application.analysis.results import NoiseRobustnessResult
 
 from .style import (
     FONT_FAMILY,

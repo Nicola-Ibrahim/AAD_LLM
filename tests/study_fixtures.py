@@ -1,6 +1,6 @@
 """Explicit small-study settings for isolated backend tests; no config files."""
 
-from benchmarking.application.benchmark_config import BenchmarkConfig
+from benchmark.application.benchmark_config import BenchmarkConfig
 from evolution.application.synthesis_config import SynthesisConfig
 
 

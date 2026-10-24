@@ -76,7 +76,7 @@ protocol, not approval of a new protocol.
 
 - **Evolution** owns synthesis campaigns/sessions, prompting, generated
   iterations, feedback, selection fitness, penalties and stagnation policy.
-- **Benchmarking** owns champion selection, benchmark/resumption, provenance,
+- **Benchmark** owns champion selection, benchmark/resumption, provenance,
   reliability, ECDF, performance and generalization analysis.
 - **Shared infrastructure/science** owns database connections, common BBOB/noise
   capabilities, objective-gap rules and isolated candidate execution.
@@ -113,7 +113,7 @@ flowchart TD
             SynthesisStore[("<b>Synthesis-owned storage</b><br/>synthesis/db.sqlite3 · code/ · checkpoints/<br/>synthesis/configs/")]
         end
 
-        subgraph Benchmarking["Benchmarking"]
+        subgraph Benchmarking["Benchmark"]
             Champions("<b>Champion selection and freeze</b><br/>Read-only candidate handoff<br/>benchmark/champions.json + exact code")
             Benchmark("<b>Benchmark and analysis workflows</b><br/>Baselines · champion trials · resume · statistics")
             BenchmarkStore[("<b>Benchmark-owned storage</b><br/>benchmark/ioh_traces/ · analysis/ · reports/<br/>benchmark/configs/")]
@@ -215,7 +215,7 @@ dependency versions, dates, protocol, hashes and archive format version.
 ### Preparation and execution sequence
 
 Creation is the explicit preparation step. Opening a study selects and validates
-existing resources; neither action starts synthesis or benchmarking. The researcher
+existing resources; neither action starts synthesis or benchmark. The researcher
 decides which workflow to run and when. The following is a **proposed interaction**,
 not a runnable API or the current manual staging procedure.
 

@@ -3,8 +3,8 @@
 import atexit
 import hashlib
 import json
-from contextlib import nullcontext
-from dataclasses import fields, is_dataclass, replace
+from dataclasses import dataclass, fields, is_dataclass, replace
+from functools import partial
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -14,25 +14,25 @@ import plotly.graph_objects as go
 import pytest
 from notebooks.analysis.plotting.exporter import AnalysisFigureExporter
 
-from benchmarking.application.analysis.analyze_ecdf_and_convergence import AnalyzeEcdfAndConvergence
-from benchmarking.application.analysis.analyze_noise_robustness import AnalyzeNoiseRobustness
-from benchmarking.application.analysis.analyze_performance import AnalyzePerformance
-from benchmarking.application.analysis.analyze_reliability import AnalyzeReliability
-from benchmarking.application.analysis.data_loader import AnalysisDataLoader, AnalysisSnapshot
-from benchmarking.application.benchmark_config import BenchmarkConfig
-from benchmarking.domain.benchmark_results import (
+from benchmark.application.analysis.analyze_ecdf_and_convergence import AnalyzeEcdfAndConvergence
+from benchmark.application.analysis.analyze_noise_robustness import AnalyzeNoiseRobustness
+from benchmark.application.analysis.analyze_performance import AnalyzePerformance
+from benchmark.application.analysis.analyze_reliability import AnalyzeReliability
+from benchmark.application.analysis.data_loader import AnalysisDataLoader, AnalysisSnapshot
+from benchmark.application.benchmark_config import BenchmarkConfig
+from benchmark.domain.benchmark_results import (
     BENCHMARK_SCHEMA_VERSION,
     CHAMPION_RETURN_VALIDATION_VERSION,
     ERROR_DEFINITION,
 )
-from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
-from benchmarking.domain.services.performance import PerformanceMetricsEngine
-from benchmarking.domain.services.reliability import ReliabilityEngine
-from benchmarking.domain.services.transfer import TransferAnalysisEngine
-from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
-from benchmarking.infra.di import AnalysisUseCases
-from benchmarking.infra.storage.analysis_results_store import AnalysisResultsStore
-from benchmarking.infra.storage.model_registry import configured_model_names
+from benchmark.domain.services.ecdf import EcdfConvergenceEngine
+from benchmark.domain.services.performance import PerformanceMetricsEngine
+from benchmark.domain.services.reliability import ReliabilityEngine
+from benchmark.domain.services.transfer import TransferAnalysisEngine
+from benchmark.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
+from benchmark.infra.module import BenchmarkModule
+from benchmark.infra.storage.analysis_results_store import AnalysisResultsStore
+from benchmark.infra.storage.model_registry import configured_model_names
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOKS = [
@@ -139,6 +139,16 @@ def inputs(tmp_path: Path) -> AnalysisSnapshot:
     return loader.load(dims=None, problems=None, noise_stds=None, include_transfer=True)
 
 
+@dataclass(frozen=True)
+class AnalysisUseCases:
+    """Test fixture only; production modules expose operations, not service bundles."""
+
+    ecdf_and_convergence: AnalyzeEcdfAndConvergence
+    reliability: AnalyzeReliability
+    noise_robustness: AnalyzeNoiseRobustness
+    performance: AnalyzePerformance
+
+
 def use_cases(snapshot: AnalysisSnapshot) -> AnalysisUseCases:
     loader = MagicMock()
     loader.load.return_value = snapshot
@@ -147,7 +157,6 @@ def use_cases(snapshot: AnalysisSnapshot) -> AnalysisUseCases:
         AnalyzeReliability(loader, TransferAnalysisEngine(), ReliabilityEngine()),
         AnalyzeNoiseRobustness(loader, TransferAnalysisEngine()),
         AnalyzePerformance(loader, EcdfConvergenceEngine(), PerformanceMetricsEngine()),
-        MagicMock(spec=AnalysisResultsStore),
     )
 
 
@@ -186,7 +195,9 @@ def test_notebooks_receive_ready_services_without_decorators_or_container_lookup
         assert "container.get(" not in source
         assert "as container:" not in source
         assert "Application(" not in source
-        assert "ExitStack()" in source
+        assert "ExitStack" not in source
+        assert "enter_context" not in source
+        assert "Module(" in source
         assert "atexit.register(" in source
 
 
@@ -269,14 +280,25 @@ def test_profile_provenance_detects_trace_changes(inputs: AnalysisSnapshot) -> N
 def test_notebooks_run_independently(
     name: str, inputs: AnalysisSnapshot, png_exports, monkeypatch, tmp_path: Path
 ) -> None:
-    import benchmarking.infra.di as composition
+    import benchmark.infra.module as composition
 
-    analysis = replace(use_cases(inputs), results_store=AnalysisResultsStore(tmp_path / "analysis"))
-    monkeypatch.setattr(
-        composition,
-        "analysis_scope",
-        lambda config: nullcontext(analysis),
-    )
+    analysis = use_cases(inputs)
+    module = MagicMock(spec=BenchmarkModule)
+
+    def execute(use_case, **params):
+        filters = {
+            key: value
+            for key, value in params.items()
+            if key in {"mode", "dims", "problems", "noise_stds"}
+        }
+        return use_case.execute(**filters)
+
+    for workflow in ("ecdf_and_convergence", "reliability", "noise_robustness", "performance"):
+        getattr(module, f"analyze_{workflow}").side_effect = partial(
+            execute, getattr(analysis, workflow)
+        )
+    module.save_analysis_results.side_effect = AnalysisResultsStore(tmp_path / "analysis").save
+    monkeypatch.setattr(composition, "BenchmarkModule", lambda: module)
     monkeypatch.chdir(ROOT / "notebooks" / "analysis")
     scope = {"display": lambda table: None}
     try:
@@ -287,9 +309,9 @@ def test_notebooks_run_independently(
                 )
                 exec(compile(source, name, "exec"), scope)
     finally:
-        if "close_analysis" in scope:
-            atexit.unregister(scope["close_analysis"])
-            scope["close_analysis"]()
+        if "benchmark_module" in scope:
+            atexit.unregister(scope["benchmark_module"].close)
+            scope["benchmark_module"].close()
     assert png_exports
     assert all(path.endswith(".png") for _, path in png_exports)
 

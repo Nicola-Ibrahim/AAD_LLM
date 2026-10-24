@@ -24,15 +24,15 @@ The compact view introduces the main workflows and supporting capabilities.
 %%{init: {"theme":"base","themeVariables":{"background":"#f2e6ff","clusterBkg":"#faf9fc","clusterBorder":"#d8d2e3","lineColor":"#64748b","edgeLabelBackground":"#f2e6ff","fontFamily":"Arial, Helvetica, sans-serif","fontSize":"15px"},"flowchart":{"curve":"basis","htmlLabels":true,"nodeSpacing":40,"rankSpacing":32,"padding":20,"wrappingWidth":1000},"markdownAutoWrap":false,"themeCSS":".label, .nodeLabel, .edgeLabel, .cluster-label { font-family: Arial, Helvetica, sans-serif !important; } .cluster rect { filter: none !important; }"}}%%
 flowchart TD
     accTitle: From generated algorithms to measured performance
-    accDescr: Two workflow contexts, evolution and benchmarking, share execution and persistence capabilities; notebook researchers orchestrate workflows and own figure presentation.
+    accDescr: Two workflow contexts, evolution and benchmark, share execution and persistence capabilities; notebook researchers orchestrate workflows and own figure presentation.
     Researcher("<b>Notebook researcher</b><br/>Configuration · orchestration · figures · exports")
 
     subgraph Evolution["Evolution · synthesis context"]
         Synthesis("<b>Algorithm synthesis</b><br/>Campaign planning · settings · sessions<br/>Generation feedback · candidate scoring")
     end
 
-    subgraph Benchmarking["Benchmarking · evaluation and analysis context"]
-        Benchmark("<b>Benchmarking and audit</b><br/>Champion selection · classical optimizers<br/>Trial execution · coverage · run status")
+    subgraph Benchmarking["Benchmark · trials and analysis context"]
+        Benchmark("<b>Benchmark and audit</b><br/>Champion selection · classical optimizers<br/>Trial execution · coverage · run status")
         Analysis("<b>Analysis and transfer</b><br/>ECDF · reliability · statistics · robustness<br/>Isolated transfer traces · notebook figures")
     end
 
@@ -54,7 +54,7 @@ flowchart TD
 
     click Researcher "https://github.com/nicola-ibrahim/aad_llm/tree/main/notebooks"
     click Synthesis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/run.py"
-    click Benchmark "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/benchmark/run.py"
+    click Benchmark "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/application/trials/coordinator.py"
     click Analysis "https://github.com/nicola-ibrahim/aad_llm/tree/main/notebooks/analysis"
     click Runtime "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/execution/executor.py"
     click Persistence "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/database/engine.py"
@@ -101,8 +101,8 @@ subgraph group_runtime["Candidate execution"]
   node_noise_model["Noise model<br/>[noise_model.py]"]
 end
 
-subgraph group_benchmark["Benchmarking and audit"]
-  node_benchmark["Champion and baseline trials<br/>[run.py]"]
+subgraph group_benchmark["Benchmark and audit"]
+  node_benchmark["Champion and baseline trials<br/>[coordinator.py]"]
   node_baselines["Classical optimizers<br/>[baselines.py]"]
   node_champions["Champion selection"]
   node_audit["Coverage and run audit<br/>[audit.py]"]
@@ -165,14 +165,14 @@ click node_noise_model "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/
 click node_code_store "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/code/repository.py"
 click node_synthesis_store "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis/repository.py"
 click node_database "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/database/engine.py"
-click node_benchmark "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/benchmark/run.py"
-click node_baselines "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/solvers/baselines.py"
-click node_champions "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/select_champions.py"
-click node_trace_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/io/trace_repository.py"
-click node_audit "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/benchmark/audit.py"
-click node_analysis "https://github.com/nicola-ibrahim/aad_llm/tree/main/src/benchmarking/application/analysis"
-click node_analysis_services "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/ecdf.py"
-click node_transfer "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/transfer.py"
+click node_benchmark "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/application/trials/coordinator.py"
+click node_baselines "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/infra/solvers/baselines.py"
+click node_champions "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/application/select_champions.py"
+click node_trace_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/infra/io/trace_repository.py"
+click node_audit "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/application/trials/audit.py"
+click node_analysis "https://github.com/nicola-ibrahim/aad_llm/tree/main/src/benchmark/application/analysis"
+click node_analysis_services "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/domain/services/ecdf.py"
+click node_transfer "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/domain/services/transfer.py"
 click node_figures "https://github.com/nicola-ibrahim/aad_llm/blob/main/notebooks/analysis/plotting/summary.py"
 
 classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
@@ -191,7 +191,7 @@ class node_code_store,node_synthesis_store,node_database,node_trace_repo,node_re
 
 Both views retain the original palette and component links. GitHub controls the
 rendered spacing and theme. Arrows describe workflow and data access, not Python
-imports; analysis belongs to benchmarking, not a third bounded context.
+imports; analysis belongs to the benchmark context, not a third bounded context.
 
 [Level 0 Mermaid source](docs/architecture/system_overview.mmd) ·
 [Level 1 Mermaid source](docs/architecture/system_diagram.mmd) ·
@@ -214,14 +214,14 @@ imports; analysis belongs to benchmarking, not a third bounded context.
 - [code store](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/code/repository.py)
 - [synthesis store](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis/repository.py)
 - [database](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/database/engine.py)
-- [benchmark](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/benchmark/run.py)
-- [baselines](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/solvers/baselines.py)
-- [champions](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/select_champions.py)
-- [trace repo](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/io/trace_repository.py)
-- [audit](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/benchmark/audit.py)
-- [analysis](https://github.com/nicola-ibrahim/aad_llm/tree/main/src/benchmarking/application/analysis)
-- [analysis services](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/ecdf.py)
-- [transfer](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/transfer.py)
+- [benchmark](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/application/trials/coordinator.py)
+- [baselines](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/infra/solvers/baselines.py)
+- [champions](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/application/select_champions.py)
+- [trace repo](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/infra/io/trace_repository.py)
+- [audit](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/application/trials/audit.py)
+- [analysis](https://github.com/nicola-ibrahim/aad_llm/tree/main/src/benchmark/application/analysis)
+- [analysis services](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/domain/services/ecdf.py)
+- [transfer](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/domain/services/transfer.py)
 - [figures](https://github.com/nicola-ibrahim/aad_llm/blob/main/notebooks/analysis/plotting/summary.py)
 
 </details>
@@ -367,7 +367,7 @@ src/
   evolution/       LLM-driven algorithm synthesis: domain rules, campaigns,
                    LLaMEA adapter, prompt construction,
                    and synthesis persistence
-  benchmarking/    champion/baseline evaluation, trace processing, ECDF and
+  benchmark/       champion/baseline evaluation, trace processing, ECDF and
                    statistical analysis services
   shared/          shared BBOB/noise mathematics, objective capabilities, SQLite,
                    IOH adapters, and guarded algorithm execution

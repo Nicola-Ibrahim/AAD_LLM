@@ -11,23 +11,23 @@ import pandas as pd
 import pytest
 from study_fixtures import run_parameters
 
-from benchmarking.application.benchmark.audit import BenchmarkAuditService, SynthesisConditionSpec
-from benchmarking.application.benchmark.run import BenchmarkService
-from benchmarking.application.benchmark.trials import BenchmarkTrialRunner
-from benchmarking.application.benchmark.workload import BenchmarkWorkload
-from benchmarking.application.benchmark_config import BenchmarkConfig
-from benchmarking.application.select_champions import ChampionSelectionService
-from benchmarking.domain.benchmark_results import (
+from benchmark.application.benchmark_config import BenchmarkConfig
+from benchmark.application.select_champions import ChampionSelectionService
+from benchmark.application.trials.audit import BenchmarkAuditService, SynthesisConditionSpec
+from benchmark.application.trials.coordinator import BenchmarkCoordinator
+from benchmark.application.trials.runner import BenchmarkTrialRunner
+from benchmark.application.trials.workload import BenchmarkWorkload
+from benchmark.domain.benchmark_results import (
     BENCHMARK_SCHEMA_VERSION,
     ERROR_DEFINITION,
 )
-from benchmarking.domain.services.transfer import TransferAnalysisEngine
-from benchmarking.infra.io.trace_repository import IOHTraceReader
-from benchmarking.infra.storage.model_registry import configured_model_names
+from benchmark.domain.services.transfer import TransferAnalysisEngine
+from benchmark.infra.io.trace_repository import IOHTraceReader
+from benchmark.infra.storage.model_registry import configured_model_names
 from shared.domain.problem import ObservationSample
 
 
-def audit_for(service: BenchmarkService) -> BenchmarkAuditService:
+def audit_for(service: BenchmarkCoordinator) -> BenchmarkAuditService:
     service.workload.sqlite_repo.get_synthesis_dataframes.return_value = (
         pd.DataFrame(
             [
@@ -48,7 +48,7 @@ def audit_for(service: BenchmarkService) -> BenchmarkAuditService:
 
 
 def test_audit_does_not_substitute_implicit_counts_or_count_synthesis_gaps(
-    transfer_service: BenchmarkService,
+    transfer_service: BenchmarkCoordinator,
 ) -> None:
     service = transfer_service
     row = service.workload.audit_champions_workload(config=service.config).iloc[0]
@@ -79,7 +79,7 @@ def test_audit_does_not_substitute_implicit_counts_or_count_synthesis_gaps(
 
 
 def test_audit_excludes_missing_code_and_keeps_baselines_without_models(
-    transfer_service: BenchmarkService,
+    transfer_service: BenchmarkCoordinator,
 ) -> None:
     service = transfer_service
     audit = audit_for(service)
@@ -102,19 +102,21 @@ def test_audit_excludes_missing_code_and_keeps_baselines_without_models(
 
 
 def test_audit_notebook_runs_without_campaign(
-    transfer_service: BenchmarkService,
+    transfer_service: BenchmarkCoordinator,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import plotly.graph_objects as go
 
-    import benchmarking.infra.di as composition
+    import benchmark.infra.module as composition
     import shared.config
 
     monkeypatch.setattr(
         composition,
-        "benchmark_scope",
-        lambda **kwargs: nullcontext(SimpleNamespace(audit=audit_for(transfer_service))),
+        "BenchmarkModule",
+        lambda **kwargs: SimpleNamespace(
+            audit_coverage=audit_for(transfer_service).get_audit_data, close=MagicMock()
+        ),
     )
     monkeypatch.setattr(shared.config, "RESULTS_DIR", tmp_path)
     monkeypatch.setattr(go.Figure, "show", lambda self: None)
@@ -207,7 +209,7 @@ class Problem:
 
 
 @pytest.fixture
-def transfer_service(tmp_path: Path) -> BenchmarkService:
+def transfer_service(tmp_path: Path) -> BenchmarkCoordinator:
     candidates = pd.DataFrame(
         [
             dict(
@@ -271,7 +273,7 @@ def transfer_service(tmp_path: Path) -> BenchmarkService:
         model_names=names,
     )
     return SimpleNamespace(
-        service=BenchmarkService(
+        service=BenchmarkCoordinator(
             workload=workload,
             trials=trials,
             baseline_labels=config.baseline_labels,
@@ -359,7 +361,7 @@ def test_readiness_and_resumption_agree_on_incompatible_partial_history(transfer
 
 
 def test_frozen_target_execution_pairing_and_baseline_reuse(
-    transfer_service: BenchmarkService,
+    transfer_service: BenchmarkCoordinator,
 ) -> None:
     service = transfer_service
     rows = service.service.run_benchmarks(
@@ -395,7 +397,7 @@ def test_frozen_target_execution_pairing_and_baseline_reuse(
     assert executor.execute_algorithm.call_count == count
 
 
-def test_failure_does_not_skip_later_instances(transfer_service: BenchmarkService) -> None:
+def test_failure_does_not_skip_later_instances(transfer_service: BenchmarkCoordinator) -> None:
     service = transfer_service
     executor = service.trials.executor_factory(1)
     executor.execute_algorithm.side_effect = [
@@ -413,7 +415,7 @@ def test_failure_does_not_skip_later_instances(transfer_service: BenchmarkServic
 
 @pytest.mark.parametrize("point", [np.array([6.0, 0.0]), np.array([np.nan, 0.0])])
 def test_invalid_champion_return_fails_each_trial(
-    transfer_service: BenchmarkService, point: np.ndarray
+    transfer_service: BenchmarkCoordinator, point: np.ndarray
 ) -> None:
     service = transfer_service
     executor = service.trials.executor_factory(1)
@@ -427,7 +429,7 @@ def test_invalid_champion_return_fails_each_trial(
 
 
 def test_native_diagonals_are_reused_without_reexecution(
-    transfer_service: BenchmarkService,
+    transfer_service: BenchmarkCoordinator,
 ) -> None:
     service = transfer_service
     service.service.run_benchmarks(
@@ -444,7 +446,7 @@ def test_native_diagonals_are_reused_without_reexecution(
     assert len(rows[rows["status"] == "CACHED"]) == 2
 
 
-def test_historical_skipped_tail_resumes(transfer_service: BenchmarkService) -> None:
+def test_historical_skipped_tail_resumes(transfer_service: BenchmarkCoordinator) -> None:
     service = transfer_service
     champion = next(iter(service.workload.champion_selection.flatten_champions().values()))
     service.trials.run_champion_trials(
@@ -464,7 +466,7 @@ def test_historical_skipped_tail_resumes(transfer_service: BenchmarkService) -> 
     assert record["instance_ids"] == [2, 3, 4]
 
 
-def test_workflow_flags_and_baseline_targets(transfer_service: BenchmarkService) -> None:
+def test_workflow_flags_and_baseline_targets(transfer_service: BenchmarkCoordinator) -> None:
     service = transfer_service
     service.config.noise_robustness_enabled = False
     assert service.workload.audit_noise_robustness_workload(config=service.config).empty

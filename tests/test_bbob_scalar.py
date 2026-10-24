@@ -184,7 +184,7 @@ def test_ioh_logger_noisy_problem_does_not_corrupt_trajectory(tmp_path):
 
 def test_bbob_function_enum():
     """Verify BBOBFunction Enum properties, values, and lookup methods."""
-    from benchmarking.domain.enums import (
+    from benchmark.domain.enums import (
         BBOB_CLASSES_ORDER,
         BBOBFunction,
     )

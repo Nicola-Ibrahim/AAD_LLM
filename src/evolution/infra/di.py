@@ -82,17 +82,6 @@ class EvolutionProvider(Provider):
 
 
 @contextmanager
-def synthesis_scope(llm_client: LLMClient) -> Iterator[SynthesisCampaignCoordinator]:
-    """Supply a ready campaign; own its resources, not the caller's LLM client."""
-    with container_scope(
-        EvolutionProvider(),
-        context={LLMClient: llm_client},
-        request_context={},
-    ) as container:
-        yield container.get(SynthesisCampaignCoordinator)
-
-
-@contextmanager
 def synthesis_worker_scope(engine: SynthesisEngine) -> Iterator[SingleSynthesisUseCase]:
     """Open resources in the worker process, never in its serialized task payload."""
     with container_scope(

@@ -18,8 +18,8 @@ subgraph group_runtime["Candidate execution"]
   node_noise_model["Noise model<br/>[noise_model.py]"]
 end
 
-subgraph group_benchmark["Benchmarking and audit"]
-  node_benchmark["Champion and baseline trials<br/>[run.py]"]
+subgraph group_benchmark["Benchmark and audit"]
+  node_benchmark["Champion and baseline trials<br/>[coordinator.py]"]
   node_baselines["Classical optimizers<br/>[baselines.py]"]
   node_champions["Champion selection"]
   node_audit["Coverage and run audit<br/>[audit.py]"]
@@ -82,14 +82,14 @@ click node_noise_model "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/
 click node_code_store "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/code/repository.py"
 click node_synthesis_store "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis/repository.py"
 click node_database "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/database/engine.py"
-click node_benchmark "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/benchmark/run.py"
-click node_baselines "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/solvers/baselines.py"
-click node_champions "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/select_champions.py"
-click node_trace_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/infra/io/trace_repository.py"
-click node_audit "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/benchmark/audit.py"
-click node_analysis "https://github.com/nicola-ibrahim/aad_llm/tree/main/src/benchmarking/application/analysis"
-click node_analysis_services "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/ecdf.py"
-click node_transfer "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/domain/services/transfer.py"
+click node_benchmark "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/application/trials/coordinator.py"
+click node_baselines "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/infra/solvers/baselines.py"
+click node_champions "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/application/select_champions.py"
+click node_trace_repo "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/infra/io/trace_repository.py"
+click node_audit "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/application/trials/audit.py"
+click node_analysis "https://github.com/nicola-ibrahim/aad_llm/tree/main/src/benchmark/application/analysis"
+click node_analysis_services "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/domain/services/ecdf.py"
+click node_transfer "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/domain/services/transfer.py"
 click node_figures "https://github.com/nicola-ibrahim/aad_llm/blob/main/notebooks/analysis/plotting/summary.py"
 
 classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a

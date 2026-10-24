@@ -5,7 +5,7 @@ from typing import Literal
 
 import plotly.graph_objects as go
 
-from benchmarking.application.analysis.results import (
+from benchmark.application.analysis.results import (
     NoiseRobustnessResult,
     PerformanceAnalysisResult,
     ProfileAnalysisResult,

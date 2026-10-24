@@ -1,15 +1,15 @@
 %%{init: {"theme":"base","themeVariables":{"background":"#f2e6ff","clusterBkg":"#faf9fc","clusterBorder":"#d8d2e3","lineColor":"#64748b","edgeLabelBackground":"#f2e6ff","fontFamily":"Arial, Helvetica, sans-serif","fontSize":"15px"},"flowchart":{"curve":"basis","htmlLabels":true,"nodeSpacing":40,"rankSpacing":32,"padding":20,"wrappingWidth":1000},"markdownAutoWrap":false,"themeCSS":".label, .nodeLabel, .edgeLabel, .cluster-label { font-family: Arial, Helvetica, sans-serif !important; } .cluster rect { filter: none !important; }"}}%%
 flowchart TD
     accTitle: From generated algorithms to measured performance
-    accDescr: Two workflow contexts, evolution and benchmarking, share execution and persistence capabilities; notebook researchers orchestrate workflows and own figure presentation.
+    accDescr: Two workflow contexts, evolution and benchmark, share execution and persistence capabilities; notebook researchers orchestrate workflows and own figure presentation.
     Researcher("<b>Notebook researcher</b><br/>Configuration · orchestration · figures · exports")
 
     subgraph Evolution["Evolution · synthesis context"]
         Synthesis("<b>Algorithm synthesis</b><br/>Campaign planning · settings · sessions<br/>Generation feedback · candidate scoring")
     end
 
-    subgraph Benchmarking["Benchmarking · evaluation and analysis context"]
-        Benchmark("<b>Benchmarking and audit</b><br/>Champion selection · classical optimizers<br/>Trial execution · coverage · run status")
+    subgraph Benchmarking["Benchmark · trials and analysis context"]
+        Benchmark("<b>Benchmark and audit</b><br/>Champion selection · classical optimizers<br/>Trial execution · coverage · run status")
         Analysis("<b>Analysis and transfer</b><br/>ECDF · reliability · statistics · robustness<br/>Isolated transfer traces · notebook figures")
     end
 
@@ -31,7 +31,7 @@ flowchart TD
 
     click Researcher "https://github.com/nicola-ibrahim/aad_llm/tree/main/notebooks"
     click Synthesis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/run.py"
-    click Benchmark "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmarking/application/benchmark/run.py"
+    click Benchmark "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/application/trials/coordinator.py"
     click Analysis "https://github.com/nicola-ibrahim/aad_llm/tree/main/notebooks/analysis"
     click Runtime "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/execution/executor.py"
     click Persistence "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/database/engine.py"

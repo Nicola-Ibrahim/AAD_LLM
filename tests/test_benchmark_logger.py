@@ -2,7 +2,7 @@
 
 from io import StringIO
 
-from benchmarking.infra.logging.benchmark_logger import BenchmarkLogger
+from benchmark.infra.logging.benchmark_logger import BenchmarkLogger
 
 
 def test_trial_values_use_three_decimals_without_field_padding():

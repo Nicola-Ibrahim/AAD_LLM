@@ -2,7 +2,7 @@
 
 [Documentation map](../README.md) · [Project README](../../README.md)
 
-A modular monolith with two workflow contexts: **evolution** and **benchmarking**.
+A modular monolith with two workflow contexts: **evolution** and **benchmark**.
 Audit is a capability within those contexts; notebooks own presentation.
 
 ## Workflow overview
@@ -21,7 +21,7 @@ flowchart TD
     accDescr: Campaign composition dispatches worker-local synthesis sessions; LLaMEA delegates candidate evaluation to shared execution and evolution scoring.
     subgraph Campaign["Campaign composition and dispatch"]
         direction LR
-        Bootstrap["Notebook setup<br/>COMPOSITION ENTRY POINT<br/>Ready campaign services<br/>with Dishka providers"]
+        Bootstrap["EvolutionModule<br/>MODULE ENTRY POINT<br/>Own operation scope<br/>with Dishka providers"]
         Coordinator["SynthesisCampaignCoordinator<br/>EVOLUTION APPLICATION<br/>CampaignAuditor + CampaignPlanner<br/>Reconcile state; build CampaignTask payloads"]
         Dispatcher["ProcessPoolRunner<br/>EVOLUTION INFRASTRUCTURE<br/>Dispatch worker processes<br/>run_synthesis_worker"]
         Bootstrap --> Coordinator --> Dispatcher
@@ -61,7 +61,7 @@ nodes in this focused view.
 
 ```mermaid
 flowchart LR
-    Entry[Notebooks] --> Bootstrap[Composition functions]
+    Entry[Notebook / CLI / future HTTP] --> Bootstrap[Module façades and composition]
     Bootstrap --> App[Application workflows]
     App --> Ports[Application ports]
     App --> Domain[Domain rules and entities]
@@ -76,12 +76,12 @@ implements an interface. Application code does not import its concrete adapter.
 | Owner | Responsibilities |
 | --- | --- |
 | Evolution | Prompts, campaigns, iterations, feedback, fitness penalties and synthesis recovery. |
-| Benchmarking | Champion selection, trial validity/resumption, audit, reliability, ECDF and transfer. |
+| Benchmark | Champion selection, trial validity/resumption, audit, reliability, ECDF and transfer. |
 | Shared foundation | BBOB/noise definitions, objective gap, problem capabilities, execution and database adapters. |
 | Notebooks / infrastructure DI | Composition, labels, Plotly figures and explicit exports. |
 
 Neither context's application/domain imports the other context. Shared code imports
-neither context. Benchmarking infrastructure may read synthesis records through
+neither context. Benchmark infrastructure may read synthesis records through
 read-only adapters; evolution owns synthesis writes. Database sessions are short-lived,
 with worker-local engines and the existing SQLite WAL configuration.
 
@@ -99,25 +99,25 @@ This is a modular monolith with two workflow contexts, not independent services.
 ```text
 Notebook dashboards / figures / exports
                   ↓ composition in infrastructure DI
-        Evolution                 Benchmarking
+        Evolution                 Benchmark
     synthesis + campaign       selection + evaluation + analysis
                   ↓                    ↓
        Shared scientific rules and runtime infrastructure
 ```
 
 Evolution owns prompts, generation modes, experiment/iteration semantics, fitness
-penalties, and campaign coverage. Benchmarking owns champion ranking, trial
+penalties, and campaign coverage. Benchmark owns champion ranking, trial
 protocols, condition validity, benchmark coverage, reliability, and transfer studies.
 Audit and analysis are workflows, not a third bounded context. Persistence and
 candidate runtime are supporting infrastructure, not business contexts.
 
 Shared code must not depend on either context. Neither context's domain or
-application imports the other context. Bootstrap may compose both. Benchmarking's
+application imports the other context. Bootstrap may compose both. Benchmark's
 read-only SQLite adapters deliberately consume synthesis-owned table projections;
 they must not write synthesis state or invoke synthesis workflows. The ORM schema
 stays in shared infrastructure for this single-database application; evolution owns
 its synthesis-table meaning and writes. Benchmark traces/provenance belong to
-benchmarking. No database/schema migration is required.
+benchmark. No database/schema migration is required.
 
 ## Dependency direction
 
@@ -141,7 +141,7 @@ Dishka bindings live only in infrastructure:
 | --- | --- |
 | [SharedProvider](../../src/shared/infra/di.py) | Process-local SQLAlchemy engine/session factory and shared problem factory |
 | [EvolutionProvider](../../src/evolution/infra/di.py) | Synthesis repositories, logging, engine, dispatcher and use cases |
-| [BenchmarkProvider](../../src/benchmarking/infra/di.py) | Champion reads/selection, benchmark execution, audit and analytical collaborators |
+| [BenchmarkProvider](../../src/benchmark/infra/di.py) | Champion reads/selection, benchmark execution, audit and analytical collaborators |
 
 Providers use `provide(Service)` for ordinary constructor injection. `AnyOf`
 binds a concrete adapter and its existing interface to the same scoped instance.
@@ -153,7 +153,7 @@ This follows the same division of responsibility as .NET's Generic Host without
 imitating its builder syntax: the host owns lifetime, providers register bindings,
 and the container constructs services using typed constructor parameters. An API
 server is not required. Console/job code can compose these same providers directly;
-notebook setup cells own their local resource lifetimes.
+module façades own operation scopes; callers own module startup and shutdown.
 
 Existing abstract classes are bound only for external or replaceable boundaries
 (repositories, code/trace storage, problem creation, logging and task dispatch).
@@ -173,8 +173,8 @@ alone is not sufficient: a trace-loading workflow may also return domain data.
 | --- | --- | --- |
 | Evolution domain | `domain/interfaces/synthesis_repository.py` | Persists and restores experiment domain objects and iteration state |
 | Shared scientific domain | `domain/problem.py`, `domain/interfaces/problem_factory.py` | Defines objective-problem capabilities and creation of scientific problem objects |
-| Benchmarking application | `ChampionRepository`, `SynthesisReadRepository` | Query projections/DataFrames and workflow exports; not repositories for benchmark domain aggregates |
-| Benchmarking application | `BenchmarkTraceReader`, `BenchmarkStateStore`, `CandidateCodeReader` | Workflow IO, provenance, trace lifecycle and code access |
+| Benchmark application | `ChampionRepository`, `SynthesisReadRepository` | Query projections/DataFrames and workflow exports; not repositories for benchmark domain aggregates |
+| Benchmark application | `BenchmarkTraceReader`, `BenchmarkStateStore`, `CandidateCodeReader` | Workflow IO, provenance, trace lifecycle and code access |
 | Evolution application | `SynthesisEngine`, `SynthesisCodeStore`, `TaskDispatcher`, `DuplicateStorage` | Synthesis execution, source artifacts, dispatch and maintenance workflows |
 | Shared application | `CandidateExecutor` | External generated-code execution, warnings and timeout boundary |
 | Context application packages | `BaseLogger`, `BenchmarkLoggerInterface` | Workflow telemetry rather than scientific rules |
@@ -185,59 +185,65 @@ an internal capability of `SQLiteSynthesisRepository`, with its existing calls
 and database behavior unchanged. Domain modules may not import application,
 infrastructure or Dishka. No replacement interface was introduced for WAL work.
 
-Notebook-only initialization lives in the notebooks themselves. There are no
-backend notebook-host classes or modules. Reusable providers neither import
-notebook lifecycle code nor register shutdown hooks.
+### Module entry points and lifetimes
 
-There is no separate audit context or root bootstrap package. Application and
-domain modules neither import Dishka nor resolve dependencies from a container.
-They retain ordinary constructor injection and explicit experiment parameters.
+[EvolutionModule](../../src/evolution/infra/module.py) and
+[BenchmarkModule](../../src/benchmark/infra/module.py) are the public runtime
+entry points for notebooks, console programs and a future HTTP host. Each instance
+builds one process-local Dishka root from its context provider and SharedProvider.
+Construction validates the graph but does not launch a campaign or eagerly open a
+database.
 
-The database and caller-owned LLM client have application/process scope.
-Repositories, mutable loggers, workload coordinators and analysis use cases have
-request/job scope. Analysis settings and worker engines are request context,
-not application-global experiment settings. Repositories continue opening
-short-lived sessions per operation. WAL, foreign keys, busy timeout and
-synchronous settings remain the database adapter's responsibility.
+Each public operation opens a fresh REQUEST/job scope, resolves the existing use
+case, invokes it directly, and closes the scope on return or exception. There is
+no mediator, command bus, global container or service locator in application/domain
+code. Façades contain only typed argument forwarding, validated analysis-settings
+construction, and lifecycle handling. Analytical calculations stay in domain
+engines; application use cases still own loading and orchestration.
 
-Each notebook's setup cell uses standard-library `ExitStack` to own a Dishka
-request/job scope across cells. Setup resolves ready services without executing
-their workflow methods. A PID-bound `atexit` callback releases resources at normal
-process shutdown; `close_synthesis()`, `close_benchmark()` or `close_analysis()`
-releases them early. Rerunning setup unregisters and invokes its previous callback
-before replacement. Failed initialization closes partial resources immediately.
-The database provider owns engine disposal; LLM clients remain caller-owned.
-
-Use cases receive collaborators through ordinary constructor injection. Dishka
-constructs the registered services; notebooks receive those ready-to-use objects
-from their setup cells and call their methods normally. No injection
-decorators, context-local service locators or container lookups are needed in
-notebooks. SQLAlchemy and workflows remain synchronous; process workers supply
-concurrency.
+The database engine/session factory and caller-owned LLM client have APP/process
+scope. Repositories, mutable loggers, workload coordinators and analysis use cases
+have operation scope. Repositories continue opening short-lived database sessions
+per operation. The root retains its engine until module shutdown; WAL, foreign
+keys, busy timeout and synchronous settings remain the database adapter's job.
 
 ```python
-# After running the corresponding notebook setup cells:
-results = campaign.run_campaign(**synthesis_parameters)
+from evolution.infra.module import EvolutionModule
+from benchmark.infra.module import BenchmarkModule
 
-outcomes = workflow.service.run_benchmarks(
-    solver_type="champions", **benchmark_parameters
-)
-audit = workflow.audit.get_audit_data(**benchmark_parameters)
-
-# Optional early release; normal process shutdown also releases resources.
-close_synthesis()
-close_benchmark()
+evolution = EvolutionModule(llm)
+benchmark_module = BenchmarkModule()
+try:
+    results = evolution.run_campaign(**synthesis_parameters)
+    outcomes = benchmark_module.run_benchmarks(
+        solver_type="champions", **benchmark_parameters
+    )
+    coverage = benchmark_module.audit_coverage(**benchmark_parameters)
+finally:
+    evolution.close()
+    benchmark_module.close()
 ```
 
-Setup cells manage resource lifetime, not method injection. Collaborators are already
-supplied before a service is called. Stable collaborators belong in constructors;
-budgets, dimensions and other execution inputs remain explicit method arguments.
-Do not use services after closing their resources. Detached data results can outlive
-the scope. A failed workflow call leaves the services available for diagnosis or retry; it
-does not automatically close the notebook application. Force-killing a process
-cannot guarantee Python shutdown hooks. Future HTTP handlers should use framework
-lifetimes rather than notebook setup. No workflow method proxies or global service
-containers are introduced.
+In notebooks, setup initializes a module once and registers one normal-process
+shutdown callback. Rerunning setup closes and unregisters the previous module
+before replacing it. No notebook ExitStack, per-operation scope management, or
+live repository/use-case bundle is exposed. Calculations and numerical persistence
+are separate module calls; figures and CSV presentation remain notebook-owned.
+
+Only detached data is returned: DataFrames, calculated result classes, champion
+catalogs, paths and immutable model-registry entries. Operation scopes never
+escape through module APIs. A failed operation closes its scope but leaves the
+module root available for a new operation. Analysis settings are passed per call,
+not retained as mutable module configuration. Module close is idempotent; calls
+after close fail explicitly. Modules reject serialization and cross-process
+operation calls. Caller-owned LLM clients are not closed.
+
+The host must call close during graceful shutdown, after draining active jobs.
+Notebook atexit is only a fallback for normal interpreter exit; force-killing a
+process cannot guarantee finalization. Recreate the module when switching an
+imported database or infrastructure configuration. Scientific settings remain
+explicit method arguments, with existing Pydantic validation in use cases and
+analysis configuration models.
 
 Synthesis workers open their own container inside the worker process, then resolve
 `SingleSynthesisUseCase` with the engine already in the unchanged task payload.
@@ -253,19 +259,21 @@ Service registration and constructor injection follow the
 
 FastAPI is not implemented by this change. A future server will assemble the same
 `SharedProvider`, `EvolutionProvider` and `BenchmarkProvider` in its composition
-root. It must not import notebook setup. Dishka's FastAPI middleware owns
-request scopes, and the FastAPI lifespan closes the root container. Handlers
-receive ready application services through the official integration; service
-constructors and scientific methods do not change.
+The API lifespan initializes the two module instances once and closes them on
+shutdown. Routes call their public methods; module-internal containers are not
+registered in an API-global service locator. An API container may inject the
+module objects into handlers, but each module still owns its internal operation
+scope. No notebook setup is imported. Service constructors and scientific methods
+do not change.
 
-The current providers and workflows are synchronous. Start with the supported
-synchronous integration (`inject_sync` at HTTP handlers), or choose an async
-container if future adapters actually require asynchronous resources. Do not run
+The module methods and current adapters are synchronous. Keep blocking calls in
+synchronous handlers or dedicated jobs, and use async containers only if future
+adapters actually need them. Do not run
 blocking synthesis/benchmark campaigns directly in an async event loop. Long jobs
 need worker/job lifetimes separate from HTTP request lifetimes; never pass request
 repositories, sessions or containers into the existing process-pool payload.
-Per-request analysis settings can be supplied by an HTTP-specific provider for
-`BenchmarkConfig`; the current worker engine context remains process-local.
+Analysis method arguments become a fresh validated `BenchmarkConfig` inside each
+module operation; the worker engine context remains process-local.
 See [Dishka's FastAPI integration](https://dishka.readthedocs.io/en/stable/integrations/fastapi.html).
 
 ## Evolution context (`src/evolution/`)
@@ -281,8 +289,8 @@ See [Dishka's FastAPI integration](https://dishka.readthedocs.io/en/stable/integ
   (fitness and failure classification using the shared objective gap).
 - `infra/` adapts SQLite/files, LLaMEA, logging, synthesis telemetry, and multiprocessing.
 
-Notebook 02 uses `evolution.infra.di.synthesis_scope()` to prepare the coordinator,
-repositories, problem factory, engine and automatically sized dispatcher. Setup does
+Notebook 02 calls `EvolutionModule` methods; its operation scope prepares the
+coordinator, repositories, problem factory, engine and automatically sized dispatcher. Setup does
 not read study configuration files. The notebook supplies flat validated method arguments;
 the coordinator builds a fresh planner and configuration for each invocation.
 Benchmark composition injects concrete workload and trial-runner objects. Each
@@ -308,9 +316,9 @@ calculation without sharing fitness penalties. Use the application
 candidate-evaluation service and executor port directly; the domain contains no
 generated-code execution.
 
-## Benchmarking context (`src/benchmarking/`)
+## Benchmark context (`src/benchmark/`)
 
-- `application/benchmark/` separates workload discovery, per-condition trials,
+- `application/trials/` separates workload discovery, per-condition trials,
   batch execution, and coverage auditing. `select_champions.py` owns ranking.
 - `application/analysis/` contains injected analysis use cases. A shared loader
   reads validated snapshots; profile, reliability, noise-robustness and performance
@@ -331,8 +339,8 @@ application-owned; repositories return candidate records and persist exports.
 ## Audit and analysis boundaries
 
 The independent workflow is named `benchmark`: notebook `03_benchmark.ipynb`
-uses `BenchmarkWorkflow` from `benchmarking.infra.di.benchmark_scope()`.
-The provider composes `BenchmarkService` and its adapters; method parameters
+calls `BenchmarkModule`; live workload and repository objects stay inside each operation.
+The provider composes `BenchmarkCoordinator` and its adapters; method parameters
 create the validated `BenchmarkConfig`. Configuration
 uses `trials_per_condition`, `trial_timeout_seconds` and
 `noise_robustness_enabled`; old workflow imports are not forwarding aliases.
@@ -340,10 +348,10 @@ Synthesis candidate evaluation and objective-evaluation counts retain their
 scientific names. Recorded provenance keys such as `evaluation_schema_version`,
 `evaluation_kind` and `evaluations_used` retain their existing serialized format.
 
-Inside `application/benchmark/`, `run.py` coordinates injected workload and trial
+Inside `application/trials/`, `coordinator.py` coordinates injected workload and trial
 collaborators; the infrastructure provider owns their construction. `workload.py` discovers typed
 tasks carrying exact selected champions, then projects them into audit tables.
-`trials.py` resumes and executes those conditions using one record per terminal
+`runner.py` resumes and executes those conditions using one record per terminal
 trial rather than parallel mutable columns. `models.py` contains these application
 records and callable dependency types. `summary.py` produces read-only outcome
 summaries; `audit.py` reports coverage. Scientific validity, trial identities and
@@ -353,7 +361,7 @@ are reported consistently by readiness and refused by resumption without deletio
 complete compatible-schema historical results remain reusable.
 
 Notebook 04 passes expected synthesis coverage as plain condition specifications
-to `benchmark_scope(planned_conditions=...)`, then calls its ready audit service. The benchmark audit reports missing champions
+to `BenchmarkModule(planned_conditions=...)`, then calls `audit_coverage()`. The benchmark audit reports missing champions
 separately from executable condition completion and reuses the pure status policy
 used by workload discovery and trial resumption. Stale schema/hash results expose
 recorded counts but contribute zero reusable trials. Native, noise robustness,
@@ -363,9 +371,8 @@ another. Baselines do not require a synthesis champion.
 Audit returns numeric IDs, counts, reasons, and statuses. Notebook 04 owns icons,
 labels, heatmaps, CSV exports, and the Markdown dashboard. Analysis use cases receive
 required loaders and engines through constructor injection.
-Notebook analysis setup passes explicit validated settings to
-`benchmarking.infra.di.analysis_scope()` and owns resources until explicit close
-or normal process shutdown. Application use cases load an
+Analysis notebooks pass explicit scientific settings to the module's four
+`analyze_*` methods; the module opens and closes each operation scope. Application use cases load an
 internal snapshot and calculate results without writes. Notebooks receive detached
 scientific results and resolved metadata, not live repositories or engine services.
 Plotly builders consume those results; `AnalysisFigureExporter` orchestrates PNG

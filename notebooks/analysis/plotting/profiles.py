@@ -9,12 +9,12 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from benchmarking.application.analysis.results import (
+from benchmark.application.analysis.results import (
     ConditionProfile,
     ProfileMode,
     ProfileSeries,
 )
-from benchmarking.domain.enums import BBOBFunction
+from benchmark.domain.enums import BBOBFunction
 
 from .style import (
     FONT_FAMILY,

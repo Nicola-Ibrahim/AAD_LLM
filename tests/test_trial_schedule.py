@@ -8,13 +8,13 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from benchmarking.application.benchmark.trials import BenchmarkTrialRunner
-from benchmarking.application.benchmark_config import BenchmarkConfig
-from benchmarking.domain.benchmark_results import BENCHMARK_SCHEMA_VERSION, ERROR_DEFINITION
-from benchmarking.domain.services.condition_status import inspect_condition
-from benchmarking.domain.trial_schedule import matching_trial_indices, select_scheduled_trials
-from benchmarking.infra.io.trace_repository import BenchmarkStateRepository, IOHTraceReader
-from benchmarking.infra.storage.model_registry import configured_model_names
+from benchmark.application.benchmark_config import BenchmarkConfig
+from benchmark.application.trials.runner import BenchmarkTrialRunner
+from benchmark.domain.benchmark_results import BENCHMARK_SCHEMA_VERSION, ERROR_DEFINITION
+from benchmark.domain.services.condition_status import inspect_condition
+from benchmark.domain.trial_schedule import matching_trial_indices, select_scheduled_trials
+from benchmark.infra.io.trace_repository import BenchmarkStateRepository, IOHTraceReader
+from benchmark.infra.storage.model_registry import configured_model_names
 from shared.domain.problem import BaseProblem
 from shared.infra.problems.factory import BBOBProblemFactory
 

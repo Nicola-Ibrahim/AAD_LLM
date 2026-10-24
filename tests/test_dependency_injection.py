@@ -7,17 +7,19 @@ from unittest.mock import MagicMock
 import pytest
 from dishka import Provider, Scope, make_container
 
-import benchmarking.infra.di as benchmark_di
+import benchmark.infra.di as benchmark_di
 import evolution.infra.di as evolution_di
 import shared.infra.di as shared_di
-from benchmarking.application.benchmark.run import BenchmarkService
-from benchmarking.application.benchmark_config import BenchmarkConfig
-from benchmarking.application.interfaces.benchmark_state_store import BenchmarkStateStore
-from benchmarking.application.interfaces.candidate_code_reader import CandidateCodeReader
-from benchmarking.application.interfaces.champion_repository import ChampionRepository
-from benchmarking.application.interfaces.logger import BenchmarkLoggerInterface
-from benchmarking.application.interfaces.synthesis_read_repository import SynthesisReadRepository
-from benchmarking.infra.di import AnalysisUseCases, BenchmarkProvider
+from benchmark.application.analysis.analyze_ecdf_and_convergence import AnalyzeEcdfAndConvergence
+from benchmark.application.benchmark_config import BenchmarkConfig
+from benchmark.application.interfaces.benchmark_state_store import BenchmarkStateStore
+from benchmark.application.interfaces.candidate_code_reader import CandidateCodeReader
+from benchmark.application.interfaces.champion_repository import ChampionRepository
+from benchmark.application.interfaces.logger import BenchmarkLoggerInterface
+from benchmark.application.interfaces.synthesis_read_repository import SynthesisReadRepository
+from benchmark.application.trials.audit import BenchmarkAuditService
+from benchmark.application.trials.coordinator import BenchmarkCoordinator
+from benchmark.infra.di import BenchmarkProvider
 from evolution.application.campaign.models import CampaignTask
 from evolution.application.campaign.run import SynthesisCampaignCoordinator
 from evolution.application.interfaces.code_store import SynthesisCodeStore
@@ -40,23 +42,22 @@ def test_container_disposes_database_on_success_and_failure(monkeypatch, context
     database = MagicMock()
     monkeypatch.setattr(shared_di, "Database", lambda: database)
     monkeypatch.setattr(benchmark_di, "ChampionsReadRepository", MagicMock())
-    if context == "synthesis":
-        manager, dependency = (
-            evolution_di.synthesis_scope(MagicMock()),
-            SynthesisCampaignCoordinator,
-        )
-    elif context == "worker":
-        manager, dependency = (
-            evolution_di.synthesis_worker_scope(MagicMock()),
-            SingleSynthesisUseCase,
-        )
-    elif context == "analysis":
-        manager, dependency = benchmark_di.analysis_scope(BenchmarkConfig()), AnalysisUseCases
-    else:
-        manager, dependency = benchmark_di.benchmark_scope(), benchmark_di.BenchmarkWorkflow
+    dependency = {
+        "synthesis": SynthesisCampaignCoordinator,
+        "worker": SingleSynthesisUseCase,
+        "analysis": AnalyzeEcdfAndConvergence,
+        "benchmark": BenchmarkCoordinator,
+    }[context]
+    provider = EvolutionProvider() if context in {"synthesis", "worker"} else BenchmarkProvider()
+    manager = container_scope(
+        provider,
+        context={LLMClient: MagicMock()},
+        request_context={SynthesisEngine: MagicMock(), BenchmarkConfig: BenchmarkConfig()},
+    )
 
     def resolve():
-        with manager as service:
+        with manager as scope:
+            service = scope.get(dependency)
             assert isinstance(service, dependency)
             database.dispose.assert_not_called()
             if interrupted:
@@ -74,7 +75,7 @@ def test_container_disposes_database_on_success_and_failure(monkeypatch, context
     "provider,repository,dependency",
     [
         (EvolutionProvider, "SQLiteSynthesisRepository", SynthesisCampaignCoordinator),
-        (BenchmarkProvider, "SQLiteSynthesisReadRepository", BenchmarkService),
+        (BenchmarkProvider, "SQLiteSynthesisReadRepository", BenchmarkCoordinator),
     ],
 )
 def test_repository_construction_failure_still_disposes_database(
@@ -134,14 +135,14 @@ def test_analysis_settings_are_job_scoped_not_application_globals(monkeypatch):
     root = make_container(SharedProvider(), BenchmarkProvider())
     try:
         with root(context={BenchmarkConfig: first_settings}) as request:
-            first = request.get(AnalysisUseCases)
-            assert first.ecdf_and_convergence.loader.config is first_settings
+            first = request.get(AnalyzeEcdfAndConvergence)
+            assert first.loader.config is first_settings
         with root(context={BenchmarkConfig: second_settings}) as request:
-            second = request.get(AnalysisUseCases)
-            assert second.ecdf_and_convergence.loader.config is second_settings
+            second = request.get(AnalyzeEcdfAndConvergence)
+            assert second.loader.config is second_settings
             assert second is not first
-            assert second.ecdf_and_convergence.loader is not first.ecdf_and_convergence.loader
-        assert first.ecdf_and_convergence.loader.config.budget == 100_000
+            assert second.loader is not first.loader
+        assert first.loader.config.budget == 100_000
     finally:
         root.close()
     database.dispose.assert_called_once()
@@ -160,13 +161,13 @@ def test_nested_workflows_have_ready_collaborators_and_independent_lifetimes(mon
     outer_db, inner_db = MagicMock(), MagicMock()
     monkeypatch.setattr(shared_di, "Database", MagicMock(side_effect=[outer_db, inner_db]))
     monkeypatch.setattr(benchmark_di, "ChampionsReadRepository", MagicMock())
-    with benchmark_di.benchmark_scope() as outer:
-        assert isinstance(outer.service, BenchmarkService)
-        assert outer.audit.workload is outer.service.workload
-        assert outer.service.workload.sqlite_repo is outer.sqlite_repo
-        with benchmark_di.benchmark_scope() as inner:
-            assert inner.service is not outer.service
-            assert inner.service.logger is not outer.service.logger
+    with container_scope(BenchmarkProvider(), context={}, request_context={}) as outer_scope:
+        outer = outer_scope.get(BenchmarkCoordinator)
+        assert outer_scope.get(BenchmarkAuditService).workload is outer.workload
+        with container_scope(BenchmarkProvider(), context={}, request_context={}) as inner_scope:
+            inner = inner_scope.get(BenchmarkCoordinator)
+            assert inner is not outer
+            assert inner.logger is not outer.logger
         inner_db.dispose.assert_called_once()
         outer_db.dispose.assert_not_called()
     outer_db.dispose.assert_called_once()
@@ -236,7 +237,7 @@ def test_non_web_composition_can_replace_an_external_interface(monkeypatch):
 
 def test_reusable_providers_do_not_import_notebook_lifecycle():
     root = Path(__file__).resolve().parents[1] / "src"
-    for package in ("shared", "evolution", "benchmarking"):
+    for package in ("shared", "evolution", "benchmark"):
         path = root / package / "infra" / "di.py"
         tree = ast.parse(path.read_text())
         imports = [

@@ -150,7 +150,7 @@ configuration-file dependency.
 | `run_campaign(...)`, `audit_matrix(...)` | `problem_targets`, `noise_conditions`, `synthesis_modes`, `iterations`, `budget`, `timeout_seconds`, `runs_per_config`, `auto_resume`, `skip_completed`, `retry_failed_synthesis` |
 | `run_benchmarks(...)`, `audit_workload(...)`, `summarize_results(...)` | `trials_per_condition`, `random_seed`, `first_instance_id`, `budget`, `trial_timeout_seconds`, `observation_trace_points`, `force_rerun`, `classical_baselines`, `noise_robustness_enabled`, `cross_function_enabled`, `cross_function_problem_ids` |
 | Summary thresholds | `primary_target`, `secondary_target` |
-| Analysis composition | Notebook setup builds `BenchmarkConfig`/`ReliabilityConfig` and passes validated settings to `analysis_scope` |
+| Analysis operations | Flat scientific parameters go to the four `analyze_*` module methods; each builds a validated invocation-local configuration |
 
 Parameters are keyword-only. Pydantic validates values before planning, discovery,
 dispatch or writes; ordinary model fields and validators describe structured
@@ -159,9 +159,10 @@ CPU-worker capacity is selected automatically. Credentials, database paths and
 infrastructure collaborators are server-managed, not experiment body fields.
 
 Context-owned Dishka providers live in `evolution/infra/di.py` and
-`benchmarking/infra/di.py`. The application coordinator receives concrete workload and trial-runner objects.
-Notebook-only initialization and cleanup live in setup cells. A future
-FastAPI server reuses the providers with server/request lifetimes, not notebook setup.
+`benchmark/infra/di.py`. The application coordinator receives concrete workload and trial-runner objects.
+Module façades in each context's `infra/module.py` own internal operation scopes.
+Notebook setup owns only module initialization and final shutdown; a future
+FastAPI lifespan can initialize/close the same modules without notebook code.
 Settings are passed through their internal methods, not held as mutable
 configuration or supplied through invocation-time factory callbacks. Dishka
 constructs infrastructure collaborators; it does not replace method parameters. Internal validated
@@ -171,8 +172,10 @@ configuration objects group typed values; callers do not pass a nested
 For example, a small explicit synthesis request is:
 
 ```python
-# The notebook setup cell has already prepared campaign and its dependencies.
-results = campaign.run_campaign(
+from evolution.infra.module import EvolutionModule
+
+evolution_module = EvolutionModule(llm)
+results = evolution_module.run_campaign(
     problem_targets=[{"id": 15, "dimensions": [10]}],
     noise_conditions=[{"std": 0.1, "noise_model": "heteroscedastic"}],
     synthesis_modes=[{"mode": "explicit", "strategies": ["baseline"]}],
@@ -184,6 +187,7 @@ results = campaign.run_campaign(
     skip_completed=True,
     retry_failed_synthesis=True,
 )
+evolution_module.close()
 
 ```
 

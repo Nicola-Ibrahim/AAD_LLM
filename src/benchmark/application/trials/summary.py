@@ -1,0 +1,109 @@
+"""Read-only post-evaluation summary of current champions and classical baselines."""
+
+import pandas as pd
+
+from benchmark.application.benchmark_config import BenchmarkConfig
+from benchmark.application.interfaces.benchmark_state_store import BenchmarkStateStore
+from benchmark.application.trials.workload import BenchmarkWorkload
+from benchmark.domain.services.benchmark_outcomes import summarize_trial_outcomes
+from benchmark.domain.trial_schedule import select_scheduled_trials
+
+
+def summarize_benchmarks(
+    workload: BenchmarkWorkload,
+    state: BenchmarkStateStore,
+    config: BenchmarkConfig,
+) -> pd.DataFrame:
+    """Use current workload validity; stale and incomplete trials never suggest synthesis."""
+    conditions = [
+        *workload.discover("champions", config=config),
+        *workload.discover("baselines", config=config),
+    ]
+    rows = []
+    for condition in conditions:
+        baseline = condition.champion is None
+        champion = condition.champion or {}
+        provenance = state.read_provenance(condition.target_dir) or {}
+        outcome = summarize_trial_outcomes(
+            select_scheduled_trials(provenance, config.trial_schedule),
+            config.trials_per_condition,
+            config.reliability.primary_target,
+            config.reliability.secondary_target,
+        )
+        category = outcome.category
+        reusable = condition.inspection.reason in {"complete", "partial", "not_started"}
+        if not reusable:
+            category = "missing_or_stale"
+        if category == "missing_or_stale":
+            action = "Refresh benchmark/code first"
+        elif category == "incomplete":
+            action = "Finish/resume benchmark first"
+        elif category in {"all_failed", "mostly_failed"}:
+            action = (
+                "Inspect baseline implementation"
+                if baseline
+                else "Inspect; consider fresh synthesis"
+            )
+        elif category == "some_failed":
+            action = "Inspect failed-trial diagnostics"
+        elif category == "large_error":
+            action = "Compare with baselines; not an automatic rerun"
+        else:
+            action = "No execution-failure flag"
+        rows.append(
+            {
+                "Model": condition.model,
+                "Experiment ID": champion.get("experiment_id"),
+                "Algorithm": champion.get("algorithm_name", condition.solver),
+                "Mode": str(condition.mode),
+                "Strategy": condition.strategy,
+                "Problem ID": condition.problem_id,
+                "Dim": condition.dim,
+                "Noise": condition.noise_std,
+                "Solver Type": condition.solver_type,
+                "Recorded trials": condition.inspection.recorded_trials,
+                "Executed trials": outcome.executed_trials,
+                "Valid trials": outcome.executed_trials - outcome.failed_trials if reusable else 0,
+                "Expected trials": config.trials_per_condition,
+                "Failed trials": outcome.failed_trials if reusable else 0,
+                "Execution rate": (
+                    (outcome.executed_trials - outcome.failed_trials) / outcome.executed_trials
+                    if reusable and outcome.executed_trials
+                    else float("nan")
+                ),
+                "Failure rate": (
+                    outcome.failed_trials / outcome.executed_trials
+                    if reusable and outcome.executed_trials
+                    else float("nan")
+                ),
+                "Solved trials": outcome.solved_trials if reusable else 0,
+                "Meaningful trials": outcome.meaningful_trials if reusable else 0,
+                "Primary target rate": outcome.success_rate if reusable else float("nan"),
+                "Median error": outcome.median_error if reusable else float("nan"),
+                "Median finite error": outcome.median_finite_error if reusable else float("nan"),
+                "Category": category,
+                "Suggested action": action,
+                "Rerun candidate": not baseline
+                and category in {"all_failed", "mostly_failed"}
+                and bool(champion.get("experiment_id")),
+            }
+        )
+    table = pd.DataFrame(rows)
+    if table.empty:
+        return table
+    keys = ["Problem ID", "Dim", "Noise"]
+    baseline_errors = (
+        table[
+            (table["Solver Type"] == "baseline")
+            & (table["Executed trials"] >= config.trials_per_condition)
+            & (table["Category"] != "missing_or_stale")
+        ]
+        .groupby(keys)["Median error"]
+        .min()
+        .rename("Best baseline median error")
+    )
+    table = table.join(baseline_errors, on=keys)
+    table["Experiment ID"] = pd.array(table["Experiment ID"], dtype="Int64")
+    return table.sort_values(
+        ["Model", "Problem ID", "Dim", "Noise", "Strategy", "Mode"], kind="stable"
+    ).reset_index(drop=True)

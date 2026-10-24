@@ -16,7 +16,7 @@ notebook = json.loads(Path('notebooks/02_synthesis.ipynb').read_text())
 setup = next(
     ''.join(cell['source']) for cell in notebook['cells']
     if cell['cell_type'] == 'code'
-    and 'from evolution.infra.di import synthesis_scope' in ''.join(cell['source'])
+    and 'from evolution.infra.module import EvolutionModule' in ''.join(cell['source'])
 )
 namespace = {}
 exec(compile(setup, 'notebook-setup', 'exec'), namespace)

@@ -11,8 +11,8 @@ import pytest
 from pydantic import ValidationError
 from study_fixtures import run_parameters, synthesis_config
 
-from benchmarking.application.benchmark.run import BenchmarkService
-from benchmarking.application.benchmark_config import BenchmarkConfig
+from benchmark.application.benchmark_config import BenchmarkConfig
+from benchmark.application.trials.coordinator import BenchmarkCoordinator
 from evolution.application.campaign.run import SynthesisCampaignCoordinator
 from evolution.application.synthesis_config import SynthesisConfig
 from shared.infra.cpu import available_cpu_count
@@ -102,7 +102,7 @@ def test_benchmark_json_parameters_are_validated_and_not_retained() -> None:
     workload = MagicMock()
     workload.discover.return_value = []
     trials = MagicMock()
-    service = BenchmarkService(
+    service = BenchmarkCoordinator(
         workload, trials, {"pso": "Particle Swarm Optimization"}, MagicMock()
     )
     original = BenchmarkConfig()
@@ -138,7 +138,7 @@ def test_benchmark_json_parameters_are_validated_and_not_retained() -> None:
 def test_invalid_benchmark_inputs_fail_before_discovery(changes: dict[str, object]) -> None:
     workload = MagicMock()
     trials = MagicMock()
-    service = BenchmarkService(workload, trials, {}, MagicMock())
+    service = BenchmarkCoordinator(workload, trials, {}, MagicMock())
     with pytest.raises(ValidationError):
         service.run_benchmarks(**(run_parameters(BenchmarkConfig()) | changes))
     workload.discover.assert_not_called()
@@ -159,7 +159,7 @@ def test_worker_capacity_uses_affinity_and_scheduler(monkeypatch: pytest.MonkeyP
 
 
 def test_public_execution_dependencies_are_not_study_configuration() -> None:
-    for service in (SynthesisCampaignCoordinator, BenchmarkService):
+    for service in (SynthesisCampaignCoordinator, BenchmarkCoordinator):
         assert "config" not in inspect.signature(service).parameters
     assert (
         "max_workers" not in inspect.signature(SynthesisCampaignCoordinator.run_campaign).parameters
@@ -170,18 +170,21 @@ def test_public_execution_dependencies_are_not_study_configuration() -> None:
 
 
 def test_benchmark_composition_injects_concrete_workflows(monkeypatch: pytest.MonkeyPatch) -> None:
-    import benchmarking.infra.di as composition
+    import benchmark.infra.di as composition
     import shared.infra.di
 
     database = MagicMock()
     monkeypatch.setattr(shared.infra.di, "Database", lambda: database)
     monkeypatch.setattr(composition, "ChampionsReadRepository", MagicMock())
-    with composition.benchmark_scope() as workflow:
-        assert isinstance(workflow.service.workload, composition.BenchmarkWorkload)
-        assert isinstance(workflow.service.trials, composition.BenchmarkTrialRunner)
-        assert not hasattr(workflow.service, "workload_factory")
-        assert not hasattr(workflow.service.workload, "config")
-        assert not hasattr(workflow.service.trials, "config")
+    with shared.infra.di.container_scope(
+        composition.BenchmarkProvider(), context={}, request_context={}
+    ) as scope:
+        workflow = scope.get(BenchmarkCoordinator)
+        assert isinstance(workflow.workload, composition.BenchmarkWorkload)
+        assert isinstance(workflow.trials, composition.BenchmarkTrialRunner)
+        assert not hasattr(workflow, "workload_factory")
+        assert not hasattr(workflow.workload, "config")
+        assert not hasattr(workflow.trials, "config")
     database.dispose.assert_called_once()
 
 
@@ -196,7 +199,10 @@ def test_synthesis_composition_gets_model_from_client_not_parameters(
     client.model.name = "live-server-model"
     monkeypatch.setattr(shared.infra.di, "Database", lambda: database)
     monkeypatch.setattr(composition, "available_cpu_count", lambda: 6)
-    with composition.synthesis_scope(client) as workflow:
+    with shared.infra.di.container_scope(
+        composition.EvolutionProvider(), context={composition.LLMClient: client}, request_context={}
+    ) as scope:
+        workflow = scope.get(SynthesisCampaignCoordinator)
         assert workflow.model_name == "live-server-model"
         assert workflow.worker_count == workflow.dispatcher.max_workers == 6
     database.dispose.assert_called_once()

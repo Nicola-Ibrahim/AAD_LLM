@@ -10,23 +10,23 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from benchmarking.application.analysis.analyze_ecdf_and_convergence import AnalyzeEcdfAndConvergence
-from benchmarking.application.analysis.analyze_noise_robustness import AnalyzeNoiseRobustness
-from benchmarking.application.analysis.analyze_performance import AnalyzePerformance
-from benchmarking.application.analysis.analyze_reliability import AnalyzeReliability
-from benchmarking.application.analysis.data_loader import AnalysisDataLoader, AnalysisSnapshot
-from benchmarking.application.benchmark_config import BenchmarkConfig
-from benchmarking.domain.benchmark_results import (
+from benchmark.application.analysis.analyze_ecdf_and_convergence import AnalyzeEcdfAndConvergence
+from benchmark.application.analysis.analyze_noise_robustness import AnalyzeNoiseRobustness
+from benchmark.application.analysis.analyze_performance import AnalyzePerformance
+from benchmark.application.analysis.analyze_reliability import AnalyzeReliability
+from benchmark.application.analysis.data_loader import AnalysisDataLoader, AnalysisSnapshot
+from benchmark.application.benchmark_config import BenchmarkConfig
+from benchmark.domain.benchmark_results import (
     BENCHMARK_SCHEMA_VERSION,
     CHAMPION_RETURN_VALIDATION_VERSION,
     ERROR_DEFINITION,
 )
-from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
-from benchmarking.domain.services.performance import PerformanceMetricsEngine
-from benchmarking.domain.services.reliability import ReliabilityEngine
-from benchmarking.domain.services.resolvers import ModelNames
-from benchmarking.domain.services.transfer import TransferAnalysisEngine
-from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
+from benchmark.domain.services.ecdf import EcdfConvergenceEngine
+from benchmark.domain.services.performance import PerformanceMetricsEngine
+from benchmark.domain.services.reliability import ReliabilityEngine
+from benchmark.domain.services.resolvers import ModelNames
+from benchmark.domain.services.transfer import TransferAnalysisEngine
+from benchmark.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 
 
 @pytest.fixture
@@ -433,14 +433,19 @@ def test_dependencies_are_required_and_mode_validated_before_loading():
 
 
 def test_analysis_scope_disposes_on_use_case_failure(monkeypatch):
-    import benchmarking.infra.di
+    import benchmark.infra.di
     import shared.infra.di
 
     database = MagicMock()
     monkeypatch.setattr(shared.infra.di, "Database", lambda: database)
     with pytest.raises(RuntimeError):
-        with benchmarking.infra.di.analysis_scope(BenchmarkConfig()) as analysis:
-            assert isinstance(analysis.ecdf_and_convergence, AnalyzeEcdfAndConvergence)
+        with shared.infra.di.container_scope(
+            benchmark.infra.di.BenchmarkProvider(),
+            context={},
+            request_context={BenchmarkConfig: BenchmarkConfig()},
+        ) as scope:
+            analysis = scope.get(AnalyzeEcdfAndConvergence)
+            assert isinstance(analysis, AnalyzeEcdfAndConvergence)
             raise RuntimeError("interrupted")
     database.dispose.assert_called_once()
 

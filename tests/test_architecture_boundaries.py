@@ -6,9 +6,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1] / "src"
 
 
+def test_benchmark_context_and_trial_workflow_use_the_public_names() -> None:
+    from benchmark.application.trials.coordinator import BenchmarkCoordinator
+    from benchmark.application.trials.runner import BenchmarkTrialRunner
+    from benchmark.infra.module import BenchmarkModule
+
+    assert BenchmarkModule.__module__ == "benchmark.infra.module"
+    assert BenchmarkCoordinator.__module__ == "benchmark.application.trials.coordinator"
+    assert BenchmarkTrialRunner.__module__ == "benchmark.application.trials.runner"
+    assert (ROOT / "benchmark" / "application" / "analysis").is_dir()
+    assert not (ROOT / "benchmarking").exists()
+    assert not (ROOT / "benchmark" / "application" / "benchmark").exists()
+
+
 def test_domain_contracts_do_not_depend_on_application_or_infrastructure() -> None:
     violations = []
-    for context in ("evolution", "benchmarking", "shared"):
+    for context in ("evolution", "benchmark", "shared"):
         for path in (ROOT / context / "domain").rglob("*.py"):
             tree = ast.parse(path.read_text(), filename=str(path))
             for node in ast.walk(tree):
@@ -37,7 +50,7 @@ def test_domain_repository_contract_excludes_sqlite_maintenance() -> None:
 
 def test_dishka_stays_out_of_core_workflows_and_scientific_rules() -> None:
     violations = []
-    for context in ("evolution", "benchmarking", "shared"):
+    for context in ("evolution", "benchmark", "shared"):
         for layer in ("application", "domain"):
             for path in (ROOT / context / layer).rglob("*.py"):
                 for node in ast.walk(ast.parse(path.read_text())):
@@ -54,13 +67,13 @@ def test_dishka_stays_out_of_core_workflows_and_scientific_rules() -> None:
 
 def test_contexts_and_shared_foundation_are_independent() -> None:
     violations: list[str] = []
-    for context in ("evolution", "benchmarking", "shared"):
+    for context in ("evolution", "benchmark", "shared"):
         roots = (
             [ROOT / context]
             if context == "shared"
             else [ROOT / context / "domain", ROOT / context / "application"]
         )
-        forbidden = {"evolution", "benchmarking"} - {context}
+        forbidden = {"evolution", "benchmark"} - {context}
         for root in roots:
             for path in root.rglob("*.py"):
                 tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -76,10 +89,10 @@ def test_contexts_and_shared_foundation_are_independent() -> None:
     assert not violations, "Context ownership leaks: " + ", ".join(violations)
 
 
-def test_benchmarking_backend_does_not_depend_on_presentation() -> None:
+def test_benchmark_backend_does_not_depend_on_presentation() -> None:
     """Figures belong to notebook-owned helpers, not any backend layer."""
     violations: list[str] = []
-    for path in (ROOT / "benchmarking").rglob("*.py"):
+    for path in (ROOT / "benchmark").rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -104,13 +117,13 @@ def test_core_modules_do_not_import_infrastructure_at_module_scope():
     core_roots = [
         ROOT / "evolution/domain",
         ROOT / "evolution/application",
-        ROOT / "benchmarking/domain",
-        ROOT / "benchmarking/application",
+        ROOT / "benchmark/domain",
+        ROOT / "benchmark/application",
         ROOT / "shared/domain",
     ]
     forbidden_imports = (
         "evolution.infra",
-        "benchmarking.infra",
+        "benchmark.infra",
         "shared.infra",
         "shared.config",
     )
@@ -136,7 +149,7 @@ def test_core_modules_do_not_import_infrastructure_at_module_scope():
 def test_domain_modules_do_not_read_configuration_or_files():
     domain_roots = [
         ROOT / "evolution/domain",
-        ROOT / "benchmarking/domain",
+        ROOT / "benchmark/domain",
         ROOT / "shared/domain",
     ]
     forbidden_modules = {"tomllib", "pathlib", "os", "shutil"}
@@ -166,9 +179,9 @@ def test_domain_modules_do_not_read_configuration_or_files():
 def test_plotting_does_not_calculate_or_load_scientific_results() -> None:
     plotting = ROOT.parent / "notebooks" / "analysis" / "plotting"
     forbidden = (
-        "benchmarking.domain.services",
-        "benchmarking.application.analysis.data_loader",
-        "benchmarking.infra",
+        "benchmark.domain.services",
+        "benchmark.application.analysis.data_loader",
+        "benchmark.infra",
         "bootstrap",
     )
     violations = []

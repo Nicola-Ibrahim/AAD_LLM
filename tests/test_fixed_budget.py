@@ -6,14 +6,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from benchmarking.application.benchmark.models import RecordedTrial
-from benchmarking.application.benchmark.trials import BenchmarkTrialRunner
-from benchmarking.application.benchmark_config import BenchmarkConfig
-from benchmarking.domain.services.resolvers import ModelNames
-from benchmarking.infra.io.code_reader import FilesystemCodeReader
-from benchmarking.infra.io.trace_repository import BenchmarkStateRepository
-from benchmarking.infra.logging import BenchmarkLogger
-from benchmarking.infra.solvers.baselines import get_baseline_runner
+from benchmark.application.benchmark_config import BenchmarkConfig
+from benchmark.application.trials.models import RecordedTrial
+from benchmark.application.trials.runner import BenchmarkTrialRunner
+from benchmark.domain.services.resolvers import ModelNames
+from benchmark.infra.io.code_reader import FilesystemCodeReader
+from benchmark.infra.io.trace_repository import BenchmarkStateRepository
+from benchmark.infra.logging import BenchmarkLogger
+from benchmark.infra.solvers.baselines import get_baseline_runner
 from shared.application.interfaces.candidate_executor import (
     CANDIDATE_EXECUTION_VERSION,
     CandidateTimeout,

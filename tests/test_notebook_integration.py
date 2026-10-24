@@ -8,15 +8,15 @@ from unittest.mock import MagicMock
 import pandas as pd
 from study_fixtures import run_parameters, synthesis_config
 
-from benchmarking.application.benchmark.run import BenchmarkService
-from benchmarking.application.benchmark.trials import BenchmarkTrialRunner
-from benchmarking.application.benchmark.workload import BenchmarkWorkload
-from benchmarking.application.benchmark_config import BenchmarkConfig
-from benchmarking.application.select_champions import ChampionSelectionService
-from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
-from benchmarking.infra.io.code_reader import FilesystemCodeReader
-from benchmarking.infra.solvers.baselines import get_baseline_runner
-from benchmarking.infra.storage.model_registry import configured_model_names
+from benchmark.application.benchmark_config import BenchmarkConfig
+from benchmark.application.select_champions import ChampionSelectionService
+from benchmark.application.trials.coordinator import BenchmarkCoordinator
+from benchmark.application.trials.runner import BenchmarkTrialRunner
+from benchmark.application.trials.workload import BenchmarkWorkload
+from benchmark.domain.services.hypothesis import HypothesisTestingEngine
+from benchmark.infra.io.code_reader import FilesystemCodeReader
+from benchmark.infra.solvers.baselines import get_baseline_runner
+from benchmark.infra.storage.model_registry import configured_model_names
 from evolution.infra.concurrency.runner import ProcessPoolRunner
 from evolution.infra.concurrency.worker import run_synthesis_worker
 from shared.config import PROJECT_ROOT
@@ -50,7 +50,7 @@ def build_benchmark_service(**kwargs):
         model_names=names,
     )
     return SimpleNamespace(
-        service=BenchmarkService(
+        service=BenchmarkCoordinator(
             workload=workload,
             trials=trials,
             baseline_labels=config.baseline_labels,
@@ -193,8 +193,8 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
 
 def test_nb03_benchmark_pipeline(tmp_path, db_session_factory):
     """Verify Notebook 03 (03_benchmark.ipynb: Champion Selection + Evaluations Audit & Dispatch)."""
-    print("Testing NB03 logic with ChampionSelectionService & BenchmarkService...")
-    from benchmarking.infra.storage import (
+    print("Testing NB03 logic with ChampionSelectionService & BenchmarkCoordinator...")
+    from benchmark.infra.storage import (
         ChampionsReadRepository,
         SQLiteSynthesisReadRepository,
     )
@@ -245,8 +245,8 @@ def test_nb03_benchmark_pipeline(tmp_path, db_session_factory):
             "  • Database in fresh/running state (0 completed experiments). Balance query contract validated."
         )
 
-    from benchmarking.infra.io.trace_repository import BenchmarkStateRepository
-    from benchmarking.infra.logging import BenchmarkLogger
+    from benchmark.infra.io.trace_repository import BenchmarkStateRepository
+    from benchmark.infra.logging import BenchmarkLogger
 
     state_repo = BenchmarkStateRepository(benchmark_dir=tmp_path / "traces")
     config = BenchmarkConfig()
@@ -278,10 +278,10 @@ def test_nb03_import_order_isolation():
     import sys
 
     code = (
-        "from benchmarking.infra.io.trace_repository import BenchmarkStateRepository; "
-        "from benchmarking.infra.storage import ChampionsReadRepository; "
-        "from benchmarking.application.benchmark.run import BenchmarkService; "
-        "from benchmarking.application.benchmark_config import BenchmarkConfig; "
+        "from benchmark.infra.io.trace_repository import BenchmarkStateRepository; "
+        "from benchmark.infra.storage import ChampionsReadRepository; "
+        "from benchmark.application.trials.coordinator import BenchmarkCoordinator; "
+        "from benchmark.application.benchmark_config import BenchmarkConfig; "
         "assert BenchmarkConfig().trials_per_condition == 20"
     )
     subprocess.run([sys.executable, "-c", code], check=True, capture_output=True, text=True)
@@ -289,10 +289,13 @@ def test_nb03_import_order_isolation():
 
 def test_nb04_audit_pipeline():
     """Verify Notebook 04 (04_audit.ipynb: Experimental Matrix Audit)."""
-    from benchmarking.infra.di import benchmark_scope
+    from benchmark.infra.module import BenchmarkModule
 
-    with benchmark_scope() as workflow:
-        snapshot = workflow.audit.get_audit_data()
+    module = BenchmarkModule()
+    try:
+        snapshot = module.audit_coverage()
+    finally:
+        module.close()
     assert isinstance(snapshot.benchmarks, pd.DataFrame)
     assert isinstance(snapshot.synthesis_gaps, pd.DataFrame)
     assert snapshot.coverage_summary.total_cells >= 0
@@ -302,8 +305,8 @@ def test_nb04_audit_pipeline():
 def test_statistical_analysis_pipeline(tmp_path, db_session_factory):
     """Verify shared statistical calculations and analysis data access."""
     print("\nTesting statistical analysis data access...")
-    from benchmarking.infra.io.trace_repository import IOHTraceReader
-    from benchmarking.infra.storage import SQLiteSynthesisReadRepository
+    from benchmark.infra.io.trace_repository import IOHTraceReader
+    from benchmark.infra.storage import SQLiteSynthesisReadRepository
 
     session_factory = db_session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)

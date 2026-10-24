@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from benchmarking.application.analysis.results import (
+from benchmark.application.analysis.results import (
     HardnessSummary,
     PerformanceAnalysisResult,
 )

@@ -9,7 +9,7 @@ from notebooks.analysis.plotting.style import (
     get_solver_line_style,
 )
 
-from benchmarking.application.analysis.results import ConditionProfile, ProfileSeries
+from benchmark.application.analysis.results import ConditionProfile, ProfileSeries
 
 
 @pytest.mark.parametrize("kind", ["convergence", "ecdf"])

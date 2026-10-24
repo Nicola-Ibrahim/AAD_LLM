@@ -4,20 +4,20 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from benchmarking.application.benchmark.audit import AuditCoverageSummary
-from benchmarking.application.select_champions import ChampionSelectionService
-from benchmarking.domain.enums import (
+from benchmark.application.select_champions import ChampionSelectionService
+from benchmark.application.trials.audit import AuditCoverageSummary
+from benchmark.domain.enums import (
     BBOB_CLASSES_ORDER,
     BBOBFunction,
 )
-from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
-from benchmarking.domain.services.hypothesis import HypothesisTestingEngine
-from benchmarking.domain.services.performance import PerformanceMetricsEngine
-from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
-from benchmarking.infra.io.trace_repository import IOHTraceReader
-from benchmarking.infra.storage.champions_repository import ChampionsReadRepository
-from benchmarking.infra.storage.model_registry import configured_model_names
-from benchmarking.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
+from benchmark.domain.services.ecdf import EcdfConvergenceEngine
+from benchmark.domain.services.hypothesis import HypothesisTestingEngine
+from benchmark.domain.services.performance import PerformanceMetricsEngine
+from benchmark.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
+from benchmark.infra.io.trace_repository import IOHTraceReader
+from benchmark.infra.storage.champions_repository import ChampionsReadRepository
+from benchmark.infra.storage.model_registry import configured_model_names
+from benchmark.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
 from shared.config import DATA_DIR, RESULTS_DIR
 from shared.infra.database import Database
 
@@ -287,10 +287,13 @@ class TestApplicationServicesIntegration:
             assert count >= 0
 
     def test_audit_service(self):
-        from benchmarking.infra.di import benchmark_scope
+        from benchmark.infra.module import BenchmarkModule
 
-        with benchmark_scope() as workflow:
-            snapshot = workflow.audit.get_audit_data()
+        module = BenchmarkModule()
+        try:
+            snapshot = module.audit_coverage()
+        finally:
+            module.close()
         assert isinstance(snapshot.benchmarks, pd.DataFrame)
         assert isinstance(snapshot.synthesis_gaps, pd.DataFrame)
         assert isinstance(snapshot.coverage_summary, AuditCoverageSummary)

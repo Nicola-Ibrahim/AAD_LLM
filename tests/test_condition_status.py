@@ -3,13 +3,13 @@
 import pandas as pd
 import pytest
 
-from benchmarking.application.select_champions import ChampionSelectionService
-from benchmarking.domain.benchmark_results import (
+from benchmark.application.select_champions import ChampionSelectionService
+from benchmark.domain.benchmark_results import (
     BENCHMARK_SCHEMA_VERSION,
     CHAMPION_RETURN_VALIDATION_VERSION,
     ERROR_DEFINITION,
 )
-from benchmarking.domain.services.condition_status import inspect_condition
+from benchmark.domain.services.condition_status import inspect_condition
 
 
 @pytest.mark.parametrize(

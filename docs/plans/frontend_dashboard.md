@@ -39,7 +39,7 @@ flowchart LR
   SYN & BEN & ANA -->|notify after commit| PUB
 ```
 
-The scientific contexts remain `src/evolution`, `src/benchmarking`, and `src/shared`. Add `src/operations` as a supporting job context, `src/api` for HTTP adapters and read projections, `src/worker` for Celery adapters, and `src/di` for composition. Keep the suggested top-level layout: this repository already tests that the `evolution` and `benchmarking` cores are independent. Group routes and tasks **by feature inside their adapter packages**; do not place one FastAPI app or Celery worker inside each scientific domain. None of the scientific application/domain modules should import FastAPI, Celery, Redis, or the DI container.
+The scientific contexts remain `src/evolution`, `src/benchmark`, and `src/shared`. Add `src/operations` as a supporting job context, `src/api` for HTTP adapters and read projections, `src/worker` for Celery adapters, and `src/di` for composition. Keep the suggested top-level layout: this repository already tests that the `evolution` and `benchmark` cores are independent. Group routes and tasks **by feature inside their adapter packages**; do not place one FastAPI app or Celery worker inside each scientific domain. None of the scientific application/domain modules should import FastAPI, Celery, Redis, or the DI container.
 
 ### Two distinct application calls
 
@@ -57,7 +57,7 @@ Suggested layout:
 web/src/features/{overview,experiments,benchmark,analysis,jobs}/
 web/src/api/                 generated client and query hooks
 src/evolution/               existing synthesis domain/application/infra
-src/benchmarking/            existing benchmark + analysis domain/application/infra
+src/benchmark/            existing benchmark + analysis domain/application/infra
 src/operations/application/  submit, claim, progress, read, reconcile use cases
 src/operations/infra/        job/event/lease/outbox persistence adapters
 src/api/routes/              synthesis, benchmark, analysis, jobs HTTP routes
@@ -66,10 +66,11 @@ src/worker/tasks/            synthesis, benchmark, analysis Celery task adapters
 src/worker/                  outbox dispatcher and reconciler processes
 src/di/                      provider modules and process-local containers
 src/*/infra/di.py             reusable context-owned Dishka registrations
+src/*/infra/module.py         public module façades with internal operation scopes
 notebooks/*.ipynb             notebook-owned initialization; not used by the HTTP server
 ```
 
-Dependency rule: `api` and `worker` may call `operations`, `evolution`, and `benchmarking` application use cases; `operations/application` owns generic job policy and its ports, without importing the scientific contexts; scientific application/domain code stays unaware of all delivery adapters. `di` is the only place that wires implementations across these boundaries. This keeps feature ownership clear without creating a separate deployable API/worker per domain.
+Dependency rule: `api` and `worker` may call `operations`, `evolution`, and `benchmark` application use cases; `operations/application` owns generic job policy and its ports, without importing the scientific contexts; scientific application/domain code stays unaware of all delivery adapters. `di` is the only place that wires implementations across these boundaries. This keeps feature ownership clear without creating a separate deployable API/worker per domain.
 
 ### Dependency and resource lifetimes
 
@@ -97,9 +98,9 @@ Never share a SQLAlchemy `Session`, engine, Redis connection, LLM client, or DI 
 | Synthesis run/recover/replace/resume | `SynthesisCampaignCoordinator.run_campaign()` | Worker wrapper, strict ID validation, immutable inputs, progress hooks, and checkpoint validation. |
 | Synthesis preview | `CampaignPlanner.build_tasks()` is mutating | New non-mutating preview use case; never call `build_tasks()` from preview. |
 | Champion catalog | `ChampionSelectionService` | Typed filtered projection; no export on GET. |
-| Benchmark coverage/comparisons | `BenchmarkAuditService.get_audit_data()`, `BenchmarkService.summarize_results()`, condition-status policy | Reuse scientific validity rules; cache or materialize bounded responses. Existing methods return broad DataFrames. |
-| Benchmark run | `BenchmarkService.run_benchmarks(solver_type=...)` | Worker wrapper; validate `all`, `champions`, `noise_robustness`, `cross_function`, `baselines`. Current use case cannot launch one arbitrary table row. |
-| Analysis calculations | Four `.execute(...)` methods; notebook setup prepares dependencies through `analysis_scope()` | Worker wrapper with server-managed Dishka lifetimes; save typed results with `AnalysisResultsStore`. |
+| Benchmark coverage/comparisons | `BenchmarkAuditService.get_audit_data()`, `BenchmarkCoordinator.summarize_results()`, condition-status policy | Reuse scientific validity rules; cache or materialize bounded responses. Existing methods return broad DataFrames. |
+| Benchmark run | `BenchmarkCoordinator.run_benchmarks(solver_type=...)` | Worker wrapper; validate `all`, `champions`, `noise_robustness`, `cross_function`, `baselines`. Current use case cannot launch one arbitrary table row. |
+| Analysis calculations | Four `BenchmarkModule.analyze_*` methods | Worker wrapper; initialize/close modules through server/job lifecycle and keep numerical persistence separate. |
 | Saved analysis views | `AnalysisResultsStore.load()` | New manifest catalog and bounded series/table queries keyed by validated snapshot ID. |
 | Jobs/events/SSE | No current use case | New `operations` application layer and adapters. |
 
@@ -253,6 +254,6 @@ For local development run Vite, FastAPI, Redis, and workers as separate processe
 
 ## References
 
-Repository: [`src/evolution/application/campaign/run.py`](../../src/evolution/application/campaign/run.py), [`src/benchmarking/application/benchmark/run.py`](../../src/benchmarking/application/benchmark/run.py), [`src/benchmarking/infra/di.py`](../../src/benchmarking/infra/di.py), [`src/evolution/infra/concurrency/runner.py`](../../src/evolution/infra/concurrency/runner.py), and [campaign isolation](campaign_isolation.md).
+Repository: [`src/evolution/application/campaign/run.py`](../../src/evolution/application/campaign/run.py), [`src/benchmark/application/trials/coordinator.py`](../../src/benchmark/application/trials/coordinator.py), [`src/benchmark/infra/di.py`](../../src/benchmark/infra/di.py), [`src/evolution/infra/concurrency/runner.py`](../../src/evolution/infra/concurrency/runner.py), and [campaign isolation](campaign_isolation.md).
 
 External: [Dishka scopes](https://dishka.readthedocs.io/en/stable/advanced/scopes.html), [Celery concurrency](https://docs.celeryq.dev/en/main/userguide/concurrency/), [Celery task semantics](https://docs.celeryq.dev/en/stable/userguide/tasks.html), [FastAPI SSE](https://fastapi.tiangolo.com/tutorial/server-sent-events/), [MDN EventSource](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events), [SQLAlchemy multiprocessing](https://docs.sqlalchemy.org/en/21/core/pooling.html#using-connection-pools-with-multiprocessing-or-os-fork), and [SQLite WAL](https://www.sqlite.org/wal.html).

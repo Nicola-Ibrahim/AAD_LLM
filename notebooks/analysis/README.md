@@ -17,7 +17,7 @@ provenance and available traces, then call domain engines. No evaluation or
 synthesis campaign is launched.
 
 The backend has no Plotly dependency or figure-export code. Application modules
-in `src/benchmarking/application/analysis/` coordinate profile, reliability,
+in `src/benchmark/application/analysis/` coordinate profile, reliability,
 noise-robustness and performance analysis; domain engines own the scientific calculations. Notebook-owned
 helpers handle visual layout, styling and explicit PNG export, without figure caching.
 The infrastructure `AnalysisResultsStore` saves calculated arrays and statistics;
@@ -45,8 +45,10 @@ Calculation and export are separate notebook cells. Required collaborators are
 resolved by infrastructure Dishka providers, not optional constructor fallbacks:
 
 ```python
-# Run this notebook's setup cell first; it prepares analysis and its dependencies.
-profiles = analysis.ecdf_and_convergence.execute(
+from benchmark.infra.module import BenchmarkModule
+
+benchmark_module = BenchmarkModule()
+profiles = benchmark_module.analyze_ecdf_and_convergence(
     mode="explicit",
     dims=[2],
     problems=None,
@@ -61,7 +63,7 @@ then run the optional export cell:
 from notebooks.analysis.plotting.exporter import AnalysisFigureExporter
 from shared.config import RESULTS_DIR
 
-snapshot_path = analysis.results_store.save(profiles)
+snapshot_path = benchmark_module.save_analysis_results(profiles)
 exporter = AnalysisFigureExporter(RESULTS_DIR)
 exporter.export_profiles(profiles)
 ```
@@ -69,8 +71,9 @@ exporter.export_profiles(profiles)
 For an individual figure, call `build_profile(condition, profiles.mode,
 kind="ecdf", title="...")` and pass its returned figure and output path to
 `exporter.export_figure(figure, output_path)`.
-The notebook's `ExitStack` disposes the database on normal process shutdown, or call
-`close_analysis()` when finished. Re-running setup releases its previous resources.
+Each module operation closes its own scope. The notebook registers one final
+shutdown callback, or call `benchmark_module.close()` when finished. Re-running
+setup closes the previous module. No live use cases or repositories reach notebook cells.
 Calculated arrays and tables remain usable afterward. Treat result arrays/tables
 as read-only. `None` in condition
 filters means unrestricted; required constructor dependencies never default to it.
@@ -82,7 +85,7 @@ typed return values consumed by plotting.
 
 `AnalyzeEcdfAndConvergence` calculates both convergence (median and IQR) and
 adaptive-target ECDF curves in one pass over their shared interpolated traces.
-Access it through `analysis.ecdf_and_convergence.execute(...)`. Keeping these
+Access it through `benchmark_module.analyze_ecdf_and_convergence(...)`. Keeping these
 calculations together avoids duplicate loading and interpolation. Statistical
 calculations and CSV exports remain available; unused Markdown report export
 components have been removed.

@@ -1,7 +1,7 @@
 import numpy as np
 
-from benchmarking.domain.services.reliability import ReliabilityEngine
-from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
+from benchmark.domain.services.reliability import ReliabilityEngine
+from benchmark.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 
 
 def _run(values: list[float]) -> RunTrace:

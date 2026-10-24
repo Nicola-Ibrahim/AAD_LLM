@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from benchmarking.domain.services.returned_point import validate_returned_point
+from benchmark.domain.services.returned_point import validate_returned_point
 from shared.domain.noise import HeteroscedasticNoiseStrategy
 from shared.infra.problems.bbob import BBOBProblem
 

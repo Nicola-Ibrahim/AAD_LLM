@@ -1,4 +1,4 @@
-"""Tests for BenchmarkService (Application Layer: Empirical Execution Engine)."""
+"""Tests for BenchmarkCoordinator (Application Layer: Empirical Execution Engine)."""
 
 import json
 from pathlib import Path
@@ -7,20 +7,20 @@ from types import SimpleNamespace
 import pandas as pd
 from study_fixtures import run_parameters
 
-from benchmarking.application.benchmark.run import BenchmarkService
-from benchmarking.application.benchmark.trials import BenchmarkTrialRunner
-from benchmarking.application.benchmark.workload import BenchmarkWorkload
-from benchmarking.application.benchmark_config import BenchmarkConfig
-from benchmarking.application.select_champions import ChampionSelectionService
-from benchmarking.infra.io.code_reader import FilesystemCodeReader
-from benchmarking.infra.io.trace_repository import BenchmarkStateRepository, IOHTraceReader
-from benchmarking.infra.logging import BenchmarkLogger
-from benchmarking.infra.solvers.baselines import get_baseline_runner, run_cmaes, run_de, run_pso
-from benchmarking.infra.storage import (
+from benchmark.application.benchmark_config import BenchmarkConfig
+from benchmark.application.select_champions import ChampionSelectionService
+from benchmark.application.trials.coordinator import BenchmarkCoordinator
+from benchmark.application.trials.runner import BenchmarkTrialRunner
+from benchmark.application.trials.workload import BenchmarkWorkload
+from benchmark.infra.io.code_reader import FilesystemCodeReader
+from benchmark.infra.io.trace_repository import BenchmarkStateRepository, IOHTraceReader
+from benchmark.infra.logging import BenchmarkLogger
+from benchmark.infra.solvers.baselines import get_baseline_runner, run_cmaes, run_de, run_pso
+from benchmark.infra.storage import (
     ChampionsReadRepository,
     SQLiteSynthesisReadRepository,
 )
-from benchmarking.infra.storage.model_registry import configured_model_names
+from benchmark.infra.storage.model_registry import configured_model_names
 from shared.config import PROJECT_ROOT
 from shared.domain.noise import NoNoiseStrategy
 from shared.infra.database import Database
@@ -56,7 +56,7 @@ def build_benchmark_service(**kwargs):
         model_names=names,
     )
     return SimpleNamespace(
-        service=BenchmarkService(
+        service=BenchmarkCoordinator(
             workload=workload,
             trials=trials,
             baseline_labels=config.baseline_labels,
@@ -120,7 +120,7 @@ def test_baselines_callables():
 
 
 def test_service_baseline_execution(tmp_path: Path):
-    """Test BenchmarkService executing classical baselines, caching, and dashboard."""
+    """Test BenchmarkCoordinator executing classical baselines, caching, and dashboard."""
     benchmark_dir = tmp_path / "benchmarks"
 
     session_factory = Database().session_factory
@@ -181,7 +181,7 @@ def test_service_baseline_execution(tmp_path: Path):
 
 
 def test_service_champion_execution(tmp_path: Path):
-    """Test BenchmarkService executing LLM champion code, compilation, caching, and dashboard."""
+    """Test BenchmarkCoordinator executing LLM champion code, compilation, caching, and dashboard."""
     benchmark_dir = tmp_path / "benchmarks"
     project_root = tmp_path / "project"
     project_root.mkdir()
@@ -374,7 +374,7 @@ def test_benchmark_logger(tmp_path: Path):
     """Verify BenchmarkLogger formatting and verbosity controls."""
     import io
 
-    from benchmarking.infra.logging import BenchmarkLogger
+    from benchmark.infra.logging import BenchmarkLogger
 
     # 1. BenchmarkLogger capturing output
     buf = io.StringIO()
@@ -427,10 +427,10 @@ def test_benchmark_logger(tmp_path: Path):
 
 
 def test_benchmark_service_run_verbose_control(tmp_path: Path):
-    """Verify that verbose flag on BenchmarkService.run_* methods controls output dynamically."""
+    """Verify that verbose flag on BenchmarkCoordinator.run_* methods controls output dynamically."""
     import io
 
-    from benchmarking.infra.logging import BenchmarkLogger
+    from benchmark.infra.logging import BenchmarkLogger
 
     buf = io.StringIO()
     custom_logger = BenchmarkLogger(verbose=True, stream=buf)
@@ -619,7 +619,7 @@ def test_cross_eval_default_behavior_with_default_settings(tmp_path: Path):
 
 
 def test_evaluation_service_seeds_trials_independently(tmp_path: Path):
-    """Verify that BenchmarkService configures independent noise seeds across trials."""
+    """Verify that BenchmarkCoordinator configures independent noise seeds across trials."""
     benchmark_dir = tmp_path / "benchmarks"
 
     session_factory = Database().session_factory

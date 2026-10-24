@@ -3,7 +3,7 @@
 import numpy as np
 import plotly.graph_objects as go
 
-from benchmarking.application.analysis.results import ReliabilityAnalysisResult
+from benchmark.application.analysis.results import ReliabilityAnalysisResult
 
 from .style import FONT_FAMILY
 

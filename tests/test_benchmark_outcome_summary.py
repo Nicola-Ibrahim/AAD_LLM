@@ -5,12 +5,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from benchmarking.application.benchmark.models import BenchmarkTask
-from benchmarking.application.benchmark.summary import summarize_benchmarks
-from benchmarking.application.benchmark_config import BenchmarkConfig
-from benchmarking.application.champions import GenerationMode
-from benchmarking.domain.services.benchmark_outcomes import summarize_trial_outcomes
-from benchmarking.domain.services.condition_status import ConditionStatus
+from benchmark.application.benchmark_config import BenchmarkConfig
+from benchmark.application.champions import GenerationMode
+from benchmark.application.trials.models import BenchmarkTask
+from benchmark.application.trials.summary import summarize_benchmarks
+from benchmark.domain.services.benchmark_outcomes import summarize_trial_outcomes
+from benchmark.domain.services.condition_status import ConditionStatus
 
 
 def task(row: dict[str, object], experiment_id: int | None) -> BenchmarkTask:

@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from benchmarking.domain.services.ecdf import EcdfConvergenceEngine
-from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
+from benchmark.domain.services.ecdf import EcdfConvergenceEngine
+from benchmark.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 
 
 @pytest.mark.parametrize("noise_std", [0.0, 0.05, 0.2])
