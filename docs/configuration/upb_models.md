@@ -32,7 +32,7 @@ $20 per-person monthly allowance. Published provider rates are 10 RPM for GWDG a
 recommend throttling and off-peak execution for large evaluations. Applicable terms
 still apply.
 
-Keep `max_workers = 0` (automatic) or your chosen fixed CPU-worker count for either
+Worker count is selected automatically from available CPU capacity for either
 local or hosted synthesis. Gateway request pacing is automatic and shared across
 workers on one host: defaults are 8 RPM for GWDG and 80 RPM for KIConnect/OpenAI.
 See [model configuration](model_configuration.md) for overrides, scope and limitations.

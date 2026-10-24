@@ -66,6 +66,7 @@ class BenchmarkConfig(BaseModel):
     trial_timeout_seconds: float = Field(
         default=30.0,
         gt=0.0,
+        allow_inf_nan=False,
         description="Timeout limit per benchmark trial execution in seconds.",
     )
     observation_trace_points: int = Field(
@@ -86,7 +87,11 @@ class BenchmarkConfig(BaseModel):
         description="List of classical baseline optimizer slugs.",
     )
     baseline_labels: dict[str, str] = Field(
-        default_factory=dict,
+        default_factory=lambda: {
+            "cmaes": "CMA-ES",
+            "de": "Differential Evolution",
+            "pso": "Particle Swarm Optimization",
+        },
         description="Mapping of baseline slugs to display labels.",
     )
     noise_robustness_enabled: bool = Field(
@@ -95,6 +100,13 @@ class BenchmarkConfig(BaseModel):
     )
     cross_function_enabled: bool = False
     cross_function_problem_ids: list[int] = Field(default_factory=lambda: [1, 8, 11, 15, 21])
+
+    @field_validator("classical_baselines")
+    @classmethod
+    def validate_baselines(cls, solvers: list[str]) -> list[str]:
+        if unknown := set(solvers) - {"cmaes", "de", "pso"}:
+            raise ValueError(f"Unsupported classical baselines: {sorted(unknown)}")
+        return solvers
 
     @field_validator("cross_function_problem_ids")
     @classmethod
@@ -106,9 +118,5 @@ class BenchmarkConfig(BaseModel):
     target_noise_stds: list[float] = Field(
         default_factory=list,
         description="Optional filtered noise levels for evaluation.",
-    )
-    benchmarking: dict[str, object] = Field(
-        default_factory=dict,
-        description="Raw benchmark section dictionary from TOML.",
     )
     reliability: ReliabilityConfig = Field(default_factory=ReliabilityConfig)

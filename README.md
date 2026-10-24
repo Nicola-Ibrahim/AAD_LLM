@@ -265,7 +265,7 @@ jupyter notebook
 
 Open the notebooks in the order below. The synthesis configuration has a large
 default experiment matrix and a fixed 100,000-call candidate budget;
-adjust `configs/synthesis.toml` before running a quick experiment.
+adjust the explicit parameters in notebook 02's setup cell before a quick experiment.
 
 ## Notebook workflow
 
@@ -303,14 +303,14 @@ scoring, storage, and thesis interpretation.
 
 | File | Purpose |
 | --- | --- |
-| `configs/synthesis.toml` | Synthesis matrix, noise conditions, prompt strategies, budgets, retries, and process concurrency. |
-| `configs/benchmark.toml` | Instance–seed schedule (currently 11–30), trial count, fixed evaluation budget (100,000 calls per trial), timeout, and classical baselines. |
+| Notebook 02 setup parameters | Synthesis matrix, noise, prompts, 100,000-call budget, timeout and recovery policies. Worker capacity is automatic. |
+| Notebook 03 setup parameters | Benchmark schedule (instances 2–21), 20 trials, 100,000-call budget, timeout and baseline algorithms. |
 | `configs/problems.toml` | BBOB problem descriptions and groupings. |
 | `configs/llms.toml` | Available local-model presets. |
 | `.env` | Active LLM provider and local model/server settings. |
 
 The default synthesis matrix covers BBOB functions 1, 8, 11, 15, and 21 across
-2D, 3D, 5D, and 10D; clean and heteroscedastic-noise conditions; explicit and
+2D, 10D, and 50D; clean and heteroscedastic-noise conditions; explicit and
 implicit prompts; and several prompt strategies.
 
 ## LLM providers and local server

@@ -109,7 +109,7 @@ are not failures and are excluded from aggregates.
 | Timeout | Per-candidate `func_timeout` covers compilation, one initialization and the optimizer call; not a per-candidate security sandbox. |
 | Configured benchmark trials | 20; instances 2–21, seed `42+instance_id`, fixed budget 100,000 calls per trial, champion timeout 30 seconds. |
 
-Defaults come from [benchmark configuration](../configs/benchmark.toml).
+Study inputs are explicit in [notebook 03](../notebooks/03_benchmark.ipynb).
 Both synthesis and benchmarking now configure a fixed allowance of 100,000 calls
 per optimizer execution; synthesis targets dimensions 2, 10 and 50. Only a fixed
 `budget` is supported; execution, readiness checks, provenance filtering and
@@ -216,7 +216,7 @@ candidate-evaluation workflow passes a budget to the optimizer but does not itse
 call `set_budget`; a hard adapter limit must not be assumed for every synthesis run.
 
 See [BBOB adapter](../src/shared/infra/problems/bbob.py) and
-[current synthesis configuration](../configs/synthesis.toml).
+[explicit synthesis parameters](../notebooks/02_synthesis.ipynb).
 
 ## Noise
 
@@ -235,7 +235,7 @@ Noise strategy selection and magnitude are configuration-driven.
 
 ## Independent benchmarking and reliability
 
-[Benchmark configuration](../configs/benchmark.toml) currently requests 20 trials
+[Notebook 03](../notebooks/03_benchmark.ipynb) currently requests 20 trials
 per condition, a fixed budget of 100,000 calls, and a 30-second champion execution
 timeout. Classical baselines do not have the equivalent wall-clock timeout.
 Trial `r` uses instance `first_instance_id + r - 1` and seed
@@ -289,7 +289,8 @@ questions; neither enters the native champion ranking.
 
 ## Noise robustness
 
-`service.run_noise_robustness()` freezes each clean explicit champion and tests
+`service.run_benchmarks(solver_type="noise_robustness", **benchmark_parameters)`
+freezes each clean explicit champion and tests
 added noise on its original function and dimension. The existing
 `noise_robustness_enabled` configuration key enables/disables this workflow.
 Historical storage remains `results/ioh_traces/`; it is not moved or deleted.
@@ -300,9 +301,9 @@ targets remain exploratory elsewhere. Figures use `results/figures/05_noise_robu
 
 ## Cross-function generalization
 
-Enable `benchmarking.cross_function_enabled` in `configs/benchmark.toml`, then set
+Pass `cross_function_enabled=True` in the benchmark parameters, then set
 `RUN_CROSS_FUNCTION = True` in notebook 03's separate campaign cell, or explicitly
-call `service.run_cross_function_benchmarks()`.
+call `service.run_benchmarks(solver_type="cross_function", **benchmark_parameters)`.
 
 Only clean, explicit, baseline-strategy champions enter this workflow. Their code
 is unchanged, their dimension is unchanged, and the clean target functions default

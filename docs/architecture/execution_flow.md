@@ -6,7 +6,10 @@
 
 [build_synthesis_campaign](../../src/bootstrap/synthesis.py) loads synthesis
 configuration, creates the database/repositories and runtime adapters, and returns
-a `SynthesisCampaignCoordinator`. The notebook calls `run_campaign()`.
+a `SynthesisCampaignCoordinator`. The notebook defines the study inputs visibly,
+then calls `run_campaign(**synthesis_parameters)`. Required study parameters are
+keyword-only and Pydantic-validated before planning or writes. Worker count is
+resolved by infrastructure; the model identity comes from the connected LLM.
 
 The coordinator delegates task construction to
 [CampaignPlanner](../../src/evolution/application/campaign/plan.py).

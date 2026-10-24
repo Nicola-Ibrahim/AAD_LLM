@@ -233,7 +233,7 @@ For remote access, authenticate SSE and every job command against the study. Use
 
 Start with early task acknowledgment and no automatic retry of non-idempotent scientific writes. On worker death, the reconciler reports interruption; a deliberate new job recovers or resumes. Avoid prefetching several long tasks into one busy worker. Redis is the broker; its task result backend and pub/sub are not job history. SQLite WAL allows readers alongside a writer but still has one writer at a time. If multiple hosts/users are required, use PostgreSQL for the operations DB and explicit shared artifact storage; do not infer multi-study isolation from extra Celery workers.
 
-Freeze at submission: resolved config/protocol hash, source revision, model identity, requested mode/IDs, and benchmark champion/code manifest with experiment/iteration IDs, hashes, copied code, trial schedule, and budget. The worker uses this snapshot, not whichever TOML or champion is current when the queued task starts. Implement the separate [campaign isolation design](campaign_isolation.md) before enabling concurrent writable studies.
+Freeze at submission: validated parameters/protocol hash, source revision, model identity, requested mode/IDs, and benchmark champion/code manifest with experiment/iteration IDs, hashes, copied code, trial schedule, and budget. The worker uses this snapshot, not whichever notebook parameters or champion are current when the queued task starts. Implement the separate [campaign isolation design](campaign_isolation.md) before enabling concurrent writable studies.
 
 ## 7. Delivery plan and acceptance gates
 

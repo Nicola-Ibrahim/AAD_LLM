@@ -7,13 +7,11 @@ from benchmarking.infra.io import (
 )
 from benchmarking.infra.logging import BenchmarkLogger
 from benchmarking.infra.storage import (
-    BenchmarkConfigRepository,
     ChampionsReadRepository,
     SQLiteSynthesisReadRepository,
 )
 
 __all__ = [
-    "BenchmarkConfigRepository",
     "SQLiteSynthesisReadRepository",
     "ChampionsReadRepository",
     "BenchmarkStateRepository",

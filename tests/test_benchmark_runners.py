@@ -2,20 +2,21 @@
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
-import pytest
+from study_fixtures import run_parameters
 
 from benchmarking.application.benchmark.run import BenchmarkService
 from benchmarking.application.benchmark.trials import BenchmarkTrialRunner
 from benchmarking.application.benchmark.workload import BenchmarkWorkload
+from benchmarking.application.benchmark_config import BenchmarkConfig
 from benchmarking.application.select_champions import ChampionSelectionService
 from benchmarking.infra.io.code_reader import FilesystemCodeReader
 from benchmarking.infra.io.trace_repository import BenchmarkStateRepository, IOHTraceReader
 from benchmarking.infra.logging import BenchmarkLogger
 from benchmarking.infra.solvers.baselines import get_baseline_runner, run_cmaes, run_de, run_pso
 from benchmarking.infra.storage import (
-    BenchmarkConfigRepository,
     ChampionsReadRepository,
     SQLiteSynthesisReadRepository,
 )
@@ -30,8 +31,8 @@ from shared.infra.problems.factory import BBOBProblemFactory
 
 def build_benchmark_service(**kwargs):
     project_root = kwargs.pop("project_root", PROJECT_ROOT)
-    config_repo = kwargs.pop("config_repo")
-    config = config_repo.load_config()
+    config = kwargs.pop("config")
+    config = config
     selection = ChampionSelectionService(kwargs.pop("champions_repo"))
     state = kwargs.pop("state_repo")
     logger = kwargs.pop("logger")
@@ -43,24 +44,27 @@ def build_benchmark_service(**kwargs):
         state_repo=state,
         code_reader=code_reader,
         model_names=names,
-        config=config,
         **kwargs,
     )
     trials = BenchmarkTrialRunner(
         state_repo=state,
         logger=logger,
-        config=config,
         problem_factory=BBOBProblemFactory(),
         executor_factory=create_candidate_executor,
         baseline_resolver=get_baseline_runner,
         code_reader=code_reader,
         model_names=names,
     )
-    return BenchmarkService(
+    return SimpleNamespace(
+        service=BenchmarkService(
+            workload=workload,
+            trials=trials,
+            baseline_labels=config.baseline_labels,
+            logger=logger,
+        ),
         workload=workload,
         trials=trials,
         config=config,
-        logger=logger,
     )
 
 
@@ -118,35 +122,31 @@ def test_baselines_callables():
 def test_service_baseline_execution(tmp_path: Path):
     """Test BenchmarkService executing classical baselines, caching, and dashboard."""
     benchmark_dir = tmp_path / "benchmarks"
-    cfg_file = tmp_path / "benchmark.toml"
-    cfg_file.write_text(
-        """
-[benchmarking]
-trials_per_condition = 2
-budget = 100
-trial_timeout_seconds = 30.0
-classical_baselines = ["cmaes", "de", "pso"]
-""",
-        encoding="utf-8",
-    )
 
     session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
     state_repo = BenchmarkStateRepository(benchmark_dir=benchmark_dir)
-    config_repo = BenchmarkConfigRepository(config_path=cfg_file)
+    config = BenchmarkConfig(
+        trials_per_condition=2,
+        budget=100,
+        trial_timeout_seconds=30.0,
+        classical_baselines=["cmaes", "de", "pso"],
+    )
     logger = BenchmarkLogger()
 
     service = build_benchmark_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
-        config_repo=config_repo,
+        config=config,
         logger=logger,
     )
 
     # 1. Run evaluation
-    res = service.trials.run_baseline_trials(dim=2, noise_std=0.0, p_id=1, baseline_slug="pso")
+    res = service.trials.run_baseline_trials(
+        dim=2, noise_std=0.0, p_id=1, baseline_slug="pso", config=service.config
+    )
     assert res["status"] == "SUCCESS"
     assert len(res["clean_errors"]) == 2
     assert res["median_clean_error"] is not None
@@ -160,18 +160,22 @@ classical_baselines = ["cmaes", "de", "pso"]
 
     # 2. Second call should hit cache
     cached_res = service.trials.run_baseline_trials(
-        dim=2, noise_std=0.0, p_id=1, baseline_slug="pso"
+        dim=2, noise_std=0.0, p_id=1, baseline_slug="pso", config=service.config
     )
     assert cached_res["status"] == "CACHED"
 
     # A changed allowance invalidates the cache even without force_rerun.
-    service.trials.config.budget = 150
-    updated = service.trials.run_baseline_trials(dim=2, noise_std=0.0, p_id=1, baseline_slug="pso")
+    service.config.budget = 150
+    updated = service.trials.run_baseline_trials(
+        dim=2, noise_std=0.0, p_id=1, baseline_slug="pso", config=service.config
+    )
     assert updated["status"] == "SUCCESS"
     assert json.loads(prov_file.read_text())["budget"] == 150
 
     # The configured allowance is identical at another problem dimension.
-    service.trials.run_baseline_trials(dim=5, noise_std=0.0, p_id=1, baseline_slug="pso")
+    service.trials.run_baseline_trials(
+        dim=5, noise_std=0.0, p_id=1, baseline_slug="pso", config=service.config
+    )
     higher_dim_provenance = benchmark_dir / "5D" / "std_0.0" / "f1" / "pso" / "provenance.json"
     assert json.loads(higher_dim_provenance.read_text())["budget"] == 150
 
@@ -182,23 +186,16 @@ def test_service_champion_execution(tmp_path: Path):
     project_root = tmp_path / "project"
     project_root.mkdir()
 
-    cfg_file = tmp_path / "benchmark.toml"
-    cfg_file.write_text(
-        """
-[benchmarking]
-trials_per_condition = 2
-budget = 100
-trial_timeout_seconds = 5.0
-classical_baselines = ["cmaes", "de", "pso"]
-""",
-        encoding="utf-8",
-    )
-
     session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
     state_repo = BenchmarkStateRepository(benchmark_dir=benchmark_dir)
-    config_repo = BenchmarkConfigRepository(config_path=cfg_file)
+    config = BenchmarkConfig(
+        trials_per_condition=2,
+        budget=100,
+        trial_timeout_seconds=5.0,
+        classical_baselines=["cmaes", "de", "pso"],
+    )
 
     # Create dummy champion algorithm script conforming to (problem, budget) contract
     dummy_code = """
@@ -230,7 +227,7 @@ class RandomOptimizer:
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
-        config_repo=config_repo,
+        config=config,
         logger=logger,
         project_root=project_root,
     )
@@ -247,7 +244,7 @@ class RandomOptimizer:
     }
 
     # 1. Run evaluation
-    res = service.trials.run_champion_trials(champ_info)
+    res = service.trials.run_champion_trials(champ_info, config=service.config)
     assert res["status"] == "SUCCESS"
     assert len(res["clean_errors"]) == 2
     assert res["median_clean_error"] is not None
@@ -259,13 +256,13 @@ class RandomOptimizer:
     assert prov_data["n_runs"] == 2
 
     # 2. Second call should hit cache
-    cached_res = service.trials.run_champion_trials(champ_info)
+    cached_res = service.trials.run_champion_trials(champ_info, config=service.config)
     assert cached_res["status"] == "CACHED"
 
     # 3. Missing code handling
     missing_champ = dict(champ_info)
     missing_champ["code_path"] = "algorithms/nonexistent.py"
-    missing_res = service.trials.run_champion_trials(missing_champ)
+    missing_res = service.trials.run_champion_trials(missing_champ, config=service.config)
     assert missing_res["status"] == "MISSING_CODE"
 
 
@@ -275,37 +272,23 @@ def test_service_incremental_resumption(tmp_path: Path):
     project_root = tmp_path / "project"
     project_root.mkdir()
 
-    cfg_file_2runs = tmp_path / "benchmark_2runs.toml"
-    cfg_file_2runs.write_text(
-        """
-[benchmarking]
-trials_per_condition = 2
-budget = 100
-trial_timeout_seconds = 5.0
-classical_baselines = ["cmaes", "de", "pso"]
-""",
-        encoding="utf-8",
-    )
-
-    cfg_file_4runs = tmp_path / "benchmark_4runs.toml"
-    cfg_file_4runs.write_text(
-        """
-[benchmarking]
-trials_per_condition = 4
-budget = 100
-trial_timeout_seconds = 5.0
-classical_baselines = ["cmaes", "de", "pso"]
-""",
-        encoding="utf-8",
-    )
-
     session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
     trace_repo = IOHTraceReader(benchmark_dir=benchmark_dir)
     state_repo = BenchmarkStateRepository(benchmark_dir=benchmark_dir)
-    config_repo_2 = BenchmarkConfigRepository(config_path=cfg_file_2runs)
-    config_repo_4 = BenchmarkConfigRepository(config_path=cfg_file_4runs)
+    config_2 = BenchmarkConfig(
+        trials_per_condition=2,
+        budget=100,
+        trial_timeout_seconds=5.0,
+        classical_baselines=["cmaes", "de", "pso"],
+    )
+    config_4 = BenchmarkConfig(
+        trials_per_condition=4,
+        budget=100,
+        trial_timeout_seconds=5.0,
+        classical_baselines=["cmaes", "de", "pso"],
+    )
     logger = BenchmarkLogger()
 
     dummy_code = """
@@ -339,11 +322,11 @@ class IncrementalOptimizer:
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
-        config_repo=config_repo_2,
+        config=config_2,
         logger=logger,
         project_root=project_root,
     )
-    res_1 = service_initial.trials.run_champion_trials(champ_info)
+    res_1 = service_initial.trials.run_champion_trials(champ_info, config=service_initial.config)
     assert res_1["status"] == "SUCCESS"
     assert len(res_1["clean_errors"]) == 2
 
@@ -355,11 +338,11 @@ class IncrementalOptimizer:
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
-        config_repo=config_repo_4,
+        config=config_4,
         logger=logger,
         project_root=project_root,
     )
-    res_2 = service_resumed.trials.run_champion_trials(champ_info)
+    res_2 = service_resumed.trials.run_champion_trials(champ_info, config=service_resumed.config)
     assert res_2["status"] == "SUCCESS"
     assert len(res_2["clean_errors"]) == 4
     assert trace_repo.get_run_count(solver_dir) == 4
@@ -371,7 +354,7 @@ class IncrementalOptimizer:
 
     # Step 3: Baseline incremental resumption
     base_res_1 = service_initial.trials.run_baseline_trials(
-        dim=2, noise_std=0.0, p_id=1, baseline_slug="pso"
+        dim=2, noise_std=0.0, p_id=1, baseline_slug="pso", config=service_initial.config
     )
     assert base_res_1["status"] == "SUCCESS"
     assert len(base_res_1["clean_errors"]) == 2
@@ -380,45 +363,11 @@ class IncrementalOptimizer:
     assert trace_repo.get_run_count(pso_dir) == 2
 
     base_res_2 = service_resumed.trials.run_baseline_trials(
-        dim=2, noise_std=0.0, p_id=1, baseline_slug="pso"
+        dim=2, noise_std=0.0, p_id=1, baseline_slug="pso", config=service_resumed.config
     )
     assert base_res_2["status"] == "SUCCESS"
     assert len(base_res_2["clean_errors"]) == 4
     assert trace_repo.get_run_count(pso_dir) == 4
-
-
-def test_benchmark_config_repository_edge_cases(tmp_path: Path):
-    """Test BenchmarkConfigRepository handling missing, empty, or NoneType configuration sections."""
-    # 1. Non-existent files
-    repo_missing = BenchmarkConfigRepository(
-        config_path=tmp_path / "nonexistent_bench.toml",
-        baselines_path=tmp_path / "nonexistent_base.toml",
-    )
-    cfg_missing = repo_missing.load_config()
-    assert cfg_missing.trials_per_condition == 20
-    assert "cmaes" in cfg_missing.baseline_labels
-
-    # 2. Empty TOML file
-    empty_cfg_file = tmp_path / "empty_bench.toml"
-    empty_cfg_file.write_text("", encoding="utf-8")
-    repo_empty = BenchmarkConfigRepository(config_path=empty_cfg_file)
-    cfg_empty = repo_empty.load_config()
-    assert cfg_empty.trials_per_condition == 20
-
-    # 3. File with empty [benchmarking] section
-    bench_empty_file = tmp_path / "bench_empty.toml"
-    bench_empty_file.write_text("[benchmarking]\n", encoding="utf-8")
-    repo_bench_empty = BenchmarkConfigRepository(config_path=bench_empty_file)
-    cfg_bench_empty = repo_bench_empty.load_config()
-    assert cfg_bench_empty.trials_per_condition == 20
-    assert cfg_bench_empty.budget == 100_000
-
-    # 4. An obsolete section is rejected, not silently interpreted as a benchmark.
-    eval_file = tmp_path / "eval_fallback.toml"
-    eval_file.write_text("[evaluation]\ntrials_per_condition = 5\nbudget = 100\n", encoding="utf-8")
-    repo_eval = BenchmarkConfigRepository(config_path=eval_file)
-    with pytest.raises(ValueError, match="benchmarking"):
-        repo_eval.load_config()
 
 
 def test_benchmark_logger(tmp_path: Path):
@@ -487,39 +436,37 @@ def test_benchmark_service_run_verbose_control(tmp_path: Path):
     custom_logger = BenchmarkLogger(verbose=True, stream=buf)
 
     benchmark_dir = tmp_path / "benchmarks"
-    cfg_file = tmp_path / "benchmark.toml"
-    cfg_file.write_text(
-        """
-[benchmarking]
-trials_per_condition = 2
-budget = 100
-trial_timeout_seconds = 30.0
-classical_baselines = ["cmaes"]
-""",
-        encoding="utf-8",
-    )
 
     session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
     state_repo = BenchmarkStateRepository(benchmark_dir=benchmark_dir)
-    config_repo = BenchmarkConfigRepository(config_path=cfg_file)
+    config = BenchmarkConfig(
+        trials_per_condition=2,
+        budget=100,
+        trial_timeout_seconds=30.0,
+        classical_baselines=["cmaes"],
+    )
 
     service = build_benchmark_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
-        config_repo=config_repo,
+        config=config,
         logger=custom_logger,
         planned_target_conditions=((2, 0.0, 1),),
     )
 
     # 1. Run with verbose=False -> No output captured in buffer
-    service.run_baselines(verbose=False)
+    service.service.run_benchmarks(
+        **run_parameters(service.config), solver_type="baselines", verbose=False
+    )
     assert buf.getvalue() == ""
 
     # 2. Run with verbose=True -> Output is captured
-    service.run_baselines(verbose=True)
+    service.service.run_benchmarks(
+        **run_parameters(service.config), solver_type="baselines", verbose=True
+    )
     assert len(buf.getvalue()) > 0
     assert "CMA-ES" in buf.getvalue()
 
@@ -529,20 +476,6 @@ def test_noise_robustness_workload_audit(tmp_path: Path):
     benchmark_dir = tmp_path / "benchmarks"
     project_root = tmp_path / "project"
     project_root.mkdir()
-
-    cfg_file = tmp_path / "benchmark.toml"
-    cfg_file.write_text(
-        """
-[benchmarking]
-trials_per_condition = 2
-budget = 100
-trial_timeout_seconds = 5.0
-classical_baselines = ["cmaes"]
-noise_robustness_enabled = true
-target_noise_stds = [0.0, 0.05, 0.1]
-""",
-        encoding="utf-8",
-    )
 
     code_file = project_root / "champ.py"
     code_file.write_text("class DummyOpt: pass", encoding="utf-8")
@@ -571,52 +504,47 @@ target_noise_stds = [0.0, 0.05, 0.1]
     sqlite_repo = EmptyConditionsRepository()
     champions_repo = FixtureChampionsRepository(champions_json)
     state_repo = BenchmarkStateRepository(benchmark_dir=benchmark_dir)
-    config_repo = BenchmarkConfigRepository(config_path=cfg_file)
+    config = BenchmarkConfig(
+        trials_per_condition=2,
+        budget=100,
+        trial_timeout_seconds=5.0,
+        classical_baselines=["cmaes"],
+        noise_robustness_enabled=True,
+        target_noise_stds=[0.0, 0.05, 0.1],
+    )
     logger = BenchmarkLogger()
 
     service = build_benchmark_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
-        config_repo=config_repo,
+        config=config,
         logger=logger,
         project_root=project_root,
     )
 
-    df_native = service.workload.audit_champions_workload()
+    df_native = service.workload.audit_champions_workload(config=service.config)
     assert len(df_native) == 1
     assert df_native.iloc[0]["noise_std"] == 0.0
     assert df_native.iloc[0]["solver_type"] == "champion"
 
-    df_cross = service.workload.audit_noise_robustness_workload()
+    df_cross = service.workload.audit_noise_robustness_workload(config=service.config)
     assert len(df_cross) == 2
     assert set(df_cross["noise_std"]) == {0.05, 0.1}
     assert all(df_cross["solver_type"] == "noise_robustness")
     assert all(df_cross["solver"] == "qwen_14b_baseline")
 
-    df_all = service.workload.audit_workload(solver_type="all")
+    df_all = service.workload.audit_workload(solver_type="all", config=service.config)
     # 1 native champion + 2 cross-evals + 3 baselines (dim 2, 3 noises = 3 runs)
     assert len(df_all[df_all["solver_type"] == "champion"]) == 1
     assert len(df_all[df_all["solver_type"] == "noise_robustness"]) == 2
 
 
-def test_cross_eval_default_behavior_without_toml_flags(tmp_path: Path):
-    """Verify that cross-eval is enabled by default even with minimal benchmark.toml."""
+def test_cross_eval_default_behavior_with_default_settings(tmp_path: Path):
+    """Verify that cross-eval is enabled by default even with the default explicit settings."""
     benchmark_dir = tmp_path / "benchmarks"
     project_root = tmp_path / "project"
     project_root.mkdir()
-
-    cfg_file = tmp_path / "benchmark.toml"
-    cfg_file.write_text(
-        """
-[benchmarking]
-trials_per_condition = 2
-budget = 100
-trial_timeout_seconds = 5.0
-classical_baselines = ["cmaes"]
-""",
-        encoding="utf-8",
-    )
 
     code_file = project_root / "champ.py"
     code_file.write_text("class DummyOpt: pass", encoding="utf-8")
@@ -655,14 +583,16 @@ classical_baselines = ["cmaes"]
     sqlite_repo = EmptyConditionsRepository()
     champions_repo = FixtureChampionsRepository(champions_json)
     state_repo = BenchmarkStateRepository(benchmark_dir=benchmark_dir)
-    config_repo = BenchmarkConfigRepository(config_path=cfg_file)
+    config = BenchmarkConfig(
+        trials_per_condition=2, budget=100, trial_timeout_seconds=5.0, classical_baselines=["cmaes"]
+    )
     logger = BenchmarkLogger()
 
     service = build_benchmark_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
-        config_repo=config_repo,
+        config=config,
         logger=logger,
         project_root=project_root,
     )
@@ -670,7 +600,7 @@ classical_baselines = ["cmaes"]
     # Defaults to True for noise_robustness_enabled
     assert service.config.noise_robustness_enabled is True
 
-    df_native = service.workload.audit_champions_workload()
+    df_native = service.workload.audit_champions_workload(config=service.config)
     assert len(df_native) == 2  # clean champion and noisy champion
     assert any(
         row["noise_std"] == 0.0 and row["solver"] == "qwen_14b_baseline"
@@ -681,7 +611,7 @@ classical_baselines = ["cmaes"]
         for _, row in df_native.iterrows()
     )
 
-    df_cross = service.workload.audit_noise_robustness_workload()
+    df_cross = service.workload.audit_noise_robustness_workload(config=service.config)
     assert len(df_cross) >= 1
     assert 0.05 in df_cross["noise_std"].values
     assert all(df_cross["solver"] == "qwen_14b_baseline")
@@ -691,34 +621,27 @@ classical_baselines = ["cmaes"]
 def test_evaluation_service_seeds_trials_independently(tmp_path: Path):
     """Verify that BenchmarkService configures independent noise seeds across trials."""
     benchmark_dir = tmp_path / "benchmarks"
-    cfg_file = tmp_path / "benchmark.toml"
-    cfg_file.write_text(
-        """
-[benchmarking]
-trials_per_condition = 3
-budget = 50
-trial_timeout_seconds = 10.0
-classical_baselines = ["pso"]
-""",
-        encoding="utf-8",
-    )
 
     session_factory = Database().session_factory
     sqlite_repo = SQLiteSynthesisReadRepository(session_factory)
     champions_repo = ChampionsReadRepository(session_factory)
     state_repo = BenchmarkStateRepository(benchmark_dir=benchmark_dir)
-    config_repo = BenchmarkConfigRepository(config_path=cfg_file)
+    config = BenchmarkConfig(
+        trials_per_condition=3, budget=50, trial_timeout_seconds=10.0, classical_baselines=["pso"]
+    )
     logger = BenchmarkLogger()
 
     service = build_benchmark_service(
         sqlite_repo=sqlite_repo,
         champions_repo=champions_repo,
         state_repo=state_repo,
-        config_repo=config_repo,
+        config=config,
         logger=logger,
     )
 
-    res = service.trials.run_baseline_trials(dim=2, noise_std=0.2, p_id=1, baseline_slug="pso")
+    res = service.trials.run_baseline_trials(
+        dim=2, noise_std=0.2, p_id=1, baseline_slug="pso", config=service.config
+    )
     assert res["status"] == "SUCCESS"
     assert len(res["clean_errors"]) == 3
     # With distinct seeds under noisy evaluations, PSO trajectories should vary across runs

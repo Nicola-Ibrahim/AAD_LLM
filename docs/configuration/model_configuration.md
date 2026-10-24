@@ -55,15 +55,16 @@ reasoning models, need a smoke test for LLaMEA's `temperature` setting and plain
 code output before a campaign. Listing is not proof of generation entitlement.
 The gateway catalogue supplies no prices, so no cheapest-model claim follows from it.
 
-Keep `execution.max_workers = 0` for automatic CPU-based worker selection, or a fixed
-worker count appropriate to your machine. This same setting works for local and hosted
-models. Worker concurrency does not set the HTTP request rate.
+CPU-worker capacity is selected automatically from process CPU availability,
+affinity and `SLURM_CPUS_PER_TASK` when available. It is not a TOML setting or a
+public campaign argument. This works for local and hosted models; worker
+concurrency does not set the HTTP request rate.
 
 The gateway adapter automatically selects request pacing from the model's provider:
 
 | Provider selection | Request starts per minute | Worker scheduling |
 | --- | ---: | --- |
-| `local` / `lmstudio` | No added throttling | Configured parallel pool |
+| `local` / `lmstudio` | No added throttling | Automatic CPU parallel pool |
 | `upb`, model ID beginning `gwdg.` | 8 | Same parallel pool |
 | `upb`, model ID beginning `kiconnect.` | 80 | Same parallel pool |
 | `upb`, model ID beginning `openai.` | 80 | Same parallel pool |
@@ -136,45 +137,85 @@ as `0.0.0.0` is not the client connection URL.
 it is used by the management tooling and infrastructure name registry.
 It does not declare which models have completed experiments.
 
-[configs/synthesis.toml](../../configs/synthesis.toml) controls problem conditions,
-prompt strategies, synthesis modes, iterations and future repeat counts.
-[configs/benchmark.toml](../../configs/benchmark.toml) controls evaluation and
-reliability settings. Audit and analysis discover completed models from the
-database rather than treating every registry preset as an evaluated model.
+### Explicit study parameters
 
-Synthesis and benchmark TOML are validated at the infrastructure boundary before campaign
-planning. Integer settings require integers, boolean settings require TOML
-booleans, and real-valued settings accept integer or floating-point numbers—not
-numeric strings or booleans. Missing settings retain their existing defaults;
-malformed values and unknown keys raise field-specific validation errors rather
-than being silently replaced. Supported single-name/list forms, mode tables and
-configuration aliases are resolved there. Application workflows receive typed
-`SynthesisConfig`, `MatrixCondition`, `SessionConfig` and `BenchmarkConfig` objects, including enum
-values for modes, strategies and noise models; they do not reparse the TOML.
+Scientific study settings are passed directly to application methods. There are
+no synthesis, benchmark or baseline TOML loaders. Notebook 02 defines
+`synthesis_parameters`; notebook 03 defines `benchmark_parameters` visibly in
+their setup cells. A future HTTP adapter can pass the same fields without a
+configuration-file dependency.
+
+| Method | Explicit study inputs |
+| --- | --- |
+| `run_campaign(...)`, `audit_matrix(...)` | `problem_targets`, `noise_conditions`, `synthesis_modes`, `iterations`, `budget`, `timeout_seconds`, `runs_per_config`, `auto_resume`, `skip_completed`, `retry_failed_synthesis` |
+| `run_benchmarks(...)`, `audit_workload(...)`, `summarize_results(...)` | `trials_per_condition`, `random_seed`, `first_instance_id`, `budget`, `trial_timeout_seconds`, `observation_trace_points`, `force_rerun`, `classical_baselines`, `noise_robustness_enabled`, `cross_function_enabled`, `cross_function_problem_ids` |
+| Summary thresholds | `primary_target`, `secondary_target` |
+| Analysis composition | Trial protocol plus `primary_prompt_strategy`, both targets, `bootstrap_samples`, `bootstrap_seed`, `checkpoint_fractions`; see `build_analysis_use_cases` |
+
+Parameters are keyword-only. Pydantic validates values before planning, discovery,
+dispatch or writes; ordinary model fields and validators describe structured
+problem/noise/mode entries. Model identity comes from the connected LLM, and
+CPU-worker capacity is selected automatically. Credentials, database paths and
+infrastructure collaborators are server-managed, not experiment body fields.
+
+The application coordinator receives concrete workload and trial-runner objects.
+Settings are passed through their internal methods, not held as mutable
+configuration or supplied through workflow factories. Internal validated
+configuration objects group typed values; callers do not pass a nested
+`config` object.
+
+For example, a small explicit synthesis request is:
+
+```python
+with build_synthesis_campaign(llm) as campaign:
+    results = campaign.run_campaign(
+        problem_targets=[{"id": 15, "dimensions": [10]}],
+        noise_conditions=[{"std": 0.1, "noise_model": "heteroscedastic"}],
+        synthesis_modes=[{"mode": "explicit", "strategies": ["baseline"]}],
+        iterations=10,
+        budget=100_000,
+        timeout_seconds=30.0,
+        runs_per_config=1,
+        auto_resume=True,
+        skip_completed=True,
+        retry_failed_synthesis=True,
+    )
+```
+
+Notebooks may collect these visible arguments in a dictionary and unpack it into
+the same method. Native, baseline, noise-robustness and cross-function benchmark
+work use `run_benchmarks(solver_type=..., **benchmark_parameters)`.
+`audit_workload(...)` and `summarize_results(...)` are read-only; neither launches
+trials. The optional study gates, missing-data policy and dynamic model discovery
+are unchanged. No HTTP server, queue or frontend is introduced.
+
+`configs/llms.toml` remains provider/model-registry metadata. It is unrelated to
+the scientific execution parameters and does not determine completed models.
 
 ### Selective synthesis reruns
 
-Keep protocol settings in `synthesis.toml`; pass selections to each campaign call:
+Keep study parameters visible in the notebook; pass selections to each campaign call:
 
 ```python
 # Automatic recovery only, for the active LLM:
-campaign_usecase.run_campaign(recover=True)
+campaign_usecase.run_campaign(**synthesis_parameters, recover=True)
 
 # Recovery plus manually selected conditions (review IDs for the current DB):
 campaign_usecase.run_campaign(
+    **synthesis_parameters,
     recover=True,
     rerun_experiment_ids=[2091, 2737, 2147],
 )
 
 # Resume specific running sessions, without scheduling other work:
-campaign_usecase.run_campaign(resume_experiment_ids=[123])
+campaign_usecase.run_campaign(**synthesis_parameters, resume_experiment_ids=[123])
 
 # Fill the full configured matrix to its replicate target:
-campaign_usecase.run_campaign()
+campaign_usecase.run_campaign(**synthesis_parameters)
 ```
 
 Use the matching model server. These options are invocation-scoped: changing IDs
-does not require editing TOML or restarting the kernel. After updating Python
+does not require editing configuration files or restarting the kernel. After updating Python
 code, restart Notebook 02's kernel. The planner
 combines explicit replacement requests with configured-matrix recovery for the active model:
 interrupted sessions are resumed when `auto_resume` is enabled, and unresolved

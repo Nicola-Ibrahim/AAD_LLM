@@ -3,11 +3,13 @@
 import json
 from contextlib import nullcontext
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
 import pytest
+from study_fixtures import run_parameters
 
 from benchmarking.application.benchmark.audit import BenchmarkAuditService, SynthesisConditionSpec
 from benchmarking.application.benchmark.run import BenchmarkService
@@ -49,7 +51,7 @@ def test_audit_does_not_substitute_implicit_counts_or_count_synthesis_gaps(
     transfer_service: BenchmarkService,
 ) -> None:
     service = transfer_service
-    row = service.workload.audit_champions_workload().iloc[0]
+    row = service.workload.audit_champions_workload(config=service.config).iloc[0]
     path = Path(row["target_dir"])
     service.trials.state_repo.records[path] = {
         "evaluation_schema_version": BENCHMARK_SCHEMA_VERSION,
@@ -110,7 +112,9 @@ def test_audit_notebook_runs_without_campaign(
     import shared.config
 
     monkeypatch.setattr(
-        bootstrap.audit, "build_audit_service", lambda: nullcontext(audit_for(transfer_service))
+        bootstrap.audit,
+        "build_audit_service",
+        lambda **kwargs: nullcontext(audit_for(transfer_service)),
     )
     monkeypatch.setattr(shared.config, "RESULTS_DIR", tmp_path)
     monkeypatch.setattr(go.Figure, "show", lambda self: None)
@@ -254,13 +258,11 @@ def transfer_service(tmp_path: Path) -> BenchmarkService:
         sqlite_repo=synthesis_repo,
         champion_selection=selection,
         state_repo=state,
-        config=config,
         code_reader=code_reader,
         model_names=names,
     )
     trials = BenchmarkTrialRunner(
         state_repo=state,
-        config=config,
         logger=logger,
         problem_factory=problem_factory,
         executor_factory=lambda timeout: executor,
@@ -268,11 +270,16 @@ def transfer_service(tmp_path: Path) -> BenchmarkService:
         code_reader=code_reader,
         model_names=names,
     )
-    return BenchmarkService(
+    return SimpleNamespace(
+        service=BenchmarkService(
+            workload=workload,
+            trials=trials,
+            baseline_labels=config.baseline_labels,
+            logger=logger,
+        ),
         workload=workload,
         trials=trials,
         config=config,
-        logger=logger,
     )
 
 
@@ -285,9 +292,9 @@ def transfer_service(tmp_path: Path) -> BenchmarkService:
 )
 def test_native_baselines_preserve_exact_database_conditions(transfer_service, conditions):
     workload = transfer_service.workload
-    workload.config.cross_function_enabled = False
+    transfer_service.config.cross_function_enabled = False
     workload.sqlite_repo.get_target_conditions.return_value = conditions
-    rows = workload.audit_baselines_workload()
+    rows = workload.audit_baselines_workload(config=transfer_service.config)
     assert set(zip(rows["dim"], rows["noise_std"], rows["problem_id"])) == set(conditions)
     assert len(rows) == len(set(conditions))
     assert not (rows["noise_std"] == 0.0).any()
@@ -295,10 +302,12 @@ def test_native_baselines_preserve_exact_database_conditions(transfer_service, c
 
 def test_native_noise_filter_does_not_create_new_conditions(transfer_service):
     workload = transfer_service.workload
-    workload.config.cross_function_enabled = False
+    transfer_service.config.cross_function_enabled = False
     workload.sqlite_repo.get_target_conditions.return_value = [(10, 0.1, 15)]
-    workload.config.target_noise_stds = [0.0, 0.1, 0.2]
-    assert workload._discover_target_conditions({}) == [(10, 0.1, 15)]
+    transfer_service.config.target_noise_stds = [0.0, 0.1, 0.2]
+    assert workload._discover_target_conditions({}, config=transfer_service.config) == [
+        (10, 0.1, 15)
+    ]
 
 
 def test_execution_uses_exact_candidates_and_one_selection_snapshot(transfer_service) -> None:
@@ -314,7 +323,9 @@ def test_execution_uses_exact_candidates_and_one_selection_snapshot(transfer_ser
     service.workload.audit_workload = MagicMock(side_effect=AssertionError("Not an execution API"))
     service.trials.run_champion_trials = MagicMock(return_value={"status": "SUCCESS"})
 
-    results = service.run_champions(verbose=False)
+    results = service.service.run_benchmarks(
+        **run_parameters(service.config), solver_type="champions", verbose=False
+    )
 
     assert len(results) == 2
     selection.flatten_champions.assert_called_once_with()
@@ -326,20 +337,24 @@ def test_execution_uses_exact_candidates_and_one_selection_snapshot(transfer_ser
 
 def test_readiness_and_resumption_agree_on_incompatible_partial_history(transfer_service) -> None:
     service = transfer_service
-    service.run_champions(verbose=False)
-    task = service.workload.discover("champions")[0]
+    service.service.run_benchmarks(
+        **run_parameters(service.config), solver_type="champions", verbose=False
+    )
+    task = service.workload.discover("champions", config=service.config)[0]
     state = service.trials.state_repo
     provenance = state.records[task.target_dir]
     provenance.pop("candidate_execution_contract")
     service.config.trials_per_condition += 1
     original = dict(provenance)
 
-    inspection = service.workload.discover("champions")[0].inspection
+    inspection = service.workload.discover("champions", config=service.config)[0].inspection
     assert inspection.reason == "incompatible_execution"
     assert inspection.recorded_trials == 3
     assert inspection.reusable_trials == 0
     with pytest.raises(ValueError, match="unknown execution contract"):
-        service.run_champions(verbose=False)
+        service.service.run_benchmarks(
+            **run_parameters(service.config), solver_type="champions", verbose=False
+        )
     assert state.records[task.target_dir] == original
 
 
@@ -347,7 +362,9 @@ def test_frozen_target_execution_pairing_and_baseline_reuse(
     transfer_service: BenchmarkService,
 ) -> None:
     service = transfer_service
-    rows = service.run_cross_function_benchmarks(verbose=False)
+    rows = service.service.run_benchmarks(
+        **run_parameters(service.config), solver_type="cross_function", verbose=False
+    )
     assert len(rows) == 6  # Four source-target pairs; two shared baselines.
     records = service.trials.state_repo.records
     transfer = [r for r in records.values() if "code_hash" in r]
@@ -371,7 +388,9 @@ def test_frozen_target_execution_pairing_and_baseline_reuse(
         "frozen code source_8.py",
     }
     count = executor.execute_algorithm.call_count
-    cached = service.run_cross_function_benchmarks(verbose=False)
+    cached = service.service.run_benchmarks(
+        **run_parameters(service.config), solver_type="cross_function", verbose=False
+    )
     assert set(cached["status"]) == {"CACHED"}
     assert executor.execute_algorithm.call_count == count
 
@@ -385,7 +404,9 @@ def test_failure_does_not_skip_later_instances(transfer_service: BenchmarkServic
         (np.array([0.0, 0.0]), 123.0),
     ]
     champion = next(iter(service.workload.champion_selection.flatten_champions().values()))
-    result = service.trials.run_champion_trials(champion, target_problem_id=8, verbose=False)
+    result = service.trials.run_champion_trials(
+        champion, target_problem_id=8, verbose=False, config=service.config
+    )
     assert executor.execute_algorithm.call_count == 3
     assert result["clean_errors"] == [float("inf"), float("inf"), 0.0]
 
@@ -398,7 +419,9 @@ def test_invalid_champion_return_fails_each_trial(
     executor = service.trials.executor_factory(1)
     executor.execute_algorithm.side_effect = lambda **kwargs: (point, 0.0)
     champion = next(iter(service.workload.champion_selection.flatten_champions().values()))
-    result = service.trials.run_champion_trials(champion, target_problem_id=8, verbose=False)
+    result = service.trials.run_champion_trials(
+        champion, target_problem_id=8, verbose=False, config=service.config
+    )
     assert result["clean_errors"] == [float("inf")] * 3
     assert executor.execute_algorithm.call_count == 3
 
@@ -407,10 +430,14 @@ def test_native_diagonals_are_reused_without_reexecution(
     transfer_service: BenchmarkService,
 ) -> None:
     service = transfer_service
-    service.run_champions(verbose=False)
+    service.service.run_benchmarks(
+        **run_parameters(service.config), solver_type="champions", verbose=False
+    )
     executor = service.trials.executor_factory(1)
     before = executor.execute_algorithm.call_count
-    rows = service.run_cross_function_benchmarks(verbose=False)
+    rows = service.service.run_benchmarks(
+        **run_parameters(service.config), solver_type="cross_function", verbose=False
+    )
     assert (
         executor.execute_algorithm.call_count == before + 6
     )  # Two off-diagonal pairs × three trials.
@@ -420,14 +447,18 @@ def test_native_diagonals_are_reused_without_reexecution(
 def test_historical_skipped_tail_resumes(transfer_service: BenchmarkService) -> None:
     service = transfer_service
     champion = next(iter(service.workload.champion_selection.flatten_champions().values()))
-    service.trials.run_champion_trials(champion, target_problem_id=8, verbose=False)
+    service.trials.run_champion_trials(
+        champion, target_problem_id=8, verbose=False, config=service.config
+    )
     record = next(iter(service.trials.state_repo.records.values()))
     record["clean_errors"][2] = float("inf")
     record["runtimes"][2] = 0.0
     record["evaluations_used"][2] = 0
     executor = service.trials.executor_factory(1)
     count = executor.execute_algorithm.call_count
-    service.trials.run_champion_trials(champion, target_problem_id=8, verbose=False)
+    service.trials.run_champion_trials(
+        champion, target_problem_id=8, verbose=False, config=service.config
+    )
     assert executor.execute_algorithm.call_count == count + 1
     assert executor.execute_algorithm.call_args.kwargs["problem"].problem_id == 8
     assert record["instance_ids"] == [2, 3, 4]
@@ -436,15 +467,22 @@ def test_historical_skipped_tail_resumes(transfer_service: BenchmarkService) -> 
 def test_workflow_flags_and_baseline_targets(transfer_service: BenchmarkService) -> None:
     service = transfer_service
     service.config.noise_robustness_enabled = False
-    assert service.workload.audit_noise_robustness_workload().empty
+    assert service.workload.audit_noise_robustness_workload(config=service.config).empty
     service.config.cross_function_enabled = False
-    assert service.workload.audit_cross_function_workload().empty
-    assert service.run_cross_function_benchmarks().empty
+    assert service.workload.audit_cross_function_workload(config=service.config).empty
+    assert service.service.run_benchmarks(
+        **run_parameters(service.config),
+        solver_type="cross_function",
+    ).empty
     service.config.cross_function_enabled = True
-    assert set(service.workload.audit_workload("cross_function")["problem_id"]) == {1, 8}
+    assert set(
+        service.workload.audit_workload("cross_function", config=service.config)["problem_id"]
+    ) == {1, 8}
     service.config.cross_function_problem_ids = [8]
     # Restricting transfer targets must not remove each champion's native reference.
-    assert set(service.workload.audit_cross_function_workload()["problem_id"]) == {1, 8}
+    assert set(
+        service.workload.audit_cross_function_workload(config=service.config)["problem_id"]
+    ) == {1, 8}
 
 
 def test_transfer_aggregation_missing_and_reproducibility() -> None:

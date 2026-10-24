@@ -1,10 +1,12 @@
 """Read-only audit of synthesis availability and executable benchmark coverage."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import pandas as pd
 
 from benchmarking.application.benchmark.workload import BenchmarkWorkload
+from benchmarking.application.benchmark_config import BenchmarkConfig
 from benchmarking.application.interfaces.synthesis_read_repository import SynthesisReadRepository
 
 
@@ -50,7 +52,34 @@ class BenchmarkAuditService:
         self.synthesis_reader = synthesis_reader
         self.planned_conditions = planned_conditions
 
-    def get_audit_data(self) -> AuditSnapshot:
+    def get_audit_data(
+        self,
+        *,
+        trials_per_condition: int = 20,
+        random_seed: int = 42,
+        first_instance_id: int = 2,
+        budget: int = 100_000,
+        trial_timeout_seconds: float = 30.0,
+        observation_trace_points: int = 64,
+        force_rerun: bool = False,
+        classical_baselines: Sequence[str] = ("cmaes", "de", "pso"),
+        noise_robustness_enabled: bool = True,
+        cross_function_enabled: bool = False,
+        cross_function_problem_ids: Sequence[int] = (1, 8, 11, 15, 21),
+    ) -> AuditSnapshot:
+        config = BenchmarkConfig(
+            trials_per_condition=trials_per_condition,
+            random_seed=random_seed,
+            first_instance_id=first_instance_id,
+            budget=budget,
+            trial_timeout_seconds=trial_timeout_seconds,
+            observation_trace_points=observation_trace_points,
+            force_rerun=force_rerun,
+            classical_baselines=list(classical_baselines),
+            noise_robustness_enabled=noise_robustness_enabled,
+            cross_function_enabled=cross_function_enabled,
+            cross_function_problem_ids=list(cross_function_problem_ids),
+        )
         experiments, _ = self.synthesis_reader.get_synthesis_dataframes()
         models = (
             tuple(
@@ -93,7 +122,7 @@ class BenchmarkAuditService:
             ],
             columns=["model", "problem_id", "dim", "noise_std", "mode", "strategy", "status"],
         )
-        benchmarks = self.workload.audit_workload()
+        benchmarks = self.workload.audit_workload(config=config)
         if not benchmarks.empty:
             benchmarks = benchmarks[
                 (benchmarks["solver_type"] == "baseline") | benchmarks["model"].isin(models)

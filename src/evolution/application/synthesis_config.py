@@ -1,6 +1,6 @@
 """Typed synthesis matrix and campaign configuration models owned by the application."""
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from evolution.application.synthesis.models import SessionConfig
 from evolution.domain.enums import NoiseEnvironment, PromptStrategy, SynthesisMode
@@ -10,30 +10,35 @@ from shared.domain.noise_model import NoiseModelEnum
 class ProblemTarget(BaseModel):
     """Target BBOB problem ID and its evaluated search space dimensions."""
 
-    id: int
-    dimensions: list[int]
+    id: int = Field(ge=1, le=24)
+    dimensions: list[int] = Field(min_length=1)
 
-    model_config = ConfigDict(frozen=True)
+    @field_validator("dimensions")
+    @classmethod
+    def validate_dimensions(cls, values: list[int]) -> list[int]:
+        if any(value <= 0 for value in values):
+            raise ValueError("Dimensions must be positive integers.")
+        return values
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
 
 
 class SynthesisModeConfig(BaseModel):
     """Synthesis prompting mode and its evaluated prompt engineering strategies."""
 
     mode: SynthesisMode
-    strategies: list[PromptStrategy]
+    strategies: list[PromptStrategy] = Field(min_length=1)
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
 
 class NoiseConditionConfig(BaseModel):
-    """Evaluated noise condition (std, noise model strategy, optional mode override, and pre-associated modes)."""
+    """An explicitly selected noise level and model."""
 
-    std: float
+    std: float = Field(strict=True, ge=0, allow_inf_nan=False)
     noise_model: NoiseModelEnum = NoiseModelEnum.NONE
-    mode: SynthesisMode | None = None
-    modes: list[SynthesisModeConfig] = Field(default_factory=list)
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
 
 class MatrixCondition(BaseModel):
@@ -81,12 +86,12 @@ class SynthesisConfig(BaseModel):
     matrix_conditions: list[MatrixCondition] = Field(default_factory=list)
 
     # 2. Execution & Evolutionary Hyperparameters
-    budget: int = 1_000_000
-    timeout_seconds: float = 30.0
-    iterations: int = 10
+    budget: int = Field(default=100_000, gt=0)
+    timeout_seconds: float = Field(default=30.0, gt=0, allow_inf_nan=False)
+    iterations: int = Field(default=10, gt=0)
     stagnation_threshold: int = 3
     convergence_threshold: float = 1e-6
-    runs_per_config: int = 1
+    runs_per_config: int = Field(default=1, gt=0)
     num_processes: int = 8
     auto_resume: bool = True
     skip_completed: bool = True
@@ -96,6 +101,29 @@ class SynthesisConfig(BaseModel):
     noise_model: NoiseModelEnum = NoiseModelEnum.HETEROSCEDASTIC
 
     model_config = ConfigDict(frozen=True)
+
+    @model_validator(mode="after")
+    def resolve_matrix(self) -> "SynthesisConfig":
+        """Resolve the public matrix once, preserving declared iteration order."""
+        if self.matrix_conditions or not self.problem_targets:
+            return self
+        conditions = [
+            MatrixCondition(
+                problem_id=target.id,
+                dim=dim,
+                mode=mode.mode,
+                noise_std=noise.std,
+                noise_model=noise.noise_model,
+                strategy=strategy,
+            )
+            for target in self.problem_targets
+            for dim in target.dimensions
+            for noise in self.noise_conditions
+            for mode in self.synthesis_modes
+            for strategy in mode.strategies
+        ]
+        object.__setattr__(self, "matrix_conditions", conditions)
+        return self
 
     # Derived dot-access properties:
     @property

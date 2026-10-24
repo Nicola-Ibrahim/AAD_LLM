@@ -15,7 +15,6 @@ from benchmarking.infra.io.trace_repository import BenchmarkStateRepository
 from benchmarking.infra.logging import BenchmarkLogger
 from benchmarking.infra.solvers.baselines import get_baseline_runner
 from benchmarking.infra.storage import (
-    BenchmarkConfigRepository,
     ChampionsReadRepository,
     SQLiteSynthesisReadRepository,
 )
@@ -44,21 +43,21 @@ def build_benchmark_workflow(
     try:
         sqlite_repo = SQLiteSynthesisReadRepository(database.session_factory)
         champions_repo = ChampionsReadRepository(database.session_factory)
-        config = BenchmarkConfigRepository().load_config()
         selection = ChampionSelectionService(champions_repo)
         state = BenchmarkStateRepository()
         logger = BenchmarkLogger()
         code_reader = FilesystemCodeReader(project_root)
         model_names = configured_model_names()
+
         workload = BenchmarkWorkload(
             sqlite_repo=sqlite_repo,
             champion_selection=selection,
             state_repo=state,
             code_reader=code_reader,
             model_names=model_names,
-            config=config,
             planned_target_conditions=planned_target_conditions,
         )
+
         trials = BenchmarkTrialRunner(
             state_repo=state,
             logger=logger,
@@ -67,13 +66,17 @@ def build_benchmark_workflow(
             baseline_resolver=get_baseline_runner,
             code_reader=code_reader,
             model_names=model_names,
-            config=config,
         )
+
         yield BenchmarkWorkflow(
             service=BenchmarkService(
                 workload=workload,
                 trials=trials,
-                config=config,
+                baseline_labels={
+                    "cmaes": "CMA-ES",
+                    "de": "Differential Evolution",
+                    "pso": "Particle Swarm Optimization",
+                },
                 logger=logger,
             ),
             sqlite_repo=sqlite_repo,

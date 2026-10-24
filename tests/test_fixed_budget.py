@@ -14,13 +14,10 @@ from benchmarking.infra.io.code_reader import FilesystemCodeReader
 from benchmarking.infra.io.trace_repository import BenchmarkStateRepository
 from benchmarking.infra.logging import BenchmarkLogger
 from benchmarking.infra.solvers.baselines import get_baseline_runner
-from benchmarking.infra.storage.benchmark_config_repository import BenchmarkConfigRepository
-from evolution.infra.storage.synthesis_config.repository import SynthesisConfigRepository
 from shared.application.interfaces.candidate_executor import (
     CANDIDATE_EXECUTION_VERSION,
     CandidateTimeout,
 )
-from shared.config import CONFIGS_DIR
 from shared.domain.problem import BaseProblem
 from shared.infra.execution.candidate_executor import create_candidate_executor
 from shared.infra.problems.factory import BBOBProblemFactory
@@ -30,34 +27,6 @@ def test_default_budget_is_fixed_and_non_optional() -> None:
     assert BenchmarkConfig().budget == 100_000
     with pytest.raises(ValidationError):
         BenchmarkConfig(budget=None)
-
-
-@pytest.mark.parametrize(
-    "setting",
-    [
-        'force_rerun = "false"',
-        'budget = "100000"',
-        "trials_per_condition = 20.0",
-        "fill_missing_only = 1",
-        'target_noise_stds = ["0.1"]',
-    ],
-)
-def test_benchmark_loader_rejects_wrong_types(tmp_path: Path, setting: str) -> None:
-    path = tmp_path / "benchmark.toml"
-    budget = "" if setting.startswith("budget") else "budget = 100000\n"
-    path.write_text(f"[benchmarking]\n{budget}{setting}\n", encoding="utf-8")
-    with pytest.raises(ValidationError):
-        BenchmarkConfigRepository(path).load_config()
-
-
-def test_reliability_settings_are_also_strict(tmp_path: Path) -> None:
-    path = tmp_path / "benchmark.toml"
-    path.write_text(
-        '[benchmarking]\nbudget=100000\n[benchmarking.reliability]\nbootstrap_samples="1000"\n',
-        encoding="utf-8",
-    )
-    with pytest.raises(ValidationError, match="bootstrap_samples"):
-        BenchmarkConfigRepository(path).load_config()
 
 
 def test_failure_diagnostics_survive_trial_resumption(tmp_path: Path) -> None:
@@ -71,7 +40,6 @@ def test_failure_diagnostics_survive_trial_resumption(tmp_path: Path) -> None:
         baseline_resolver=get_baseline_runner,
         code_reader=FilesystemCodeReader(tmp_path),
         model_names=ModelNames([]),
-        config=config,
     )
     errors = iter([ValueError("invalid coordinates"), CandidateTimeout("time limit")])
 
@@ -80,7 +48,9 @@ def test_failure_diagnostics_survive_trial_resumption(tmp_path: Path) -> None:
 
     directory = state.benchmark_dir / "2D/std_0.0/f1/test"
     metadata = {"baseline": "test", "candidate_execution_contract": CANDIDATE_EXECUTION_VERSION}
-    runner._execute_trial_runs(directory, 2, 0.0, 1, "test", fail, metadata, verbose=False)
+    runner._execute_trial_runs(
+        directory, 2, 0.0, 1, "test", fail, metadata, verbose=False, config=config
+    )
     original = state.read_provenance(directory)
     assert original["clean_errors"] == [float("inf")] * 2
     assert [r["error_type"] for r in original["trial_records"]] == [
@@ -94,7 +64,9 @@ def test_failure_diagnostics_survive_trial_resumption(tmp_path: Path) -> None:
     def succeed(problem: BaseProblem, budget: int) -> tuple[float, float, int]:
         return problem.true_optimum, 0.01, 0
 
-    runner._execute_trial_runs(directory, 2, 0.0, 1, "test", succeed, metadata, verbose=False)
+    runner._execute_trial_runs(
+        directory, 2, 0.0, 1, "test", succeed, metadata, verbose=False, config=config
+    )
     resumed = state.read_provenance(directory)
     assert resumed["trial_records"][:2] == original["trial_records"]
     assert resumed["trial_records"][2]["error_type"] is None
@@ -103,7 +75,9 @@ def test_failure_diagnostics_survive_trial_resumption(tmp_path: Path) -> None:
     state.write_provenance(directory, resumed)
     config.trials_per_condition = 4
     with pytest.raises(ValueError, match="unknown execution contract"):
-        runner._execute_trial_runs(directory, 2, 0.0, 1, "test", succeed, metadata, verbose=False)
+        runner._execute_trial_runs(
+            directory, 2, 0.0, 1, "test", succeed, metadata, verbose=False, config=config
+        )
     assert state.read_provenance(directory) == resumed
 
 
@@ -159,75 +133,6 @@ def test_invalid_fixed_budget_is_rejected(budget: int) -> None:
         BenchmarkConfig(budget=budget)
 
 
-def test_nonempty_config_requires_an_explicit_fixed_budget(tmp_path: Path) -> None:
-    path = tmp_path / "benchmark.toml"
-    path.write_text("[benchmarking]\ntrials_per_condition = 20\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="benchmarking.budget"):
-        BenchmarkConfigRepository(path).load_config()
-
-
-def test_benchmark_section_must_be_a_table(tmp_path: Path) -> None:
-    path = tmp_path / "benchmark.toml"
-    path.write_text("benchmarking = []\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="must be a TOML table"):
-        BenchmarkConfigRepository(path).load_config()
-
-
-def test_unknown_settings_are_rejected_by_the_model(tmp_path: Path) -> None:
-    path = tmp_path / "benchmark.toml"
-    path.write_text("[benchmarking]\nbudget = 100000\nunknown_setting = 1\n", encoding="utf-8")
-    with pytest.raises(ValidationError, match="unknown_setting"):
-        BenchmarkConfigRepository(path).load_config()
-
-
-def test_config_loader_reads_fixed_budget_and_keeps_the_schedule(tmp_path: Path) -> None:
-    path = tmp_path / "benchmark.toml"
-    path.write_text("[benchmarking]\nbudget = 100000\n", encoding="utf-8")
-    config = BenchmarkConfigRepository(path).load_config()
-    assert config.budget == 100_000
-    assert config.trial_schedule == tuple((instance, 42 + instance) for instance in range(2, 22))
-    assert config.trial_timeout_seconds == 30.0
-
-
-def test_project_configs_share_fixed_allowance_and_supported_dimensions() -> None:
-    synthesis = SynthesisConfigRepository(CONFIGS_DIR / "synthesis.toml").load_config()
-    benchmark = BenchmarkConfigRepository(CONFIGS_DIR / "benchmark.toml").load_config()
-    assert synthesis.budget == benchmark.budget == 100_000
-    selected_dimensions = {condition.dim for condition in synthesis.matrix_conditions}
-    assert selected_dimensions
-    assert selected_dimensions <= {2, 10, 50}
-
-
-@pytest.mark.parametrize(
-    ("condition", "expected_model", "expected_modes"),
-    [
-        ("{std = 0.0}", "none", {"explicit", "implicit"}),
-        ("{std = 0.1}", "heteroscedastic", {"explicit", "implicit"}),
-        ('{std = 0.1, model = "awgn"}', "awgn", {"explicit", "implicit"}),
-        (
-            '{std = 0.1, noise_model = "homoscedastic_additive", model = "awgn"}',
-            "homoscedastic_additive",
-            {"explicit", "implicit"},
-        ),
-        ('{std = 0.1, mode = "IMPLICIT"}', "heteroscedastic", {"implicit"}),
-    ],
-)
-def test_synthesis_noise_configuration_preserves_resolution(
-    tmp_path: Path, condition: str, expected_model: str, expected_modes: set[str]
-) -> None:
-    path = tmp_path / "synthesis.toml"
-    path.write_text(
-        "[matrix]\nproblem_targets = [{id = 15, dimensions = [10]}]\n"
-        f'noise_conditions = [{condition}]\nprompt_strategies = "baseline"\n',
-        encoding="utf-8",
-    )
-    config = SynthesisConfigRepository(path).load_config()
-    assert len(config.noise_conditions) == 1
-    assert config.noise_conditions[0].noise_model.value == expected_model
-    assert {item.mode.value for item in config.matrix_conditions} == expected_modes
-    assert {item.strategy.value for item in config.matrix_conditions} == {"baseline"}
-
-
 @pytest.mark.parametrize("dim", [2, 10, 50])
 def test_fixed_trial_budget_is_recorded_cached_and_invalidated(tmp_path: Path, dim: int) -> None:
     """Use tiny isolated PSO runs, never historical artifacts or LLM requests."""
@@ -240,9 +145,10 @@ def test_fixed_trial_budget_is_recorded_cached_and_invalidated(tmp_path: Path, d
         baseline_resolver=get_baseline_runner,
         code_reader=FilesystemCodeReader(tmp_path),
         model_names=ModelNames([]),
-        config=config,
     )
-    result = runner.run_baseline_trials(dim=dim, noise_std=0.0, p_id=1, baseline_slug="pso")
+    result = runner.run_baseline_trials(
+        dim=dim, noise_std=0.0, p_id=1, baseline_slug="pso", config=config
+    )
     path = tmp_path / "traces" / f"{dim}D" / "std_0.0/f1/pso/provenance.json"
     provenance = json.loads(path.read_text())
     assert result["status"] == "SUCCESS"
@@ -250,13 +156,17 @@ def test_fixed_trial_budget_is_recorded_cached_and_invalidated(tmp_path: Path, d
     assert provenance["evaluations_used"] == [120, 120]
     assert provenance["instance_ids"] == [2, 3]
     assert (
-        runner.run_baseline_trials(dim=dim, noise_std=0.0, p_id=1, baseline_slug="pso")["status"]
+        runner.run_baseline_trials(
+            dim=dim, noise_std=0.0, p_id=1, baseline_slug="pso", config=config
+        )["status"]
         == "CACHED"
     )
 
     config.budget = 150
     assert (
-        runner.run_baseline_trials(dim=dim, noise_std=0.0, p_id=1, baseline_slug="pso")["status"]
+        runner.run_baseline_trials(
+            dim=dim, noise_std=0.0, p_id=1, baseline_slug="pso", config=config
+        )["status"]
         == "SUCCESS"
     )
     assert json.loads(path.read_text())["budget"] == 150

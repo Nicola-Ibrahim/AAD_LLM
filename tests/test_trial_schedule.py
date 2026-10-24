@@ -126,9 +126,8 @@ def test_append_only_instance_21_and_filter_ioh_traces(tmp_path: Path, orphan: b
         lambda _: baseline_spy,
         MagicMock(),
         configured_model_names(),
-        config,
     )
-    result = runner.run_baseline_trials("pso", 2, 0.0, 1, verbose=False)
+    result = runner.run_baseline_trials("pso", 2, 0.0, 1, verbose=False, config=config)
     assert result["n_runs"] == 20
     factory.create.assert_called_once()
     assert factory.create.call_args.kwargs["instance_id"] == 21
@@ -148,5 +147,8 @@ def test_append_only_instance_21_and_filter_ioh_traces(tmp_path: Path, orphan: b
     assert len(runs) == 20
     assert runs[0].raw_objectives.tolist() == [2.0]
     assert all(999 not in run.raw_objectives for run in runs)
-    assert runner.run_baseline_trials("pso", 2, 0.0, 1, verbose=False)["status"] == "CACHED"
+    assert (
+        runner.run_baseline_trials("pso", 2, 0.0, 1, verbose=False, config=config)["status"]
+        == "CACHED"
+    )
     assert baseline_spy.call_count == 1

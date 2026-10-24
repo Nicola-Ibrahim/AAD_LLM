@@ -49,7 +49,6 @@ class BenchmarkTrialRunner:
         baseline_resolver: BaselineRunnerResolver,
         code_reader: CandidateCodeReader,
         model_names: ModelNames,
-        config: BenchmarkConfig,
     ) -> None:
         self.state_repo = state_repo
         self.logger = logger
@@ -58,7 +57,6 @@ class BenchmarkTrialRunner:
         self.baseline_resolver = baseline_resolver
         self.code_reader = code_reader
         self.model_names = model_names
-        self.config = config
 
     def _execute_trial_runs(
         self,
@@ -71,23 +69,25 @@ class BenchmarkTrialRunner:
         prov_metadata: dict[str, object],
         expected_code_hash: str | None = None,
         verbose: bool = True,
+        *,
+        config: BenchmarkConfig,
     ) -> dict[str, object]:
         """Generic empirical trial executor handling incremental resumption, IOH logging, and provenance."""
         self.logger.verbose = verbose
         trials: list[RecordedTrial] = []
         can_resume = False
-        schedule = self.config.trial_schedule
+        schedule = config.trial_schedule
         completed_identities: set[tuple[int, int]] = set()
 
-        if not self.config.force_rerun and self.state_repo.solver_directory_exists(target_dir):
+        if not config.force_rerun and self.state_repo.solver_directory_exists(target_dir):
             prov = self.state_repo.read_provenance(target_dir)
             inspection = inspect_condition(
                 code_available=True,
                 directory_exists=True,
                 provenance=prov,
                 expected_code_hash=expected_code_hash,
-                expected_trials=self.config.trials_per_condition,
-                expected_budget=self.config.budget,
+                expected_trials=config.trials_per_condition,
+                expected_budget=config.budget,
                 trial_schedule=schedule,
                 expected_execution_version=prov_metadata.get("candidate_execution_contract"),
             )
@@ -99,7 +99,7 @@ class BenchmarkTrialRunner:
                 )
             if inspection.reason in {"complete", "partial", "not_started"}:
                 existing_runs = inspection.reusable_trials
-                if existing_runs >= self.config.trials_per_condition:
+                if existing_runs >= config.trials_per_condition:
                     selected = select_scheduled_trials(prov, schedule)
                     self.logger.cached(existing_runs, selected["median_error"])
                     return {
@@ -116,7 +116,7 @@ class BenchmarkTrialRunner:
                 }
                 can_resume = bool(trials)
                 if existing_runs > 0:
-                    self.logger.resuming(existing_runs, self.config.trials_per_condition)
+                    self.logger.resuming(existing_runs, config.trials_per_condition)
 
         if not can_resume and self.state_repo.solver_directory_exists(target_dir):
             # Preserve the existing force/stale-result policy: replace only this
@@ -144,10 +144,10 @@ class BenchmarkTrialRunner:
                 true_optimum = float(prob.true_optimum)
 
                 prob.attach_logger(logger_ioh)
-                prob.set_budget(self.config.budget)
+                prob.set_budget(config.budget)
                 if noise_std > 0.0:
                     prob.configure_observation_checkpoints(
-                        self.config.budget, self.config.observation_trace_points
+                        config.budget, config.observation_trace_points
                     )
                 trial_started = time.perf_counter()
                 diagnostic: dict[str, str | None] = {
@@ -156,7 +156,7 @@ class BenchmarkTrialRunner:
                     "error_traceback": None,
                 }
                 try:
-                    best_objective, rt, _reported_evals = runner_fn(prob, self.config.budget)
+                    best_objective, rt, _reported_evals = runner_fn(prob, config.budget)
                     best_objective = float(best_objective)
                     if not np.isfinite(best_objective):
                         best_objective = float("inf")
@@ -204,7 +204,7 @@ class BenchmarkTrialRunner:
                 next_trace_index += int(evals_used > 0)
                 self.logger.trial(
                     trial_idx=run_idx,
-                    total_trials=self.config.trials_per_condition,
+                    total_trials=config.trials_per_condition,
                     best_clean=best_error,
                     runtime=rt,
                     evals_used=evals_used,
@@ -233,7 +233,7 @@ class BenchmarkTrialRunner:
             "problem_id": p_id,
             "dim": dim,
             "noise_std": noise_std,
-            "budget": self.config.budget,
+            "budget": config.budget,
             "instance_ids": [trial.instance_id for trial in trials],
             "trial_seeds": [trial.seed for trial in trials],
             "true_optima": [trial.true_optimum for trial in trials],
@@ -251,7 +251,7 @@ class BenchmarkTrialRunner:
             "runtimes": [trial.runtime for trial in trials],
             "evaluations_used": [trial.evaluations_used for trial in trials],
             "observed_objectives": [trial.observations for trial in trials],
-            "observation_trace_points": self.config.observation_trace_points,
+            "observation_trace_points": config.observation_trace_points,
             "evaluated_at": datetime.now(timezone.utc).isoformat(),
         }
         self.state_repo.write_provenance(target_dir, prov_data)
@@ -275,6 +275,8 @@ class BenchmarkTrialRunner:
         solver_folder: str | None = None,
         verbose: bool = True,
         target_problem_id: int | None = None,
+        *,
+        config: BenchmarkConfig,
     ) -> dict[str, object]:
         """Execute empirical trials for a single LLM champion algorithm."""
         self.logger.verbose = verbose
@@ -305,7 +307,7 @@ class BenchmarkTrialRunner:
                 source_problem_id, dim, noise_std, p_id, folder, code_hash
             )
 
-        executor = self.executor_factory(self.config.trial_timeout_seconds)
+        executor = self.executor_factory(config.trial_timeout_seconds)
 
         def champion_runner(prob: BaseProblem, budget: int) -> tuple[float, float, int]:
             t0 = time.perf_counter()
@@ -355,6 +357,7 @@ class BenchmarkTrialRunner:
             prov_metadata=prov_metadata,
             expected_code_hash=code_hash,
             verbose=verbose,
+            config=config,
         )
 
     def run_baseline_trials(
@@ -364,6 +367,8 @@ class BenchmarkTrialRunner:
         noise_std: float,
         p_id: int,
         verbose: bool = True,
+        *,
+        config: BenchmarkConfig,
     ) -> dict[str, object]:
         """Execute empirical trials for a classical baseline algorithm."""
         self.logger.verbose = verbose
@@ -382,4 +387,5 @@ class BenchmarkTrialRunner:
             prov_metadata=prov_metadata,
             expected_code_hash=None,
             verbose=verbose,
+            config=config,
         )

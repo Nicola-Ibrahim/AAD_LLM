@@ -11,26 +11,25 @@ from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
 from evolution.infra.storage.code.repository import CodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
-from evolution.infra.storage.synthesis_config.repository import SynthesisConfigRepository
+from shared.infra.cpu import available_cpu_count
 from shared.infra.database import Database
 from shared.infra.problems.factory import BBOBProblemFactory
 
 
 @contextmanager
 def build_synthesis_campaign(llm_client: LLMClient) -> Iterator[SynthesisCampaignCoordinator]:
-    config_repo = SynthesisConfigRepository()
-    config = config_repo.load_config()
+    workers = available_cpu_count()
     database = Database()
     try:
         yield SynthesisCampaignCoordinator(
             sqlite_repo=SQLiteSynthesisRepository(database.session_factory),
-            config=config,
             model_name=llm_client.model.name,
             logger=SynthesisLogger(verbose=True),
             engine=LLaMEAEngine(llm_client=llm_client, code_repo=CodeRepository()),
             problem_factory=BBOBProblemFactory(),
-            dispatcher=ProcessPoolRunner(max_workers=config.num_processes),
+            dispatcher=ProcessPoolRunner(max_workers=workers),
             worker_fn=run_synthesis_worker,
+            worker_count=workers,
         )
     finally:
         database.dispose()

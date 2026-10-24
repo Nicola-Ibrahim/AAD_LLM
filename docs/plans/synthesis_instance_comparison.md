@@ -3,7 +3,7 @@
 Historical handoff recorded on 2026-10-22; status updated on 2026-10-23.
 **Retired experiment—not the current implementation.** Synthesis has returned
 to one fixed instance per session (instance 1 for fresh sessions); benchmarking
-still uses instances 11–30. The scheduling configuration, runtime switching and
+now uses instances 2–21. The scheduling configuration, runtime switching and
 sidecar persistence APIs described below have been removed. Keep this note as a
 record of the explored design, not as instructions for running current code.
 No synthesis or benchmark run was launched while implementing the original change.
@@ -21,7 +21,7 @@ selection protocol or proof of improved generalization.
 - Qwen2.5-Coder-32B-Instruct, f15, 10D, noise standard deviation 0.1.
 - All four prompt strategies, both Explicit and Implicit modes.
 - Ten candidate executions per session, fixed budget of 100,000 per execution.
-- `configs/synthesis.toml`: `evolution.instance_policy = "per_iteration"`.
+- Historical setting in the now-removed synthesis configuration file: `evolution.instance_policy = "per_iteration"`.
 - Candidate executions use instances 1–10, with noise seed `42 + instance_id`.
 - Each candidate executes once; failures consume their instance. Generation
   failures that never reach candidate execution do not consume an instance.

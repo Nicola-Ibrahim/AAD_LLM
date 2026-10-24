@@ -176,12 +176,12 @@ paired synthesis/benchmark protocol. Changing that protocol creates another stud
 results/campaigns/<campaign-id>/
   manifest.json
   synthesis/
-    configs/synthesis.toml
+    parameters.json
     db.sqlite3
     code/
     checkpoints/
   benchmark/
-    configs/benchmark.toml
+    parameters.json
     champions.json
     code/
     ioh_traces/

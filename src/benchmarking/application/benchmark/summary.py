@@ -15,7 +15,10 @@ def summarize_benchmarks(
     config: BenchmarkConfig,
 ) -> pd.DataFrame:
     """Use current workload validity; stale and incomplete trials never suggest synthesis."""
-    conditions = [*workload.discover("champions"), *workload.discover("baselines")]
+    conditions = [
+        *workload.discover("champions", config=config),
+        *workload.discover("baselines", config=config),
+    ]
     rows = []
     for condition in conditions:
         baseline = condition.champion is None

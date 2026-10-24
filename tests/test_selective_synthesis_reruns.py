@@ -4,12 +4,12 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from study_fixtures import run_parameters
 
 from evolution.application.campaign.audit import CampaignAuditor
 from evolution.application.campaign.plan import CampaignPlanner
 from evolution.application.synthesis_config import SynthesisConfig
 from evolution.domain.enums import PromptStrategy, SynthesisMode
-from evolution.infra.storage.synthesis_config.repository import SynthesisConfigRepository
 from shared.domain.noise_model import NoiseModelEnum
 
 
@@ -191,13 +191,6 @@ def test_invalid_selections_are_rejected(kwargs: dict[str, object]) -> None:
     campaign.sqlite_repo.create_experiment.assert_not_called()
 
 
-def test_toml_rejects_dynamic_campaign_options(tmp_path) -> None:
-    path = tmp_path / "synthesis.toml"
-    path.write_text("[execution]\nrerun_experiment_ids=[1]\nrerun_repeats=2\n")
-    with pytest.raises(ValueError, match="into run_campaign"):
-        SynthesisConfigRepository(path).load_config()
-
-
 def test_recovery_without_manual_ids_discovers_failures() -> None:
     failed = experiment(3, status="failed", error=None)
     config = SynthesisConfig(matrix_conditions=[CampaignAuditor._condition_from_summary(failed)])
@@ -234,7 +227,7 @@ def test_campaign_forwards_runtime_request_without_changing_protocol() -> None:
     original = config.model_dump()
     service = SynthesisCampaignCoordinator(
         sqlite_repo=MagicMock(),
-        config=config,
+        worker_count=1,
         logger=MagicMock(),
         engine=MagicMock(),
         model_name="model",
@@ -242,10 +235,10 @@ def test_campaign_forwards_runtime_request_without_changing_protocol() -> None:
         dispatcher=MagicMock(),
         worker_fn=MagicMock(),
     )
-    service.planner = MagicMock()
-    service.planner.build_tasks.return_value = []
-    service.run_campaign(recover=True, rerun_experiment_ids=[1])
-    service.planner.build_tasks.assert_called_once_with(
+    service._build_planner = MagicMock()
+    service._build_planner.return_value.build_tasks.return_value = []
+    service.run_campaign(**run_parameters(config), recover=True, rerun_experiment_ids=[1])
+    service._build_planner.return_value.build_tasks.assert_called_once_with(
         recover=True,
         rerun_experiment_ids=[1],
         resume_experiment_ids=(),

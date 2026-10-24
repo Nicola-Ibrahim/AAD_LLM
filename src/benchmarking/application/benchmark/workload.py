@@ -27,7 +27,6 @@ class BenchmarkWorkload:
         state_repo: BenchmarkStateStore,
         code_reader: CandidateCodeReader,
         model_names: ModelNames,
-        config: BenchmarkConfig,
         planned_target_conditions: tuple[tuple[int, float, int], ...] = (),
     ) -> None:
         self.sqlite_repo = sqlite_repo
@@ -35,11 +34,13 @@ class BenchmarkWorkload:
         self.state_repo = state_repo
         self.code_reader = code_reader
         self.model_names = model_names
-        self.config = config
         self.planned_target_conditions = planned_target_conditions
 
     def _discover_target_conditions(
-        self, champions: dict[str, Champion]
+        self,
+        champions: dict[str, Champion],
+        *,
+        config: BenchmarkConfig,
     ) -> list[tuple[int, float, int]]:
         raw_conditions = self.sqlite_repo.get_target_conditions()
         if not raw_conditions:
@@ -51,13 +52,13 @@ class BenchmarkWorkload:
 
         # Keep observed tuples, not a Cartesian product that invents conditions.
         conditions = set(raw_conditions)
-        if self.config.target_noise_stds:
-            conditions = {c for c in conditions if c[1] in self.config.target_noise_stds}
-        if self.config.cross_function_enabled:
+        if config.target_noise_stds:
+            conditions = {c for c in conditions if c[1] in config.target_noise_stds}
+        if config.cross_function_enabled:
             conditions.update(
                 (dim, 0.0, problem)
                 for dim in {c[0] for c in raw_conditions}
-                for problem in self.config.cross_function_problem_ids
+                for problem in config.cross_function_problem_ids
             )
         return sorted(conditions)
 
@@ -67,6 +68,7 @@ class BenchmarkWorkload:
         expected_code_hash: str | None = None,
         code_valid: bool = True,
         *,
+        config: BenchmarkConfig,
         champion: bool = False,
     ) -> ConditionStatus:
         return inspect_condition(
@@ -74,9 +76,9 @@ class BenchmarkWorkload:
             directory_exists=self.state_repo.solver_directory_exists(target_dir),
             provenance=self.state_repo.read_provenance(target_dir),
             expected_code_hash=expected_code_hash,
-            expected_trials=self.config.trials_per_condition,
-            expected_budget=self.config.budget,
-            trial_schedule=self.config.trial_schedule,
+            expected_trials=config.trials_per_condition,
+            expected_budget=config.budget,
+            trial_schedule=config.trial_schedule,
             expected_execution_version=CANDIDATE_EXECUTION_VERSION if champion else None,
         )
 
@@ -86,6 +88,7 @@ class BenchmarkWorkload:
         champion: Champion,
         noise_std: float,
         *,
+        config: BenchmarkConfig,
         noise_robustness: bool = False,
         target_problem_id: int | None = None,
     ) -> BenchmarkTask:
@@ -135,14 +138,18 @@ class BenchmarkWorkload:
             noise_std=noise_std,
             mode=GenerationMode.EXPLICIT if noise_robustness else mode,
             target_dir=directory,
-            inspection=self.inspect_status(directory, code_hash, code_available, champion=True),
+            inspection=self.inspect_status(
+                directory, code_hash, code_available, champion=True, config=config
+            ),
             champion=champion,
             code_hash=code_hash,
         )
 
-    def _baseline_tasks(self, conditions: list[tuple[int, float, int]]) -> list[BenchmarkTask]:
+    def _baseline_tasks(
+        self, conditions: list[tuple[int, float, int]], *, config: BenchmarkConfig
+    ) -> list[BenchmarkTask]:
         tasks = []
-        for solver in self.config.classical_baselines:
+        for solver in config.classical_baselines:
             for dim, noise, problem in conditions:
                 directory = self.state_repo.condition_directory(dim, noise, problem, solver)
                 key = f"f{problem}_{dim}D_std{noise}_{solver}"
@@ -152,7 +159,7 @@ class BenchmarkWorkload:
                         raw_key=key,
                         solver_type="baseline",
                         solver=solver,
-                        display_name=self.config.baseline_labels.get(solver, solver.upper()),
+                        display_name=config.baseline_labels.get(solver, solver.upper()),
                         model=solver,
                         strategy="classical",
                         problem_id=problem,
@@ -160,14 +167,14 @@ class BenchmarkWorkload:
                         noise_std=noise,
                         mode=GenerationMode.EXPLICIT,
                         target_dir=directory,
-                        inspection=self.inspect_status(directory),
+                        inspection=self.inspect_status(directory, config=config),
                         champion=None,
                         code_hash=None,
                     )
                 )
         return tasks
 
-    def discover(self, solver_type: str = "all") -> list[BenchmarkTask]:
+    def discover(self, solver_type: str = "all", *, config: BenchmarkConfig) -> list[BenchmarkTask]:
         """Return typed tasks with exact candidates, in the existing execution order."""
         allowed = {"all", "champions", "noise_robustness", "cross_function", "baselines"}
         if solver_type not in allowed:
@@ -176,31 +183,30 @@ class BenchmarkWorkload:
         tasks = []
         if solver_type in {"all", "champions"}:
             tasks.extend(
-                self._champion_task(key, c, c.get("noise_std", 0.0)) for key, c in champions.items()
+                self._champion_task(key, c, c.get("noise_std", 0.0), config=config)
+                for key, c in champions.items()
             )
-        if solver_type in {"all", "noise_robustness"} and self.config.noise_robustness_enabled:
-            conditions = self._discover_target_conditions(champions)
+        if solver_type in {"all", "noise_robustness"} and config.noise_robustness_enabled:
+            conditions = self._discover_target_conditions(champions, config=config)
             levels = sorted(
-                {n for n in self.config.target_noise_stds if n > 0.0}
-                if self.config.target_noise_stds
+                {n for n in config.target_noise_stds if n > 0.0}
+                if config.target_noise_stds
                 else {n for _, n, _ in conditions if n > 0.0}
             )
             tasks.extend(
-                self._champion_task(key, c, noise, noise_robustness=True)
+                self._champion_task(key, c, noise, noise_robustness=True, config=config)
                 for key, c in champions.items()
                 if c.get("noise_std", 0.0) == 0.0 and c.get("mode") == GenerationMode.EXPLICIT
                 for noise in levels
             )
-        if solver_type in {"all", "cross_function"} and self.config.cross_function_enabled:
+        if solver_type in {"all", "cross_function"} and config.cross_function_enabled:
             transfer = [
-                self._champion_task(key, c, 0.0, target_problem_id=target)
+                self._champion_task(key, c, 0.0, target_problem_id=target, config=config)
                 for key, c in champions.items()
                 if c.get("noise_std", 0.0) == 0.0
                 and c.get("mode") == GenerationMode.EXPLICIT
                 and c.get("prompt_strategy", "baseline") == "baseline"
-                for target in sorted(
-                    set(self.config.cross_function_problem_ids) | {c["problem_id"]}
-                )
+                for target in sorted(set(config.cross_function_problem_ids) | {c["problem_id"]})
             ]
             tasks.extend(transfer)
             if solver_type == "cross_function" and transfer:
@@ -210,34 +216,41 @@ class BenchmarkWorkload:
                     self._baseline_tasks(
                         [
                             c
-                            for c in self._discover_target_conditions(champions)
+                            for c in self._discover_target_conditions(champions, config=config)
                             if c[1] == 0.0 and c[0] in dims and c[2] in problems
-                        ]
+                        ],
+                        config=config,
                     )
                 )
         if solver_type in {"all", "baselines"}:
-            tasks.extend(self._baseline_tasks(self._discover_target_conditions(champions)))
+            tasks.extend(
+                self._baseline_tasks(
+                    self._discover_target_conditions(champions, config=config), config=config
+                )
+            )
         return tasks
 
-    def audit_workload(self, solver_type: str = "all") -> pd.DataFrame:
+    def audit_workload(self, solver_type: str = "all", *, config: BenchmarkConfig) -> pd.DataFrame:
         """Read-only presentation of the same tasks used for execution."""
-        return pd.DataFrame(task.audit_row() for task in self.discover(solver_type))
+        return pd.DataFrame(task.audit_row() for task in self.discover(solver_type, config=config))
 
-    def audit_champions_workload(self, include_noise_robustness: bool = False) -> pd.DataFrame:
-        tasks = self.discover("champions")
+    def audit_champions_workload(
+        self, include_noise_robustness: bool = False, *, config: BenchmarkConfig
+    ) -> pd.DataFrame:
+        tasks = self.discover("champions", config=config)
         if include_noise_robustness:
-            tasks.extend(self.discover("noise_robustness"))
+            tasks.extend(self.discover("noise_robustness", config=config))
         return pd.DataFrame(task.audit_row() for task in tasks)
 
-    def audit_noise_robustness_workload(self) -> pd.DataFrame:
-        return self.audit_workload("noise_robustness")
+    def audit_noise_robustness_workload(self, *, config: BenchmarkConfig) -> pd.DataFrame:
+        return self.audit_workload("noise_robustness", config=config)
 
-    def audit_cross_function_workload(self) -> pd.DataFrame:
+    def audit_cross_function_workload(self, *, config: BenchmarkConfig) -> pd.DataFrame:
         return pd.DataFrame(
             task.audit_row()
-            for task in self.discover("cross_function")
+            for task in self.discover("cross_function", config=config)
             if task.solver_type == "cross_function"
         )
 
-    def audit_baselines_workload(self) -> pd.DataFrame:
-        return self.audit_workload("baselines")
+    def audit_baselines_workload(self, *, config: BenchmarkConfig) -> pd.DataFrame:
+        return self.audit_workload("baselines", config=config)

@@ -148,11 +148,15 @@ retain their own process-local database lifecycle. Detached tables and calculate
 results remain usable after the scope exits. For example:
 
 ```python
+# Study parameters are explicit dictionaries in notebooks 02 and 03, or HTTP-style fields.
+
 with build_synthesis_campaign(llm) as campaign:
-    results = campaign.run_campaign()
+    results = campaign.run_campaign(**synthesis_parameters)
 
 with build_benchmark_workflow() as workflow:
-    outcomes = workflow.service.run_champions()
+    outcomes = workflow.service.run_benchmarks(
+        solver_type="champions", **benchmark_parameters
+    )
 
 with build_audit_service() as service:
     audit = service.get_audit_data()
@@ -170,7 +174,13 @@ with build_audit_service() as service:
 - `infra/` adapts SQLite/files, LLaMEA, logging, synthesis telemetry, and multiprocessing.
 
 `bootstrap.synthesis.build_synthesis_campaign()` composes the coordinator,
-configuration data, repositories, problem factory, engine and dispatcher.
+repositories, problem factory, engine and automatically sized dispatcher. It does
+not read study configuration files. The notebook supplies flat validated method arguments;
+the coordinator builds a fresh planner and configuration for each invocation.
+Benchmark composition injects concrete workload and trial-runner objects. Each
+invocation passes its validated settings to their methods, without factories or
+mutable service configuration. No previous call's settings are retained. See the
+[parameter inventory](../configuration/model_configuration.md#explicit-study-parameters).
 The module-level worker calls `SingleSynthesisUseCase`; `LLaMEAEngine` implements
 the synthesis engine interface and delegates a session to `LLaMEASession`.
 Its infrastructure `Evaluator` translates LLaMEA solutions into calls to

@@ -1,10 +1,13 @@
+from typing import Literal
+
 import numpy as np
 import pandas as pd
+from pydantic import validate_call
 
 from benchmarking.application.benchmark.summary import summarize_benchmarks
 from benchmarking.application.benchmark.trials import BenchmarkTrialRunner
 from benchmarking.application.benchmark.workload import BenchmarkWorkload
-from benchmarking.application.benchmark_config import BenchmarkConfig
+from benchmarking.application.benchmark_config import BenchmarkConfig, ReliabilityConfig
 from benchmarking.application.interfaces.logger import BenchmarkLoggerInterface
 from benchmarking.domain.enums import BBOBFunction
 
@@ -16,27 +19,125 @@ class BenchmarkService:
         self,
         workload: BenchmarkWorkload,
         trials: BenchmarkTrialRunner,
-        config: BenchmarkConfig,
+        baseline_labels: dict[str, str],
         logger: BenchmarkLoggerInterface,
     ) -> None:
-        self.logger = logger
-        self.config = config
         self.workload = workload
         self.trials = trials
+        self.baseline_labels = baseline_labels
+        self.logger = logger
 
-    def summarize_results(self) -> pd.DataFrame:
-        """Inspect current saved outcomes without running or modifying experiments."""
-        return summarize_benchmarks(self.workload, self.trials.state_repo, self.config)
+    @validate_call(config={"strict": True})
+    def summarize_results(
+        self,
+        *,
+        trials_per_condition: int,
+        random_seed: int,
+        first_instance_id: int,
+        budget: int,
+        trial_timeout_seconds: float,
+        observation_trace_points: int,
+        force_rerun: bool,
+        classical_baselines: list[str],
+        noise_robustness_enabled: bool,
+        cross_function_enabled: bool,
+        cross_function_problem_ids: list[int],
+        primary_target: float,
+        secondary_target: float,
+    ) -> pd.DataFrame:
+        """Read current outcomes with explicit protocol settings and thresholds."""
+        config = BenchmarkConfig(
+            trials_per_condition=trials_per_condition,
+            random_seed=random_seed,
+            first_instance_id=first_instance_id,
+            budget=budget,
+            trial_timeout_seconds=trial_timeout_seconds,
+            observation_trace_points=observation_trace_points,
+            force_rerun=force_rerun,
+            classical_baselines=classical_baselines,
+            noise_robustness_enabled=noise_robustness_enabled,
+            cross_function_enabled=cross_function_enabled,
+            cross_function_problem_ids=cross_function_problem_ids,
+            baseline_labels=self.baseline_labels,
+            reliability=ReliabilityConfig(
+                primary_target=primary_target, secondary_target=secondary_target
+            ),
+        )
+        return summarize_benchmarks(self.workload, self.workload.state_repo, config)
 
+    @validate_call(config={"strict": True})
+    def audit_workload(
+        self,
+        *,
+        trials_per_condition: int,
+        random_seed: int,
+        first_instance_id: int,
+        budget: int,
+        trial_timeout_seconds: float,
+        observation_trace_points: int,
+        force_rerun: bool,
+        classical_baselines: list[str],
+        noise_robustness_enabled: bool,
+        cross_function_enabled: bool,
+        cross_function_problem_ids: list[int],
+        solver_type: Literal[
+            "all", "champions", "baselines", "noise_robustness", "cross_function"
+        ] = "all",
+    ) -> pd.DataFrame:
+        """Inspect the same protocol as execution without modifying stored results."""
+        config = BenchmarkConfig(
+            trials_per_condition=trials_per_condition,
+            random_seed=random_seed,
+            first_instance_id=first_instance_id,
+            budget=budget,
+            trial_timeout_seconds=trial_timeout_seconds,
+            observation_trace_points=observation_trace_points,
+            force_rerun=force_rerun,
+            classical_baselines=classical_baselines,
+            noise_robustness_enabled=noise_robustness_enabled,
+            cross_function_enabled=cross_function_enabled,
+            cross_function_problem_ids=cross_function_problem_ids,
+            baseline_labels=self.baseline_labels,
+        )
+        return self.workload.audit_workload(solver_type, config=config)
+
+    @validate_call(config={"strict": True})
     def run_benchmarks(
         self,
-        solver_type: str = "all",
+        *,
+        trials_per_condition: int,
+        random_seed: int,
+        first_instance_id: int,
+        budget: int,
+        trial_timeout_seconds: float,
+        observation_trace_points: int,
+        force_rerun: bool,
+        classical_baselines: list[str],
+        noise_robustness_enabled: bool,
+        cross_function_enabled: bool,
+        cross_function_problem_ids: list[int],
+        solver_type: Literal[
+            "all", "champions", "baselines", "noise_robustness", "cross_function"
+        ] = "all",
         verbose: bool = True,
     ) -> pd.DataFrame:
-        """Run all pending/partial benchmarks matching the configured workload."""
+        """Run pending/partial conditions using validated, invocation-local settings."""
+        config = BenchmarkConfig(
+            trials_per_condition=trials_per_condition,
+            random_seed=random_seed,
+            first_instance_id=first_instance_id,
+            budget=budget,
+            trial_timeout_seconds=trial_timeout_seconds,
+            observation_trace_points=observation_trace_points,
+            force_rerun=force_rerun,
+            classical_baselines=classical_baselines,
+            noise_robustness_enabled=noise_robustness_enabled,
+            cross_function_enabled=cross_function_enabled,
+            cross_function_problem_ids=cross_function_problem_ids,
+            baseline_labels=self.baseline_labels,
+        )
         self.logger.verbose = verbose
-
-        tasks = self.workload.discover(solver_type)
+        tasks = self.workload.discover(solver_type, config=config)
         if not tasks:
             return pd.DataFrame()
         active = [task for task in tasks if task.inspection.status != "MISSING_CODE"]
@@ -72,6 +173,7 @@ class BenchmarkService:
             if task.champion is not None:
                 res = self.trials.run_champion_trials(
                     task.champion,
+                    config=config,
                     target_noise_std=noise_std,
                     solver_folder=task.solver,
                     verbose=verbose,
@@ -79,6 +181,7 @@ class BenchmarkService:
                 )
             else:
                 res = self.trials.run_baseline_trials(
+                    config=config,
                     baseline_slug=task.solver,
                     dim=dim,
                     noise_std=noise_std,
@@ -124,28 +227,3 @@ class BenchmarkService:
             },
         )
         return pd.DataFrame(results)
-
-    def run_champions(
-        self,
-        verbose: bool = True,
-    ) -> pd.DataFrame:
-        """Run all pending/partial native champion benchmarks."""
-        return self.run_benchmarks(solver_type="champions", verbose=verbose)
-
-    def run_noise_robustness(
-        self,
-        verbose: bool = True,
-    ) -> pd.DataFrame:
-        """Run frozen clean champions on their original functions with added noise."""
-        return self.run_benchmarks(solver_type="noise_robustness", verbose=verbose)
-
-    def run_cross_function_benchmarks(self, verbose: bool = True) -> pd.DataFrame:
-        """Run opt-in cross-function trials and reuse paired clean baselines."""
-        return self.run_benchmarks(solver_type="cross_function", verbose=verbose)
-
-    def run_baselines(
-        self,
-        verbose: bool = True,
-    ) -> pd.DataFrame:
-        """Run all pending/partial baseline benchmarks matching the config matrix."""
-        return self.run_benchmarks(solver_type="baselines", verbose=verbose)

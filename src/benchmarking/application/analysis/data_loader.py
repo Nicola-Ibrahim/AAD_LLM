@@ -59,7 +59,6 @@ class AnalysisSnapshot:
         records = groups[workflow]
         settings = self.config.model_dump(
             exclude={
-                "benchmarking",
                 "cross_function_enabled",
                 "cross_function_problem_ids",
                 "noise_robustness_enabled",
