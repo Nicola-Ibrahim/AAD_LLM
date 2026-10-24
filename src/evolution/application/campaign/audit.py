@@ -4,10 +4,10 @@ import numpy as np
 import pandas as pd
 
 from evolution.application.interfaces.logger import BaseLogger
-from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.application.synthesis_config import MatrixCondition, SynthesisConfig
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import BBOBFunction
+from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 
 
 class CampaignAuditor:

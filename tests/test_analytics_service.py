@@ -287,10 +287,10 @@ class TestApplicationServicesIntegration:
             assert count >= 0
 
     def test_audit_service(self):
-        from bootstrap.audit import build_audit_service
+        from benchmarking.infra.di import benchmark_scope
 
-        with build_audit_service() as service:
-            snapshot = service.get_audit_data()
+        with benchmark_scope() as workflow:
+            snapshot = workflow.audit.get_audit_data()
         assert isinstance(snapshot.benchmarks, pd.DataFrame)
         assert isinstance(snapshot.synthesis_gaps, pd.DataFrame)
         assert isinstance(snapshot.coverage_summary, AuditCoverageSummary)

@@ -289,10 +289,10 @@ def test_nb03_import_order_isolation():
 
 def test_nb04_audit_pipeline():
     """Verify Notebook 04 (04_audit.ipynb: Experimental Matrix Audit)."""
-    from bootstrap.audit import build_audit_service
+    from benchmarking.infra.di import benchmark_scope
 
-    with build_audit_service() as service:
-        snapshot = service.get_audit_data()
+    with benchmark_scope() as workflow:
+        snapshot = workflow.audit.get_audit_data()
     assert isinstance(snapshot.benchmarks, pd.DataFrame)
     assert isinstance(snapshot.synthesis_gaps, pd.DataFrame)
     assert snapshot.coverage_summary.total_cells >= 0
@@ -477,13 +477,11 @@ def test_campaign_usecase_run_worker_and_campaign():
         "synthesis_mode": SynthesisMode.EXPLICIT,
         "initial_iteration": 0,
     }
-    with patch("shared.infra.database.Database") as mock_database:
-        mock_database.return_value.session_factory = object()
-        with patch(
-            "evolution.infra.storage.synthesis.repository.SQLiteSynthesisRepository",
-            return_value=mock_sqlite,
-        ):
-            res = run_synthesis_worker(item=mock_task)
+    with patch("shared.infra.di.Database") as mock_database:
+        # Class registrations capture the real constructor. Supply a usable
+        # session-factory substitute instead of patching a removed factory method.
+        res = run_synthesis_worker(item=mock_task)
+        mock_database.return_value.dispose.assert_called_once()
     assert res is dummy_result
     mock_engine.run.assert_called_once()
 

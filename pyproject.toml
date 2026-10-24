@@ -5,6 +5,7 @@ description = "LLaMEA-driven evolution of black-box optimization algorithms for 
 readme = "README.md"
 requires-python = ">=3.11,<4"
 dependencies = [
+    "dishka>=1.7,<2",
     "llamea>=0.1.0",
     "ioh>=0.3.14",
     "openai>=1.0.0",

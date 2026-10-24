@@ -8,7 +8,6 @@ from evolution.application.campaign.models import CampaignResults, CampaignTask
 from evolution.application.campaign.plan import CampaignPlanner
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
-from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.application.interfaces.task_dispatcher import TaskDispatcher
 from evolution.application.synthesis.models import SessionResult
 from evolution.application.synthesis_config import (
@@ -17,7 +16,8 @@ from evolution.application.synthesis_config import (
     SynthesisConfig,
     SynthesisModeConfig,
 )
-from shared.application.interfaces.problem_factory import ProblemFactory
+from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
+from shared.domain.interfaces.problem_factory import ProblemFactory
 
 
 class SynthesisCampaignCoordinator:

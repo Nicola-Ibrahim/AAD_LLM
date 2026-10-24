@@ -42,29 +42,26 @@ their matching baselines.
 Explicitly enabled noise-robustness and transfer studies remain separate.
 
 Calculation and export are separate notebook cells. Required collaborators are
-constructed by bootstrap, not by optional constructor fallbacks:
+resolved by infrastructure Dishka providers, not optional constructor fallbacks:
 
 ```python
-from bootstrap.analysis import build_analysis_use_cases
-with build_analysis_use_cases() as analysis:
-    profiles = analysis.ecdf_and_convergence.execute(
-        mode="explicit",
-        dims=[2],
-        problems=None,
-        noise_stds=[0.05, 0.1, 0.2],
-    )
+# Run this notebook's setup cell first; it prepares analysis and its dependencies.
+profiles = analysis.ecdf_and_convergence.execute(
+    mode="explicit",
+    dims=[2],
+    problems=None,
+    noise_stds=[0.05, 0.1, 0.2],
+)
 ```
 
 At this point no images or CSVs have been written. Inspect `profiles.conditions`,
 then run the optional export cell:
 
 ```python
-from bootstrap.analysis import build_analysis_results_store
 from notebooks.analysis.plotting.exporter import AnalysisFigureExporter
 from shared.config import RESULTS_DIR
 
-store = build_analysis_results_store()
-snapshot_path = store.save(profiles)
+snapshot_path = analysis.results_store.save(profiles)
 exporter = AnalysisFigureExporter(RESULTS_DIR)
 exporter.export_profiles(profiles)
 ```
@@ -72,8 +69,10 @@ exporter.export_profiles(profiles)
 For an individual figure, call `build_profile(condition, profiles.mode,
 kind="ecdf", title="...")` and pass its returned figure and output path to
 `exporter.export_figure(figure, output_path)`.
-The context manager disposes the database; calculated arrays and tables remain
-usable afterward. Treat result arrays/tables as read-only. `None` in condition
+The notebook's `ExitStack` disposes the database on normal process shutdown, or call
+`close_analysis()` when finished. Re-running setup releases its previous resources.
+Calculated arrays and tables remain usable afterward. Treat result arrays/tables
+as read-only. `None` in condition
 filters means unrestricted; required constructor dependencies never default to it.
 
 There are no request wrapper classes: use cases accept explicit keyword parameters.

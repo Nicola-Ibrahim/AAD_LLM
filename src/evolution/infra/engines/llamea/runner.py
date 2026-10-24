@@ -16,11 +16,11 @@ from evolution.application.exceptions import SynthesisResumeError
 from evolution.application.interfaces.code_store import SynthesisCodeStore
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
-from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.application.synthesis.models import SessionConfig, SessionResult
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
+from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.engines.llamea.checkpoint import load_synthesis_checkpoint
 from evolution.infra.engines.llamea.evaluator import Evaluator

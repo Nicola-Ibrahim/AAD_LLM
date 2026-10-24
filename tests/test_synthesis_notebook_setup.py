@@ -16,11 +16,11 @@ notebook = json.loads(Path('notebooks/02_synthesis.ipynb').read_text())
 setup = next(
     ''.join(cell['source']) for cell in notebook['cells']
     if cell['cell_type'] == 'code'
-    and 'from bootstrap.synthesis import build_synthesis_campaign' in ''.join(cell['source'])
+    and 'from evolution.infra.di import synthesis_scope' in ''.join(cell['source'])
 )
 namespace = {}
 exec(compile(setup, 'notebook-setup', 'exec'), namespace)
-from bootstrap.synthesis import run_synthesis_worker
+from evolution.infra.concurrency.worker import run_synthesis_worker
 original_worker = run_synthesis_worker
 exec(compile(setup, 'notebook-setup', 'exec'), namespace)
 from evolution.infra.concurrency import worker

@@ -2,9 +2,9 @@
 
 from abc import ABC, abstractmethod
 
-from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.application.synthesis.models import SessionConfig, SessionResult
 from evolution.domain.enums import PromptStrategy, SynthesisMode
+from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from shared.domain.problem import BaseProblem
 
 

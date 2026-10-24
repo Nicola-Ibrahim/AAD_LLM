@@ -6,9 +6,9 @@ from typing import cast
 from sqlalchemy import delete, func, insert, inspect, select
 from sqlalchemy.orm import Load, Session, defer, selectinload, sessionmaker
 
-from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
+from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.vos import (
     Code,
     Convergence,

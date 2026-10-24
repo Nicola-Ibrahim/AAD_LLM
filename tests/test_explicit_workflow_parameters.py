@@ -170,13 +170,13 @@ def test_public_execution_dependencies_are_not_study_configuration() -> None:
 
 
 def test_benchmark_composition_injects_concrete_workflows(monkeypatch: pytest.MonkeyPatch) -> None:
-    import bootstrap.benchmark as composition
+    import benchmarking.infra.di as composition
+    import shared.infra.di
 
     database = MagicMock()
-    monkeypatch.setattr(composition, "Database", lambda: database)
-    monkeypatch.setattr(composition, "SQLiteSynthesisReadRepository", MagicMock())
+    monkeypatch.setattr(shared.infra.di, "Database", lambda: database)
     monkeypatch.setattr(composition, "ChampionsReadRepository", MagicMock())
-    with composition.build_benchmark_workflow() as workflow:
+    with composition.benchmark_scope() as workflow:
         assert isinstance(workflow.service.workload, composition.BenchmarkWorkload)
         assert isinstance(workflow.service.trials, composition.BenchmarkTrialRunner)
         assert not hasattr(workflow.service, "workload_factory")
@@ -188,15 +188,15 @@ def test_benchmark_composition_injects_concrete_workflows(monkeypatch: pytest.Mo
 def test_synthesis_composition_gets_model_from_client_not_parameters(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import bootstrap.synthesis as composition
+    import evolution.infra.di as composition
+    import shared.infra.di
 
     database = MagicMock()
     client = MagicMock()
     client.model.name = "live-server-model"
-    monkeypatch.setattr(composition, "Database", lambda: database)
-    monkeypatch.setattr(composition, "SQLiteSynthesisRepository", MagicMock())
+    monkeypatch.setattr(shared.infra.di, "Database", lambda: database)
     monkeypatch.setattr(composition, "available_cpu_count", lambda: 6)
-    with composition.build_synthesis_campaign(client) as workflow:
+    with composition.synthesis_scope(client) as workflow:
         assert workflow.model_name == "live-server-model"
         assert workflow.worker_count == workflow.dispatcher.max_workers == 6
     database.dispose.assert_called_once()

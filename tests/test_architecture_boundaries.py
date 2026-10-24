@@ -6,6 +6,52 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1] / "src"
 
 
+def test_domain_contracts_do_not_depend_on_application_or_infrastructure() -> None:
+    violations = []
+    for context in ("evolution", "benchmarking", "shared"):
+        for path in (ROOT / context / "domain").rglob("*.py"):
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    names = [alias.name for alias in node.names]
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    names = [node.module]
+                else:
+                    continue
+                if any({"application", "infra"} & set(name.split(".")) for name in names):
+                    violations.append(str(path.relative_to(ROOT)))
+    assert not violations, "Domain depends on outer layers: " + ", ".join(violations)
+
+
+def test_domain_repository_contract_excludes_sqlite_maintenance() -> None:
+    from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
+    from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
+    from shared.domain.interfaces.problem_factory import ProblemFactory
+    from shared.infra.problems.factory import BBOBProblemFactory
+
+    assert issubclass(SQLiteSynthesisRepository, SynthesisRepository)
+    assert issubclass(BBOBProblemFactory, ProblemFactory)
+    assert "checkpoint_wal" not in SynthesisRepository.__dict__
+    assert callable(SQLiteSynthesisRepository.checkpoint_wal)
+
+
+def test_dishka_stays_out_of_core_workflows_and_scientific_rules() -> None:
+    violations = []
+    for context in ("evolution", "benchmarking", "shared"):
+        for layer in ("application", "domain"):
+            for path in (ROOT / context / layer).rglob("*.py"):
+                for node in ast.walk(ast.parse(path.read_text())):
+                    if isinstance(node, ast.Import):
+                        names = [alias.name for alias in node.names]
+                    elif isinstance(node, ast.ImportFrom) and node.module:
+                        names = [node.module]
+                    else:
+                        continue
+                    if any(name.split(".")[0] == "dishka" for name in names):
+                        violations.append(str(path.relative_to(ROOT)))
+    assert not violations, "Container access leaked into core code: " + ", ".join(violations)
+
+
 def test_contexts_and_shared_foundation_are_independent() -> None:
     violations: list[str] = []
     for context in ("evolution", "benchmarking", "shared"):

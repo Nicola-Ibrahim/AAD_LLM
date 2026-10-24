@@ -4,12 +4,12 @@
 
 ## Campaign planning
 
-[build_synthesis_campaign](../../src/bootstrap/synthesis.py) loads synthesis
-configuration, creates the database/repositories and runtime adapters, and returns
-a `SynthesisCampaignCoordinator`. The notebook defines the study inputs visibly,
-then calls `run_campaign(**synthesis_parameters)`. Required study parameters are
-keyword-only and Pydantic-validated before planning or writes. Worker count is
-resolved by infrastructure; the model identity comes from the connected LLM.
+[Notebook 02 setup](../../notebooks/02_synthesis.ipynb) owns the evolution
+Dishka scope using `ExitStack` and calls the ready coordinator through
+`campaign.run_campaign(**synthesis_parameters)`. The parameters are defined visibly,
+are keyword-only and are Pydantic-validated before planning or writes.
+Worker count is automatic; model identity comes from the connected LLM.
+No container or framework dependency enters application/domain code.
 
 The coordinator delegates task construction to
 [CampaignPlanner](../../src/evolution/application/campaign/plan.py).
@@ -20,7 +20,7 @@ dispatch; resume tasks retain the experiment ID and recorded iteration count.
 
 The process dispatcher calls the module-level
 [run_synthesis_worker](../../src/evolution/infra/concurrency/worker.py).
-Each worker creates its own database/repository, invokes
+Each worker opens a process-local Dishka scope, resolves its database/repository and invokes
 `SingleSynthesisUseCase.execute()`, and disposes the database in a `finally` block.
 
 ## Session execution

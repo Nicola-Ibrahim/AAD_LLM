@@ -1,4 +1,4 @@
-"""Abstract persistence interface for synthesis experiment state."""
+"""Domain repository contract for synthesis experiments and their iteration state."""
 
 from abc import ABC, abstractmethod
 
@@ -9,7 +9,7 @@ from evolution.domain.vos.experiment_filter import ExperimentFilter
 
 
 class SynthesisRepository(ABC):
-    """Load and persist synthesis experiment metadata and iteration state."""
+    """Load and persist experiment domain objects without exposing storage technology."""
 
     @abstractmethod
     def load(
@@ -55,9 +55,6 @@ class SynthesisRepository(ABC):
     @abstractmethod
     def reset_experiment(self, experiment_id: int) -> None:
         """Discard iterations and champion state, retaining the experiment's ID and condition."""
-
-    @abstractmethod
-    def checkpoint_wal(self) -> None: ...
 
     @abstractmethod
     def get_best_raw_fitness(self, experiment_id: int) -> float | None: ...

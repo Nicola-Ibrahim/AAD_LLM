@@ -1157,9 +1157,9 @@ def test_synthesis_engine_lsp_contract():
     from unittest.mock import MagicMock
 
     from evolution.application.interfaces.synthesis_engine import SynthesisEngine
-    from evolution.application.interfaces.synthesis_repository import SynthesisRepository
     from evolution.application.synthesis.models import SessionResult
     from evolution.domain.enums import SynthesisMode
+    from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
     from shared.domain.problem import BaseProblem
 
     class CustomEngine(SynthesisEngine):

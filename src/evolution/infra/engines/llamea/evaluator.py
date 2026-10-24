@@ -12,10 +12,10 @@ from llamea import Solution
 
 from evolution.application.interfaces.code_store import SynthesisCodeStore
 from evolution.application.interfaces.logger import BaseLogger
-from evolution.application.interfaces.synthesis_repository import SynthesisRepository
 from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
 from evolution.application.synthesis.models import SessionConfig
 from evolution.domain.entities import ExperimentSummary
+from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.vos import IterationMetadata, ProblemProfile
 from evolution.infra.engines.llamea.prompts import FeedbackRenderer
 from evolution.infra.logging import SynthesisLogger

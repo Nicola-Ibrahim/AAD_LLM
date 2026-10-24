@@ -108,13 +108,13 @@ def test_audit_notebook_runs_without_campaign(
 ) -> None:
     import plotly.graph_objects as go
 
-    import bootstrap.audit
+    import benchmarking.infra.di as composition
     import shared.config
 
     monkeypatch.setattr(
-        bootstrap.audit,
-        "build_audit_service",
-        lambda **kwargs: nullcontext(audit_for(transfer_service)),
+        composition,
+        "benchmark_scope",
+        lambda **kwargs: nullcontext(SimpleNamespace(audit=audit_for(transfer_service))),
     )
     monkeypatch.setattr(shared.config, "RESULTS_DIR", tmp_path)
     monkeypatch.setattr(go.Figure, "show", lambda self: None)

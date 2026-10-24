@@ -150,7 +150,7 @@ configuration-file dependency.
 | `run_campaign(...)`, `audit_matrix(...)` | `problem_targets`, `noise_conditions`, `synthesis_modes`, `iterations`, `budget`, `timeout_seconds`, `runs_per_config`, `auto_resume`, `skip_completed`, `retry_failed_synthesis` |
 | `run_benchmarks(...)`, `audit_workload(...)`, `summarize_results(...)` | `trials_per_condition`, `random_seed`, `first_instance_id`, `budget`, `trial_timeout_seconds`, `observation_trace_points`, `force_rerun`, `classical_baselines`, `noise_robustness_enabled`, `cross_function_enabled`, `cross_function_problem_ids` |
 | Summary thresholds | `primary_target`, `secondary_target` |
-| Analysis composition | Trial protocol plus `primary_prompt_strategy`, both targets, `bootstrap_samples`, `bootstrap_seed`, `checkpoint_fractions`; see `build_analysis_use_cases` |
+| Analysis composition | Notebook setup builds `BenchmarkConfig`/`ReliabilityConfig` and passes validated settings to `analysis_scope` |
 
 Parameters are keyword-only. Pydantic validates values before planning, discovery,
 dispatch or writes; ordinary model fields and validators describe structured
@@ -158,28 +158,33 @@ problem/noise/mode entries. Model identity comes from the connected LLM, and
 CPU-worker capacity is selected automatically. Credentials, database paths and
 infrastructure collaborators are server-managed, not experiment body fields.
 
-The application coordinator receives concrete workload and trial-runner objects.
+Context-owned Dishka providers live in `evolution/infra/di.py` and
+`benchmarking/infra/di.py`. The application coordinator receives concrete workload and trial-runner objects.
+Notebook-only initialization and cleanup live in setup cells. A future
+FastAPI server reuses the providers with server/request lifetimes, not notebook setup.
 Settings are passed through their internal methods, not held as mutable
-configuration or supplied through workflow factories. Internal validated
+configuration or supplied through invocation-time factory callbacks. Dishka
+constructs infrastructure collaborators; it does not replace method parameters. Internal validated
 configuration objects group typed values; callers do not pass a nested
 `config` object.
 
 For example, a small explicit synthesis request is:
 
 ```python
-with build_synthesis_campaign(llm) as campaign:
-    results = campaign.run_campaign(
-        problem_targets=[{"id": 15, "dimensions": [10]}],
-        noise_conditions=[{"std": 0.1, "noise_model": "heteroscedastic"}],
-        synthesis_modes=[{"mode": "explicit", "strategies": ["baseline"]}],
-        iterations=10,
-        budget=100_000,
-        timeout_seconds=30.0,
-        runs_per_config=1,
-        auto_resume=True,
-        skip_completed=True,
-        retry_failed_synthesis=True,
-    )
+# The notebook setup cell has already prepared campaign and its dependencies.
+results = campaign.run_campaign(
+    problem_targets=[{"id": 15, "dimensions": [10]}],
+    noise_conditions=[{"std": 0.1, "noise_model": "heteroscedastic"}],
+    synthesis_modes=[{"mode": "explicit", "strategies": ["baseline"]}],
+    iterations=10,
+    budget=100_000,
+    timeout_seconds=30.0,
+    runs_per_config=1,
+    auto_resume=True,
+    skip_completed=True,
+    retry_failed_synthesis=True,
+)
+
 ```
 
 Notebooks may collect these visible arguments in a dictionary and unpack it into

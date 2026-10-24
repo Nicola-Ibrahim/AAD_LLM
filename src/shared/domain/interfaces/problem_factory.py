@@ -1,4 +1,4 @@
-"""Shared application contract for creating BBOB problem instances."""
+"""Scientific domain factory contract for configured objective problems."""
 
 from abc import ABC, abstractmethod
 
@@ -7,7 +7,7 @@ from shared.domain.problem import BaseProblem
 
 
 class ProblemFactory(ABC):
-    """Create configured objective problems through the infrastructure adapter."""
+    """Create domain problem objects without prescribing IOH or another implementation."""
 
     @abstractmethod
     def create(

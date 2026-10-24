@@ -5,19 +5,9 @@ from evolution.application.synthesis.models import SessionResult
 
 
 def run_synthesis_worker(item: CampaignTask) -> SessionResult:
-    from evolution.application.synthesis.run import SingleSynthesisUseCase
-    from evolution.infra.logging import SynthesisLogger
-    from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
-    from shared.infra.database import Database
+    from evolution.infra.di import synthesis_worker_scope
 
-    database = Database()
-    repository = SQLiteSynthesisRepository(database.session_factory)
-    use_case = SingleSynthesisUseCase(
-        engine=item["engine"],
-        sqlite_repo=repository,
-        logger=SynthesisLogger(verbose=False),
-    )
-    try:
+    with synthesis_worker_scope(item["engine"]) as use_case:
         return use_case.execute(
             problem=item["problem"],
             experiment_id=item["experiment_id"],
@@ -29,5 +19,3 @@ def run_synthesis_worker(item: CampaignTask) -> SessionResult:
             verbose=False,
             restart=item.get("restart", False),
         )
-    finally:
-        database.dispose()

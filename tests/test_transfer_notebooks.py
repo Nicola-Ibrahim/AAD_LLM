@@ -1,5 +1,6 @@
 """Independent notebooks, numerical persistence and uncached PNG exports."""
 
+import atexit
 import hashlib
 import json
 from contextlib import nullcontext
@@ -29,9 +30,9 @@ from benchmarking.domain.services.performance import PerformanceMetricsEngine
 from benchmarking.domain.services.reliability import ReliabilityEngine
 from benchmarking.domain.services.transfer import TransferAnalysisEngine
 from benchmarking.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
+from benchmarking.infra.di import AnalysisUseCases
 from benchmarking.infra.storage.analysis_results_store import AnalysisResultsStore
 from benchmarking.infra.storage.model_registry import configured_model_names
-from bootstrap.analysis import AnalysisUseCases
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOKS = [
@@ -146,20 +147,15 @@ def use_cases(snapshot: AnalysisSnapshot) -> AnalysisUseCases:
         AnalyzeReliability(loader, TransferAnalysisEngine(), ReliabilityEngine()),
         AnalyzeNoiseRobustness(loader, TransferAnalysisEngine()),
         AnalyzePerformance(loader, EcdfConvergenceEngine(), PerformanceMetricsEngine()),
+        MagicMock(spec=AnalysisResultsStore),
     )
 
 
 @pytest.fixture
 def png_exports(tmp_path: Path, monkeypatch) -> list[tuple[go.Figure, str]]:
-    import bootstrap.analysis
     import shared.config
 
     monkeypatch.setattr(shared.config, "RESULTS_DIR", tmp_path)
-    monkeypatch.setattr(
-        bootstrap.analysis,
-        "build_analysis_results_store",
-        lambda: AnalysisResultsStore(tmp_path / "analysis"),
-    )
     exports = []
 
     def write_image(figure: go.Figure, path: str, **kwargs: object) -> None:
@@ -178,6 +174,20 @@ def test_modified_notebook_cells_compile() -> None:
                     line for line in cell["source"] if not line.lstrip().startswith("%")
                 )
                 compile(source, f"{name}:cell{index}", "exec")
+
+
+def test_notebooks_receive_ready_services_without_decorators_or_container_lookup() -> None:
+    for name in ["02_synthesis.ipynb", "03_benchmark.ipynb", "04_audit.ipynb", *NOTEBOOKS]:
+        source = "\n".join(
+            "".join(cell["source"]) for cell in notebook_cells(name) if cell["cell_type"] == "code"
+        )
+        assert "@inject" not in source
+        assert "FromDishka[" not in source
+        assert "container.get(" not in source
+        assert "as container:" not in source
+        assert "Application(" not in source
+        assert "ExitStack()" in source
+        assert "atexit.register(" in source
 
 
 def test_cross_function_figure_export_removed() -> None:
@@ -257,18 +267,29 @@ def test_profile_provenance_detects_trace_changes(inputs: AnalysisSnapshot) -> N
 
 @pytest.mark.parametrize("name", NOTEBOOKS)
 def test_notebooks_run_independently(
-    name: str, inputs: AnalysisSnapshot, png_exports, monkeypatch
+    name: str, inputs: AnalysisSnapshot, png_exports, monkeypatch, tmp_path: Path
 ) -> None:
-    import bootstrap.analysis
+    import benchmarking.infra.di as composition
 
+    analysis = replace(use_cases(inputs), results_store=AnalysisResultsStore(tmp_path / "analysis"))
     monkeypatch.setattr(
-        bootstrap.analysis, "build_analysis_use_cases", lambda: nullcontext(use_cases(inputs))
+        composition,
+        "analysis_scope",
+        lambda config: nullcontext(analysis),
     )
+    monkeypatch.chdir(ROOT / "notebooks" / "analysis")
     scope = {"display": lambda table: None}
-    for cell in notebook_cells(name):
-        if cell["cell_type"] == "code":
-            source = "".join(line for line in cell["source"] if not line.lstrip().startswith("%"))
-            exec(compile(source, name, "exec"), scope)
+    try:
+        for cell in notebook_cells(name):
+            if cell["cell_type"] == "code":
+                source = "".join(
+                    line for line in cell["source"] if not line.lstrip().startswith("%")
+                )
+                exec(compile(source, name, "exec"), scope)
+    finally:
+        if "close_analysis" in scope:
+            atexit.unregister(scope["close_analysis"])
+            scope["close_analysis"]()
     assert png_exports
     assert all(path.endswith(".png") for _, path in png_exports)
 

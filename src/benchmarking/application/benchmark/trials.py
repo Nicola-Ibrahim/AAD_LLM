@@ -31,7 +31,7 @@ from shared.application.interfaces.candidate_executor import (
     CANDIDATE_EXECUTION_VERSION,
     CandidateTimeout,
 )
-from shared.application.interfaces.problem_factory import ProblemFactory
+from shared.domain.interfaces.problem_factory import ProblemFactory
 from shared.domain.noise_model import NoiseModelEnum
 from shared.domain.problem import BaseProblem
 from shared.domain.scoring import objective_gap

@@ -65,7 +65,8 @@ src/api/reads/               paginated and bounded query adapters
 src/worker/tasks/            synthesis, benchmark, analysis Celery task adapters
 src/worker/                  outbox dispatcher and reconciler processes
 src/di/                      provider modules and process-local containers
-src/bootstrap/               notebook entry points during migration
+src/*/infra/di.py             reusable context-owned Dishka registrations
+notebooks/*.ipynb             notebook-owned initialization; not used by the HTTP server
 ```
 
 Dependency rule: `api` and `worker` may call `operations`, `evolution`, and `benchmarking` application use cases; `operations/application` owns generic job policy and its ports, without importing the scientific contexts; scientific application/domain code stays unaware of all delivery adapters. `di` is the only place that wires implementations across these boundaries. This keeps feature ownership clear without creating a separate deployable API/worker per domain.
@@ -83,7 +84,7 @@ flowchart TD
   COORD --> CHILD[Process-pool child: own engine, client, and adapters]
 ```
 
-Create `SharedProvider`, `EvolutionProvider`, `BenchmarkProvider`, `AnalysisProvider`, and `OperationsProvider`. The API and Celery worker each build a process-local root from these definitions. Request/task scopes resolve a **concrete use case** and close owned resources. The route or task calls its method directly. A provider is dependency registration, not a runtime domain facade. Keep the existing `src/bootstrap` functions working for notebooks while migrating them to managed resource lifetimes.
+Create `SharedProvider`, `EvolutionProvider`, `BenchmarkProvider`, `AnalysisProvider`, and `OperationsProvider`. The API and Celery worker each build a process-local root from these definitions. Request/task scopes resolve a **concrete use case** and close owned resources. The route or task calls its method directly. A provider is dependency registration, not a runtime domain facade. The notebook entry points already resolve workflows through context-owned Dishka providers; extend these registrations for the server.
 
 Never share a SQLAlchemy `Session`, engine, Redis connection, LLM client, or DI container across a process-pool boundary. `run_synthesis_worker()` already creates and disposes a child-local `Database`; extend its child-local context for progress and, later, study-specific paths. Use short transactions even inside an hours-long task or SSE stream. Verify Celery `solo` + the inner process pool on the deployment OS before turning on job submission.
 
@@ -98,11 +99,11 @@ Never share a SQLAlchemy `Session`, engine, Redis connection, LLM client, or DI 
 | Champion catalog | `ChampionSelectionService` | Typed filtered projection; no export on GET. |
 | Benchmark coverage/comparisons | `BenchmarkAuditService.get_audit_data()`, `BenchmarkService.summarize_results()`, condition-status policy | Reuse scientific validity rules; cache or materialize bounded responses. Existing methods return broad DataFrames. |
 | Benchmark run | `BenchmarkService.run_benchmarks(solver_type=...)` | Worker wrapper; validate `all`, `champions`, `noise_robustness`, `cross_function`, `baselines`. Current use case cannot launch one arbitrary table row. |
-| Analysis calculations | `build_analysis_use_cases()` context manager; four `.execute(...)` methods | Worker wrapper; save typed results with `AnalysisResultsStore`. |
+| Analysis calculations | Four `.execute(...)` methods; notebook setup prepares dependencies through `analysis_scope()` | Worker wrapper with server-managed Dishka lifetimes; save typed results with `AnalysisResultsStore`. |
 | Saved analysis views | `AnalysisResultsStore.load()` | New manifest catalog and bounded series/table queries keyed by validated snapshot ID. |
 | Jobs/events/SSE | No current use case | New `operations` application layer and adapters. |
 
-Notebook 02 and 03 currently write directly. Their writes must join the same study lease before browser write actions are enabled. Current configs and storage paths are global; changing only `DATABASE_URL` does not make concurrent studies safe. Existing `build_synthesis_campaign()` and `build_benchmark_workflow()` create databases without an exposed disposal owner; the DI providers must manage those engines. `build_analysis_use_cases()` already closes its database through a context manager.
+Notebook 02 and 03 currently write directly. Their writes must join the same study lease before browser write actions are enabled. Current configs and storage paths are global; changing only `DATABASE_URL` does not make concurrent studies safe. Existing Dishka providers own engine finalization; API and worker scopes must preserve this lifecycle.
 
 ## 4. First user experience and API
 
@@ -252,6 +253,6 @@ For local development run Vite, FastAPI, Redis, and workers as separate processe
 
 ## References
 
-Repository: [`src/evolution/application/campaign/run.py`](../../src/evolution/application/campaign/run.py), [`src/benchmarking/application/benchmark/run.py`](../../src/benchmarking/application/benchmark/run.py), [`src/bootstrap/analysis.py`](../../src/bootstrap/analysis.py), [`src/evolution/infra/concurrency/runner.py`](../../src/evolution/infra/concurrency/runner.py), and [campaign isolation](campaign_isolation.md).
+Repository: [`src/evolution/application/campaign/run.py`](../../src/evolution/application/campaign/run.py), [`src/benchmarking/application/benchmark/run.py`](../../src/benchmarking/application/benchmark/run.py), [`src/benchmarking/infra/di.py`](../../src/benchmarking/infra/di.py), [`src/evolution/infra/concurrency/runner.py`](../../src/evolution/infra/concurrency/runner.py), and [campaign isolation](campaign_isolation.md).
 
 External: [Dishka scopes](https://dishka.readthedocs.io/en/stable/advanced/scopes.html), [Celery concurrency](https://docs.celeryq.dev/en/main/userguide/concurrency/), [Celery task semantics](https://docs.celeryq.dev/en/stable/userguide/tasks.html), [FastAPI SSE](https://fastapi.tiangolo.com/tutorial/server-sent-events/), [MDN EventSource](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events), [SQLAlchemy multiprocessing](https://docs.sqlalchemy.org/en/21/core/pooling.html#using-connection-pools-with-multiprocessing-or-os-fork), and [SQLite WAL](https://www.sqlite.org/wal.html).

@@ -432,13 +432,15 @@ def test_dependencies_are_required_and_mode_validated_before_loading():
         )
 
 
-def test_bootstrap_disposes_on_use_case_failure(monkeypatch):
-    import bootstrap.analysis
+def test_analysis_scope_disposes_on_use_case_failure(monkeypatch):
+    import benchmarking.infra.di
+    import shared.infra.di
 
     database = MagicMock()
-    monkeypatch.setattr(bootstrap.analysis, "Database", lambda: database)
+    monkeypatch.setattr(shared.infra.di, "Database", lambda: database)
     with pytest.raises(RuntimeError):
-        with bootstrap.analysis.build_analysis_use_cases():
+        with benchmarking.infra.di.analysis_scope(BenchmarkConfig()) as analysis:
+            assert isinstance(analysis.ecdf_and_convergence, AnalyzeEcdfAndConvergence)
             raise RuntimeError("interrupted")
     database.dispose.assert_called_once()
 
