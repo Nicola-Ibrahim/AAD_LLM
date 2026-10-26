@@ -6,7 +6,7 @@
 
 [SynthesisCampaignCoordinator](../../src/evolution/application/campaign/run.py)
 is resolved once during notebook setup through `EvolutionProvider`.
-Notebook 02 calls `campaign.run_campaign(**synthesis_parameters)` directly and
+Notebook 02 calls `campaign.run_campaign(...)` directly with explicit study keyword arguments and
 owns the workflow scope until setup is replaced or the kernel shuts down.
 The parameters are defined visibly,
 are keyword-only and are Pydantic-validated before planning or writes.

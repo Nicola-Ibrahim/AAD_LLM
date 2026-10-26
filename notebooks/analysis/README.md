@@ -3,6 +3,15 @@
 [Project README](../../README.md) · [Documentation map](../../docs/README.md) ·
 [Benchmark protocol](../../docs/benchmark_protocol.md)
 
+PNG export requires Kaleido and Chrome/Chromium in the environment running the
+notebook. Kaleido is a project dependency; run `uv sync --locked` after updating
+the project, then restart the kernel. For a separately managed Jupyter environment,
+install Kaleido in that kernel with `%pip install "kaleido>=1.0,<2"`.
+If Chrome is missing, install it with `plotly_get_chrome` from that environment.
+See [Plotly's static export requirements](https://plotly.com/python/static-image-export/).
+An export dependency error does not require rerunning benchmark trials or analysis;
+rerun the export cell when its calculated result is still in memory.
+
 Run any of these notebooks without running the others first:
 
 | Notebook | Workload |

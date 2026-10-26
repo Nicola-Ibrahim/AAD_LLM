@@ -71,6 +71,7 @@ class BenchmarkTrialRunner:
         verbose: bool = True,
         *,
         config: BenchmarkConfig,
+        rerun: bool = False,
     ) -> dict[str, object]:
         """Generic empirical trial executor handling incremental resumption, IOH logging, and provenance."""
         self.logger.verbose = verbose
@@ -78,13 +79,17 @@ class BenchmarkTrialRunner:
         can_resume = False
         schedule = config.trial_schedule
         completed_identities: set[tuple[int, int]] = set()
+        provenance = (
+            self.state_repo.read_provenance(target_dir)
+            if not config.force_rerun and self.state_repo.solver_directory_exists(target_dir)
+            else None
+        )
 
-        if not config.force_rerun and self.state_repo.solver_directory_exists(target_dir):
-            prov = self.state_repo.read_provenance(target_dir)
+        if provenance is not None:
             inspection = inspect_condition(
                 code_available=True,
                 directory_exists=True,
-                provenance=prov,
+                provenance=provenance,
                 expected_code_hash=expected_code_hash,
                 expected_trials=config.trials_per_condition,
                 expected_budget=config.budget,
@@ -97,10 +102,16 @@ class BenchmarkTrialRunner:
                     "contract. Preserve this study and explicitly rerun the condition if "
                     "needed; existing results were not removed."
                 )
+            if rerun and (
+                inspection.reason != "complete"
+                or provenance.get("candidate_execution_contract") != CANDIDATE_EXECUTION_VERSION
+                or not prov_metadata.get("model")
+            ):
+                raise ValueError("Selected reruns require a complete, compatible champion result.")
             if inspection.reason in {"complete", "partial", "not_started"}:
                 existing_runs = inspection.reusable_trials
-                if existing_runs >= config.trials_per_condition:
-                    selected = select_scheduled_trials(prov, schedule)
+                if existing_runs >= config.trials_per_condition and not rerun:
+                    selected = select_scheduled_trials(provenance, schedule)
                     self.logger.cached(existing_runs, selected["median_error"])
                     return {
                         "status": "CACHED",
@@ -110,14 +121,17 @@ class BenchmarkTrialRunner:
                         "clean_errors": selected["clean_errors"],
                         "n_runs": existing_runs,
                     }
-                trials = RecordedTrial.from_provenance(prov)
-                completed_identities = {
-                    trials[i].identity for i in matching_trial_indices(prov, schedule)
-                }
-                can_resume = bool(trials)
-                if existing_runs > 0:
+                if not rerun:
+                    trials = RecordedTrial.from_provenance(provenance)
+                    completed_identities = {
+                        trials[i].identity for i in matching_trial_indices(provenance, schedule)
+                    }
+                can_resume = rerun or bool(trials)
+                if existing_runs > 0 and not rerun:
                     self.logger.resuming(existing_runs, config.trials_per_condition)
 
+        if rerun and not can_resume:
+            raise ValueError("Selected reruns cannot create or replace a condition.")
         if not can_resume and self.state_repo.solver_directory_exists(target_dir):
             # Preserve the existing force/stale-result policy: replace only this
             # exact condition. Incompatible partial histories were rejected above.
@@ -192,6 +206,9 @@ class BenchmarkTrialRunner:
                         error_type=diagnostic["error_type"],
                         error_message=diagnostic["error_message"],
                         error_traceback=diagnostic["error_traceback"],
+                        execution_timeout_seconds=config.trial_timeout_seconds
+                        if prov_metadata.get("model")
+                        else None,
                         observations=[
                             {
                                 "evaluations": sample.evaluations,
@@ -254,6 +271,10 @@ class BenchmarkTrialRunner:
             "observation_trace_points": config.observation_trace_points,
             "evaluated_at": datetime.now(timezone.utc).isoformat(),
         }
+        if can_resume and provenance is not None:
+            prov_data = provenance | prov_data
+        if rerun:
+            prov_data["before_selected_rerun"] = provenance
         self.state_repo.write_provenance(target_dir, prov_data)
         selected = select_scheduled_trials(prov_data, schedule)
         return {
@@ -277,8 +298,9 @@ class BenchmarkTrialRunner:
         target_problem_id: int | None = None,
         *,
         config: BenchmarkConfig,
+        rerun: bool = False,
     ) -> dict[str, object]:
-        """Execute empirical trials for a single LLM champion algorithm."""
+        """Execute a champion condition, rerunning all scheduled trials when requested."""
         self.logger.verbose = verbose
         source_problem_id = champion_info["problem_id"]
         p_id = source_problem_id if target_problem_id is None else target_problem_id
@@ -358,6 +380,7 @@ class BenchmarkTrialRunner:
             expected_code_hash=code_hash,
             verbose=verbose,
             config=config,
+            rerun=rerun,
         )
 
     def run_baseline_trials(

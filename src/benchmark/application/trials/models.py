@@ -34,13 +34,14 @@ class RecordedTrial:
     error_type: str | None
     error_message: str | None
     error_traceback: str | None
+    execution_timeout_seconds: float | None = None  # Unrecorded in historical trials.
 
     @property
     def identity(self) -> TrialIdentity:
         return self.instance_id, self.seed
 
     def provenance_row(self, trial_number: int) -> dict[str, object]:
-        return {
+        row = {
             "trial": trial_number,
             "instance_id": self.instance_id,
             "seed": self.seed,
@@ -53,6 +54,9 @@ class RecordedTrial:
             "error_message": self.error_message,
             "error_traceback": self.error_traceback,
         }
+        if self.execution_timeout_seconds is not None:
+            row["execution_timeout_seconds"] = self.execution_timeout_seconds
+        return row
 
     @classmethod
     def from_provenance(cls, provenance: dict[str, object]) -> list["RecordedTrial"]:
@@ -82,6 +86,7 @@ class RecordedTrial:
                     error_type=row.get("error_type"),
                     error_message=row.get("error_message"),
                     error_traceback=row.get("error_traceback"),
+                    execution_timeout_seconds=row.get("execution_timeout_seconds"),
                 )
             )
         return trials

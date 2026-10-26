@@ -5,6 +5,47 @@
 Diagrams describe current execution behavior, not historical campaign findings.
 Stored experiment records and provenance—not today's defaults—identify past settings.
 
+## Selected benchmark reruns
+
+Normal execution discovers current champions and resumes missing benchmark trials.
+Explicit reruns are requested by experiment ID through `run_benchmarks`:
+
+```python
+rerun_experiment_ids=[5379],
+```
+
+Experiment IDs are synthesis database IDs for the current selected champions.
+Every scheduled benchmark trial for each selected experiment is rerun, including
+previously successful trials. Instances and seeds remain fixed by the configured
+schedule. An empty experiment-ID list means normal execution. There is no separate
+instance-selection parameter. Existing outcome summaries identify failed trials.
+
+Selection is explicit and independent of previous success, failure, budget usage
+or timeout. Repeating the same request reruns the selected trials again, even
+after a successful rerun. Set `rerun_experiment_ids=[]` directly in the execution
+calls in notebook 03 when finished. The current selection targets experiment 5379 and all 20 trials at a
+60-second timeout per trial, with the query budget unchanged at 100,000.
+
+Only native champion results are selected by these IDs. Baseline and optional-study
+execution cells skip work while an explicit native selection is supplied. Unknown
+or nonselected champion IDs, incompatible results and
+combining selection with `force_rerun=True` are rejected before trial execution.
+Use normal benchmarking to complete pending conditions before selective reruns.
+
+The preceding complete result is preserved under `before_selected_rerun` in the
+condition's provenance. Repeated reruns retain the preceding snapshots, without
+tracking or replacing individual trial positions. Existing historical preservation
+fields, including `previous_trial_attempts` and `before_budget_timeout_retry`, remain
+readable and unchanged; new reruns do not build per-trial attempt lists.
+IOH traces are appended, and current trial records point
+to the replacement trace. Each instance/seed still contributes one current
+terminal result. New trial records include `execution_timeout_seconds`.
+
+A condition is saved when its rerun batch finishes. Until that commit, its old
+terminal outcomes remain active. Editing settings does not execute trials.
+Preserved 30-second outcomes, earlier 120-second retries and new 60-second executions must be distinguished
+when describing the experimental constraints. Synthesis settings are unchanged.
+
 ## Synthesis candidate scoring
 
 Fresh synthesis sessions use BBOB instance 1 for every candidate execution.
@@ -289,8 +330,8 @@ questions; neither enters the native champion ranking.
 
 ## Noise robustness
 
-`service.run_benchmarks(solver_type="noise_robustness", **benchmark_parameters)`
-freezes each clean explicit champion and tests
+Calling `service.run_benchmarks` with `solver_type="noise_robustness"` and explicit
+protocol keyword arguments freezes each clean explicit champion and tests
 added noise on its original function and dimension. The existing
 `noise_robustness_enabled` configuration key enables/disables this workflow.
 Historical storage remains `results/ioh_traces/`; it is not moved or deleted.
@@ -301,9 +342,9 @@ targets remain exploratory elsewhere. Figures use `results/figures/05_noise_robu
 
 ## Cross-function generalization
 
-Pass `cross_function_enabled=True` in the benchmark parameters, then set
+Pass `cross_function_enabled=True` in the cross-function audit and execution calls, then set
 `RUN_CROSS_FUNCTION = True` in notebook 03's separate campaign cell, or explicitly
-call `service.run_benchmarks(solver_type="cross_function", **benchmark_parameters)`.
+call `service.run_benchmarks` with `solver_type="cross_function"` and the explicit protocol arguments.
 
 Only clean, explicit, baseline-strategy champions enter this workflow. Their code
 is unchanged, their dimension is unchanged, and the clean target functions default

@@ -142,9 +142,9 @@ It does not declare which models have completed experiments.
 ### Explicit study parameters
 
 Scientific study settings are passed directly to application methods. There are
-no synthesis, benchmark or baseline TOML loaders. Notebook 02 defines
-`synthesis_parameters`; notebook 03 defines `benchmark_parameters` visibly in
-their setup cells. A future HTTP adapter can pass the same fields without a
+no synthesis, benchmark or baseline TOML loaders. Synthesis, benchmark and analysis
+notebooks write settings directly as keyword arguments in their service calls and
+typed setup models. A future HTTP adapter can pass the same fields without a
 configuration-file dependency.
 
 | Method | Explicit study inputs |
@@ -152,6 +152,7 @@ configuration-file dependency.
 | `run_campaign(...)`, `audit_matrix(...)` | `problem_targets`, `noise_conditions`, `synthesis_modes`, `iterations`, `budget`, `timeout_seconds`, `runs_per_config`, `auto_resume`, `skip_completed`, `retry_failed_synthesis` |
 | `run_benchmarks(...)`, `audit_workload(...)`, `summarize_results(...)` | `trials_per_condition`, `random_seed`, `first_instance_id`, `budget`, `trial_timeout_seconds`, `observation_trace_points`, `force_rerun`, `classical_baselines`, `noise_robustness_enabled`, `cross_function_enabled`, `cross_function_problem_ids` |
 | Summary thresholds | `primary_target`, `secondary_target` |
+| Selected benchmark reruns | `run_benchmarks(..., rerun_experiment_ids=[...])` explicitly reruns all scheduled trials for the selected completed champion experiments. This is a run argument, not a scientific configuration field. See [rerun semantics](../benchmark_protocol.md#selected-benchmark-reruns). |
 | Analysis operations | Setup supplies validated `BenchmarkConfig` and `ReliabilityConfig`; the four use cases accept condition filters through `execute(...)` |
 
 Parameters are keyword-only. Pydantic validates values before planning, discovery,
@@ -188,9 +189,9 @@ results = campaign.run_campaign(
 
 ```
 
-Notebooks may collect these visible arguments in a dictionary and unpack it into
-the same method. Native, baseline, noise-robustness and cross-function benchmark
-work use `run_benchmarks(solver_type=..., **benchmark_parameters)`.
+Notebook service calls use explicit keyword arguments rather than unpacking a
+parameter dictionary. Native, baseline, noise-robustness and cross-function benchmark
+work use `run_benchmarks(solver_type=..., budget=..., trials_per_condition=..., ...)`.
 `audit_workload(...)` and `summarize_results(...)` are read-only; neither launches
 trials. The optional study gates, missing-data policy and dynamic model discovery
 are unchanged. No HTTP server, queue or frontend is introduced.
@@ -200,25 +201,15 @@ the scientific execution parameters and does not determine completed models.
 
 ### Selective synthesis reruns
 
-Keep study parameters visible in the notebook; pass selections to each campaign call:
+Keep study parameters explicit in each notebook campaign call. Add the following
+keyword arguments to the complete `run_campaign(...)` call shown above:
 
-```python
-# Automatic recovery only, for the active LLM:
-campaign_usecase.run_campaign(**synthesis_parameters, recover=True)
-
-# Recovery plus manually selected conditions (review IDs for the current DB):
-campaign_usecase.run_campaign(
-    **synthesis_parameters,
-    recover=True,
-    rerun_experiment_ids=[2091, 2737, 2147],
-)
-
-# Resume specific running sessions, without scheduling other work:
-campaign_usecase.run_campaign(**synthesis_parameters, resume_experiment_ids=[123])
-
-# Fill the full configured matrix to its replicate target:
-campaign_usecase.run_campaign(**synthesis_parameters)
-```
+| Purpose | Additional arguments |
+| --- | --- |
+| Automatic recovery for the active LLM | `recover=True` |
+| Recovery plus selected experiment replacement | `recover=True, rerun_experiment_ids=[2091, 2737, 2147]` |
+| Resume specific running sessions | `resume_experiment_ids=[123]` |
+| Fill the full configured matrix | No recovery or selection arguments |
 
 Use the matching model server. These options are invocation-scoped: changing IDs
 does not require editing configuration files or restarting the kernel. After updating Python

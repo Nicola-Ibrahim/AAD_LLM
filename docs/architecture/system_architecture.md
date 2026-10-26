@@ -193,13 +193,12 @@ repeats their method signatures. Application and domain code do not access
 containers or injection decorators.
 
 Notebook setup opens a workflow scope and resolves the services needed by that
-notebook once. Subsequent cells call those ready services directly:
+notebook once. Subsequent cells call those ready services directly. Synthesis and
+benchmark calls list their study settings as explicit keyword arguments, shown in
+[notebook 02](../../notebooks/02_synthesis.ipynb) and
+[notebook 03](../../notebooks/03_benchmark.ipynb). Analysis follows the same pattern:
 
 ```python
-results = campaign.run_campaign(**synthesis_parameters)
-outcomes = benchmark_coordinator.run_benchmarks(
-    solver_type="champions", **benchmark_parameters
-)
 profiles = profile_analysis.execute(
     mode="explicit", dims=[2], problems=None, noise_stds=[0.1]
 )

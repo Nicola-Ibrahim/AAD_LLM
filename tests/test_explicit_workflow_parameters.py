@@ -210,29 +210,68 @@ def test_synthesis_composition_gets_model_from_client_not_parameters(
 
 def test_notebook_study_parameters_are_executable_and_preserve_the_protocol() -> None:
     root = Path(__file__).resolve().parents[1]
-    values = {}
-    for filename, name in [
-        ("02_synthesis.ipynb", "synthesis_parameters"),
-        ("03_benchmark.ipynb", "benchmark_parameters"),
-    ]:
-        notebook = json.loads((root / "notebooks" / filename).read_text())
-        assignments = [
-            node
-            for cell in notebook["cells"]
-            if cell["cell_type"] == "code"
-            for node in ast.parse("".join(cell["source"])).body
-            if isinstance(node, ast.Assign)
-            and any(isinstance(target, ast.Name) and target.id == name for target in node.targets)
-        ]
-        assert len(assignments) == 1
-        values[name] = eval(compile(ast.Expression(assignments[0].value), filename, "eval"))
-    synthesis = SynthesisConfig(**values["synthesis_parameters"])
-    benchmark = BenchmarkConfig(**values["benchmark_parameters"])
+    synthesis_notebook = json.loads((root / "notebooks/02_synthesis.ipynb").read_text())
+    synthesis_calls = [
+        node
+        for cell in synthesis_notebook["cells"]
+        if cell["cell_type"] == "code"
+        for node in ast.walk(ast.parse("".join(cell["source"])))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "campaign"
+        and node.func.attr in {"run_campaign", "audit_matrix"}
+    ]
+    assert len(synthesis_calls) == 2
+    synthesis_configurations = []
+    for call in synthesis_calls:
+        assert all(kw.arg is not None for kw in call.keywords)
+        parameters = {
+            kw.arg: eval(compile(ast.Expression(kw.value), "02_synthesis.ipynb", "eval"))
+            for kw in call.keywords
+            if kw.arg in SynthesisConfig.model_fields
+        }
+        synthesis_configurations.append(SynthesisConfig(**parameters))
+    synthesis = synthesis_configurations[0]
+    assert synthesis_configurations[1] == synthesis
+    notebook = json.loads((root / "notebooks/03_benchmark.ipynb").read_text())
+    code = "\n".join("".join(c["source"]) for c in notebook["cells"] if c["cell_type"] == "code")
+    tree = ast.parse(code)
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "benchmark_coordinator"
+    ]
+    assert calls
+    assert not any(
+        isinstance(node, ast.Name) and node.id in {"benchmark_parameters", "benchmark_reruns"}
+        for node in ast.walk(tree)
+    )
+    configurations = []
+    for call in calls:
+        assert all(kw.arg is not None for kw in call.keywords)
+        parameters = {
+            kw.arg: ast.literal_eval(kw.value)
+            for kw in call.keywords
+            if kw.arg in BenchmarkConfig.model_fields
+        }
+        configurations.append(BenchmarkConfig(**parameters))
+        if call.func.attr == "run_benchmarks":
+            ids = next(kw.value for kw in call.keywords if kw.arg == "rerun_experiment_ids")
+            assert ast.literal_eval(ids) == [5379]
+    benchmark = configurations[0]
+    assert all(c == benchmark for c in configurations)
     assert synthesis.budget == benchmark.budget == 100_000
     assert synthesis.dimensions == [2, 10, 50]
     assert len(synthesis.matrix_conditions) == 480
     assert benchmark.trial_schedule == tuple((instance, 42 + instance) for instance in range(2, 22))
-    assert synthesis.timeout_seconds == benchmark.trial_timeout_seconds == 30.0
+    assert synthesis.timeout_seconds == 30.0
+    assert benchmark.trial_timeout_seconds == 60.0
+    assert not hasattr(benchmark, "timeout_retry")
+    assert not benchmark.force_rerun
 
 
 def test_study_loaders_and_conversion_helpers_are_removed() -> None:

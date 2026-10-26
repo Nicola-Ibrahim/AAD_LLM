@@ -7,6 +7,7 @@ from collections import defaultdict, deque
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 import ioh
 import numpy as np
@@ -396,11 +397,21 @@ class BenchmarkStateRepository(BenchmarkStateStore):
             return None
 
     def write_provenance(self, solver_dir: Path, data: dict[str, object]) -> None:
-        """Persists complete metadata, metrics, and trial arrays into provenance.json."""
+        """Atomically replace provenance so an interrupted write preserves prior outcomes."""
         solver_dir.mkdir(parents=True, exist_ok=True)
         prov_path = solver_dir / "provenance.json"
-        with open(prov_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        with NamedTemporaryFile(mode="w", encoding="utf-8", dir=solver_dir, delete=False) as f:
+            temporary_path = Path(f.name)
+            try:
+                json.dump(data, f, indent=2)
+                f.flush()
+            except BaseException:
+                temporary_path.unlink(missing_ok=True)
+                raise
+        try:
+            temporary_path.replace(prov_path)
+        finally:
+            temporary_path.unlink(missing_ok=True)
 
     def get_run_count(self, solver_dir: Path) -> int:
         """Determines the number of completed trials recorded in provenance or dat files."""

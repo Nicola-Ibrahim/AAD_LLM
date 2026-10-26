@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Literal
 
 import numpy as np
@@ -10,6 +11,7 @@ from benchmark.application.trials.runner import BenchmarkTrialRunner
 from benchmark.application.trials.summary import summarize_benchmarks
 from benchmark.application.trials.workload import BenchmarkWorkload
 from benchmark.domain.enums import BBOBFunction
+from shared.application.interfaces.candidate_executor import CANDIDATE_EXECUTION_VERSION
 
 
 class BenchmarkCoordinator:
@@ -120,8 +122,13 @@ class BenchmarkCoordinator:
             "all", "champions", "baselines", "noise_robustness", "cross_function"
         ] = "all",
         verbose: bool = True,
+        rerun_experiment_ids: Sequence[int] = (),
     ) -> pd.DataFrame:
-        """Run pending/partial conditions using validated, invocation-local settings."""
+        """Run pending conditions, or explicitly rerun selected native champion trials."""
+        if any(identifier <= 0 for identifier in rerun_experiment_ids):
+            raise ValueError("Experiment IDs must be positive integers.")
+        if rerun_experiment_ids and force_rerun:
+            raise ValueError("Use explicit rerun IDs without force_rerun.")
         config = BenchmarkConfig(
             trials_per_condition=trials_per_condition,
             random_seed=random_seed,
@@ -137,10 +144,43 @@ class BenchmarkCoordinator:
             baseline_labels=self.baseline_labels,
         )
         self.logger.verbose = verbose
+        if rerun_experiment_ids and solver_type not in {"all", "champions"}:
+            return pd.DataFrame()
         tasks = self.workload.discover(solver_type, config=config)
-        if not tasks:
+        if not tasks and not rerun_experiment_ids:
             return pd.DataFrame()
         active = [task for task in tasks if task.inspection.status != "MISSING_CODE"]
+        if rerun_experiment_ids:
+            requested = set(rerun_experiment_ids)
+            active = [
+                task
+                for task in tasks
+                if task.solver_type == "champion"
+                and task.champion is not None
+                and task.champion.get("experiment_id") in requested
+            ]
+            found = {task.champion["experiment_id"] for task in active}
+            if missing := requested - found:
+                raise ValueError(
+                    f"Rerun IDs are not current selected champion experiments: {sorted(missing)}"
+                )
+            for task in active:
+                provenance = self.workload.state_repo.read_provenance(task.target_dir)
+                if (
+                    task.inspection.reason != "complete"
+                    or not provenance
+                    or provenance.get("candidate_execution_contract") != CANDIDATE_EXECUTION_VERSION
+                ):
+                    raise ValueError(
+                        f"Experiment #{task.champion['experiment_id']} has no complete, compatible "
+                        "benchmark result. Use normal benchmarking to complete it first."
+                    )
+            self.logger.header(
+                title="Selected benchmark reruns",
+                subtitle=f"{len(active)} experiments × {config.trials_per_condition} instances "
+                f"= {len(active) * config.trials_per_condition} trials; "
+                f"limit {config.trial_timeout_seconds:g}s.",
+            )
         results: list[dict[str, object]] = []
 
         total_active = len(active)
@@ -178,6 +218,7 @@ class BenchmarkCoordinator:
                     solver_folder=task.solver,
                     verbose=verbose,
                     target_problem_id=p_id if stype == "cross_function" else None,
+                    rerun=bool(rerun_experiment_ids),
                 )
             else:
                 res = self.trials.run_baseline_trials(
