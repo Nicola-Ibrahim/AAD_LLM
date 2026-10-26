@@ -23,8 +23,9 @@ instance-selection parameter. Existing outcome summaries identify failed trials.
 Selection is explicit and independent of previous success, failure, budget usage
 or timeout. Repeating the same request reruns the selected trials again, even
 after a successful rerun. Set `rerun_experiment_ids=[]` directly in the execution
-calls in notebook 03 when finished. The current selection targets experiment 5379 and all 20 trials at a
-60-second timeout per trial, with the query budget unchanged at 100,000.
+calls in notebook 03 when finished, or omit that argument. The notebooks currently
+omit explicit rerun IDs and use normal discovery/resumption. The benchmark timeout
+is 60 seconds per champion trial, with the query budget unchanged at 100,000.
 
 Only native champion results are selected by these IDs. Baseline and optional-study
 execution cells skip work while an explicit native selection is supplied. Unknown
