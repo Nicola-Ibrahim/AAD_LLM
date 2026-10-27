@@ -186,7 +186,9 @@ def _response(status: int) -> httpx.Response:
     )
 
 
-def test_every_http_retry_is_paced_and_does_not_consume_optimizer_rng(tmp_path, clock, monkeypatch):
+def test_every_http_retry_is_paced_and_does_not_consume_optimizer_rng(
+    tmp_path, clock, monkeypatch, caplog
+):
     limiter = GatewayRequestLimiter(tmp_path / "limits.sqlite3", "shared", 8.0)
     llm = GatewayLLM("test-key", "gwdg.qwen", "https://gateway.test/v1", limiter)
     starts = []
@@ -205,6 +207,10 @@ def test_every_http_retry_is_paced_and_does_not_consume_optimizer_rng(tmp_path, 
     assert starts == [1_000_000, 1_000_020]
     assert payloads[0] == payloads[1]
     assert llm.client.max_retries == 0
+    assert "status 429" in caplog.text
+    assert "shared cooldown 20.0s" in caplog.text
+    assert "test-key" not in caplog.text
+    assert "same prompt" not in caplog.text
     llm.client.close()
 
 

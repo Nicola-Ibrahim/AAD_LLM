@@ -28,7 +28,12 @@ The overview and detailed system diagrams appear directly in the project README;
 the focused diagrams appear in their architecture/protocol guides. They describe workflows and
 supporting capabilities, not strict C4 levels or Python import dependencies.
 
-## Deferred proposals
+## Proposed and deferred changes
+
+- [System-wide error handling and logging](plans/error_handling_and_logging.md):
+  **proposed, not implemented**. Covers synthesis, benchmarking, audit, analysis,
+  exports, maintenance and CLI tools, with exception ownership, centralized
+  logging, multiprocessing and a staged migration/verification plan.
 
 - [Campaign isolation and preservation plan](plans/campaign_isolation.md): **deferred,
   not implemented**. Includes a Mermaid system overview and execution sequence,

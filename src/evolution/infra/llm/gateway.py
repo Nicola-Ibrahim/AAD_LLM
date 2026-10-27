@@ -1,6 +1,7 @@
 """UPB request pacing shared by local worker processes, independent of CPU scheduling."""
 
 import hashlib
+import logging
 import math
 import os
 import sqlite3
@@ -18,6 +19,7 @@ from llamea import OpenAI_LLM
 
 # Published per-person provider limits, with 20% headroom for other account use.
 DEFAULT_RPM = {"gwdg": 8.0, "kiconnect": 80.0, "openai": 80.0}
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,6 +164,17 @@ class GatewayLLM(OpenAI_LLM):
                 if isinstance(error, openai.APIStatusError):
                     delay = retry_delay(error, delay)
                 self.limiter.defer(delay)
+                logger.warning(
+                    "Gateway %s: %s (status %s), attempt %d/%d; "
+                    "shared cooldown %.1fs%s",
+                    self.model,
+                    type(error).__name__,
+                    getattr(error, "status_code", "unavailable"),
+                    attempt + 1,
+                    max_retries + 1,
+                    delay,
+                    "; retries exhausted" if attempt == max_retries else "; will retry",
+                )
                 if attempt == max_retries:
                     raise
         raise AssertionError("Unreachable gateway retry state")

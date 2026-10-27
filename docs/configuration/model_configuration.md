@@ -34,7 +34,8 @@ Set these values in the ignored `.env` file; never put a real key in a notebook:
 LLM_PROVIDER=upb
 UPB_API_BASE=https://ai-gateway.uni-paderborn.de/v1/
 UPB_API_KEY=replace-with-your-private-key
-UPB_MODEL=gwdg.qwen3-30b-a3b-instruct-2507
+UPB_MODEL=gwdg.glm-5.3-flash
+UPB_REQUESTS_PER_MINUTE=8
 ```
 
 Notebook 02 resolves `SynthesisCampaignCoordinator`; `EvolutionProvider` creates
@@ -52,10 +53,11 @@ print("\n".join(llm.list_models()))
 The [gateway catalogue](upb_models.md) records one account's discovery snapshot;
 refresh via `list_models()` because permissions and availability can change.
 Use named models rather than `latest` aliases or routers for reproducible studies.
-For now prefer the documented Qwen3 instruct model; other models, particularly
-reasoning models, need a smoke test for LLaMEA's `temperature` setting and plain-text
-code output before a campaign. Listing is not proof of generation entitlement.
-The gateway catalogue supplies no prices, so no cheapest-model claim follows from it.
+GLM 5.3 Flash provides a non-Qwen comparison. The university catalogue lists
+`gwdg.glm-5.3-flash` with zero input/output token charges and a 10 RPM limit;
+the 8 RPM setting leaves headroom. Availability and quotas are account-specific.
+Test LLaMEA's generated-code extraction before a full campaign, especially for
+reasoning models. Listing is not proof of generation entitlement.
 
 CPU-worker capacity is selected automatically from process CPU availability,
 affinity and `SLURM_CPUS_PER_TASK` when available. It is not a TOML setting or a
