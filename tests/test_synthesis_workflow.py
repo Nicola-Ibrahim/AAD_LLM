@@ -159,3 +159,26 @@ def test_historical_code_repository_checkpoint_preserves_storage_location(monkey
     assert type(restored) is FileCodeRepository
     assert restored.base_dir == tmp_path / "code"
     assert storage.CodeRepository is contract
+
+
+def test_historical_experiment_checkpoint_retains_its_database_identity(monkeypatch):
+    import evolution.domain.entities.experiment as module
+    from evolution.domain.entities import Experiment
+    from evolution.domain.enums import SynthesisMode
+    from evolution.domain.vos import ProblemProfile
+
+    legacy = create_model("ExperimentSummary", __base__=Experiment, __module__=module.__name__)
+    monkeypatch.setattr(module, "ExperimentSummary", legacy, raising=False)
+    payload = pickle.dumps(
+        legacy(
+            id=42,
+            mode=SynthesisMode.EXPLICIT,
+            llm_name="test-model",
+            problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0),
+        )
+    )
+    monkeypatch.delattr(module, "ExperimentSummary")
+    restored = SynthesisCheckpointUnpickler(io.BytesIO(payload)).load()
+    assert type(restored) is Experiment
+    assert restored.id == restored.experiment_id == 42
+    assert "ExperimentSummary" not in module.__dict__

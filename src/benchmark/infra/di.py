@@ -24,7 +24,6 @@ from benchmark.application.trials.workload import BenchmarkWorkload
 from benchmark.domain.services.ecdf import EcdfConvergenceEngine
 from benchmark.domain.services.performance import PerformanceMetricsEngine
 from benchmark.domain.services.reliability import ReliabilityEngine
-from benchmark.domain.services.resolvers import ModelNames
 from benchmark.domain.services.transfer import TransferAnalysisEngine
 from benchmark.infra.io.code_reader import FilesystemCodeReader
 from benchmark.infra.io.trace_repository import BenchmarkStateRepository, IOHTraceReader
@@ -32,7 +31,6 @@ from benchmark.infra.logging import BenchmarkLogger
 from benchmark.infra.solvers.baselines import get_baseline_runner
 from benchmark.infra.storage import ChampionsReadRepository, SQLiteSynthesisReadRepository
 from benchmark.infra.storage.analysis_results_store import AnalysisResultsStore
-from benchmark.infra.storage.model_registry import configured_model_names
 from shared.config import PROJECT_ROOT, RESULTS_DIR
 from shared.domain.interfaces.problem_factory import ProblemFactory
 from shared.infra.execution.candidate_executor import create_candidate_executor
@@ -86,24 +84,18 @@ class BenchmarkProvider(Provider):
         return FilesystemCodeReader(self.project_root)
 
     @provide
-    def model_names(self) -> ModelNames:
-        return configured_model_names()
-
-    @provide
     def workload(
         self,
         repository: SynthesisReadRepository,
         selection: ChampionSelectionService,
         state: BenchmarkStateStore,
         code: CandidateCodeReader,
-        names: ModelNames,
     ) -> BenchmarkWorkload:
         return BenchmarkWorkload(
             sqlite_repo=repository,
             champion_selection=selection,
             state_repo=state,
             code_reader=code,
-            model_names=names,
             planned_target_conditions=tuple(
                 sorted(
                     {
@@ -121,7 +113,6 @@ class BenchmarkProvider(Provider):
         logger: BenchmarkLoggerInterface,
         problem_factory: ProblemFactory,
         code: CandidateCodeReader,
-        names: ModelNames,
     ) -> BenchmarkTrialRunner:
         return BenchmarkTrialRunner(
             state_repo=state,
@@ -130,7 +121,6 @@ class BenchmarkProvider(Provider):
             executor_factory=create_candidate_executor,
             baseline_resolver=get_baseline_runner,
             code_reader=code,
-            model_names=names,
         )
 
     @provide
@@ -166,7 +156,6 @@ class BenchmarkProvider(Provider):
         repository: SynthesisReadRepository,
         code: CandidateCodeReader,
         selection: ChampionSelectionService,
-        names: ModelNames,
         config: BenchmarkConfig,
         classifier: TransferAnalysisEngine,
     ) -> AnalysisDataLoader:
@@ -176,7 +165,6 @@ class BenchmarkProvider(Provider):
             IOHTraceReader(self.results_dir / "cross_function_traces"),
             code,
             selection,
-            names,
             config,
             classifier,
         )

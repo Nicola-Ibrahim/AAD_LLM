@@ -1,9 +1,8 @@
 from evolution.domain.base import DomainEntity, EntityID, ValueObject
-from evolution.domain.entities.experiment import ExperimentSummary
+from evolution.domain.entities.experiment import Experiment
 from evolution.domain.enums.prompt_strategy import PromptStrategy
 from evolution.domain.enums.synthesis_mode import SynthesisMode
 from evolution.domain.services.algorithm_scoring import AlgorithmScoringService, FailureKind
-from evolution.domain.vos.experiment_filter import ExperimentFilter
 from evolution.domain.vos.iteration import IterationMetadata
 from evolution.domain.vos.metrics import (
     Code,
@@ -19,10 +18,9 @@ __all__ = [
     "DomainEntity",
     "ValueObject",
     "EntityID",
-    "ExperimentSummary",
+    "Experiment",
     "IterationMetadata",
     "ProblemProfile",
-    "ExperimentFilter",
     "SynthesisMode",
     "PromptStrategy",
     "BBOBFunction",

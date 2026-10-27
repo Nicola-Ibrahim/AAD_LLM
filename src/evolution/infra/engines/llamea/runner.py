@@ -19,7 +19,7 @@ from evolution.application.interfaces.synthesis_engine import SynthesisEngine
 from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
 from evolution.application.synthesis.result import SynthesisResult
 from evolution.application.synthesis.settings import SynthesisSettings
-from evolution.domain.entities import ExperimentSummary
+from evolution.domain.entities import Experiment
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces.code_repository import CodeRepository
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
@@ -52,7 +52,7 @@ class LLaMEASession:
     Orchestrates the evolutionary loop:
         1. Pre-warm session from existing snapshots (if available)
         2. Run LLaMEA synthesis loop
-        3. Persist final ExperimentSummary
+        3. Persist final Experiment
                │
                ▼
         Print Summary Report & Return SynthesisResult
@@ -92,7 +92,7 @@ class LLaMEASession:
             instance_id=self._problem.instance_id,
             true_optimum=self._problem.true_optimum,
         )
-        self._experiment = ExperimentSummary.new(
+        self._experiment = Experiment(
             experiment_id=self._experiment_id,
             problem=problem_profile,
             mode=self._synthesis_mode,
@@ -153,7 +153,9 @@ class LLaMEASession:
             and not CandidateEvaluator.is_failure(fitness_score)
         ):
             best_error = -fitness_score
-            raw_fitness = self._db_repo.get_best_raw_fitness(self._experiment_id)
+            records = self._db_repo.load_by_ids([self._experiment_id])
+            incumbent = records[0].incumbent if records else None
+            raw_fitness = incumbent.fitness.raw_fitness if incumbent is not None else None
         else:
             best_error = None
             raw_fitness = None
@@ -208,7 +210,7 @@ class LLaMEASession:
             raise
         else:
             self._experiment.complete()
-            self._db_repo.save_experiment_summary(self._experiment)
+            self._db_repo.save_experiment(self._experiment)
             return synthesis_engine, evaluator
 
     def run(self) -> SynthesisResult:
@@ -335,12 +337,11 @@ class LLaMEASession:
             problem=self._problem,
             db_repo=self._db_repo,
             code_repo=self._code_repo,
-            experiment_id=self._experiment_id,
+            experiment=self._experiment,
             config=self._config,
             candidate_evaluation_service=candidate_evaluation_service,
             initial_iteration=self._initial_iteration,
         )
-        evaluator.experiment = self._experiment
         evaluator.logger = self._logger
         return evaluator
 

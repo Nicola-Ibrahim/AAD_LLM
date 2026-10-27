@@ -9,14 +9,15 @@ import pandas as pd
 from study_fixtures import run_parameters, synthesis_config
 
 from benchmark.application.benchmark_config import BenchmarkConfig
+from benchmark.application.model_names import folder_solver_name
 from benchmark.application.select_champions import ChampionSelectionService
 from benchmark.application.trials.coordinator import BenchmarkCoordinator
 from benchmark.application.trials.runner import BenchmarkTrialRunner
 from benchmark.application.trials.workload import BenchmarkWorkload
+from benchmark.domain.enums.solver_kind import SolverKind
 from benchmark.domain.services.hypothesis import HypothesisTestingEngine
 from benchmark.infra.io.code_reader import FilesystemCodeReader
 from benchmark.infra.solvers.baselines import get_baseline_runner
-from benchmark.infra.storage.model_registry import configured_model_names
 from evolution.infra.concurrency.process_worker_pool import ProcessWorkerPool
 from evolution.infra.concurrency.worker import run_synthesis_worker
 from shared.config import PROJECT_ROOT
@@ -31,13 +32,12 @@ def build_benchmark_service(**kwargs):
     state = kwargs.pop("state_repo")
     logger = kwargs.pop("logger")
     code_reader = FilesystemCodeReader(project_root)
-    names = configured_model_names()
+
     workload = BenchmarkWorkload(
         sqlite_repo=kwargs.pop("sqlite_repo"),
         champion_selection=selection,
         state_repo=state,
         code_reader=code_reader,
-        model_names=names,
         **kwargs,
     )
     trials = BenchmarkTrialRunner(
@@ -47,7 +47,6 @@ def build_benchmark_service(**kwargs):
         executor_factory=create_candidate_executor,
         baseline_resolver=get_baseline_runner,
         code_reader=code_reader,
-        model_names=names,
     )
     return SimpleNamespace(
         service=BenchmarkCoordinator(
@@ -329,14 +328,16 @@ def test_statistical_analysis_pipeline(tmp_path, db_session_factory):
     trace_repo = IOHTraceReader(trace_root)
 
     df_exp, df_iter = sqlite_repo.get_synthesis_dataframes()
-    all_benchmark_data = trace_repo.load_benchmark_traces(
-        solver_resolver=configured_model_names().resolve_folder_solver_name
-    )
+    all_benchmark_data = trace_repo.load_benchmark_traces(solver_resolver=folder_solver_name)
     assert len(all_benchmark_data) > 0
     print(f"  • Problem conditions loaded: {len(all_benchmark_data)}")
 
     df_omnibus = HypothesisTestingEngine().run_omnibus_kruskal(all_benchmark_data)
-    df_pairwise = HypothesisTestingEngine().run_pairwise_fdr(all_benchmark_data, alpha=0.05)
+    df_pairwise = HypothesisTestingEngine().run_pairwise_fdr(
+        all_benchmark_data,
+        alpha=0.05,
+        solver_kinds={solver: SolverKind.CLASSICAL for solver in all_benchmark_data.solvers},
+    )
     assert not df_omnibus.empty
     assert not df_pairwise.empty
     print(f"  • Omnibus tests: {len(df_omnibus)} rows")

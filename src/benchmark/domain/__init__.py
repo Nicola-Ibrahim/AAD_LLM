@@ -8,12 +8,8 @@ from benchmark.domain.enums import (
     ClassicalSolver,
 )
 from benchmark.domain.services import (
-    CLASSICAL_SOLVERS_MAP,
-    KNOWN_STRATEGIES,
     EcdfConvergenceEngine,
     HypothesisTestingEngine,
-    LLMModelSpec,
-    ModelNames,
     PerformanceMetricsEngine,
     ReliabilityEngine,
 )
@@ -21,7 +17,6 @@ from benchmark.domain.vos import (
     BenchmarkCondition,
     BenchmarkDataset,
     RunTrace,
-    SolverRunCollection,
 )
 
 __all__ = [
@@ -30,7 +25,6 @@ __all__ = [
     "BenchmarkStrategy",
     "BenchmarkCondition",
     "RunTrace",
-    "SolverRunCollection",
     "BenchmarkDataset",
     "HypothesisTestingEngine",
     "EcdfConvergenceEngine",
@@ -38,8 +32,4 @@ __all__ = [
     "ReliabilityEngine",
     "BBOBFunction",
     "BBOB_CLASSES_ORDER",
-    "CLASSICAL_SOLVERS_MAP",
-    "KNOWN_STRATEGIES",
-    "LLMModelSpec",
-    "ModelNames",
 ]

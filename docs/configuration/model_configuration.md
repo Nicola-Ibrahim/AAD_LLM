@@ -137,9 +137,15 @@ as `0.0.0.0` is not the client connection URL.
 
 ## Presets and experiments
 
-[configs/llms.toml](../../configs/llms.toml) stores model presets/registry metadata;
-it is used by the management tooling and infrastructure name registry.
-It does not declare which models have completed experiments.
+Benchmark labels and new model folders use the complete `llm_name` recorded in
+SQLite, including its original case, version and file suffix. There is no model
+slugification or alias registry. Existing result folders are located through
+their provenance's model ID, not guessed from folder names, so changing the
+presentation convention does not discard completed benchmarks.
+
+[configs/llms.toml](../../configs/llms.toml) remains a set of local model download
+presets for management scripts. It does not rename database models or determine
+which experiments are complete.
 
 ### Explicit study parameters
 

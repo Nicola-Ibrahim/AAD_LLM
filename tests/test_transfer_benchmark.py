@@ -24,7 +24,6 @@ from benchmark.domain.benchmark_results import (
 from benchmark.domain.services.transfer import TransferAnalysisEngine
 from benchmark.infra.io.trace_repository import IOHTraceReader
 from benchmark.infra.logging import BenchmarkLogger
-from benchmark.infra.storage.model_registry import configured_model_names
 from shared.domain.problem import ObservationSample
 
 
@@ -261,13 +260,12 @@ def transfer_service(tmp_path: Path) -> BenchmarkCoordinator:
     selection = ChampionSelectionService(champion_repo)
     state = MemoryState(tmp_path)
     logger = MagicMock()
-    names = configured_model_names()
+
     workload = BenchmarkWorkload(
         sqlite_repo=synthesis_repo,
         champion_selection=selection,
         state_repo=state,
         code_reader=code_reader,
-        model_names=names,
     )
     trials = BenchmarkTrialRunner(
         state_repo=state,
@@ -276,7 +274,6 @@ def transfer_service(tmp_path: Path) -> BenchmarkCoordinator:
         executor_factory=lambda timeout: executor,
         baseline_resolver=lambda slug: baseline,
         code_reader=code_reader,
-        model_names=names,
     )
     return SimpleNamespace(
         service=BenchmarkCoordinator(

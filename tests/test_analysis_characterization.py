@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from benchmark.domain.enums.solver_kind import SolverKind
 from benchmark.domain.services.ecdf import EcdfConvergenceEngine
 from benchmark.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 
@@ -80,6 +81,7 @@ def test_auc_preserves_values_without_convergence_statistics(monkeypatch) -> Non
         group_by="condition",
         budget=100,
         n_grid_points=3,
+        solver_kinds={"Model / baseline": SolverKind.GENERATED},
     )
     expected = pd.DataFrame(
         [
@@ -115,6 +117,7 @@ def test_auc_excludes_attainment_after_fixed_budget() -> None:
         np.array([1.0]),
         group_by="condition",
         budget=200,
+        solver_kinds={"Model / baseline": SolverKind.GENERATED},
     )
     np.testing.assert_array_equal(table["AUC-ECDF (%)"], [0.0, 0.0])
     extended = engine.compute_auc_ecdf_matrix(
@@ -123,6 +126,7 @@ def test_auc_excludes_attainment_after_fixed_budget() -> None:
         np.array([1.0]),
         group_by="condition",
         budget=1000,
+        solver_kinds={"Model / baseline": SolverKind.GENERATED},
     )
     assert (extended["AUC-ECDF (%)"] > 0).all()
 

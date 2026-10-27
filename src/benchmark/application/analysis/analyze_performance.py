@@ -8,6 +8,7 @@ from benchmark.application.analysis.results import (
     PerformanceAnalysisResult,
 )
 from benchmark.application.interfaces.logger import BenchmarkLoggerInterface
+from benchmark.domain.enums.solver_kind import SolverKind
 from benchmark.domain.services.ecdf import EcdfConvergenceEngine
 from benchmark.domain.services.performance import PerformanceMetricsEngine
 from benchmark.domain.vos import BenchmarkDataset
@@ -54,6 +55,12 @@ class AnalyzePerformance:
                 targets=targets,
                 group_by="condition",
                 budget=snapshot.config.budget,
+                solver_kinds={
+                    solver: SolverKind.CLASSICAL
+                    if solver in snapshot.classical_solvers
+                    else SolverKind.GENERATED
+                    for solver in snapshot.solver_order
+                },
             )
             table["Canonical Solver"] = table["Solver"].str.replace(
                 r" \(noise-adapted\)", "", regex=True
@@ -99,7 +106,6 @@ class AnalyzePerformance:
                 model_scale,
                 hardness,
                 snapshot.models_to_solvers,
-                snapshot.model_slugs,
                 snapshot.classical_solvers,
                 scale_dimensions,
                 snapshot.clean_std,

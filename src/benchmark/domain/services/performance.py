@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 
 from benchmark.domain.enums import BBOBFunction
-from benchmark.domain.vos import BenchmarkDataset, RunTrace
+from benchmark.domain.services.reliability import search_success_rate
+from benchmark.domain.vos import BenchmarkDataset
 
 
 class PerformanceMetricsEngine:
@@ -46,17 +47,6 @@ class PerformanceMetricsEngine:
                     )
         return pd.DataFrame(scale, columns=["Model", "Dim", "Noise Std", "AUC-ECDF (%)"]), rankings
 
-    @staticmethod
-    def compute_success_rate(
-        runs: list[RunTrace],
-        threshold: float = 1e-8,
-    ) -> float:
-        """Compute empirical success rate (fraction of runs reaching delta_y <= threshold)."""
-        if not runs:
-            return 0.0
-        successes = sum(1 for r in runs if r.is_success(threshold))
-        return successes / len(runs)
-
     def compute_hardness_success_rates(
         self,
         benchmark_data: BenchmarkDataset,
@@ -76,7 +66,7 @@ class PerformanceMetricsEngine:
                 if s not in solvers:
                     continue
                 runs = solvers[s]
-                succ = self.compute_success_rate(runs, threshold=threshold)
+                succ = search_success_rate(runs, threshold=threshold)
                 prob_records.append(
                     {
                         "Problem": p_name,

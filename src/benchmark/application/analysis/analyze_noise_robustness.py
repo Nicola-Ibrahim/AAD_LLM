@@ -42,10 +42,5 @@ class AnalyzeNoiseRobustness:
                 else ("No complete frozen-champion noisy trials.",)
             )
             return NoiseRobustnessResult(
-                table,
-                aggregate,
-                snapshot.model_labels,
-                rel.primary_target,
-                snapshot.provenance("noise"),
-                diagnostics,
+                table, aggregate, rel.primary_target, snapshot.provenance("noise"), diagnostics
             )

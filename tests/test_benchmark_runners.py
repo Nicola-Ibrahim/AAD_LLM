@@ -20,7 +20,6 @@ from benchmark.infra.storage import (
     ChampionsReadRepository,
     SQLiteSynthesisReadRepository,
 )
-from benchmark.infra.storage.model_registry import configured_model_names
 from shared.config import PROJECT_ROOT
 from shared.domain.noise import NoNoiseStrategy
 from shared.infra.database import Database
@@ -37,13 +36,12 @@ def build_benchmark_service(**kwargs):
     state = kwargs.pop("state_repo")
     logger = kwargs.pop("logger")
     code_reader = FilesystemCodeReader(project_root)
-    names = configured_model_names()
+
     workload = BenchmarkWorkload(
         sqlite_repo=kwargs.pop("sqlite_repo"),
         champion_selection=selection,
         state_repo=state,
         code_reader=code_reader,
-        model_names=names,
         **kwargs,
     )
     trials = BenchmarkTrialRunner(
@@ -53,7 +51,6 @@ def build_benchmark_service(**kwargs):
         executor_factory=create_candidate_executor,
         baseline_resolver=get_baseline_runner,
         code_reader=code_reader,
-        model_names=names,
     )
     return SimpleNamespace(
         service=BenchmarkCoordinator(
@@ -249,7 +246,9 @@ class RandomOptimizer:
     assert len(res["clean_errors"]) == 2
     assert res["median_clean_error"] is not None
 
-    prov_file = benchmark_dir / "2D" / "std_0.0" / "f1" / "qwen_14b_baseline" / "provenance.json"
+    prov_file = (
+        benchmark_dir / "2D" / "std_0.0" / "f1" / "qwen2.5-coder-14b_baseline" / "provenance.json"
+    )
     assert prov_file.exists()
     prov_data = json.loads(prov_file.read_text(encoding="utf-8"))
     assert prov_data["algorithm_name"] == "RandomOptimizer"
@@ -330,7 +329,7 @@ class IncrementalOptimizer:
     assert res_1["status"] == "SUCCESS"
     assert len(res_1["clean_errors"]) == 2
 
-    solver_dir = benchmark_dir / "2D" / "std_0.0" / "f1" / "qwen_14b_baseline"
+    solver_dir = benchmark_dir / "2D" / "std_0.0" / "f1" / "qwen2.5-coder-14b_baseline"
     assert trace_repo.get_run_count(solver_dir) == 2
 
     # Step 2: Resume with trials_per_condition=4

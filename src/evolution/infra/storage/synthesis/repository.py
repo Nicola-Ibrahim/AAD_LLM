@@ -7,7 +7,7 @@ from typing import cast
 from sqlalchemy import delete, func, insert, inspect, select
 from sqlalchemy.orm import Load, Session, defer, selectinload, sessionmaker
 
-from evolution.domain.entities import ExperimentSummary
+from evolution.domain.entities import Experiment
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.vos import (
@@ -15,7 +15,6 @@ from evolution.domain.vos import (
     Convergence,
     Error,
     Execution,
-    ExperimentFilter,
     Fitness,
     IterationMetadata,
     ProblemProfile,
@@ -57,8 +56,9 @@ class SQLiteSynthesisRepository(SynthesisRepository):
         mode: SynthesisMode,
         llm_name: str,
         prompt_strategy: PromptStrategy = PromptStrategy.BASELINE,
-        budget: int = 1_000_000,
-        max_iterations: int = 10,
+        *,
+        budget: int,
+        max_iterations: int,
         synthesis_seed: int | None = None,
     ) -> int:
         with session_scope(self.SessionLocal, "create_experiment") as session:
@@ -81,8 +81,19 @@ class SQLiteSynthesisRepository(SynthesisRepository):
                 values["synthesis_seed"] = synthesis_seed
             # Explicit columns keep INSERT valid when optional seed metadata is absent.
             result = session.execute(insert(ExperimentORM.__table__).values(**values))
+            experiment = Experiment(
+                id=int(result.inserted_primary_key[0]),
+                problem=problem,
+                mode=mode,
+                llm_name=llm_name,
+                prompt_strategy=prompt_strategy,
+                budget=budget,
+                max_iterations=max_iterations,
+                synthesis_seed=synthesis_seed,
+                started_at=values["started_at"],
+            )
             session.commit()
-            return int(result.inserted_primary_key[0])
+            return experiment.id
 
     def get_experiment_status(self, experiment_id: int) -> tuple[str | None, int]:
         """Returns tuple of (status_string, max_iteration_number) for a synthesis run, or (None, 0) if not found."""
@@ -145,9 +156,9 @@ class SQLiteSynthesisRepository(SynthesisRepository):
             session.add(iteration_orm)
             session.commit()
 
-    def save_experiment_summary(self, exp: ExperimentSummary) -> None:
+    def save_experiment(self, exp: Experiment) -> None:
         """Persists the domain-calculated summary and champion fields to the experiments table."""
-        with session_scope(self.SessionLocal, "save_experiment_summary") as session:
+        with session_scope(self.SessionLocal, "save_experiment") as session:
             row = session.get(ExperimentORM, exp.id, options=self._experiment_options)
             if not row:
                 raise StorageError(f"Cannot save summary: experiment {exp.id} does not exist")
@@ -207,24 +218,8 @@ class SQLiteSynthesisRepository(SynthesisRepository):
                 exc_info=True,
             )
 
-    def get_best_raw_fitness(self, experiment_id: int) -> float | None:
-        """Returns raw algorithm objective value from the best iteration of a synthesis run."""
-        stmt = (
-            select(IterationORM.raw_fitness)
-            .where(
-                IterationORM.experiment_id == experiment_id,
-                IterationORM.final_error.isnot(None),
-                IterationORM.raw_fitness.isnot(None),
-            )
-            .order_by(IterationORM.final_error.asc())
-        )
-        with session_scope(self.SessionLocal, "get_best_raw_fitness") as session:
-            best_val = session.execute(stmt).scalar()
-            return float(best_val) if best_val is not None else None
-
     def load(
         self,
-        criteria: ExperimentFilter | None = None,
         *,
         experiment_id: int | None = None,
         problem_id: int | None = None,
@@ -234,34 +229,24 @@ class SQLiteSynthesisRepository(SynthesisRepository):
         mode: SynthesisMode | None = None,
         prompt_strategy: PromptStrategy | None = None,
         status: str | None = None,
-    ) -> list[ExperimentSummary]:
-        """Loads and filters ExperimentSummary objects from SQLite database using SQLAlchemy 2.0 select."""
-        if criteria is None:
-            criteria = ExperimentFilter(
-                experiment_id=experiment_id,
-                problem_id=problem_id,
-                instance_id=instance_id,
-                llm_name=llm_name,
-                dim=dim,
-                mode=mode,
-                prompt_strategy=prompt_strategy,
-                status=status,
-            )
-
+        noise_std: float | None = None,
+    ) -> list[Experiment]:
+        """Loads and filters Experiment objects from SQLite database using SQLAlchemy 2.0 select."""
         stmt = select(ExperimentORM).options(
             selectinload(ExperimentORM.iterations).selectinload(IterationORM.error_log),
             *self._experiment_options,
         )
 
         raw_filters = {
-            "id": criteria.experiment_id,
-            "problem_id": criteria.problem_id,
-            "instance_id": criteria.instance_id,
-            "llm_name": criteria.llm_name,
-            "dim": criteria.dim,
-            "mode": criteria.mode,
-            "prompt_strategy": criteria.prompt_strategy,
-            "status": criteria.status,
+            "id": experiment_id,
+            "problem_id": problem_id,
+            "instance_id": instance_id,
+            "llm_name": llm_name,
+            "dim": dim,
+            "mode": mode,
+            "prompt_strategy": prompt_strategy,
+            "status": status,
+            "noise_std": noise_std,
         }
         active_filters = {k: v for k, v in raw_filters.items() if v is not None}
         if active_filters:
@@ -271,9 +256,9 @@ class SQLiteSynthesisRepository(SynthesisRepository):
 
         with session_scope(self.SessionLocal, "load") as session:
             experiments = session.scalars(stmt).all()
-            return [self._to_experiment_summary(exp) for exp in experiments]
+            return [self._to_experiment(exp) for exp in experiments]
 
-    def load_by_ids(self, experiment_ids: list[int]) -> list[ExperimentSummary]:
+    def load_by_ids(self, experiment_ids: list[int]) -> list[Experiment]:
         """Load experiments matching a specific list of primary key IDs."""
         if not experiment_ids:
             return []
@@ -288,10 +273,10 @@ class SQLiteSynthesisRepository(SynthesisRepository):
         )
         with session_scope(self.SessionLocal, "load_by_ids") as session:
             experiments = session.scalars(stmt).all()
-            return [self._to_experiment_summary(exp) for exp in experiments]
+            return [self._to_experiment(exp) for exp in experiments]
 
-    def _to_experiment_summary(self, exp: ExperimentORM) -> ExperimentSummary:
-        """Helper to convert an ExperimentORM database instance into an ExperimentSummary domain entity."""
+    def _to_experiment(self, exp: ExperimentORM) -> Experiment:
+        """Helper to convert an ExperimentORM database instance into an Experiment domain entity."""
         problem_profile = ProblemProfile(
             problem_id=exp.problem_id,
             dim=exp.dim,
@@ -305,7 +290,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
             self._to_iteration_metadata(it, idx) for idx, it in enumerate(exp.iterations, start=1)
         ]
 
-        return ExperimentSummary(
+        return Experiment(
             mode=SynthesisMode(exp.mode),
             llm_name=exp.llm_name,
             prompt_strategy=PromptStrategy(exp.prompt_strategy)

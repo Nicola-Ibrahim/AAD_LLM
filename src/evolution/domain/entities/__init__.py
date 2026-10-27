@@ -1,3 +1,3 @@
-from evolution.domain.entities.experiment import ExperimentSummary
+from evolution.domain.entities.experiment import Experiment
 
-__all__ = ["ExperimentSummary"]
+__all__ = ["Experiment"]

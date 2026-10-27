@@ -4,19 +4,21 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from benchmark.application.model_names import folder_solver_name
 from benchmark.application.select_champions import ChampionSelectionService
 from benchmark.application.trials.audit import AuditCoverageSummary
 from benchmark.domain.enums import (
     BBOB_CLASSES_ORDER,
     BBOBFunction,
 )
+from benchmark.domain.enums.solver_kind import SolverKind
 from benchmark.domain.services.ecdf import EcdfConvergenceEngine
 from benchmark.domain.services.hypothesis import HypothesisTestingEngine
 from benchmark.domain.services.performance import PerformanceMetricsEngine
+from benchmark.domain.services.reliability import search_success_rate
 from benchmark.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 from benchmark.infra.io.trace_repository import IOHTraceReader
 from benchmark.infra.storage.champions_repository import ChampionsReadRepository
-from benchmark.infra.storage.model_registry import configured_model_names
 from benchmark.infra.storage.sqlite_repository import SQLiteSynthesisReadRepository
 from shared.config import DATA_DIR, RESULTS_DIR
 from shared.infra.database import Database
@@ -40,89 +42,6 @@ class TestDomainTaxonomy:
     def test_landscape_classes_order(self):
         assert len(BBOB_CLASSES_ORDER) == 5
         assert "Separable" in BBOB_CLASSES_ORDER
-
-
-class TestDomainResolvers:
-    @pytest.fixture(autouse=True)
-    def naming(self):
-        names = configured_model_names()
-        self.get_clean_model_label = names.get_clean_model_label
-        self.format_db_solver_name = names.format_db_solver_name
-        self.get_model_slug = names.get_model_slug
-        self.resolve_folder_solver_name = names.resolve_folder_solver_name
-
-    def test_clean_model_labels_dynamic(self):
-        assert (
-            self.get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m.gguf")
-            == "Qwen2.5-Coder-14B-Instruct"
-        )
-        assert (
-            self.get_clean_model_label("qwen2.5-coder-14b-instruct-q4_k_m")
-            == "Qwen2.5-Coder-14B-Instruct"
-        )
-        assert (
-            self.get_clean_model_label("qwen2.5-coder-7b-instruct-q4_k_m.gguf")
-            == "Qwen2.5-Coder-7B-Instruct"
-        )
-        assert (
-            self.get_clean_model_label("DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf")
-            == "DeepSeek-Coder-V2-Lite-Instruct"
-        )
-        assert (
-            self.get_clean_model_label("deepseek-r1-distill-qwen-70b.gguf")
-            == "DeepSeek-R1-Distill-Qwen-70B"
-        )
-        assert (
-            self.get_clean_model_label("meta-llama-3-8b-instruct") == "Meta-Llama-3.1-8B-Instruct"
-        )
-        assert (
-            self.get_clean_model_label("Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf")
-            == "Meta-Llama-3.1-8B-Instruct"
-        )
-        # Dynamic fallback for unregistered models without hardcoding
-        assert self.get_clean_model_label("mistral-7b-instruct") == "Mistral-7B"
-
-    def test_format_db_solver_name(self):
-        assert (
-            self.format_db_solver_name("qwen2.5-coder-14b-instruct-q4_k_m.gguf", "baseline")
-            == "Qwen2.5-Coder-14B-Instruct / baseline"
-        )
-        assert (
-            self.format_db_solver_name("qwen2.5-coder-70b-instruct.gguf", "thinking")
-            == "Qwen2.5-Coder-70B-Instruct / thinking"
-        )
-
-    def test_get_model_slug(self):
-        assert self.get_model_slug("qwen2.5-coder-14b-instruct-q4_k_m.gguf") == "qwen_14b"
-        assert self.get_model_slug("qwen2.5-coder-7b-instruct-q4_k_m.gguf") == "qwen_7b"
-        assert self.get_model_slug("llama-3-8b-instruct") == "llama_8b"
-
-    def test_resolve_folder_solver_name(self):
-        # Classical
-        assert self.resolve_folder_solver_name("cmaes") == "CMA-ES"
-        assert self.resolve_folder_solver_name("cma_es") == "CMA-ES"
-        assert self.resolve_folder_solver_name("cmaes-1") == "CMA-ES"
-        assert self.resolve_folder_solver_name("de") == "DE"
-        assert self.resolve_folder_solver_name("de_1") == "DE"
-        assert self.resolve_folder_solver_name("pso") == "PSO"
-
-        # LLM structured folders
-        assert (
-            self.resolve_folder_solver_name("qwen_14b_baseline")
-            == "Qwen2.5-Coder-14B-Instruct / baseline"
-        )
-        assert (
-            self.resolve_folder_solver_name("deepseek_coder_v2_lite_instruct_q4_k_m_baseline_noisy")
-            == "DeepSeek-Coder-V2-Lite-Instruct / baseline (noise-adapted)"
-        )
-        assert (
-            self.resolve_folder_solver_name("qwen_7b_guided")
-            == "Qwen2.5-Coder-7B-Instruct / guided"
-        )
-        assert (
-            self.resolve_folder_solver_name("qwen_70b_thinking")
-            == "Qwen2.5-Coder-70B-Instruct / thinking"
-        )
 
 
 class TestDomainEngines:
@@ -177,7 +96,14 @@ class TestDomainEngines:
         assert df_omni.iloc[0]["Problem ID"] == 1
         assert df_omni.iloc[0]["Solvers Count"] == 3
 
-        df_pair = hypothesis_engine.run_pairwise_fdr(bench_data)
+        df_pair = hypothesis_engine.run_pairwise_fdr(
+            bench_data,
+            solver_kinds={
+                "CMA-ES": SolverKind.CLASSICAL,
+                "DE": SolverKind.CLASSICAL,
+                "LLaMEA-14B / baseline": SolverKind.GENERATED,
+            },
+        )
         assert not df_pair.empty
         assert len(df_pair) == 3  # (CMA vs DE, CMA vs LLM, DE vs LLM)
         assert "p-adjusted" in df_pair.columns
@@ -238,7 +164,15 @@ class TestDomainEngines:
 
         # 1. Group by dim
         df_dim = ecdf_engine.compute_auc_ecdf_matrix(
-            bench_data, solvers, targets, budget=100_000, group_by="dim"
+            bench_data,
+            solvers,
+            targets,
+            budget=100_000,
+            group_by="dim",
+            solver_kinds={
+                "CMA-ES": SolverKind.CLASSICAL,
+                "LLaMEA-14B / baseline": SolverKind.GENERATED,
+            },
         )
         assert not df_dim.empty
         assert "AUC-ECDF (%)" in df_dim.columns
@@ -248,7 +182,15 @@ class TestDomainEngines:
 
         # 2. Group by noise_std
         df_noise = ecdf_engine.compute_auc_ecdf_matrix(
-            bench_data, solvers, targets, budget=100_000, group_by="noise_std"
+            bench_data,
+            solvers,
+            targets,
+            budget=100_000,
+            group_by="noise_std",
+            solver_kinds={
+                "CMA-ES": SolverKind.CLASSICAL,
+                "LLaMEA-14B / baseline": SolverKind.GENERATED,
+            },
         )
         assert not df_noise.empty
         assert "Clean (σ=0.0)" in df_noise["GroupKey"].values
@@ -256,7 +198,15 @@ class TestDomainEngines:
 
         # 3. Problem Grouping
         df_prob = ecdf_engine.compute_auc_ecdf_matrix(
-            bench_data, solvers, targets, budget=100_000, group_by="problem_id"
+            bench_data,
+            solvers,
+            targets,
+            budget=100_000,
+            group_by="problem_id",
+            solver_kinds={
+                "CMA-ES": SolverKind.CLASSICAL,
+                "LLaMEA-14B / baseline": SolverKind.GENERATED,
+            },
         )
         assert not df_prob.empty
         assert "Sphere (f1)" in df_prob["GroupKey"].values
@@ -264,7 +214,15 @@ class TestDomainEngines:
 
         # 4. Group by condition (raw)
         df_cond = ecdf_engine.compute_auc_ecdf_matrix(
-            bench_data, solvers, targets, budget=100_000, group_by="condition"
+            bench_data,
+            solvers,
+            targets,
+            budget=100_000,
+            group_by="condition",
+            solver_kinds={
+                "CMA-ES": SolverKind.CLASSICAL,
+                "LLaMEA-14B / baseline": SolverKind.GENERATED,
+            },
         )
         assert len(df_cond) == 4  # 2 conditions x 2 solvers
 
@@ -273,7 +231,7 @@ class TestDomainEngines:
             RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 1e-9])),
             RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([10.0, 1.0])),
         ]
-        succ = performance_engine.compute_success_rate(runs, threshold=1e-8)
+        succ = search_success_rate(runs, threshold=1e-8)
         assert succ == 0.5
 
 
@@ -306,9 +264,7 @@ class TestApplicationServicesIntegration:
             df_exp, df_iter = sqlite_repo.get_synthesis_dataframes()
             assert isinstance(df_exp, pd.DataFrame)
             assert isinstance(df_iter, pd.DataFrame)
-            traces = trace_repo.load_benchmark_traces(
-                solver_resolver=configured_model_names().resolve_folder_solver_name
-            )
+            traces = trace_repo.load_benchmark_traces(solver_resolver=folder_solver_name)
             assert isinstance(traces, BenchmarkDataset)
 
 
@@ -363,6 +319,7 @@ class TestNoiseSpecificEcdfTargets:
             targets=targets_dict,
             budget=100_000,
             group_by="condition",
+            solver_kinds={"TestSolver": SolverKind.GENERATED},
         )
         assert len(df_res) == 2
         assert "AUC-ECDF (%)" in df_res.columns

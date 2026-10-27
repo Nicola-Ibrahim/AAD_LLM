@@ -356,10 +356,56 @@ generated-code execution.
   lifecycle/noise calibration and candidate execution are shared infrastructure.
 
 The infrastructure providers wire concrete problem, execution, solver, and
-code-reading adapters. Model-registry TOML loading is infrastructure work; the
-domain's `ModelNames` formats names from supplied registry records. Both workflows
+code-reading adapters. Model names come directly from the synthesis database and
+recorded benchmark provenance; no model registry or slug resolver is involved. Both workflows
 use the same shared BBOB function definition. Champion selection policy is
 application-owned; repositories return candidate records and persist exports.
+
+## Domain invariants and scientific results
+
+Evolution validates problem IDs, dimensions, instances, noise and declared execution
+limits in domain models. `Experiment` always represents a registered database
+record: its positive ID is required and immutable. SQLite allocates the ID inside
+the creation transaction, the domain validates the record, and only then is the
+transaction committed. Invalid input rolls back; no temporary entity with a null
+or invented ID is created. The start timestamp is a string, with a default for new
+objects and the stored value for hydrated records. The evaluator receives the
+experiment as a required dependency. Optional terminal results, finish timestamps
+and unknown historical metadata retain their absence semantics. Experiment lifecycle changes use `complete()` or `fail()`;
+terminal states cannot be reopened by those methods. Explicit replacement remains
+an application operation. Historical unknown budgets, iteration limits and seeds
+remain optional; creating new persisted experiments requires explicit budgets and
+iteration limits. Repository queries use one keyword-only filter API, rather than
+a second criteria-object API with conflicting filters.
+
+The synthesis incumbent is the first candidate with the lowest finite clean error,
+matching the existing evolutionary selection behavior. Summary logging reads that
+incumbent from domain records. Benchmark champion selection retains its independent
+error/evaluation-count ordering; this refactor does not change selected champions.
+
+Benchmark condition identity normalizes noise once to nine decimal places before
+value equality and hashing. `RunTrace` rejects mismatched, multidimensional or
+unordered checkpoint arrays and exposes detached read-only arrays. A
+`BenchmarkDataset` is a mutable collection of those traces, not a frozen value
+object. Filtering creates separate containers while safely sharing read-only traces.
+
+ECDF, convergence, success rates, bootstrap intervals and statistical tests remain
+in the Benchmark domain. No observations produce unavailable values (`NaN`), while
+recorded failed executions remain unsuccessful observations in the denominator.
+Search attainment and returned-solution success remain separate measures. The
+single `search_success_rate` function supports search-based comparisons; terminal
+condition tables use recorded returned-solution errors. Unused trace-based terminal
+tables, checkpoint-table APIs and the unused solver-run wrapper were removed.
+
+Statistical comparisons receive explicit `SolverKind` metadata rather than guessing
+origin from display labels. Model IDs retain their exact recorded spelling;
+small presentation helpers format only solver/strategy and baseline labels. Shared scientific code validates the
+returned point and computes finite clean objective gaps for both contexts.
+New figure directories also use the model ID directly, without duplicate folder
+maps in scientific results. Numerical snapshot format 2 omits those maps; the
+reader still accepts format 1 snapshots without altering their statistics.
+Benchmark data and derived statistics retain candidate/protocol provenance; ECDF
+and other derived statistics are not added to synthesis database tables.
 
 ## Audit and analysis boundaries
 

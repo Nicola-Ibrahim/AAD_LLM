@@ -11,9 +11,9 @@ from benchmark.application.benchmark_config import BenchmarkConfig
 from benchmark.application.interfaces.benchmark_trace_reader import BenchmarkTraceReader
 from benchmark.application.interfaces.candidate_code_reader import CandidateCodeReader
 from benchmark.application.interfaces.synthesis_read_repository import SynthesisReadRepository
+from benchmark.application.model_names import folder_solver_name, record_solver_name
 from benchmark.application.select_champions import ChampionSelectionService
 from benchmark.domain.services.condition_status import inspect_condition
-from benchmark.domain.services.resolvers import ModelNames
 from benchmark.domain.services.transfer import TransferAnalysisEngine
 from benchmark.domain.trial_schedule import select_scheduled_trials
 from benchmark.domain.vos import BenchmarkDataset
@@ -23,12 +23,10 @@ ChampionIdentity = tuple[str, int, int, str]
 
 @dataclass(frozen=True)
 class AnalysisSnapshot:
-    model_labels: dict[str, str]
     solver_labels: dict[str, str]
     config: BenchmarkConfig
     dataset: BenchmarkDataset
     models_to_solvers: dict[str, list[str]]
-    model_slugs: dict[str, str]
     solver_order: list[str]
     classical_solvers: list[str]
     native_records: list[dict[str, object]]
@@ -79,9 +77,7 @@ class AnalysisSnapshot:
                         for values in (run.evaluations, run.raw_objectives):
                             digest.update(str((values.dtype, values.shape)).encode())
                             digest.update(values.tobytes())
-        return AnalysisProvenance(
-            settings, dict(self.filters), dict(self.model_slugs), records, digest.hexdigest()
-        )
+        return AnalysisProvenance(settings, dict(self.filters), records, digest.hexdigest())
 
 
 class AnalysisDataLoader:
@@ -92,7 +88,6 @@ class AnalysisDataLoader:
         transfer_reader: BenchmarkTraceReader,
         code_reader: CandidateCodeReader,
         champion_selection: ChampionSelectionService,
-        model_names: ModelNames,
         config: BenchmarkConfig,
         classifier: TransferAnalysisEngine,
     ) -> None:
@@ -101,7 +96,6 @@ class AnalysisDataLoader:
         self.transfer_reader = transfer_reader
         self.code_reader = code_reader
         self.champion_selection = champion_selection
-        self.model_names = model_names
         self.config = config
         self.classifier = classifier
 
@@ -118,24 +112,15 @@ class AnalysisDataLoader:
         champions = self.champion_selection.get_champions()
         experiments, _ = self.synthesis_repo.get_synthesis_dataframes()
         completed = experiments.loc[experiments["status"] == "completed"]
-        names = self.model_names
-        model_labels = {
-            str(model): names.get_clean_model_label(str(model))
-            for model in completed["llm_name"].dropna().unique()
-        }
-        model_slugs = {label: names.get_model_slug(raw) for raw, label in model_labels.items()}
+        models = completed["llm_name"].dropna().unique().tolist()
         traces = self.trace_reader.load_benchmark_traces(
             dims=dims,
             problems=problems,
             noise_stds=noise_stds,
-            solver_resolver=names.resolve_folder_solver_name,
+            solver_resolver=folder_solver_name,
             trial_schedule=config.trial_schedule,
         )
-        solvers = [
-            s
-            for s in traces.solvers
-            if " / " not in s or s.split(" / ", 1)[0] in model_labels.values()
-        ]
+        solvers = [s for s in traces.solvers if " / " not in s or s.split(" / ", 1)[0] in models]
         dataset = traces.filter(solvers=solvers)
         active: set[ChampionIdentity] = set()
         clean_baseline: set[ChampionIdentity] = set()
@@ -170,7 +155,7 @@ class AnalysisDataLoader:
             select_scheduled_trials(r, config.trial_schedule)
             for r in self.trace_reader.load_provenance_records()
             if selected(r)
-            and ("baseline" in r or r.get("model") in model_labels)
+            and ("baseline" in r or r.get("model") in models)
             and inspect_condition(
                 code_available=True,
                 directory_exists=True,
@@ -234,7 +219,7 @@ class AnalysisDataLoader:
                 int(r["dim"]),
                 float(r["noise_std"]),
                 int(r["problem_id"]),
-                names.resolve_folder_solver_name(str(r["solver_folder"])),
+                record_solver_name(r),
             )
             for r in profile_records
         }
@@ -263,22 +248,10 @@ class AnalysisDataLoader:
         classical = [s for s in dataset.solvers if " / " not in s]
         llms = [s for s in dataset.solvers if " / " in s]
         return AnalysisSnapshot(
-            model_labels={
-                str(r.get("model", r.get("baseline", ""))): names.get_clean_model_label(
-                    str(r.get("model", r.get("baseline", "")))
-                )
-                for r in records
-            },
-            solver_labels={
-                str(r["solver_folder"]): str(
-                    names.resolve_folder_solver_name(str(r["solver_folder"]))
-                )
-                for r in records
-            },
+            solver_labels={str(r["solver_folder"]): str(record_solver_name(r)) for r in records},
             config=config,
             dataset=dataset,
             models_to_solvers=dict(models),
-            model_slugs=model_slugs,
             solver_order=llms + classical,
             classical_solvers=classical,
             native_records=native,

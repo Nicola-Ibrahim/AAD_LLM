@@ -14,7 +14,6 @@ from benchmark.domain.benchmark_results import BENCHMARK_SCHEMA_VERSION, ERROR_D
 from benchmark.domain.services.condition_status import inspect_condition
 from benchmark.domain.trial_schedule import matching_trial_indices, select_scheduled_trials
 from benchmark.infra.io.trace_repository import BenchmarkStateRepository, IOHTraceReader
-from benchmark.infra.storage.model_registry import configured_model_names
 from shared.domain.problem import BaseProblem
 from shared.infra.problems.factory import BBOBProblemFactory
 
@@ -119,13 +118,7 @@ def test_append_only_instance_21_and_filter_ioh_traces(tmp_path: Path, orphan: b
 
     baseline_spy = MagicMock(side_effect=baseline)
     runner = BenchmarkTrialRunner(
-        state,
-        MagicMock(),
-        factory,
-        MagicMock(),
-        lambda _: baseline_spy,
-        MagicMock(),
-        configured_model_names(),
+        state, MagicMock(), factory, MagicMock(), lambda _: baseline_spy, MagicMock()
     )
     result = runner.run_baseline_trials("pso", 2, 0.0, 1, verbose=False, config=config)
     assert result["n_runs"] == 20

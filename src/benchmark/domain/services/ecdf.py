@@ -1,12 +1,13 @@
 """ECDF, paired convergence summaries and condition-level AUC calculations."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Literal, cast
 
 import numpy as np
 import pandas as pd
 
 from benchmark.domain.enums import BBOBFunction
+from benchmark.domain.enums.solver_kind import SolverKind
 from benchmark.domain.vos import BenchmarkDataset, RunTrace
 
 # ─── Declarative Dispatch Table for AUC-ECDF Grouping Strategies ──────────────
@@ -69,7 +70,7 @@ class EcdfConvergenceEngine:
         arr = self._interpolate_runs(runs, eval_grid)
         if arr.size == 0:
             nan_arr = np.full(len(eval_grid), np.nan)
-            return nan_arr, nan_arr, nan_arr, np.zeros(len(eval_grid))
+            return nan_arr, nan_arr.copy(), nan_arr.copy(), nan_arr.copy()
         med = np.median(arr, axis=0)
         q25 = np.percentile(arr, 25, axis=0)
         q75 = np.percentile(arr, 75, axis=0)
@@ -90,7 +91,7 @@ class EcdfConvergenceEngine:
         """Calculate ECDF without unused median/IQR statistics for AUC analysis."""
         values = self._interpolate_runs(runs, eval_grid)
         if values.size == 0:
-            return np.zeros(len(eval_grid))
+            return np.full(len(eval_grid), np.nan)
         return self._ecdf_from_interpolated(values, targets)
 
     def compute_auc_ecdf_matrix(
@@ -103,6 +104,8 @@ class EcdfConvergenceEngine:
             "dim", "problem_id", "noise_std", "dim_noise", "problem_noise", "condition"
         ] = "dim",
         n_grid_points: int = 200,
+        *,
+        solver_kinds: Mapping[str, SolverKind],
     ) -> pd.DataFrame:
         """Compute Area Under the Runtime ECDF (AUC-ECDF) matrix disaggregated by grouping axis.
 
@@ -110,6 +113,8 @@ class EcdfConvergenceEngine:
         Every condition uses the explicitly supplied fixed objective-call budget.
         Targets can be a single np.ndarray or a dictionary mapping noise_std to target arrays.
         """
+        if missing := set(solvers) - solver_kinds.keys():
+            raise ValueError(f"Missing solver origins: {sorted(missing)}")
         rows = []
         c_grid = np.geomspace(1, budget, n_grid_points)
         log_x = np.log10(c_grid)
@@ -140,7 +145,9 @@ class EcdfConvergenceEngine:
                             "Problem ID": cond.problem_id,
                             "AUC-ECDF (%)": auc_pct,
                             "AUC-ECDF": auc_raw,
-                            "Type": "Classical Baseline" if " / " not in s else "LLaMEA Evolved",
+                            "Type": "Classical Baseline"
+                            if solver_kinds[s] == SolverKind.CLASSICAL
+                            else "LLaMEA Evolved",
                         }
                     )
 

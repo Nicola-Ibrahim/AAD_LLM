@@ -7,7 +7,7 @@ class Execution(ValueObject):
     """Timing and throughput metrics for candidate algorithm execution."""
 
     timed_out: bool = Field(
-        description="True if the candidate algorithm exceeded the CPU time limit during execution.",
+        description="True if the candidate algorithm exceeded the wall-clock time limit during execution.",
         examples=[False, True],
     )
     runtime_seconds: float = Field(
@@ -20,7 +20,7 @@ class Execution(ValueObject):
         examples=[4.5, None],
     )
     evaluations_used: int = Field(
-        description="Number of clean objective function evaluations consumed by the algorithm before stopping.",
+        description="Number of supplied objective-interface evaluations consumed by the algorithm before stopping.",
         examples=[1000],
     )
     budget_consumed_pct: float = Field(
@@ -42,12 +42,12 @@ class Fitness(ValueObject):
     )
     final_error: float | None = Field(
         default=None,
-        description="The absolute difference between the true optimum and the best clean fitness achieved.",
+        description="The nonnegative clean objective gap of the returned solution.",
         examples=[0.64, None],
     )
     relative_error: float | None = Field(
         default=None,
-        description="Relative error ratio computed as final_error / true_optimum.",
+        description="Relative error ratio computed as final_error / abs(true_optimum), or final_error when the optimum is zero.",
         examples=[0.008, None],
     )
     error_per_evaluation: float | None = Field(

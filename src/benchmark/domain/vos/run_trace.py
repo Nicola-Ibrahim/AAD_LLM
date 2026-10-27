@@ -1,10 +1,9 @@
-"""RunTrace and SolverRunCollection Value Objects representing empirical optimization convergence traces."""
+"""Validated search history from one optimizer execution."""
 
-from collections.abc import Iterator
 from typing import Self
 
 import numpy as np
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from benchmark.domain.base import ValueObject
 
@@ -17,15 +16,23 @@ class RunTrace(ValueObject):
         description="Array of objective error values at each evaluation checkpoint."
     )
 
+    @field_validator("evaluations", "raw_objectives")
+    @classmethod
+    def protect_array(cls, value: np.ndarray) -> np.ndarray:
+        if value.ndim != 1:
+            raise ValueError("Trace arrays must be one-dimensional")
+        values = np.array(value, copy=True)
+        values.setflags(write=False)
+        return values
+
     @model_validator(mode="after")
-    def validate_lengths(self) -> Self:
-        """Guarantee evaluations and raw_objectives have identical length."""
-        len_evals = len(self.evaluations)
-        len_raw = len(self.raw_objectives)
-        if len_evals != len_raw:
-            min_len = min(len_evals, len_raw)
-            self.evaluations = self.evaluations[:min_len]
-            self.raw_objectives = self.raw_objectives[:min_len]
+    def validate_trace(self) -> Self:
+        if len(self.evaluations) != len(self.raw_objectives):
+            raise ValueError("Trace evaluations and objective gaps must have identical lengths")
+        if not np.isfinite(self.evaluations).all() or np.any(self.evaluations < 0):
+            raise ValueError("Evaluation counts must be finite and nonnegative")
+        if np.any(np.diff(self.evaluations) < 0):
+            raise ValueError("Evaluation counts must be nondecreasing")
         return self
 
     @property
@@ -53,43 +60,3 @@ class RunTrace(ValueObject):
 
     def __repr__(self) -> str:
         return f"RunTrace(n_evals={self.eval_count}, final={self.final_value:.2e})"
-
-
-class SolverRunCollection(ValueObject):
-    """Value Object representing the collection of experimental runs for a specific solver under a single condition."""
-
-    solver_name: str = Field(
-        description="Canonical display name of the solver or LLaMEA configuration."
-    )
-    runs: list[RunTrace] = Field(
-        default_factory=list, description="List of individual RunTrace value objects."
-    )
-
-    @property
-    def terminal_values(self) -> list[float]:
-        """List of final terminal error values across all runs."""
-        return [r.final_value for r in self.runs if not np.isnan(r.final_value)]
-
-    @property
-    def best_values(self) -> list[float]:
-        """List of best objective values across all runs."""
-        return [r.best_value for r in self.runs if not np.isnan(r.best_value)]
-
-    def success_rate(self, threshold: float = 1e-8) -> float:
-        """Fraction of runs that reached delta_y <= threshold."""
-        if not self.runs:
-            return 0.0
-        successes = sum(1 for r in self.runs if r.is_success(threshold))
-        return successes / len(self.runs)
-
-    def __len__(self) -> int:
-        return len(self.runs)
-
-    def __iter__(self) -> Iterator[RunTrace]:
-        return iter(self.runs)
-
-    def __getitem__(self, idx: int) -> RunTrace:
-        return self.runs[idx]
-
-    def __repr__(self) -> str:
-        return f"SolverRunCollection(solver='{self.solver_name}', n_runs={len(self.runs)})"

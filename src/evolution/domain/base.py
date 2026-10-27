@@ -12,8 +12,9 @@ class ValueObject(BaseModel):
 class DomainEntity(BaseModel):
     """Long-lived domain concept with a unique identity and a lifecycle."""
 
-    id: EntityID | None = Field(
-        default=None,
+    id: EntityID = Field(
+        gt=0,
+        frozen=True,
         description="Globally unique entity primary key.",
     )
 

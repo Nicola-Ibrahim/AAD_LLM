@@ -30,13 +30,15 @@ def test_repository_reads_and_writes_without_migrating(
             mode=SynthesisMode.EXPLICIT,
             llm_name="test-model",
             synthesis_seed=43,
+            budget=1_000_000,
+            max_iterations=10,
         )
         assert repository.get_experiment_status(identifier) == ("running", 0)
         experiment = repository.load_by_ids([identifier])[0]
         assert experiment.synthesis_seed == (43 if has_seed_column else None)
         assert repository.load(llm_name="test-model")[0].id == identifier
-        experiment.status = "completed"
-        repository.save_experiment_summary(experiment)
+        experiment.complete()
+        repository.save_experiment(experiment)
         assert repository.get_experiment_status(identifier) == ("completed", 0)
         repository.mark_failed(identifier)
         assert repository.load_by_ids([identifier])[0].status == "failed"

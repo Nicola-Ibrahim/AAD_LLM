@@ -54,6 +54,8 @@ def test_stagnation_diversity_injection(db_session_factory, tmp_path):
         ),
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
+        budget=1_000_000,
+        max_iterations=10,
     )
 
     candidate_evaluation_service = build_candidate_evaluation_service(
@@ -65,7 +67,7 @@ def test_stagnation_diversity_injection(db_session_factory, tmp_path):
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        experiment_id=exp_id,
+        experiment=repo.load_by_ids([exp_id])[0],
         config=SynthesisSettings(budget=100, stagnation_threshold=3),
         candidate_evaluation_service=candidate_evaluation_service,
     )
@@ -114,6 +116,8 @@ def test_evaluator_noisy_feedback_no_noise_std_leak(db_session_factory, tmp_path
         ),
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
+        budget=1_000_000,
+        max_iterations=10,
     )
 
     candidate_evaluation_service = build_candidate_evaluation_service(
@@ -124,7 +128,7 @@ def test_evaluator_noisy_feedback_no_noise_std_leak(db_session_factory, tmp_path
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        experiment_id=exp_id,
+        experiment=repo.load_by_ids([exp_id])[0],
         config=SynthesisSettings(budget=100),
         candidate_evaluation_service=candidate_evaluation_service,
     )

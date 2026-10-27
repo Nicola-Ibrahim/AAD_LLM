@@ -100,7 +100,6 @@ class AnalyzeEcdfAndConvergence:
                         conditions.append(
                             ConditionProfile(
                                 model,
-                                snapshot.model_slugs[model],
                                 dim,
                                 noise,
                                 problem_ids,

@@ -7,30 +7,11 @@ from collections.abc import Iterable
 import numpy as np
 import pandas as pd
 
-from benchmark.domain.vos import BenchmarkDataset, RunTrace
+from benchmark.domain.vos import RunTrace
 
 
 class ReliabilityEngine:
     """Compute fixed-target reliability metrics without conflating missing data and failure."""
-
-    @staticmethod
-    def split_solver_name(solver: str) -> tuple[str, str] | None:
-        """Return canonical ``(model, strategy)`` for an LLM solver label.
-
-        Classical baseline labels deliberately return ``None`` so they cannot enter
-        LLM reliability rankings.
-        """
-        if " / " not in solver:
-            return None
-        model, strategy = solver.rsplit(" / ", 1)
-        return model.strip(), strategy.split(" ", 1)[0].strip().lower()
-
-    @classmethod
-    def discover_models(cls, benchmark_data: BenchmarkDataset) -> list[str]:
-        """Discover LLM labels from loaded traces, including future models automatically."""
-        return sorted(
-            {parsed[0] for s in benchmark_data.solvers if (parsed := cls.split_solver_name(s))}
-        )
 
     @staticmethod
     def wilson_interval(
@@ -56,62 +37,6 @@ class ReliabilityEngine:
             return float("nan")
         hits = np.flatnonzero(np.minimum.accumulate(run.raw_objectives) <= threshold)
         return float(run.evaluations[hits[0]]) if len(hits) else float("nan")
-
-    def compute_reliability_table(
-        self,
-        benchmark_data: BenchmarkDataset,
-        primary_threshold: float = 1e-8,
-        secondary_threshold: float = 1e-2,
-        expected_trials: int = 20,
-    ) -> pd.DataFrame:
-        """Return condition-level reliability rows for every discovered LLM strategy."""
-        rows: list[dict[str, object]] = []
-        for condition, solvers in benchmark_data.items():
-            for solver, runs in solvers.items():
-                parsed = self.split_solver_name(str(solver))
-                if parsed is None:
-                    continue
-                model, strategy = parsed
-                # Empty traces can represent confirmed executions that failed
-                # before their first query. They are not missing trials.
-                valid_runs = list(runs)
-                n_trials = len(valid_runs)
-                primary_hits = sum(r.is_success(primary_threshold) for r in valid_runs)
-                secondary_hits = sum(r.is_success(secondary_threshold) for r in valid_runs)
-                lower, upper = self.wilson_interval(primary_hits, n_trials)
-                terminal = [r.best_value for r in valid_runs if np.isfinite(r.best_value)]
-                hit_times = [self.evaluations_to_target(r, primary_threshold) for r in valid_runs]
-                hit_times = [v for v in hit_times if np.isfinite(v)]
-                rows.append(
-                    {
-                        "Model": model,
-                        "Strategy": strategy,
-                        "Solver": str(solver),
-                        "Dim": condition.dim,
-                        "Noise Std": condition.noise_std,
-                        "Problem ID": condition.problem_id,
-                        "Trials": n_trials,
-                        "Expected Trials": expected_trials,
-                        "Complete": n_trials >= expected_trials,
-                        "Primary Successes": primary_hits,
-                        "Primary Success Rate": primary_hits / n_trials
-                        if n_trials
-                        else float("nan"),
-                        "Primary CI Lower": lower,
-                        "Primary CI Upper": upper,
-                        "Secondary Successes": secondary_hits,
-                        "Secondary Success Rate": secondary_hits / n_trials
-                        if n_trials
-                        else float("nan"),
-                        "Median Best Error": float(np.median(terminal))
-                        if terminal
-                        else float("nan"),
-                        "Median Evals to Primary Target": float(np.median(hit_times))
-                        if hit_times
-                        else float("nan"),
-                    }
-                )
-        return pd.DataFrame(rows)
 
     def compute_aggregate_reliability(
         self,
@@ -162,8 +87,8 @@ class ReliabilityEngine:
         """Fixed-target attainment curve and trial-bootstrap 95% confidence band."""
         traces = list(runs)
         if not traces:
-            zeros = np.zeros(len(eval_grid))
-            return zeros, zeros, zeros
+            missing = np.full(len(eval_grid), np.nan)
+            return missing, missing.copy(), missing.copy()
         matrix = []
         for run in traces:
             hit = self.evaluations_to_target(run, threshold)
@@ -177,44 +102,10 @@ class ReliabilityEngine:
         resampled = values[indices].mean(axis=1)
         return curve, np.quantile(resampled, 0.025, axis=0), np.quantile(resampled, 0.975, axis=0)
 
-    def compute_checkpoint_table(
-        self,
-        benchmark_data: BenchmarkDataset,
-        checkpoint_fractions: list[float],
-        budget: int,
-        threshold: float = 1e-8,
-        primary_strategy: str = "baseline",
-    ) -> pd.DataFrame:
-        """Target attainment at fractions of the explicitly supplied fixed budget."""
-        rows: list[dict[str, object]] = []
-        for condition, solvers in benchmark_data.items():
-            for solver, runs in solvers.items():
-                parsed = self.split_solver_name(str(solver))
-                if parsed is None or parsed[1] != primary_strategy:
-                    continue
-                for fraction in checkpoint_fractions:
-                    checkpoint = max(1, int(budget * fraction))
-                    outcomes = []
-                    for run in runs:
-                        if not len(run.evaluations):
-                            continue
-                        idx = np.searchsorted(run.evaluations, checkpoint, side="right") - 1
-                        if idx < 0:
-                            continue
-                        outcomes.append(float(np.min(run.raw_objectives[: idx + 1]) <= threshold))
-                    if outcomes:
-                        rows.append(
-                            {
-                                "Model": parsed[0],
-                                "Strategy": parsed[1],
-                                "Solver": str(solver),
-                                "Dim": condition.dim,
-                                "Noise Std": condition.noise_std,
-                                "Problem ID": condition.problem_id,
-                                "Checkpoint Fraction": fraction,
-                                "Checkpoint Evaluations": checkpoint,
-                                "Attainment Rate": float(np.mean(outcomes)),
-                                "Trials": len(outcomes),
-                            }
-                        )
-        return pd.DataFrame(rows)
+
+def search_success_rate(runs: Iterable[RunTrace], threshold: float = 1e-8) -> float:
+    """Fraction of recorded search trials attaining the target; NaN means no trials."""
+    traces = list(runs)
+    return (
+        sum(run.is_success(threshold) for run in traces) / len(traces) if traces else float("nan")
+    )

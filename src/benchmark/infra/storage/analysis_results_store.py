@@ -45,7 +45,7 @@ class AnalysisResultsStore:
             arrays: dict[str, np.ndarray] = {}
             tables: dict[str, pd.DataFrame] = {}
             metadata: dict[str, object] = {
-                "schema_version": 1,
+                "schema_version": 2,
                 "provenance": asdict(result.provenance),
                 "diagnostics": list(result.diagnostics),
             }
@@ -74,7 +74,6 @@ class AnalysisResultsStore:
                         dict(
                             key=prefix,
                             model=condition.model,
-                            model_slug=condition.model_slug,
                             dim=condition.dim,
                             noise_std=condition.noise_std,
                             problems=condition.problems,
@@ -110,7 +109,6 @@ class AnalysisResultsStore:
                 namespace = Path("noise_robustness")
                 metadata.update(
                     kind="noise_robustness",
-                    model_labels=result.model_labels,
                     primary_target=result.primary_target,
                 )
                 tables.update(conditions=result.conditions, aggregate=result.aggregate)
@@ -119,7 +117,6 @@ class AnalysisResultsStore:
                 metadata.update(
                     kind="performance",
                     models_to_solvers=result.models_to_solvers,
-                    model_slugs=result.model_slugs,
                     classical_solvers=result.classical_solvers,
                     dims=result.dims,
                     clean_std=result.clean_std,
@@ -210,7 +207,7 @@ class AnalysisResultsStore:
                     "Analysis snapshot must be inside the configured results directory."
                 )
             metadata = read_json_object(directory / "manifest.json")
-            if metadata["schema_version"] != 1:
+            if metadata["schema_version"] not in {1, 2}:
                 raise ValueError("Unsupported analysis snapshot schema.")
             for name, expected in metadata["files"].items():
                 if Path(name).name != name:
@@ -245,7 +242,12 @@ class AnalysisResultsStore:
                 tables[name].index = pd.Index(
                     spec["index"], dtype=spec["index_dtype"], name=spec["index_name"]
                 )
-            provenance = AnalysisProvenance(**metadata["provenance"])
+            provenance = AnalysisProvenance(
+                settings=metadata["provenance"]["settings"],
+                filters=metadata["provenance"]["filters"],
+                records=metadata["provenance"]["records"],
+                trace_signature=metadata["provenance"]["trace_signature"],
+            )
             diagnostics = tuple(metadata["diagnostics"])
             kind = metadata["kind"]
             if kind == "profiles":
@@ -267,7 +269,6 @@ class AnalysisResultsStore:
                     conditions.append(
                         ConditionProfile(
                             condition["model"],
-                            condition["model_slug"],
                             condition["dim"],
                             condition["noise_std"],
                             condition["problems"],
@@ -304,7 +305,6 @@ class AnalysisResultsStore:
                 return NoiseRobustnessResult(
                     tables["conditions"],
                     tables["aggregate"],
-                    metadata["model_labels"],
                     metadata["primary_target"],
                     provenance,
                     diagnostics,
@@ -330,7 +330,6 @@ class AnalysisResultsStore:
                     tables["model_scale"],
                     hardness,
                     metadata["models_to_solvers"],
-                    metadata["model_slugs"],
                     metadata["classical_solvers"],
                     metadata["dims"],
                     metadata["clean_std"],

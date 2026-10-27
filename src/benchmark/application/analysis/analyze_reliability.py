@@ -56,7 +56,6 @@ class AnalyzeReliability:
             )
             display = native.copy()
             if not display.empty:
-                display["Model"] = display["Model"].map(snapshot.model_labels)
                 display["Solver"] = display["Solver"].map(snapshot.solver_labels)
             primary = (
                 display[

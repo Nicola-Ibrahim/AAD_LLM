@@ -16,15 +16,16 @@ from benchmark.application.analysis.analyze_performance import AnalyzePerformanc
 from benchmark.application.analysis.analyze_reliability import AnalyzeReliability
 from benchmark.application.analysis.data_loader import AnalysisDataLoader, AnalysisSnapshot
 from benchmark.application.benchmark_config import BenchmarkConfig
+from benchmark.application.model_names import folder_solver_name
 from benchmark.domain.benchmark_results import (
     BENCHMARK_SCHEMA_VERSION,
     CHAMPION_RETURN_VALIDATION_VERSION,
     ERROR_DEFINITION,
 )
+from benchmark.domain.enums.solver_kind import SolverKind
 from benchmark.domain.services.ecdf import EcdfConvergenceEngine
 from benchmark.domain.services.performance import PerformanceMetricsEngine
 from benchmark.domain.services.reliability import ReliabilityEngine
-from benchmark.domain.services.resolvers import ModelNames
 from benchmark.domain.services.transfer import TransferAnalysisEngine
 from benchmark.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 from benchmark.infra.logging import BenchmarkLogger
@@ -55,7 +56,7 @@ def snapshot() -> AnalysisSnapshot:
     for noise in [0.0, 0.05, 0.1]:
         records.append(
             dict(
-                model="raw-model",
+                model="Model",
                 strategy="baseline",
                 problem_id=1,
                 source_problem_id=1,
@@ -69,12 +70,10 @@ def snapshot() -> AnalysisSnapshot:
             )
         )
     return AnalysisSnapshot(
-        {"raw-model": "Model"},
         {"model_baseline": "Model / baseline"},
         BenchmarkConfig(trials_per_condition=2),
         dataset,
         {"Model": [s for s in dataset.solvers if " / " in s]},
-        {"Model": "model"},
         dataset.solvers,
         ["PSO"],
         [records[0]],
@@ -157,18 +156,7 @@ def test_performance_uses_configured_fixed_budget(snapshot):
     assert result.provenance.settings["auc_grid_policy"] == "fixed_budget_v3"
 
 
-def test_checkpoint_fractions_use_fixed_budget(snapshot):
-    table = ReliabilityEngine().compute_checkpoint_table(
-        snapshot.dataset,
-        checkpoint_fractions=[0.1, 1.0],
-        budget=200,
-    )
-    assert set(table.loc[table["Checkpoint Fraction"] == 0.1, "Checkpoint Evaluations"]) == {20}
-    assert set(table.loc[table["Checkpoint Fraction"] == 1.0, "Checkpoint Evaluations"]) == {200}
-    assert set(table["Dim"]) == {2, 5}
-
-
-def test_fixed_budget_aligns_profiles_auc_attainment_and_checkpoints(snapshot):
+def test_fixed_budget_aligns_profiles_auc_and_attainment(snapshot):
     snapshot = replace(snapshot, config=BenchmarkConfig(budget=100_000, trials_per_condition=2))
     filters = dict(dims=None, problems=None, noise_stds=None)
     profiles = AnalyzeEcdfAndConvergence(
@@ -187,6 +175,12 @@ def test_fixed_budget_aligns_profiles_auc_attainment_and_checkpoints(snapshot):
         targets=performance.targets,
         group_by="condition",
         budget=100_000,
+        solver_kinds={
+            solver: SolverKind.CLASSICAL
+            if solver in snapshot.classical_solvers
+            else SolverKind.GENERATED
+            for solver in snapshot.solver_order
+        },
     )
     pd.testing.assert_frame_equal(performance.table.drop(columns="Canonical Solver"), expected)
 
@@ -197,13 +191,6 @@ def test_fixed_budget_aligns_profiles_auc_attainment_and_checkpoints(snapshot):
         logger=BenchmarkLogger(),
     ).execute(**filters)
     assert reliability.evaluations[-1] == 100_000
-    checkpoints = ReliabilityEngine().compute_checkpoint_table(
-        snapshot.dataset,
-        [0.01, 0.1, 0.5, 1.0],
-        budget=snapshot.config.budget,
-    )
-    assert set(checkpoints["Checkpoint Evaluations"]) == {1000, 10000, 50000, 100000}
-    assert set(checkpoints["Dim"]) == {2, 5}
 
 
 def test_fixed_budget_changes_result_cache_provenance(snapshot):
@@ -237,7 +224,7 @@ def test_reliability_matches_bootstrap_and_preserves_raw_csv_identifiers(snapsho
         ReliabilityEngine(),
         logger=BenchmarkLogger(),
     ).execute(dims=None, problems=None, noise_stds=None)
-    assert result.native.iloc[0]["Model"] == "raw-model"
+    assert result.native.iloc[0]["Model"] == "Model"
     assert result.primary.iloc[0]["Model"] == "Model"
     rel = snapshot.config.reliability
     assert [(series.solver, series.baseline) for series in result.attainment] == [
@@ -289,6 +276,12 @@ def test_noise_and_performance_match_domain_services(snapshot):
         targets=performance.targets,
         group_by="condition",
         budget=snapshot.config.budget,
+        solver_kinds={
+            solver: SolverKind.CLASSICAL
+            if solver in snapshot.classical_solvers
+            else SolverKind.GENERATED
+            for solver in snapshot.solver_order
+        },
     )
     pd.testing.assert_frame_equal(performance.table.drop(columns="Canonical Solver"), expected)
     expected_scale, _ = PerformanceMetricsEngine.summarize_auc_results(
@@ -495,10 +488,9 @@ def test_analysis_scope_disposes_on_use_case_failure(monkeypatch):
 @pytest.mark.parametrize("fixed_budget", [20_000, 100_000])
 def test_loader_eligibility_and_dynamic_models(state, expected_native, fixed_budget):
     config = BenchmarkConfig(budget=fixed_budget)
-    names = ModelNames([])
     raw = "NewModel-7B-Instruct"
-    label = names.get_clean_model_label(raw)
-    solver = names.resolve_folder_solver_name("NewModel-7B-Instruct_baseline")
+    label = raw
+    solver = folder_solver_name("NewModel-7B-Instruct_baseline")
     code = "candidate"
     code_hash = hashlib.sha256(code.encode()).hexdigest()
     dataset = BenchmarkDataset()
@@ -586,18 +578,11 @@ def test_loader_eligibility_and_dynamic_models(state, expected_native, fixed_bud
     code_reader.exists.return_value = state != "missing_code"
     code_reader.read.return_value = code
     loader = AnalysisDataLoader(
-        repository,
-        reader,
-        MagicMock(),
-        code_reader,
-        candidates,
-        names,
-        config,
-        TransferAnalysisEngine(),
+        repository, reader, MagicMock(), code_reader, candidates, config, TransferAnalysisEngine()
     )
     result = loader.load(dims=None, problems=None, noise_stds=None)
     assert len(result.native_records) == expected_native
-    assert result.model_slugs[label] == names.get_model_slug(raw)
+    assert (label in result.models_to_solvers) == bool(expected_native)
     assert result.dataset.get_runs(2, 0.0, 1, "PSO")
     assert result.dataset.get_runs(50, 0.2, 15, "PSO")
     for records in [result.reference_records, result.noise_records]:

@@ -118,12 +118,19 @@ def test_pickle_llamea(tmp_path, test_repos):
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
     llm = LLMClient(Provider.LOCAL)
 
+    db_repo.create_experiment(
+        problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0),
+        mode=SynthesisMode.EXPLICIT,
+        llm_name=llm.model.name,
+        budget=10,
+        max_iterations=10,
+    )
     candidate_evaluation_service = build_candidate_evaluation_service(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=db_repo,
         code_repo=code_repo,
-        experiment_id=1,
+        experiment=db_repo.load_by_ids([1])[0],
         config=SynthesisSettings(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )

@@ -26,6 +26,7 @@ from evolution.domain.vos.metrics import (
 from shared.application.errors import ArtifactError, StorageError
 from shared.application.interfaces.candidate_executor import CandidateExecutor, CandidateTimeout
 from shared.domain.problem import BaseProblem
+from shared.domain.solution import validate_returned_point
 
 
 @dataclass
@@ -181,17 +182,7 @@ class CandidateEvaluator:
         best_x: np.ndarray,
     ) -> float:
         """Validate best_x dimension and bounds, re-evaluate on clean objective, and check finite return."""
-        if len(best_x) != self._problem.dim:
-            raise ValueError(
-                f"Returned best_x has dimension {len(best_x)}, expected problem dimension {self._problem.dim}."
-            )
-        if not self._problem.is_in_bounds(best_x):
-            lb_val = self._problem.lower_bound[0]
-            ub_val = self._problem.upper_bound[0]
-            raise ValueError(
-                f"Returned best_x {best_x.tolist()} is outside search space bounds [{lb_val}, {ub_val}]. "
-                "Ensure your algorithm clips candidate solutions to domain bounds using problem.clip(x) or np.clip(x, lb, ub)."
-            )
+        validate_returned_point(self._problem, best_x)
         clean_y = self._problem.eval_clean(best_x)
 
         if not math.isfinite(clean_y):

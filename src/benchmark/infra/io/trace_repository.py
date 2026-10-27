@@ -14,6 +14,7 @@ import numpy as np
 
 from benchmark.application.interfaces.benchmark_state_store import BenchmarkStateStore
 from benchmark.application.interfaces.benchmark_trace_reader import BenchmarkTraceReader
+from benchmark.application.model_names import folder_solver_name, record_solver_name
 from benchmark.domain.benchmark_results import (
     executed_trial_count,
 )
@@ -181,7 +182,14 @@ class IOHTraceReader(BenchmarkTraceReader):
             if "dummy" in parent_name.lower():
                 continue
 
-            solver_name = solver_resolver(parent_name) if solver_resolver else parent_name
+            record = by_directory.get(json_path.parent.resolve())
+            solver_name = (
+                record_solver_name(record)
+                if record and "model" in record
+                else solver_resolver(parent_name)
+                if solver_resolver
+                else parent_name
+            )
 
             if dims and dim is not None and dim not in dims:
                 continue
@@ -259,7 +267,13 @@ class IOHTraceReader(BenchmarkTraceReader):
             if noise_stds and not any(np.isclose(noise_std, n) for n in noise_stds):
                 continue
             folder = str(record["solver_folder"])
-            solver_name = solver_resolver(folder) if solver_resolver else folder
+            solver_name = (
+                record_solver_name(record)
+                if "model" in record
+                else solver_resolver(folder)
+                if solver_resolver
+                else folder
+            )
             if solvers and solver_name not in solvers:
                 continue
             condition = BenchmarkCondition(dim=dim, noise_std=noise_std, problem_id=p_id)
@@ -293,7 +307,8 @@ class BenchmarkStateRepository(BenchmarkStateStore):
         return self._benchmark_dir
 
     def condition_directory(self, dim: int, noise_std: float, problem_id: int, solver: str) -> Path:
-        return self.benchmark_dir / f"{dim}D" / f"std_{noise_std}" / f"f{problem_id}" / solver
+        condition = self.benchmark_dir / f"{dim}D" / f"std_{noise_std}" / f"f{problem_id}"
+        return self._recorded_directory(condition, condition / solver, solver, None)
 
     def transfer_directory(
         self,
@@ -304,15 +319,39 @@ class BenchmarkStateRepository(BenchmarkStateStore):
         solver: str,
         code_hash: str,
     ) -> Path:
-        return (
+        condition = (
             self.benchmark_dir.parent
             / "cross_function_traces"
             / f"source_f{source_problem_id}"
             / f"{dim}D"
             / f"std_{noise_std}"
             / f"f{problem_id}"
-            / f"{solver}_{code_hash[:12]}"
         )
+        return self._recorded_directory(
+            condition, condition / f"{solver}_{code_hash[:12]}", solver, code_hash
+        )
+
+    def _recorded_directory(
+        self, condition: Path, target: Path, solver: str, code_hash: str | None
+    ) -> Path:
+        """Find historical folders through provenance, without slug aliases or file moves."""
+        if not target.resolve().is_relative_to(condition.resolve()):
+            raise ValueError("A model identifier cannot point outside its benchmark condition")
+        if target.exists() or not condition.exists():
+            return target
+        matches = []
+        for provenance in sorted(condition.glob("*/provenance.json")):
+            record = read_json_object(provenance)
+            record["solver_folder"] = provenance.parent.name
+            if "model" not in record and "baseline" not in record:
+                continue
+            if record_solver_name(record) == folder_solver_name(solver) and (
+                code_hash is None or record.get("code_hash") == code_hash
+            ):
+                matches.append(provenance.parent)
+        if len(matches) > 1:
+            raise ArtifactError(f"Multiple recorded directories match {solver}: {matches}")
+        return matches[0] if matches else target
 
     def remove_solver_traces(self, solver_dir: Path) -> None:
         """Remove one stale solver condition directory before a clean evaluation."""

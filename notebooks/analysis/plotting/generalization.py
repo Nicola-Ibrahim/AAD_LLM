@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from benchmark.application.analysis.results import NoiseRobustnessResult
+from benchmark.application.model_names import baseline_name
 
 from .style import (
     FONT_FAMILY,
@@ -21,7 +22,7 @@ def build_noise_success_figure(results: NoiseRobustnessResult) -> go.Figure:
         raise ValueError("No complete frozen-champion noisy trials.")
     dims = sorted(aggregate["Dim"].unique())
     models = sorted(aggregate["Model"].unique())
-    labels = {model: results.model_labels[model] for model in models}
+    labels = {model: baseline_name(model) for model in models}
     model_styles = {}
     ordered_labels = sorted(labels.values())
     for model, label in labels.items():

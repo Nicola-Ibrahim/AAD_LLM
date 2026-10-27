@@ -13,7 +13,6 @@ ProfileMode = Literal["explicit", "implicit", "comparison"]
 class AnalysisProvenance:
     settings: dict[str, object]
     filters: dict[str, object]
-    model_slugs: dict[str, str]
     records: list[dict[str, object]]
     trace_signature: str
 
@@ -32,7 +31,6 @@ class ProfileSeries:
 @dataclass(frozen=True)
 class ConditionProfile:
     model: str
-    model_slug: str
     dim: int
     noise_std: float
     problems: list[int]
@@ -76,7 +74,6 @@ class ReliabilityAnalysisResult:
 class NoiseRobustnessResult:
     conditions: pd.DataFrame
     aggregate: pd.DataFrame
-    model_labels: dict[str, str]
     primary_target: float
     provenance: AnalysisProvenance
     diagnostics: tuple[str, ...]
@@ -98,7 +95,6 @@ class PerformanceAnalysisResult:
     model_scale: pd.DataFrame
     hardness: list[HardnessSummary]
     models_to_solvers: dict[str, list[str]]
-    model_slugs: dict[str, str]
     classical_solvers: list[str]
     dims: list[int]
     clean_std: float

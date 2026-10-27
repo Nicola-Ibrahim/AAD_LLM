@@ -17,6 +17,7 @@ class IterationMetadata(ValueObject):
         default=None,
         description="The 1-based index representing the generation or iteration of the evolution loop.",
         examples=[1, 5, 10],
+        gt=0,
     )
     algorithm_name: str = Field(
         description="Name of the generated algorithm candidate.",

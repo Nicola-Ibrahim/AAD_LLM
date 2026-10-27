@@ -54,7 +54,6 @@ def setup_namespace() -> dict[str, object]:
         "BenchmarkCoordinator",
         "ChampionSelectionService",
         "SQLiteSynthesisReadRepository",
-        "ModelNames",
         "BenchmarkAuditService",
         "AnalyzeReliability",
         "AnalyzeEcdfAndConvergence",

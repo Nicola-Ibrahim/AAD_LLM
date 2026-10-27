@@ -13,7 +13,6 @@ import pytest
 
 from benchmark.application.benchmark_config import BenchmarkConfig
 from benchmark.application.trials.workload import BenchmarkWorkload
-from benchmark.domain.services.resolvers import ModelNames
 from benchmark.infra.io.trace_repository import BenchmarkStateRepository, IOHTraceReader
 from evolution.application.exceptions import OrchestrationError, ProviderError
 from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
@@ -97,7 +96,7 @@ def test_unreadable_provenance_is_not_missing_and_audit_is_read_only(tmp_path):
     with pytest.raises(ArtifactError) as failure:
         repository.read_provenance(directory)
     assert failure.value.__cause__ is not None
-    workload = BenchmarkWorkload(MagicMock(), MagicMock(), repository, MagicMock(), ModelNames([]))
+    workload = BenchmarkWorkload(MagicMock(), MagicMock(), repository, MagicMock())
     status = workload.inspect_status(directory, config=BenchmarkConfig())
     assert status.status == "INVALID_ARTIFACT"
     assert status.reusable_trials == 0

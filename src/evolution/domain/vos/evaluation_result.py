@@ -14,7 +14,7 @@ class AlgorithmEvaluationResult(ValueObject):
     )
     final_error: float | None = Field(
         default=None,
-        description="Absolute error to true optimum |y_clean - y*| if the candidate executed successfully.",
+        description="Nonnegative clean optimality gap max(0, y_clean - y*) after successful execution.",
     )
     feedback_message: str | None = Field(
         default=None,

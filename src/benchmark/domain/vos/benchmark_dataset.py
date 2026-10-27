@@ -1,18 +1,19 @@
 """BenchmarkDataset Value Object representing complete multi-condition benchmark traces."""
 
-from collections.abc import ItemsView, Iterator, KeysView, Mapping, ValuesView
-from typing import Any, Self
+from collections.abc import Iterator, Mapping
+from typing import Self
 
 import numpy as np
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from benchmark.domain.base import ValueObject
 from benchmark.domain.vos.condition import BenchmarkCondition
-from benchmark.domain.vos.run_trace import RunTrace, SolverRunCollection
+from benchmark.domain.vos.run_trace import RunTrace
 
 
-class BenchmarkDataset(ValueObject, Mapping[BenchmarkCondition, dict[str, list[RunTrace]]]):
-    """Analytical Value Object encapsulating multi-condition empirical evaluation traces."""
+class BenchmarkDataset(BaseModel, Mapping[BenchmarkCondition, dict[str, list[RunTrace]]]):
+    """Mutable collection of conditions and immutable search traces."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
 
     conditions_data: dict[BenchmarkCondition, dict[str, list[RunTrace]]] = Field(
         default_factory=dict,
@@ -66,17 +67,6 @@ class BenchmarkDataset(ValueObject, Mapping[BenchmarkCondition, dict[str, list[R
         cond = BenchmarkCondition(dim=dim, noise_std=noise_std, problem_id=problem_id)
         return self.conditions_data.get(cond, {}).get(solver, [])
 
-    def get_solver_collection(
-        self,
-        dim: int,
-        noise_std: float,
-        problem_id: int,
-        solver: str,
-    ) -> SolverRunCollection:
-        """Get strongly-typed SolverRunCollection VO for a specific condition and solver."""
-        runs = self.get_runs(dim, noise_std, problem_id, solver)
-        return SolverRunCollection(solver_name=solver, runs=runs)
-
     def filter(
         self,
         dims: list[int] | None = None,
@@ -119,15 +109,3 @@ class BenchmarkDataset(ValueObject, Mapping[BenchmarkCondition, dict[str, list[R
 
     def __len__(self) -> int:
         return len(self.conditions_data)
-
-    def items(self) -> ItemsView[BenchmarkCondition, dict[str, list[RunTrace]]]:
-        return self.conditions_data.items()
-
-    def keys(self) -> KeysView[BenchmarkCondition]:
-        return self.conditions_data.keys()
-
-    def values(self) -> ValuesView[dict[str, list[RunTrace]]]:
-        return self.conditions_data.values()
-
-    def get(self, key: BenchmarkCondition, default: Any = None) -> Any:
-        return self.conditions_data.get(key, default)

@@ -86,7 +86,7 @@ def test_explicit_rerun_replaces_all_scheduled_trials_and_preserves_history(time
     if times_out_again:
         execute.side_effect = CandidateTimeout("Execution exceeded 120 seconds")
     runner = BenchmarkTrialRunner(
-        state, MagicMock(), factory, MagicMock(), MagicMock(), MagicMock(), MagicMock()
+        state, MagicMock(), factory, MagicMock(), MagicMock(), MagicMock()
     )
     config = BenchmarkConfig(trials_per_condition=5, trial_timeout_seconds=120.0)
 
@@ -261,6 +261,6 @@ def test_reader_uses_retry_trace_once_and_ignores_the_preserved_original(tmp_pat
     dataset = IOHTraceReader(tmp_path).load_benchmark_traces(
         trial_schedule=BenchmarkConfig(trials_per_condition=5).trial_schedule
     )
-    runs = dataset.get_runs(2, 0.0, 1, "test")
+    runs = dataset.get_runs(2, 0.0, 1, f"{record['model']} / {record.get('strategy', 'baseline')}")
     assert len(runs) == 5
     assert [run.raw_objectives.tolist() for run in runs] == expected

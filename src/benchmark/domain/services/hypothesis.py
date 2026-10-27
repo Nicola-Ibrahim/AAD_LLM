@@ -1,11 +1,14 @@
 """Inferential statistical hypothesis testing, effect size estimation,."""
 
+from collections.abc import Mapping
+
 import numpy as np
 import pandas as pd
 from scipy.stats import kruskal, mannwhitneyu
 from statsmodels.stats.multitest import multipletests
 
 from benchmark.domain.enums import BBOBFunction
+from benchmark.domain.enums.solver_kind import SolverKind
 from benchmark.domain.vos import BenchmarkDataset
 
 
@@ -87,9 +90,13 @@ class HypothesisTestingEngine:
     def run_pairwise_fdr(
         self,
         benchmark_data: BenchmarkDataset,
+        *,
+        solver_kinds: Mapping[str, SolverKind],
         alpha: float = 0.05,
     ) -> pd.DataFrame:
         """Execute pairwise Mann-Whitney U tests with Benjamini-Hochberg FDR correction."""
+        if missing := set(benchmark_data.solvers) - solver_kinds.keys():
+            raise ValueError(f"Missing solver origins: {sorted(missing)}")
         master_pairwise: list[dict[str, object]] = []
 
         for cond, s_dict in benchmark_data.items():
@@ -125,8 +132,8 @@ class HypothesisTestingEngine:
                                 u_stat, p_val = np.nan, np.nan
 
                         def get_tier(a: str, b: str) -> str:
-                            is_a = "llamea" in a.lower()
-                            is_b = "llamea" in b.lower()
+                            is_a = solver_kinds[a] == SolverKind.GENERATED
+                            is_b = solver_kinds[b] == SolverKind.GENERATED
                             if (is_a and not is_b) or (is_b and not is_a):
                                 return "Tier 2 (LLaMEA vs. Classical)"
                             elif is_a and is_b:

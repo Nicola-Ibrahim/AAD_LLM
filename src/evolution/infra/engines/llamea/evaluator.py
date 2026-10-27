@@ -15,7 +15,7 @@ from llamea import Solution
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
 from evolution.application.synthesis.settings import SynthesisSettings
-from evolution.domain.entities import ExperimentSummary
+from evolution.domain.entities import Experiment
 from evolution.domain.interfaces.code_repository import CodeRepository
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.vos import IterationMetadata, ProblemProfile
@@ -38,7 +38,7 @@ class Evaluator:
         problem: BaseProblem,
         db_repo: SynthesisRepository,
         code_repo: CodeRepository,
-        experiment_id: int,
+        experiment: Experiment,
         config: SynthesisSettings,
         candidate_evaluation_service: CandidateEvaluator,
         initial_iteration: int = 0,
@@ -47,10 +47,10 @@ class Evaluator:
         self._db_repo = db_repo
         self._code_repo = code_repo
         self._config = config
-        self._experiment_id = experiment_id
+        self._experiment_id = experiment.id
         self._current_iteration = initial_iteration
         self._logger: BaseLogger = SynthesisLogger()
-        self._experiment: ExperimentSummary | None = None
+        self._experiment = experiment
         self._candidate_evaluation_service = candidate_evaluation_service
         self._feedback_renderer = FeedbackRenderer()
         self._execution_contract = CANDIDATE_EXECUTION_VERSION
@@ -65,12 +65,8 @@ class Evaluator:
         self._logger = value
 
     @property
-    def experiment(self) -> ExperimentSummary | None:
+    def experiment(self) -> Experiment:
         return self._experiment
-
-    @experiment.setter
-    def experiment(self, value: ExperimentSummary | None) -> None:
-        self._experiment = value
 
     @property
     def problem_profile(self) -> ProblemProfile:
@@ -88,7 +84,7 @@ class Evaluator:
         self._current_iteration += 1
         code_path_str: str | None = None
 
-        if self._code_repo is not None and solution.code:
+        if solution.code:
             code_path_str = self._code_repo.save_code(
                 code=solution.code,
                 iteration_num=self._current_iteration,
@@ -103,14 +99,11 @@ class Evaluator:
             }
         )
 
-        if self._db_repo is not None:
-            self._db_repo.append_iteration(
-                experiment_id=self._experiment_id,
-                metadata=final_metadata,
-            )
-
-        if self._experiment is not None:
-            self._experiment.record_iteration(final_metadata, self._current_iteration)
+        self._db_repo.append_iteration(
+            experiment_id=self._experiment_id,
+            metadata=final_metadata,
+        )
+        self._experiment.record_iteration(final_metadata)
 
     def __call__(self, solution: Solution, explogger: object | None = None) -> Solution:
         """Execute and score a candidate optimization algorithm solution.
@@ -134,24 +127,23 @@ class Evaluator:
             solution.set_scores(result.fitness_score, feedback)
             self._persist_iteration(solution, result.metadata)
 
-            if self._logger is not None:
-                if result.is_stagnated:
-                    self._logger.stagnation_warning(
-                        self._config.stagnation_threshold, self._config.stagnation_threshold
-                    )
-                succeeded = not result.is_failure and result.final_error is not None
-                failure_reason = result.metadata.error.error_type if result.metadata.error else None
-                self._logger.generation(
-                    gen_idx=self._current_iteration,
-                    total_gens=self._config.iterations,
-                    algo_name=solution.name or "Candidate",
-                    error=result.final_error if succeeded else None,
-                    fitness=result.fitness_score if succeeded else None,
-                    evals_used=result.metadata.execution.evaluations_used,
-                    runtime=result.metadata.execution.runtime_seconds,
-                    is_failure=not succeeded,
-                    failure_reason="" if succeeded else failure_reason or "ExecutionFailure",
+            if result.is_stagnated:
+                self._logger.stagnation_warning(
+                    self._config.stagnation_threshold, self._config.stagnation_threshold
                 )
+            succeeded = not result.is_failure and result.final_error is not None
+            failure_reason = result.metadata.error.error_type if result.metadata.error else None
+            self._logger.generation(
+                gen_idx=self._current_iteration,
+                total_gens=self._config.iterations,
+                algo_name=solution.name or "Candidate",
+                error=result.final_error if succeeded else None,
+                fitness=result.fitness_score if succeeded else None,
+                evals_used=result.metadata.execution.evaluations_used,
+                runtime=result.metadata.execution.runtime_seconds,
+                is_failure=not succeeded,
+                failure_reason="" if succeeded else failure_reason or "ExecutionFailure",
+            )
 
             return solution
         except Exception as error:
@@ -185,11 +177,11 @@ class Evaluator:
         if getattr(self, "_db_repo", None) is None:
             logging.getLogger(__name__).warning(
                 "[WARN] Evaluator resumed from pickle with _db_repo=None. "
-                "Iteration persistence is DISABLED for this run. "
+                "Reattach the repository before candidate execution. "
                 "Call evaluator._db_repo = repo to re-attach."
             )
         if getattr(self, "_code_repo", None) is None:
             logging.getLogger(__name__).warning(
                 "[WARN] Evaluator resumed from pickle with _code_repo=None. "
-                "Code file saving is DISABLED for this run."
+                "Reattach the code repository before candidate execution."
             )

@@ -9,7 +9,6 @@ from pydantic import ValidationError
 from benchmark.application.benchmark_config import BenchmarkConfig
 from benchmark.application.trials.models import RecordedTrial
 from benchmark.application.trials.runner import BenchmarkTrialRunner
-from benchmark.domain.services.resolvers import ModelNames
 from benchmark.infra.io.code_reader import FilesystemCodeReader
 from benchmark.infra.io.trace_repository import BenchmarkStateRepository
 from benchmark.infra.logging import BenchmarkLogger
@@ -39,7 +38,6 @@ def test_failure_diagnostics_survive_trial_resumption(tmp_path: Path) -> None:
         executor_factory=create_candidate_executor,
         baseline_resolver=get_baseline_runner,
         code_reader=FilesystemCodeReader(tmp_path),
-        model_names=ModelNames([]),
     )
     errors = iter([ValueError("invalid coordinates"), CandidateTimeout("time limit")])
 
@@ -144,7 +142,6 @@ def test_fixed_trial_budget_is_recorded_cached_and_invalidated(tmp_path: Path, d
         executor_factory=create_candidate_executor,
         baseline_resolver=get_baseline_runner,
         code_reader=FilesystemCodeReader(tmp_path),
-        model_names=ModelNames([]),
     )
     result = runner.run_baseline_trials(
         dim=dim, noise_std=0.0, p_id=1, baseline_slug="pso", config=config

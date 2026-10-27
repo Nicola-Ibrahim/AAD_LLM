@@ -2,13 +2,13 @@ from collections.abc import Sequence
 
 from evolution.application.campaign.conditions import (
     MatrixCondition,
-    condition_from_summary,
+    condition_from_experiment,
     group_experiments_by_condition,
 )
 from evolution.application.campaign.experiment_task import ExperimentTask
 from evolution.application.campaign.settings import CampaignSettings
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
-from evolution.domain.entities import ExperimentSummary
+from evolution.domain.entities import Experiment
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.vos.problem_profile import ProblemProfile
 from shared.domain.interfaces.problem_factory import ProblemFactory
@@ -67,7 +67,7 @@ class CampaignPlanner:
             # Step A: Resume interrupted/running runs from DB if AUTO_RESUME enabled
             if self.config.auto_resume:
                 for exp in running_list:
-                    tasks.append(self._build_task_from_summary(exp, tag="resume"))
+                    tasks.append(self._build_task_from_experiment(exp, tag="resume"))
 
             # Step B: Calculate accounted count
             accounted_runs = (
@@ -80,12 +80,14 @@ class CampaignPlanner:
             if not self.config.only_incomplete:
                 remaining_needed = max(0, self.config.runs_per_config - accounted_runs)
                 replacements = sorted(
-                    db_failed.get(item, []), key=lambda exp: exp.id or 0, reverse=True
+                    db_failed.get(item, []), key=lambda exp: exp.id, reverse=True
                 )[:remaining_needed]
                 if self.config.retry_failed_synthesis:
                     for experiment in replacements:
                         tasks.append(
-                            self._build_task_from_summary(experiment, tag="replace", restart=True)
+                            self._build_task_from_experiment(
+                                experiment, tag="replace", restart=True
+                            )
                         )
                     remaining_needed -= len(replacements)
                 for run_idx in range(accounted_runs + 1, accounted_runs + remaining_needed + 1):
@@ -108,13 +110,13 @@ class CampaignPlanner:
         # for another active model must never dispatch these experiments.
         selected = [experiment for experiment in selected if experiment.llm_name == self.model_name]
         existing = self.sqlite_repo.load(llm_name=self.model_name)
-        manual_conditions = dict.fromkeys(condition_from_summary(exp) for exp in selected)
+        manual_conditions = dict.fromkeys(condition_from_experiment(exp) for exp in selected)
         eligible = set(self.config.matrix_conditions) | set(manual_conditions)
         completed, running, failed = group_experiments_by_condition(
             experiments=existing,
         )
         tasks = [
-            self._build_task_from_summary(exp, tag="replace", restart=True) for exp in selected
+            self._build_task_from_experiment(exp, tag="replace", restart=True) for exp in selected
         ]
         resumed: set[MatrixCondition] = set()
         if self.config.auto_resume:
@@ -124,8 +126,8 @@ class CampaignPlanner:
                     and condition not in manual_conditions
                     and not completed.get(condition)
                 ):
-                    experiment = max(experiments, key=lambda exp: exp.id or 0)
-                    tasks.append(self._build_task_from_summary(experiment, tag="resume"))
+                    experiment = max(experiments, key=lambda exp: exp.id)
+                    tasks.append(self._build_task_from_experiment(experiment, tag="resume"))
                     resumed.add(condition)
 
         # Any completed valid champion satisfies automatic recovery, regardless
@@ -139,21 +141,21 @@ class CampaignPlanner:
                     or condition in resumed
                 ):
                     continue
-                experiment = max(experiments, key=lambda exp: exp.id or 0)
-                tasks.append(self._build_task_from_summary(experiment, tag="replace", restart=True))
+                experiment = max(experiments, key=lambda exp: exp.id)
+                tasks.append(
+                    self._build_task_from_experiment(experiment, tag="replace", restart=True)
+                )
         return tasks
 
     # -------------------------------------------------------------------------
 
-    def _build_task_from_summary(
+    def _build_task_from_experiment(
         self,
-        exp: ExperimentSummary,
+        exp: Experiment,
         tag: str = "resume",
         restart: bool = False,
     ) -> ExperimentTask:
         """Constructs a work item for an existing experiment in the database."""
-        if exp.id is None:
-            raise ValueError(f"Cannot build task without a valid database id: {exp}")
         if not restart and exp.iterations:
             if exp.budget is None or exp.budget != self.config.budget:
                 raise ValueError(
@@ -166,14 +168,14 @@ class CampaignPlanner:
                     f"Cannot resume experiment #{exp.id}: its synthesis seed is unknown. "
                     "Explicit replacement is required; no results were removed."
                 )
-        noise_std = exp.problem.noise_std or 0.0
+        noise_std = exp.problem.noise_std
         problem = self.problem_factory.create(
             problem_id=exp.problem.problem_id,
             dim=exp.problem.dim,
             noise_std=noise_std,
             noise_model=exp.problem.noise_model,
-            instance_id=exp.problem.instance_id or 1,
-            seed=exp.synthesis_seed if exp.synthesis_seed is not None else 42 + (exp.id or 0),
+            instance_id=exp.problem.instance_id,
+            seed=exp.synthesis_seed if exp.synthesis_seed is not None else 42 + (exp.id),
         )
         initial_iter = 0 if restart else (len(exp.iterations) if exp.iterations else 0)
         cfg = self.config.synthesis_settings(
@@ -202,9 +204,9 @@ class CampaignPlanner:
         if missing := set(target_ids) - found:
             raise ValueError(f"Unknown resume experiment IDs: {sorted(missing)}")
         return [
-            self._build_task_from_summary(exp, tag="target")
+            self._build_task_from_experiment(exp, tag="target")
             for exp in targeted_experiments
-            if exp.id is not None and exp.llm_name == self.model_name and exp.status == "running"
+            if exp.llm_name == self.model_name and exp.status == "running"
         ]
 
     def _build_fresh_task(

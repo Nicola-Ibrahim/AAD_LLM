@@ -16,7 +16,7 @@ from evolution.application.interfaces.synthesis_engine import SynthesisEngine
 from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
 from evolution.application.synthesis.service import Synthesis
 from evolution.application.synthesis.settings import SynthesisSettings
-from evolution.domain.entities import ExperimentSummary
+from evolution.domain.entities import Experiment
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.vos import (
     Code,
@@ -254,6 +254,8 @@ def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
         ),
         mode=SynthesisMode.EXPLICIT,
         llm_name="dummy-llm",
+        budget=1_000_000,
+        max_iterations=10,
     )
 
     candidate_evaluation_service = build_candidate_evaluation_service(problem=problem, budget=10)
@@ -261,7 +263,7 @@ def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        experiment_id=exp_id,
+        experiment=repo.load_by_ids([exp_id])[0],
         config=SynthesisSettings(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )
@@ -312,6 +314,8 @@ def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory
         ),
         mode=SynthesisMode.EXPLICIT,
         llm_name="dummy-llm",
+        budget=1_000_000,
+        max_iterations=10,
     )
 
     candidate_evaluation_service = build_candidate_evaluation_service(problem=problem, budget=10)
@@ -319,7 +323,7 @@ def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        experiment_id=exp_id,
+        experiment=repo.load_by_ids([exp_id])[0],
         config=SynthesisSettings(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )
@@ -362,6 +366,8 @@ def test_sqlite_create_and_append(db_session_factory):
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0),
         mode=SynthesisMode.EXPLICIT,
         llm_name="dummy-llm",
+        budget=1_000_000,
+        max_iterations=10,
     )
 
     it_meta = IterationMetadata(
@@ -399,9 +405,9 @@ def test_sqlite_create_and_append(db_session_factory):
 
     repo.append_iteration(ctx1, it_meta)
     summary = repo.load(experiment_id=ctx1)[0]
-    summary.record_iteration(it_meta, 1)
+    summary.record_iteration(it_meta)
     summary.complete()
-    repo.save_experiment_summary(summary)
+    repo.save_experiment(summary)
 
     # Verify save
     with db_session_factory() as session:
@@ -424,6 +430,8 @@ def test_sqlite_append_with_error(db_session_factory):
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0),
         mode=SynthesisMode.EXPLICIT,
         llm_name="dummy-llm",
+        budget=1_000_000,
+        max_iterations=10,
     )
 
     it_meta = IterationMetadata(
@@ -461,9 +469,9 @@ def test_sqlite_append_with_error(db_session_factory):
 
     repo.append_iteration(ctx, it_meta)
     summary = repo.load(experiment_id=ctx)[0]
-    summary.record_iteration(it_meta, 1)
+    summary.record_iteration(it_meta)
     summary.complete()
-    repo.save_experiment_summary(summary)
+    repo.save_experiment(summary)
 
     # Load and verify error_log relation mapping
     loaded = repo.load(problem_id=1)
@@ -632,6 +640,7 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
         mode=SynthesisMode.EXPLICIT,
         llm_name=llm.model.name,
         budget=2500,
+        max_iterations=10,
     )
 
     engine = LLaMEAEngine(
@@ -679,6 +688,8 @@ def test_evaluator_current_iteration_resumes_from_db(temp_dir, db_session_factor
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0),
         mode=SynthesisMode.EXPLICIT,
         llm_name="dummy",
+        budget=1_000_000,
+        max_iterations=10,
     )
 
     status, max_iter = repo.get_experiment_status(exp_id)
@@ -692,7 +703,7 @@ def test_evaluator_current_iteration_resumes_from_db(temp_dir, db_session_factor
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        experiment_id=exp_id,
+        experiment=repo.load_by_ids([exp_id])[0],
         config=SynthesisSettings(budget=1_000_000),
         candidate_evaluation_service=candidate_evaluation_service1,
     )
@@ -729,7 +740,7 @@ def test_evaluator_current_iteration_resumes_from_db(temp_dir, db_session_factor
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        experiment_id=exp_id,
+        experiment=repo.load_by_ids([exp_id])[0],
         config=SynthesisSettings(budget=1_000_000),
         candidate_evaluation_service=candidate_evaluation_service2,
         initial_iteration=max_iter,
@@ -798,10 +809,12 @@ def test_prompt_strategy_persisted(db_session_factory, tmp_path):
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
         prompt_strategy=PromptStrategy.VECTORIZATION,
+        budget=1_000_000,
+        max_iterations=10,
     )
     summary = repo.load(experiment_id=exp_id)[0]
     summary.complete()
-    repo.save_experiment_summary(summary)
+    repo.save_experiment(summary)
 
     summaries = repo.load(problem_id=1, prompt_strategy=PromptStrategy.VECTORIZATION)
     assert len(summaries) == 1
@@ -847,13 +860,15 @@ def test_evaluator_clean_reevaluation_with_tuple_return(db_session_factory, tmp_
         ),
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
+        budget=1_000_000,
+        max_iterations=10,
     )
     candidate_evaluation_service = build_candidate_evaluation_service(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        experiment_id=exp_id,
+        experiment=repo.load_by_ids([exp_id])[0],
         config=SynthesisSettings(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )
@@ -886,13 +901,15 @@ def test_evaluator_out_of_bounds_best_x_rejected(db_session_factory, tmp_path):
         ),
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
+        budget=1_000_000,
+        max_iterations=10,
     )
     candidate_evaluation_service = build_candidate_evaluation_service(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        experiment_id=exp_id,
+        experiment=repo.load_by_ids([exp_id])[0],
         config=SynthesisSettings(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )
@@ -936,13 +953,15 @@ def test_evaluator_failure_fitness_and_categorized_feedback(db_session_factory, 
         ),
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
+        budget=1_000_000,
+        max_iterations=10,
     )
     candidate_evaluation_service = build_candidate_evaluation_service(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        experiment_id=exp_id,
+        experiment=repo.load_by_ids([exp_id])[0],
         config=SynthesisSettings(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )
@@ -986,13 +1005,15 @@ def test_evaluator_enriched_feedback_and_warnings(db_session_factory, tmp_path):
         ),
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
+        budget=1_000_000,
+        max_iterations=10,
     )
     candidate_evaluation_service = build_candidate_evaluation_service(problem=problem, budget=10)
     evaluator = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
-        experiment_id=exp_id,
+        experiment=repo.load_by_ids([exp_id])[0],
         config=SynthesisSettings(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )
@@ -1026,16 +1047,18 @@ class BadMatrixOpt:
 
 
 def test_experiment_summary_domain_aggregate(db_session_factory):
-    """Verify ExperimentSummary behavioral methods and save_experiment_summary persistence."""
+    """Verify Experiment behavioral methods and save_experiment persistence."""
     repo = SQLiteSynthesisRepository(db_session_factory)
     profile = ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0)
     exp_id = repo.create_experiment(
         problem=profile,
         mode=SynthesisMode.EXPLICIT,
         llm_name="test-llm",
+        budget=1_000_000,
+        max_iterations=10,
     )
 
-    exp = ExperimentSummary.new(
+    exp = Experiment(
         experiment_id=exp_id,
         problem=profile,
         mode=SynthesisMode.EXPLICIT,
@@ -1146,10 +1169,10 @@ def test_experiment_summary_domain_aggregate(db_session_factory):
     assert exp.status == "completed"
     assert exp.finished_at is not None
 
-    repo.save_experiment_summary(exp)
+    repo.save_experiment(exp)
 
     # Verify persisted values in database
-    loaded = repo.load(criteria=None, experiment_id=exp_id)[0]
+    loaded = repo.load(experiment_id=exp_id)[0]
     assert loaded.status == "completed"
     assert loaded.best_final_error == 2.0
     assert loaded.best_algorithm == "Algo2"

@@ -5,7 +5,7 @@ from collections import defaultdict
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from evolution.domain.entities import ExperimentSummary
+from evolution.domain.entities import Experiment
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from shared.domain.noise_model import NoiseModelEnum
 
@@ -57,8 +57,8 @@ class MatrixCondition(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-def condition_from_summary(exp: ExperimentSummary) -> MatrixCondition:
-    """Constructs a MatrixCondition from an ExperimentSummary entity."""
+def condition_from_experiment(exp: Experiment) -> MatrixCondition:
+    """Constructs a MatrixCondition from an Experiment entity."""
     return MatrixCondition(
         problem_id=exp.problem.problem_id,
         dim=exp.problem.dim,
@@ -70,19 +70,19 @@ def condition_from_summary(exp: ExperimentSummary) -> MatrixCondition:
 
 
 def group_experiments_by_condition(
-    experiments: list[ExperimentSummary],
+    experiments: list[Experiment],
 ) -> tuple[
-    dict[MatrixCondition, list[ExperimentSummary]],
-    dict[MatrixCondition, list[ExperimentSummary]],
-    dict[MatrixCondition, list[ExperimentSummary]],
+    dict[MatrixCondition, list[Experiment]],
+    dict[MatrixCondition, list[Experiment]],
+    dict[MatrixCondition, list[Experiment]],
 ]:
     """Groups experiments by their matrix condition into completed, running, and failed categories."""
-    completed: defaultdict[MatrixCondition, list[ExperimentSummary]] = defaultdict(list)
-    running: defaultdict[MatrixCondition, list[ExperimentSummary]] = defaultdict(list)
-    failed: defaultdict[MatrixCondition, list[ExperimentSummary]] = defaultdict(list)
+    completed: defaultdict[MatrixCondition, list[Experiment]] = defaultdict(list)
+    running: defaultdict[MatrixCondition, list[Experiment]] = defaultdict(list)
+    failed: defaultdict[MatrixCondition, list[Experiment]] = defaultdict(list)
 
     for exp in experiments:
-        cond = condition_from_summary(exp)
+        cond = condition_from_experiment(exp)
         has_valid_champion = exp.best_final_error is not None and np.isfinite(exp.best_final_error)
         if exp.status == "completed":
             if has_valid_champion:

@@ -31,7 +31,6 @@ from benchmark.domain.services.transfer import TransferAnalysisEngine
 from benchmark.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 from benchmark.infra.logging import BenchmarkLogger
 from benchmark.infra.storage.analysis_results_store import AnalysisResultsStore
-from benchmark.infra.storage.model_registry import configured_model_names
 from shared.application.errors import StorageError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,8 +48,8 @@ def notebook_cells(name: str) -> list[dict[str, object]]:
 @pytest.fixture
 def inputs(tmp_path: Path) -> AnalysisSnapshot:
     model = "qwen2.5-coder-14b-instruct-q4_k_m.gguf"
-    names = configured_model_names()
-    label = names.get_clean_model_label(model) + " / baseline"
+
+    label = model + " / baseline"
     dataset = BenchmarkDataset()
     for noise in [0.0, 0.05]:
         for solver in [label, "PSO"]:
@@ -132,7 +131,6 @@ def inputs(tmp_path: Path) -> AnalysisSnapshot:
         transfer_reader,
         code_reader,
         champions,
-        names,
         BenchmarkConfig(cross_function_problem_ids=[1, 8]),
         TransferAnalysisEngine(),
     )
@@ -454,3 +452,22 @@ def test_snapshot_failed_write_does_not_publish_manifest(inputs, tmp_path, monke
     with pytest.raises(OSError, match="Disk unavailable"):
         store.save(result)
     assert not list(store.root.rglob("manifest.json"))
+
+
+def test_previous_snapshot_folder_aliases_are_ignored_without_changing_statistics(inputs, tmp_path):
+    result = use_cases(inputs).ecdf_and_convergence.execute(
+        mode="explicit",
+        dims=None,
+        problems=None,
+        noise_stds=None,
+    )
+    store = AnalysisResultsStore(tmp_path / "analysis")
+    directory = store.save(result)
+    manifest_path = directory / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["schema_version"] = 1
+    manifest["provenance"]["model_slugs"] = {"Old Model": "old_folder"}
+    for condition in manifest["conditions"]:
+        condition["model_slug"] = "old_folder"
+    manifest_path.write_text(json.dumps(manifest))
+    assert_saved_equal(result, store.load(directory))

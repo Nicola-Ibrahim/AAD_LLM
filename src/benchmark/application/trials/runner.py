@@ -24,8 +24,6 @@ from benchmark.domain.benchmark_results import (
     ERROR_DEFINITION,
 )
 from benchmark.domain.services.condition_status import inspect_condition
-from benchmark.domain.services.resolvers import ModelNames
-from benchmark.domain.services.returned_point import validate_returned_point
 from benchmark.domain.trial_schedule import matching_trial_indices, select_scheduled_trials
 from shared.application.diagnostics import diagnostic_context
 from shared.application.errors import ArtifactError, StorageError
@@ -37,6 +35,7 @@ from shared.domain.interfaces.problem_factory import ProblemFactory
 from shared.domain.noise_model import NoiseModelEnum
 from shared.domain.problem import BaseProblem
 from shared.domain.scoring import objective_gap
+from shared.domain.solution import validate_returned_point
 
 
 class BenchmarkTrialRunner:
@@ -50,7 +49,6 @@ class BenchmarkTrialRunner:
         executor_factory: ExecutorBuilder,
         baseline_resolver: BaselineRunnerResolver,
         code_reader: CandidateCodeReader,
-        model_names: ModelNames,
     ) -> None:
         self.state_repo = state_repo
         self.logger = logger
@@ -58,7 +56,6 @@ class BenchmarkTrialRunner:
         self.executor_factory = executor_factory
         self.baseline_resolver = baseline_resolver
         self.code_reader = code_reader
-        self.model_names = model_names
 
     def _execute_trial_runs(
         self,
@@ -328,8 +325,7 @@ class BenchmarkTrialRunner:
 
         code_str = self.code_reader.read(raw_code_path)
         code_hash = hashlib.sha256(code_str.strip().encode("utf-8")).hexdigest()
-        model_slug = self.model_names.get_model_slug(llm_name)
-        folder = solver_folder or f"{model_slug}_{strat}"
+        folder = solver_folder or f"{llm_name}_{strat}"
         target_dir = self.state_repo.condition_directory(dim, noise_std, p_id, folder)
         if target_problem_id is not None and p_id != source_problem_id:
             target_dir = self.state_repo.transfer_directory(
@@ -354,9 +350,9 @@ class BenchmarkTrialRunner:
 
         prov_metadata = {
             "model": llm_name,
+            "mode": champion_info.get("mode", "explicit"),
             "candidate_execution_contract": CANDIDATE_EXECUTION_VERSION,
             "return_validation_version": CHAMPION_RETURN_VALIDATION_VERSION,
-            "model_slug": model_slug,
             "strategy": strat,
             "algorithm_name": algo_name,
             "code_path": champion_info.get("code_path", ""),

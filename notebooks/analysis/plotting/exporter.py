@@ -75,7 +75,7 @@ class AnalysisFigureExporter:
                     self.results_dir
                     / "figures"
                     / PROFILE_DIRECTORIES[results.mode]
-                    / profile.model_slug
+                    / profile.model
                     / f"{profile.dim}D"
                     / f"std_{profile.noise_std}"
                 )
@@ -139,7 +139,7 @@ class AnalysisFigureExporter:
                     continue
                 target = (
                     (self.results_dir / "figures" / "02_explicit")
-                    / results.model_slugs[hardness.model]
+                    / hardness.model
                     / f"{hardness.dim}D"
                     / "figure_success_rate_by_hardness.png"
                 )

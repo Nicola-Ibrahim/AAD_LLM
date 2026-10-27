@@ -22,7 +22,12 @@ from shared.infra.problems.bbob import BBOBProblem
 
 def add_completed(repository: SQLiteSynthesisRepository, problem: ProblemProfile) -> int:
     identifier = repository.create_experiment(
-        problem, SynthesisMode.EXPLICIT, "test-model", synthesis_seed=43
+        problem,
+        SynthesisMode.EXPLICIT,
+        "test-model",
+        synthesis_seed=43,
+        budget=1_000_000,
+        max_iterations=10,
     )
     with repository.SessionLocal.begin() as session:
         row = session.get(ExperimentORM, identifier)

@@ -21,6 +21,10 @@ class SynthesisCheckpointUnpickler(pickle.Unpickler):
     }
 
     TYPE_RELOCATIONS = {
+        ("evolution.domain.entities.experiment", "ExperimentSummary"): (
+            "evolution.domain.entities.experiment",
+            "Experiment",
+        ),
         ("evolution.infra.storage.code.repository", "CodeRepository"): (
             "evolution.infra.storage.code.repository",
             "FileCodeRepository",

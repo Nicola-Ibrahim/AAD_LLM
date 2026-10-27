@@ -18,7 +18,6 @@ def test_profiles_only_plot_individual_functions(kind):
     values = np.ones(300)
     profile = ConditionProfile(
         "Model",
-        "model",
         2,
         0.0,
         problems,
@@ -43,7 +42,6 @@ def test_single_problem_uses_full_figure_width(kind):
     values = np.array([1000.0, 10.0])
     profile = ConditionProfile(
         "Model",
-        "model",
         10,
         0.1,
         [15],
@@ -74,7 +72,6 @@ def test_comparison_legend_separates_strategy_and_mode(kind):
     ]
     profile = ConditionProfile(
         "Model",
-        "model",
         2,
         0.1,
         [1],
@@ -135,7 +132,6 @@ def test_ecdf_and_convergence_share_strategy_palette(mode):
         solvers += ["CMA-ES", "PSO", "DE"]
     profile = ConditionProfile(
         "Model",
-        "model",
         2,
         0.05,
         [1],
@@ -175,7 +171,6 @@ def test_profile_axes_end_at_calculated_budget(kind, dim, budget):
     values = np.ones(300)
     profile = ConditionProfile(
         "Model",
-        "model",
         dim,
         0.0,
         [1],
@@ -198,7 +193,6 @@ def test_profile_skips_missing_and_nan_series_without_mutating_arrays(kind):
     solvers = ["Model / guided", "Model / thinking", "Model / baseline"]
     profile = ConditionProfile(
         "Model",
-        "model",
         2,
         0.05,
         [1],

@@ -343,7 +343,7 @@ def test_numerical_result_storage_needs_no_database_and_returns_detached_data(
 
     create_database = MagicMock(side_effect=AssertionError("database not needed"))
     monkeypatch.setattr(shared_di, "Database", create_database)
-    result = ProfileAnalysisResult("explicit", [], AnalysisProvenance({}, {}, {}, [], "empty"), ())
+    result = ProfileAnalysisResult("explicit", [], AnalysisProvenance({}, {}, [], "empty"), ())
     with container_scope(
         BenchmarkProvider(results_dir=tmp_path), context={}, request_context={}
     ) as scope:

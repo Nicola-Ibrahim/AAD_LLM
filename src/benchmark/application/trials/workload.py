@@ -13,7 +13,6 @@ from benchmark.application.interfaces.synthesis_read_repository import Synthesis
 from benchmark.application.select_champions import ChampionSelectionService
 from benchmark.application.trials.models import BenchmarkTask
 from benchmark.domain.services.condition_status import ConditionStatus, inspect_condition
-from benchmark.domain.services.resolvers import ModelNames
 from shared.application.errors import ArtifactError
 from shared.application.interfaces.candidate_executor import CANDIDATE_EXECUTION_VERSION
 
@@ -27,14 +26,12 @@ class BenchmarkWorkload:
         champion_selection: ChampionSelectionService,
         state_repo: BenchmarkStateStore,
         code_reader: CandidateCodeReader,
-        model_names: ModelNames,
         planned_target_conditions: tuple[tuple[int, float, int], ...] = (),
     ) -> None:
         self.sqlite_repo = sqlite_repo
         self.champion_selection = champion_selection
         self.state_repo = state_repo
         self.code_reader = code_reader
-        self.model_names = model_names
         self.planned_target_conditions = planned_target_conditions
 
     def _discover_target_conditions(
@@ -104,7 +101,6 @@ class BenchmarkWorkload:
         dim = champion["dim"]
         strategy = champion.get("prompt_strategy", "baseline")
         model = champion.get("llm_name", "llamea")
-        slug = self.model_names.get_model_slug(model)
         native_noise = champion.get("noise_std", 0.0)
         mode = GenerationMode(
             champion.get("mode") or ("implicit" if "_implicit" in key else "explicit")
@@ -112,7 +108,7 @@ class BenchmarkWorkload:
         suffix = (
             "_implicit" if mode == GenerationMode.IMPLICIT else "_noisy" if native_noise else ""
         )
-        solver = f"{slug}_{strategy}{suffix}"
+        solver = f"{model}_{strategy}{suffix}"
         code_path = Path(champion["code_path"])
         code_available = self.code_reader.exists(code_path)
         code_hash = (

@@ -1,5 +1,4 @@
 from evolution.domain.vos.evaluation_result import AlgorithmEvaluationResult
-from evolution.domain.vos.experiment_filter import ExperimentFilter
 from evolution.domain.vos.iteration import IterationMetadata
 from evolution.domain.vos.metrics import (
     Code,
@@ -14,7 +13,6 @@ __all__ = [
     "AlgorithmEvaluationResult",
     "IterationMetadata",
     "ProblemProfile",
-    "ExperimentFilter",
     "Execution",
     "Fitness",
     "Code",
