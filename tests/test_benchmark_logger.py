@@ -5,9 +5,9 @@ from io import StringIO
 from benchmark.infra.logging.benchmark_logger import BenchmarkLogger
 
 
-def test_trial_values_use_three_decimals_without_field_padding():
+def test_trial_values_use_three_decimals_without_field_padding(make_progress_logger):
     stream = StringIO()
-    logger = BenchmarkLogger(stream=stream)
+    logger = make_progress_logger(BenchmarkLogger, stream)
     logger.trial(
         trial_idx=1,
         total_trials=20,
@@ -32,9 +32,9 @@ def test_trial_values_use_three_decimals_without_field_padding():
     assert "          -2.345670" not in output
 
 
-def test_cached_and_completed_errors_use_three_decimals():
+def test_cached_and_completed_errors_use_three_decimals(make_progress_logger):
     stream = StringIO()
-    logger = BenchmarkLogger(stream=stream)
+    logger = make_progress_logger(BenchmarkLogger, stream)
     logger.cached(3, 0.123456)
     logger.condition_complete(3, 0.987654)
 
@@ -43,9 +43,11 @@ def test_cached_and_completed_errors_use_three_decimals():
     assert "Median Δy Error: \033[92m0.988\033[0m" in output
 
 
-def test_noise_level_preserves_configured_precision_without_repeated_noise_label():
+def test_noise_level_preserves_configured_precision_without_repeated_noise_label(
+    make_progress_logger,
+):
     stream = StringIO()
-    logger = BenchmarkLogger(stream=stream)
+    logger = make_progress_logger(BenchmarkLogger, stream)
     logger.condition_start(
         1,
         2,

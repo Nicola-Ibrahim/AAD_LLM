@@ -117,8 +117,8 @@ def cmd_get_active_model(args):
                 model_id = payload.get("data", [{}])[0].get("id", "(unknown)")
                 print(model_id)
                 return
-    except Exception:
-        pass
+    except (OSError, ValueError, KeyError, IndexError) as error:
+        sys.stderr.write(f"Model discovery unavailable: {type(error).__name__}\n")
     print("(none/server offline)")
 
 
@@ -179,7 +179,7 @@ def find_hf_repo_id(path: Path) -> str | None:
     """Finds Hugging Face repository ID (e.g. 'Qwen/Qwen2.5-Coder-7B-Instruct-GGUF') from path."""
     try:
         resolved = path.resolve()
-    except Exception:
+    except OSError:
         resolved = path
 
     for part in [path] + list(path.parents) + [resolved] + list(resolved.parents):

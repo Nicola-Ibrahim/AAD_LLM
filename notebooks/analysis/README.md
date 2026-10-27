@@ -84,6 +84,11 @@ dependency resolution is confined to setup. Infrastructure `WorkflowScope` handl
 normal shutdown cleanup; call `services.close()` to release resources earlier.
 Re-running setup closes the previous scope. Live services are only usable while
 this scope is open.
+Application methods retain diagnostic context and report failures once; notebook
+cells call them directly. Setup prints the rotating diagnostic-log location.
+Figure exporters return a summary of written files and skipped outputs; they do
+not print or silently hide a failed write. See the
+[logging guide](../../docs/operations/error_handling_and_logging.md).
 Calculated arrays and tables remain usable afterward. Treat result arrays/tables
 as read-only. `None` in condition
 filters means unrestricted; required constructor dependencies never default to it.

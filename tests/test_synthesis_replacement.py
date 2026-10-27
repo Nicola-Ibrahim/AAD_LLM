@@ -7,7 +7,8 @@ from unittest.mock import MagicMock
 import pytest
 from sqlalchemy import func, select
 
-from evolution.application.synthesis.models import SessionConfig, SessionResult
+from evolution.application.synthesis.result import SynthesisResult
+from evolution.application.synthesis.settings import SynthesisSettings
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.engines.llamea import LLaMEASession
@@ -113,13 +114,13 @@ def test_execution_clears_old_state_only_for_explicit_replacement(
             llm_client=SimpleNamespace(model=SimpleNamespace(name="test-model")),
             db_repo=repository,
             code_repo=code_store,
-            config=SessionConfig(),
+            config=SynthesisSettings(budget=1_000_000),
             initial_iteration=5,
             restart=restart,
         )
         checkpoint = session._archive_dir / "llamea_config.pkl"
         checkpoint.write_bytes(b"old checkpoint")
-        result = SessionResult(
+        result = SynthesisResult(
             problem_id=1,
             dim=2,
             mode=SynthesisMode.EXPLICIT,

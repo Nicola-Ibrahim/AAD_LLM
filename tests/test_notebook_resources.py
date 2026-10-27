@@ -49,7 +49,7 @@ def setup_namespace() -> dict[str, object]:
     for symbol in (
         "LLMClient",
         "BenchmarkConfig",
-        "SynthesisCampaignCoordinator",
+        "SynthesisCampaign",
         "BenchmarkCoordinator",
         "ChampionSelectionService",
         "SQLiteSynthesisReadRepository",
@@ -61,7 +61,7 @@ def setup_namespace() -> dict[str, object]:
         "AnalyzeNoiseRobustness",
         "AnalysisResultsStore",
     ):
-        namespace[symbol] = object()
+        namespace[symbol] = type(symbol, (), {})
     return namespace
 
 

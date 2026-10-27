@@ -40,5 +40,11 @@ def container_scope(
     try:
         with root(context=request_context) as request:
             yield request
-    finally:
+    except BaseException as primary:
+        try:
+            root.close()
+        except Exception as cleanup:
+            primary.add_note(f"Container cleanup also failed: {type(cleanup).__name__}")
+        raise
+    else:
         root.close()

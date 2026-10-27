@@ -7,9 +7,9 @@ import numpy as np
 import pytest
 from llamea import LLaMEA
 
-from evolution.application import SessionConfig
 from evolution.application.exceptions import SynthesisResumeError
-from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
+from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
+from evolution.application.synthesis.settings import SynthesisSettings
 from evolution.domain.enums import SynthesisMode
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.engines.llamea import Evaluator, LLaMEASession
@@ -27,7 +27,7 @@ from shared.infra.problems.bbob import BBOBProblem
 
 
 def build_candidate_evaluation_service(*, problem, **kwargs):
-    return CandidateEvaluationService(
+    return CandidateEvaluator(
         problem=problem,
         executor=create_candidate_executor(kwargs.get("timeout_seconds", 30.0)),
         **kwargs,
@@ -41,7 +41,7 @@ def test_checkpoint_compatibility_does_not_silently_cold_restart(
     import evolution.infra.engines.llamea.runner as module
 
     saved = object.__new__(Evaluator)
-    saved._config = SessionConfig(budget=100 if mismatch != "budget" else 200)
+    saved._config = SynthesisSettings(budget=100 if mismatch != "budget" else 200)
     saved._current_iteration = 1 if mismatch != "iterations" else 0
     if mismatch != "execution_contract":
         saved._execution_contract = CANDIDATE_EXECUTION_VERSION
@@ -53,7 +53,7 @@ def test_checkpoint_compatibility_does_not_silently_cold_restart(
     session._archive_dir = tmp_path
     session._experiment_id = 1
     session._initial_iteration = 1
-    session._config = SessionConfig(budget=100)
+    session._config = SynthesisSettings(budget=100)
     session._llm_client = MagicMock()
     session._logger = MagicMock()
     (tmp_path / "llamea_config.pkl").write_bytes(b"fixture")
@@ -77,7 +77,7 @@ def test_incompatible_resume_does_not_mark_experiment_failed(
     session._problem = MagicMock()
     session._synthesis_mode = SynthesisMode.EXPLICIT
     session._prompt_strategy = "baseline"
-    session._config = SessionConfig()
+    session._config = SynthesisSettings(budget=1_000_000)
     session._experiment = MagicMock()
     session._experiment_id = 1
     session._db_repo = MagicMock()
@@ -124,7 +124,7 @@ def test_pickle_llamea(tmp_path, test_repos):
         db_repo=db_repo,
         code_repo=code_repo,
         experiment_id=1,
-        config=SessionConfig(budget=10),
+        config=SynthesisSettings(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )
     opt = LLaMEA(f=evaluator, llm=llm, log=False)
@@ -188,7 +188,7 @@ def test_warm_start_rehydration(tmp_path, test_repos):
         llm_client=llm,
         db_repo=db_repo,
         code_repo=code_repo,
-        config=SessionConfig(iterations=5),
+        config=SynthesisSettings(iterations=5, budget=1_000_000),
     )
 
     evaluator = session._setup_evaluator()

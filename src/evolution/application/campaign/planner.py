@@ -1,9 +1,9 @@
 from collections.abc import Sequence
 
 from evolution.application.campaign.audit import CampaignAuditor
-from evolution.application.campaign.models import CampaignTask
+from evolution.application.campaign.settings import CampaignSettings, MatrixCondition
+from evolution.application.campaign.tasks import CampaignTask
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
-from evolution.application.synthesis_config import MatrixCondition, SynthesisConfig
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.vos.problem_profile import ProblemProfile
@@ -16,7 +16,7 @@ class CampaignPlanner:
     def __init__(
         self,
         sqlite_repo: SynthesisRepository,
-        config: SynthesisConfig,
+        config: CampaignSettings,
         engine: SynthesisEngine,
         model_name: str,
         problem_factory: ProblemFactory,
@@ -176,7 +176,9 @@ class CampaignPlanner:
             seed=exp.synthesis_seed if exp.synthesis_seed is not None else 42 + (exp.id or 0),
         )
         initial_iter = 0 if restart else (len(exp.iterations) if exp.iterations else 0)
-        cfg = self.config.to_session_config(iterations=exp.max_iterations or self.config.iterations)
+        cfg = self.config.synthesis_settings(
+            iterations=exp.max_iterations or self.config.iterations
+        )
         mode_label = f"{exp.mode}_std_{noise_std}"
         key = f"f{exp.problem.problem_id}_{exp.problem.dim}D_{mode_label}_{exp.prompt_strategy}_{tag}_exp{exp.id}"
         return CampaignTask(
@@ -220,7 +222,7 @@ class CampaignPlanner:
             instance_id=1,
             seed=42 + run_idx,
         )
-        fresh_cfg = self.config.to_session_config(iterations=self.config.iterations)
+        fresh_cfg = self.config.synthesis_settings(iterations=self.config.iterations)
         exp_id = self.sqlite_repo.create_experiment(
             problem=ProblemProfile(
                 problem_id=problem.problem_id,
@@ -238,9 +240,9 @@ class CampaignPlanner:
             synthesis_seed=42 + run_idx,
         )
         key = (
-            f"{key_prefix}f{condition.problem_id}_{condition.dim}D_{condition.task_mode_label}_{condition.strategy}_run{run_idx}_exp{exp_id}"
+            f"{key_prefix}f{condition.problem_id}_{condition.dim}D_{condition.mode.value}_std_{condition.noise_std}_{condition.strategy}_run{run_idx}_exp{exp_id}"
             if key_prefix
-            else f"f{condition.problem_id}_{condition.dim}D_{condition.task_mode_label}_{condition.strategy}_run{run_idx}"
+            else f"f{condition.problem_id}_{condition.dim}D_{condition.mode.value}_std_{condition.noise_std}_{condition.strategy}_run{run_idx}"
         )
         return CampaignTask(
             key=key,

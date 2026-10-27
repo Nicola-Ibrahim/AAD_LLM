@@ -65,7 +65,7 @@ class HypothesisTestingEngine:
                             stat, p_val, sig_badge = 0.0, 1.0, "Identical"
                         else:
                             sig_badge = "Yes" if p_val < 0.05 else "No"
-                    except Exception:
+                    except ValueError:
                         stat, p_val, sig_badge = np.nan, np.nan, "Error"
 
                 master_omnibus.append(
@@ -121,7 +121,7 @@ class HypothesisTestingEngine:
                         else:
                             try:
                                 u_stat, p_val = mannwhitneyu(v1, v2, alternative="two-sided")
-                            except Exception:
+                            except ValueError:
                                 u_stat, p_val = np.nan, np.nan
 
                         def get_tier(a: str, b: str) -> str:

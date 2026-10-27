@@ -1,7 +1,11 @@
 """Abstract interface and standard telemetry behavior for synthesis logging."""
 
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from contextlib import AbstractContextManager
+
+from shared.application.diagnostics import report_operation
 
 
 class BaseLogger(ABC):
@@ -9,6 +13,9 @@ class BaseLogger(ABC):
 
     def __init__(self, verbose: bool = True) -> None:
         self.verbose = verbose
+
+    def operation(self, name: str) -> AbstractContextManager[None]:
+        return report_operation(logging.getLogger("evolution.workflow"), name)
 
     @abstractmethod
     def info(self, msg: str) -> None: ...

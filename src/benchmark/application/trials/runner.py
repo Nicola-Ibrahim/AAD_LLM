@@ -27,6 +27,8 @@ from benchmark.domain.services.condition_status import inspect_condition
 from benchmark.domain.services.resolvers import ModelNames
 from benchmark.domain.services.returned_point import validate_returned_point
 from benchmark.domain.trial_schedule import matching_trial_indices, select_scheduled_trials
+from shared.application.diagnostics import diagnostic_context
+from shared.application.errors import ArtifactError, StorageError
 from shared.application.interfaces.candidate_executor import (
     CANDIDATE_EXECUTION_VERSION,
     CandidateTimeout,
@@ -142,95 +144,100 @@ class BenchmarkTrialRunner:
 
         with self.state_repo.open_run_logger(target_dir, algo_name, can_resume) as logger_ioh:
             for run_idx, (instance_id, trial_seed) in enumerate(schedule, start=1):
-                if (instance_id, trial_seed) in completed_identities:
-                    continue
-                random.seed(trial_seed)
-                np.random.seed(trial_seed)
+                with diagnostic_context(trial=run_idx, instance_id=instance_id):
+                    if (instance_id, trial_seed) in completed_identities:
+                        continue
+                    random.seed(trial_seed)
+                    np.random.seed(trial_seed)
 
-                prob = self.problem_factory.create(
-                    problem_id=p_id,
-                    dim=dim,
-                    noise_std=noise_std,
-                    noise_model=noise_model,
-                    instance_id=instance_id,
-                    seed=trial_seed,
-                )
-                true_optimum = float(prob.true_optimum)
-
-                prob.attach_logger(logger_ioh)
-                prob.set_budget(config.budget)
-                if noise_std > 0.0:
-                    prob.configure_observation_checkpoints(
-                        config.budget, config.observation_trace_points
-                    )
-                trial_started = time.perf_counter()
-                diagnostic: dict[str, str | None] = {
-                    "error_type": None,
-                    "error_message": None,
-                    "error_traceback": None,
-                }
-                try:
-                    best_objective, rt, _reported_evals = runner_fn(prob, config.budget)
-                    best_objective = float(best_objective)
-                    if not np.isfinite(best_objective):
-                        best_objective = float("inf")
-                        best_error = float("inf")
-                        diagnostic.update(
-                            error_type="NonFiniteObjective",
-                            error_message="The solver returned a non-finite objective value.",
-                        )
-                    else:
-                        best_error = objective_gap(best_objective, true_optimum)
-                except Exception as error:
-                    best_objective, best_error = float("inf"), float("inf")
-                    rt = time.perf_counter() - trial_started
-                    diagnostic.update(
-                        error_type=type(error).__name__,
-                        error_message=str(error),
-                        error_traceback=None
-                        if isinstance(error, CandidateTimeout)
-                        else traceback.format_exc(),
-                    )
-
-                evals_used = int(prob.evaluations)
-                trials.append(
-                    RecordedTrial(
+                    prob = self.problem_factory.create(
+                        problem_id=p_id,
+                        dim=dim,
+                        noise_std=noise_std,
+                        noise_model=noise_model,
                         instance_id=instance_id,
                         seed=trial_seed,
-                        true_optimum=true_optimum,
-                        best_objective=best_objective,
-                        error=best_error,
-                        runtime=rt,
-                        evaluations_used=evals_used,
-                        trace_run_index=next_trace_index if evals_used > 0 else None,
-                        error_type=diagnostic["error_type"],
-                        error_message=diagnostic["error_message"],
-                        error_traceback=diagnostic["error_traceback"],
-                        execution_timeout_seconds=config.trial_timeout_seconds
-                        if prov_metadata.get("model")
-                        else None,
-                        observations=[
-                            {
-                                "evaluations": sample.evaluations,
-                                "observed_y": sample.observed_y,
-                            }
-                            for sample in prob.observation_samples()
-                        ],
                     )
-                )
-                next_trace_index += int(evals_used > 0)
-                self.logger.trial(
-                    trial_idx=run_idx,
-                    total_trials=config.trials_per_condition,
-                    best_clean=best_error,
-                    runtime=rt,
-                    evals_used=evals_used,
-                    instance_id=instance_id,
-                    trial_seed=trial_seed,
-                    best_objective=best_objective,
-                    true_optimum=true_optimum,
-                )
-                prob.reset()
+                    true_optimum = float(prob.true_optimum)
+
+                    prob.attach_logger(logger_ioh)
+                    prob.set_budget(config.budget)
+                    if noise_std > 0.0:
+                        prob.configure_observation_checkpoints(
+                            config.budget, config.observation_trace_points
+                        )
+                    trial_started = time.perf_counter()
+                    diagnostic: dict[str, str | None] = {
+                        "error_type": None,
+                        "error_message": None,
+                        "error_traceback": None,
+                    }
+                    try:
+                        best_objective, rt, _reported_evals = runner_fn(prob, config.budget)
+                        best_objective = float(best_objective)
+                        if not np.isfinite(best_objective):
+                            best_objective = float("inf")
+                            best_error = float("inf")
+                            diagnostic.update(
+                                error_type="NonFiniteObjective",
+                                error_message="The solver returned a non-finite objective value.",
+                            )
+                    except (StorageError, ArtifactError):
+                        raise
+                    except Exception as error:
+                        best_objective, best_error = float("inf"), float("inf")
+                        rt = time.perf_counter() - trial_started
+                        diagnostic.update(
+                            error_type=type(error).__name__,
+                            error_message=str(error),
+                            error_traceback=None
+                            if isinstance(error, CandidateTimeout)
+                            else traceback.format_exc(),
+                        )
+                    else:
+                        # Scientific calculation faults must propagate to the workflow.
+                        if np.isfinite(best_objective):
+                            best_error = objective_gap(best_objective, true_optimum)
+
+                    evals_used = int(prob.evaluations)
+                    trials.append(
+                        RecordedTrial(
+                            instance_id=instance_id,
+                            seed=trial_seed,
+                            true_optimum=true_optimum,
+                            best_objective=best_objective,
+                            error=best_error,
+                            runtime=rt,
+                            evaluations_used=evals_used,
+                            trace_run_index=next_trace_index if evals_used > 0 else None,
+                            error_type=diagnostic["error_type"],
+                            error_message=diagnostic["error_message"],
+                            error_traceback=diagnostic["error_traceback"],
+                            execution_timeout_seconds=config.trial_timeout_seconds
+                            if prov_metadata.get("model")
+                            else None,
+                            observations=[
+                                {
+                                    "evaluations": sample.evaluations,
+                                    "observed_y": sample.observed_y,
+                                }
+                                for sample in prob.observation_samples()
+                            ],
+                        )
+                    )
+                    next_trace_index += int(evals_used > 0)
+                    self.logger.trial(
+                        trial_idx=run_idx,
+                        total_trials=config.trials_per_condition,
+                        best_clean=best_error,
+                        runtime=rt,
+                        evals_used=evals_used,
+                        instance_id=instance_id,
+                        trial_seed=trial_seed,
+                        best_objective=best_objective,
+                        true_optimum=true_optimum,
+                    )
+                    prob.reset()
 
         active_indices = matching_trial_indices(
             {

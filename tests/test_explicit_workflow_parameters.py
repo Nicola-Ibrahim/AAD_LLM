@@ -13,13 +13,13 @@ from study_fixtures import run_parameters, synthesis_config
 
 from benchmark.application.benchmark_config import BenchmarkConfig
 from benchmark.application.trials.coordinator import BenchmarkCoordinator
-from evolution.application.campaign.run import SynthesisCampaignCoordinator
-from evolution.application.synthesis_config import SynthesisConfig
+from evolution.application.campaign.service import SynthesisCampaign
+from evolution.application.campaign.settings import CampaignSettings
 from shared.infra.cpu import available_cpu_count
 
 
-def synthesis_service() -> SynthesisCampaignCoordinator:
-    return SynthesisCampaignCoordinator(
+def synthesis_service() -> SynthesisCampaign:
+    return SynthesisCampaign(
         sqlite_repo=MagicMock(),
         logger=MagicMock(),
         engine=MagicMock(),
@@ -34,10 +34,10 @@ def synthesis_service() -> SynthesisCampaignCoordinator:
 def test_synthesis_json_parameters_preserve_matrix_and_session_settings() -> None:
     original = synthesis_config()
     payload = json.loads(json.dumps(run_parameters(original)))
-    resolved = SynthesisConfig(**payload)
+    resolved = CampaignSettings(**payload)
     assert resolved.matrix_conditions == original.matrix_conditions
     assert len(resolved.matrix_conditions) == 480
-    assert resolved.to_session_config(iterations=10) == original.to_session_config(iterations=10)
+    assert resolved.synthesis_settings(iterations=10) == original.synthesis_settings(iterations=10)
     assert set(payload) == {
         "problem_targets",
         "noise_conditions",
@@ -57,17 +57,17 @@ def test_synthesis_parameters_are_local_to_each_call() -> None:
     payload = run_parameters(synthesis_config())
     plans = []
 
-    def planner(config: SynthesisConfig) -> SimpleNamespace:
+    def planner(config: CampaignSettings) -> SimpleNamespace:
         plans.append(config)
         return SimpleNamespace(build_tasks=lambda **selection: [])
 
     service._build_planner = planner
-    service.run_campaign(**payload)
-    service.run_campaign(**(payload | {"budget": 200_000}))
+    service.run(**payload)
+    service.run(**(payload | {"budget": 200_000}))
     assert [config.budget for config in plans] == [100_000, 200_000]
     assert plans[0] is not plans[1]
     assert payload["budget"] == 100_000
-    assert plans[0].num_processes == 4
+    assert service.worker_count == 4
     assert service.model_name == "connected-model"
     service.dispatcher.run.assert_not_called()
     service.sqlite_repo.create_experiment.assert_not_called()
@@ -93,7 +93,7 @@ def test_invalid_synthesis_inputs_never_dispatch_or_write(changes: dict[str, obj
     service = synthesis_service()
     payload = run_parameters(synthesis_config()) | changes
     with pytest.raises((ValueError, ValidationError)):
-        service.run_campaign(**payload)
+        service.run(**payload)
     service.dispatcher.run.assert_not_called()
     service.sqlite_repo.create_experiment.assert_not_called()
 
@@ -159,14 +159,10 @@ def test_worker_capacity_uses_affinity_and_scheduler(monkeypatch: pytest.MonkeyP
 
 
 def test_public_execution_dependencies_are_not_study_configuration() -> None:
-    for service in (SynthesisCampaignCoordinator, BenchmarkCoordinator):
+    for service in (SynthesisCampaign, BenchmarkCoordinator):
         assert "config" not in inspect.signature(service).parameters
-    assert (
-        "max_workers" not in inspect.signature(SynthesisCampaignCoordinator.run_campaign).parameters
-    )
-    assert (
-        "model_name" not in inspect.signature(SynthesisCampaignCoordinator.run_campaign).parameters
-    )
+    assert "max_workers" not in inspect.signature(SynthesisCampaign.run).parameters
+    assert "model_name" not in inspect.signature(SynthesisCampaign.run).parameters
 
 
 def test_benchmark_composition_injects_concrete_workflows(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -202,7 +198,7 @@ def test_synthesis_composition_gets_model_from_client_not_parameters(
     with shared.infra.di.container_scope(
         composition.EvolutionProvider(), context={composition.LLMClient: client}, request_context={}
     ) as scope:
-        workflow = scope.get(SynthesisCampaignCoordinator)
+        workflow = scope.get(SynthesisCampaign)
         assert workflow.model_name == "live-server-model"
         assert workflow.worker_count == workflow.dispatcher.max_workers == 6
     database.dispose.assert_called_once()
@@ -220,7 +216,7 @@ def test_notebook_study_parameters_are_executable_and_preserve_the_protocol() ->
         and isinstance(node.func, ast.Attribute)
         and isinstance(node.func.value, ast.Name)
         and node.func.value.id == "campaign"
-        and node.func.attr in {"run_campaign", "audit_matrix"}
+        and node.func.attr in {"run", "audit_matrix"}
     ]
     assert len(synthesis_calls) == 2
     synthesis_configurations = []
@@ -229,9 +225,9 @@ def test_notebook_study_parameters_are_executable_and_preserve_the_protocol() ->
         parameters = {
             kw.arg: eval(compile(ast.Expression(kw.value), "02_synthesis.ipynb", "eval"))
             for kw in call.keywords
-            if kw.arg in SynthesisConfig.model_fields
+            if kw.arg in CampaignSettings.model_fields
         }
-        synthesis_configurations.append(SynthesisConfig(**parameters))
+        synthesis_configurations.append(CampaignSettings(**parameters))
     synthesis = synthesis_configurations[0]
     assert synthesis_configurations[1] == synthesis
     notebook = json.loads((root / "notebooks/03_benchmark.ipynb").read_text())
@@ -285,7 +281,7 @@ def test_study_loaders_and_conversion_helpers_are_removed() -> None:
     root = Path(__file__).resolve().parents[1]
     assert not (root / "configs/synthesis.toml").exists()
     assert not (root / "configs/benchmark.toml").exists()
-    assert not hasattr(SynthesisConfig, "run_parameters")
+    assert not hasattr(CampaignSettings, "run_parameters")
     assert not hasattr(BenchmarkConfig, "run_parameters")
     for path in (root / "src").rglob("*.py"):
         source = path.read_text()

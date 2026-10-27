@@ -14,6 +14,7 @@ import httpx
 import openai
 import pytest
 
+from evolution.application.exceptions import ProviderError
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.llm.gateway import GatewayLLM, GatewayRequestLimiter, retry_delay
 
@@ -238,7 +239,7 @@ def test_permanent_errors_are_not_retried_by_outer_llm_wrapper(
         return_value=httpx.Response(status, json={"error": {"message": "stopped", "code": code}})
     )
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", lambda self, request: probe(request))
-    with pytest.raises(openai.APIError):
+    with pytest.raises(ProviderError):
         wrapper.sample_solution([{"role": "user", "content": "test"}])
     assert probe.call_count == 1
     wrapper._client.client.close()
@@ -249,7 +250,7 @@ def test_retry_count_is_bounded(tmp_path, clock, monkeypatch):
     llm = GatewayLLM("test-key", "gwdg.qwen", "https://gateway.test/v1", limiter)
     probe = MagicMock(side_effect=lambda request: _response(503))
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", lambda self, request: probe(request))
-    with pytest.raises(openai.InternalServerError):
+    with pytest.raises(ProviderError):
         llm.query([{"role": "user", "content": "test"}], max_retries=2)
     assert probe.call_count == 3
     llm.client.close()

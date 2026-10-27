@@ -22,20 +22,20 @@ flowchart TD
     subgraph Campaign["Campaign composition and dispatch"]
         direction LR
         Bootstrap["Notebook setup<br/>COMPOSITION ROOT<br/>Prepare workflow scope<br/>with Dishka providers"]
-        Coordinator["SynthesisCampaignCoordinator<br/>EVOLUTION APPLICATION<br/>CampaignAuditor + CampaignPlanner<br/>Reconcile state; build CampaignTask payloads"]
+        Coordinator["SynthesisCampaign<br/>EVOLUTION APPLICATION<br/>CampaignAuditor + CampaignPlanner<br/>Reconcile state; build CampaignTask payloads"]
         Dispatcher["ProcessPoolRunner<br/>EVOLUTION INFRASTRUCTURE<br/>Dispatch worker processes<br/>run_synthesis_worker"]
         Bootstrap --> Coordinator --> Dispatcher
     end
     subgraph Session["Worker-local synthesis session"]
         direction LR
-        UseCase["SingleSynthesisUseCase<br/>EVOLUTION APPLICATION<br/>Worker-local repository and database<br/>Execute one synthesis session"]
+        UseCase["Synthesis<br/>EVOLUTION APPLICATION<br/>Worker-local repository and database<br/>Execute one synthesis session"]
         Engine["LLaMEAEngine / LLaMEASession<br/>EVOLUTION INFRASTRUCTURE<br/>Build prompts; restore trusted checkpoints<br/>Run LLaMEA with Evaluator callback"]
         Evaluator["Evaluator<br/>EVOLUTION INFRASTRUCTURE<br/>Translate Solution into code evaluation<br/>Persist iterations; attach fitness / feedback"]
         UseCase --> Engine --> Evaluator
     end
     subgraph Candidate["Candidate evaluation"]
         direction TB
-        Evaluation["CandidateEvaluationService<br/>EVOLUTION APPLICATION<br/>Execute through CandidateExecutor interface<br/>Validate, clean-score and assemble diagnostics"]
+        Evaluation["CandidateEvaluator<br/>EVOLUTION APPLICATION<br/>Execute through CandidateExecutor interface<br/>Validate, clean-score and assemble diagnostics"]
         Executor["AlgorithmExecutorAdapter<br/>SHARED INFRASTRUCTURE<br/>Compile, run and capture warnings<br/>func_timeout; require (best_x, best_y)"]
         Scoring["AlgorithmScoringService<br/>EVOLUTION DOMAIN<br/>Shared objective_gap(clean_y, f_opt)<br/>Evolution fitness and failure penalties"]
         Evaluation --> Executor
@@ -224,7 +224,7 @@ if "services" in globals():
 services = WorkflowScope(
     EvolutionProvider(), context={}, request_context={}
 )
-campaign = services.get(SynthesisCampaignCoordinator)
+campaign = services.get(SynthesisCampaign)
 ```
 
 `WorkflowScope` registers normal-process shutdown cleanup, closes resources if
@@ -238,10 +238,15 @@ supplied context overrides remain caller-owned. WAL, foreign keys,
 busy timeout and synchronous settings remain the database adapter's responsibility.
 
 Synthesis workers open their own container inside the worker process and resolve
-`SingleSynthesisUseCase` with the engine from the unchanged task payload. No
+`Synthesis` with the engine from the unchanged task payload. No
 container, database engine or session is serialized into a task. The module-level
 worker stays picklable. Calculated arrays and tables are detached and remain
 usable after scope exit; live services must only be used while their scope is open.
+
+Campaign and standalone session entry points are both resolved through the same
+provider. The worker-specific binding reuses its supplied engine and opens no
+additional LLM client. See [the two workflow APIs](execution_flow.md#two-application-workflows)
+for single-session parameters and the application file layout.
 
 Registration, constructor injection and generator finalization follow the
 [Dishka quickstart](https://dishka.readthedocs.io/en/stable/quickstart.html) and
@@ -265,9 +270,9 @@ from dishka.integrations.fastapi import FromDishka, inject_sync
 @inject_sync
 def run_synthesis(
     body: SynthesisBody,
-    campaign: FromDishka[SynthesisCampaignCoordinator],
+    campaign: FromDishka[SynthesisCampaign],
 ):
-    return campaign.run_campaign(**body.model_dump())
+    return campaign.run(**body.model_dump())
 ```
 
 This is an illustrative transport adapter: `router` and `SynthesisBody` belong
@@ -295,7 +300,7 @@ containers only when adapters need asynchronous lifetimes. See
   (fitness and failure classification using the shared objective gap).
 - `infra/` adapts SQLite/files, LLaMEA, logging, synthesis telemetry, and multiprocessing.
 
-Notebook 02 calls `SynthesisCampaignCoordinator` directly; setup resolves the
+Notebook 02 calls `SynthesisCampaign` directly; setup resolves the
 coordinator, repositories, problem factory, engine and automatically sized dispatcher. Setup does
 not read study configuration files. The notebook supplies flat validated method arguments;
 the coordinator builds a fresh planner and configuration for each invocation.
@@ -303,10 +308,10 @@ Benchmark composition injects concrete workload and trial-runner objects. Each
 invocation passes its validated settings to their methods, without factories or
 mutable service configuration. No previous call's settings are retained. See the
 [parameter inventory](../configuration/model_configuration.md#explicit-study-parameters).
-The module-level worker calls `SingleSynthesisUseCase`; `LLaMEAEngine` implements
+The module-level worker calls `Synthesis`; `LLaMEAEngine` implements
 the synthesis engine interface and delegates a session to `LLaMEASession`.
 Its infrastructure `Evaluator` translates LLaMEA solutions into calls to
-`CandidateEvaluationService` and persists iteration telemetry. The shared
+`CandidateEvaluator` and persists iteration telemetry. The shared
 `AlgorithmExecutorAdapter` implements the candidate executor interface;
 `BBOBProblemFactory` implements the problem factory interface. These are runtime
 collaborations, not imports from application code into infrastructure.
@@ -398,6 +403,12 @@ independence, the absence of backend presentation dependencies, and the absence
 of scientific calculation/data-loading calls in figure builders.
 
 ## Data and imports
+
+Operational errors use application-owned contracts at external boundaries.
+Domain services do not configure logging or perform IO. Notebook hosts own
+logging lifetimes and output destinations; application methods report failures and pool workers send diagnostic records to
+the parent rather than configuring file handlers. See
+[error handling and logs](../operations/error_handling_and_logging.md).
 
 Imports are explicit from the owning layer; compatibility shims are not maintained.
 Configuration keys, notebook entry points,

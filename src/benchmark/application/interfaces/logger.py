@@ -1,12 +1,18 @@
 """Abstract interface for benchmark evaluation logging."""
 
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from contextlib import AbstractContextManager
 
 from benchmark.application.champions import GenerationMode
+from shared.application.diagnostics import report_operation
 
 
 class BenchmarkLoggerInterface(ABC):
+    def operation(self, name: str) -> AbstractContextManager[None]:
+        return report_operation(logging.getLogger("benchmark.workflow"), name)
+
     @property
     @abstractmethod
     def verbose(self) -> bool: ...

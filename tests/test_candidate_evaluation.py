@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
-from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
+from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
 from evolution.domain.enums import SynthesisMode
 from shared.application.interfaces.candidate_executor import CandidateExecutor
 from shared.domain.problem import BaseProblem
@@ -13,7 +13,7 @@ from shared.infra.execution.candidate_executor import create_candidate_executor
 
 
 def build_candidate_evaluation_service(*, problem, **kwargs):
-    return CandidateEvaluationService(
+    return CandidateEvaluator(
         problem=problem,
         executor=create_candidate_executor(kwargs.get("timeout_seconds", 30.0)),
         **kwargs,
@@ -76,22 +76,16 @@ class DummyProblem(BaseProblem):
 
 def test_is_failure_classification():
     """Verify classification of failure score tiers vs valid fitness scores."""
-    assert CandidateEvaluationService.is_failure(CandidateEvaluationService.FAILURE_FITNESS) is True
-    assert (
-        CandidateEvaluationService.is_failure(CandidateEvaluationService.RUNTIME_FAILURE_FITNESS)
-        is True
-    )
-    assert (
-        CandidateEvaluationService.is_failure(CandidateEvaluationService.TIMEOUT_FAILURE_FITNESS)
-        is True
-    )
-    assert CandidateEvaluationService.is_failure(float("-inf")) is True
-    assert CandidateEvaluationService.is_failure(float("nan")) is True
+    assert CandidateEvaluator.is_failure(CandidateEvaluator.FAILURE_FITNESS) is True
+    assert CandidateEvaluator.is_failure(CandidateEvaluator.RUNTIME_FAILURE_FITNESS) is True
+    assert CandidateEvaluator.is_failure(CandidateEvaluator.TIMEOUT_FAILURE_FITNESS) is True
+    assert CandidateEvaluator.is_failure(float("-inf")) is True
+    assert CandidateEvaluator.is_failure(float("nan")) is True
 
-    assert CandidateEvaluationService.is_failure(0.0) is False
-    assert CandidateEvaluationService.is_failure(-0.05) is False
-    assert CandidateEvaluationService.is_failure(-1000.0) is False
-    assert CandidateEvaluationService.is_failure(-1e6) is False
+    assert CandidateEvaluator.is_failure(0.0) is False
+    assert CandidateEvaluator.is_failure(-0.05) is False
+    assert CandidateEvaluator.is_failure(-1000.0) is False
+    assert CandidateEvaluator.is_failure(-1e6) is False
 
 
 def test_evaluate_successful_candidate():
@@ -131,7 +125,7 @@ def test_repeated_candidates_keep_the_same_problem_instance() -> None:
         return point, problem(point)
 
     executor.execute_algorithm.side_effect = execute_algorithm
-    evaluator = CandidateEvaluationService(problem=problem, executor=executor, budget=100)
+    evaluator = CandidateEvaluator(problem=problem, executor=executor, budget=100)
 
     for _ in range(10):
         result = evaluator.evaluate(code="class Candidate: pass", name="Candidate")
@@ -161,7 +155,7 @@ class OutOfBoundsSearch:
     result = evaluator.evaluate(code=code, name="OutOfBoundsSearch")
 
     assert result.is_failure is True
-    assert result.fitness_score == CandidateEvaluationService.RUNTIME_FAILURE_FITNESS
+    assert result.fitness_score == CandidateEvaluator.RUNTIME_FAILURE_FITNESS
     assert result.metadata.error.error_type == "ValueError"
     assert "outside search space bounds" in (result.metadata.error.error_message or "")
 
@@ -184,7 +178,7 @@ class DimMismatchSearch:
     result = evaluator.evaluate(code=code, name="DimMismatchSearch")
 
     assert result.is_failure is True
-    assert result.fitness_score == CandidateEvaluationService.RUNTIME_FAILURE_FITNESS
+    assert result.fitness_score == CandidateEvaluator.RUNTIME_FAILURE_FITNESS
     assert result.metadata.error.error_type == "ValueError"
     assert "expected problem dimension" in (result.metadata.error.error_message or "")
 
@@ -203,7 +197,7 @@ class CrashingSearch:
     result = evaluator.evaluate(code=code, name="CrashingSearch")
 
     assert result.is_failure is True
-    assert result.fitness_score == CandidateEvaluationService.RUNTIME_FAILURE_FITNESS
+    assert result.fitness_score == CandidateEvaluator.RUNTIME_FAILURE_FITNESS
     assert result.metadata.error.error_type == "ZeroDivisionError"
     assert "division by zero" in (result.metadata.error.error_message or "")
     assert "line   4:" in result.code_context

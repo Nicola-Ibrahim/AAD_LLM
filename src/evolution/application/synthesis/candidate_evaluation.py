@@ -23,6 +23,7 @@ from evolution.domain.vos.metrics import (
     Execution,
     Fitness,
 )
+from shared.application.errors import ArtifactError, StorageError
 from shared.application.interfaces.candidate_executor import CandidateExecutor, CandidateTimeout
 from shared.domain.problem import BaseProblem
 
@@ -43,7 +44,7 @@ class _AlgorithmExecutionContext:
     captured_warnings: list[str] = field(default_factory=list)
 
 
-class CandidateEvaluationService:
+class CandidateEvaluator:
     """Application use case for executing and scoring synthesized optimizer candidates.
 
     Agnostic of framework (LLaMEA, EoH, FunSearch, Reflection). Evaluates candidate code
@@ -63,7 +64,7 @@ class CandidateEvaluationService:
         self,
         problem: BaseProblem,
         executor: CandidateExecutor,
-        budget: int = 1_000_000,
+        budget: int,
         timeout_seconds: float = 30.0,
         stagnation_threshold: int = 3,
         convergence_threshold: float = 1e-6,
@@ -122,13 +123,10 @@ class CandidateEvaluationService:
                 candidate_code=code,
                 captured_warnings=captured,
             )
-            fitness_score, final_error, metadata = self._calculate_success_result(
-                ctx=ctx,
-            )
-            code_context = ""
-            is_failure = False
-            self._consecutive_failures = 0
+            clean_y = self._resolve_clean_objective(best_x)
 
+        except (StorageError, ArtifactError):
+            raise
         except Exception as error:
             runtime_seconds = time.perf_counter() - start_time
             evaluations_used = self._problem.evaluations
@@ -152,6 +150,12 @@ class CandidateEvaluationService:
             final_error = None
             is_failure = True
             self._consecutive_failures += 1
+        else:
+            # Scoring/metadata bugs are backend failures, not candidate failures.
+            fitness_score, final_error, metadata = self._calculate_success_result(ctx, clean_y)
+            code_context = ""
+            is_failure = False
+            self._consecutive_failures = 0
 
         if not math.isfinite(fitness_score):
             fitness_score = self.FAILURE_FITNESS
@@ -284,12 +288,12 @@ class CandidateEvaluationService:
     def _calculate_success_result(
         self,
         ctx: _AlgorithmExecutionContext,
+        clean_y: float,
     ) -> tuple[float, float, IterationMetadata]:
         """Compute final error, fitness score, and metadata object."""
         true_optimum = self._problem.true_optimum
         if ctx.best_x is None:
             raise ValueError("A successful optimizer result must include best_x coordinates.")
-        clean_y = self._resolve_clean_objective(ctx.best_x)
         scoring = AlgorithmScoringService.success(clean_y, true_optimum)
         final_error = scoring.objective_gap
         metadata = self._build_success_metadata(ctx, final_error)

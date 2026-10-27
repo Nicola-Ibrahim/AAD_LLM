@@ -14,6 +14,7 @@ Use these guides for deeper explanations; each topic has one primary home.
 | What is scored, how are budgets/timeouts handled, and how do native/noise/transfer studies differ? | [Benchmark protocol](benchmark_protocol.md) |
 | How do I configure a provider, serve a model and discover its identity? | [Model configuration](configuration/model_configuration.md) |
 | Which analysis notebook should I run, and where do its figures go? | [Analysis workflow guide](../notebooks/analysis/README.md) |
+| Where are errors recorded, and which failures stop a workflow? | [Error handling and logging](operations/error_handling_and_logging.md) |
 
 ## Architecture views
 
@@ -31,9 +32,8 @@ supporting capabilities, not strict C4 levels or Python import dependencies.
 ## Proposed and deferred changes
 
 - [System-wide error handling and logging](plans/error_handling_and_logging.md):
-  **proposed, not implemented**. Covers synthesis, benchmarking, audit, analysis,
-  exports, maintenance and CLI tools, with exception ownership, centralized
-  logging, multiprocessing and a staged migration/verification plan.
+  implementation rationale and migration/verification checklist. Current behavior
+  is described in the operational guide above.
 
 - [Campaign isolation and preservation plan](plans/campaign_isolation.md): **deferred,
   not implemented**. Includes a Mermaid system overview and execution sequence,

@@ -1,13 +1,13 @@
 """Trace reader for parsing and scanning empirical IOHprofiler benchmark logs."""
 
 import json
+import logging
 import re
 import shutil
 from collections import defaultdict, deque
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from tempfile import NamedTemporaryFile
 
 import ioh
 import numpy as np
@@ -20,7 +20,30 @@ from benchmark.domain.benchmark_results import (
 from benchmark.domain.services.condition_status import inspect_condition
 from benchmark.domain.trial_schedule import TrialIdentity, matching_trial_indices
 from benchmark.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
+from shared.application.errors import ArtifactError
 from shared.config import RESULTS_DIR
+from shared.infra.artifacts import atomic_write, read_json_object
+
+
+def count_recorded_runs(solver_dir: Path) -> int:
+    """Preserve counting fallbacks, but never hide a corrupt existing artifact."""
+    if not solver_dir.exists():
+        return 0
+    provenance = solver_dir / "provenance.json"
+    if provenance.exists():
+        record = read_json_object(provenance)
+        if isinstance(record.get("clean_errors"), list):
+            return executed_trial_count(record)
+        count = record.get("n_runs")
+        if count is not None and int(count) > 0:
+            return int(count)
+    metadata_files = [p for p in solver_dir.glob("**/*.json") if "IOHprofiler" in p.name]
+    if metadata_files:
+        metadata = read_json_object(metadata_files[0])
+        runs = metadata.get("scenarios", [{}])[0].get("runs", [])
+        if runs:
+            return len(runs)
+    return len([p for p in solver_dir.glob("**/*.dat") if p.stat().st_size > 0])
 
 
 class IOHTraceReader(BenchmarkTraceReader):
@@ -74,6 +97,9 @@ class IOHTraceReader(BenchmarkTraceReader):
                         current_evals.append(eval_val)
                         current_raw.append(raw_val)
                     except ValueError:
+                        logging.getLogger(__name__).warning(
+                            "Unparseable trace row excluded from %s", dat_path
+                        )
                         continue
 
         if current_evals:
@@ -87,48 +113,13 @@ class IOHTraceReader(BenchmarkTraceReader):
         return runs
 
     def get_run_count(self, solver_dir: Path) -> int:
-        """Extract number of completed runs for a solver folder."""
-        if not solver_dir.exists():
-            return 0
-
-        prov_path = solver_dir / "provenance.json"
-        if prov_path.exists():
-            try:
-                with open(prov_path, "r", encoding="utf-8") as pf:
-                    prov = json.load(pf)
-                clean_errors = prov.get("clean_errors")
-                if clean_errors is not None and isinstance(clean_errors, list):
-                    return executed_trial_count(prov)
-                n = prov.get("n_runs")
-                if n is not None and int(n) > 0:
-                    return int(n)
-            except Exception:
-                pass
-
-        ioh_jsons = [f for f in solver_dir.glob("**/*.json") if "IOHprofiler" in f.name]
-        if ioh_jsons:
-            try:
-                with open(ioh_jsons[0], "r", encoding="utf-8") as jf:
-                    meta = json.load(jf)
-                runs = meta.get("scenarios", [{}])[0].get("runs", [])
-                if runs:
-                    return len(runs)
-            except Exception:
-                pass
-
-        dat_files = [f for f in solver_dir.glob("**/*.dat") if f.stat().st_size > 0]
-        return len(dat_files)
+        return count_recorded_runs(solver_dir)
 
     def load_provenance_records(self) -> list[dict[str, object]]:
         """Load current terminal-result records, excluding historical skipped tails."""
         records: list[dict[str, object]] = []
         for path in sorted(self.benchmark_dir.rglob("provenance.json")):
-            try:
-                record = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                continue
-            if not isinstance(record, dict):
-                continue
+            record = read_json_object(path)
             inspection = inspect_condition(
                 code_available=True,
                 directory_exists=True,
@@ -172,13 +163,7 @@ class IOHTraceReader(BenchmarkTraceReader):
             if "provenance" in json_path.name:
                 continue
 
-            try:
-                with open(json_path, "r", encoding="utf-8") as jf:
-                    raw_metadata = json.load(jf)
-            except Exception:
-                continue
-            if not isinstance(raw_metadata, dict):
-                continue
+            raw_metadata = read_json_object(json_path)
             meta: dict[str, object] = raw_metadata
 
             path_str = str(json_path.relative_to(self.benchmark_dir))
@@ -390,53 +375,16 @@ class BenchmarkStateRepository(BenchmarkStateStore):
         prov_path = solver_dir / "provenance.json"
         if not prov_path.exists():
             return None
-        try:
-            with open(prov_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return None
+        return read_json_object(prov_path)
 
     def write_provenance(self, solver_dir: Path, data: dict[str, object]) -> None:
         """Atomically replace provenance so an interrupted write preserves prior outcomes."""
         solver_dir.mkdir(parents=True, exist_ok=True)
         prov_path = solver_dir / "provenance.json"
-        with NamedTemporaryFile(mode="w", encoding="utf-8", dir=solver_dir, delete=False) as f:
-            temporary_path = Path(f.name)
-            try:
-                json.dump(data, f, indent=2)
-                f.flush()
-            except BaseException:
-                temporary_path.unlink(missing_ok=True)
-                raise
-        try:
-            temporary_path.replace(prov_path)
-        finally:
-            temporary_path.unlink(missing_ok=True)
+        atomic_write(prov_path, json.dumps(data, indent=2).encode("utf-8"))
 
     def get_run_count(self, solver_dir: Path) -> int:
-        """Determines the number of completed trials recorded in provenance or dat files."""
-        prov = self.read_provenance(solver_dir)
-        if prov is not None:
-            clean_errors = prov.get("clean_errors")
-            if clean_errors is not None and isinstance(clean_errors, list):
-                return executed_trial_count(prov)
-            n_runs = prov.get("n_runs")
-            if n_runs is not None and int(n_runs) > 0:
-                return int(n_runs)
-
-        ioh_jsons = [f for f in solver_dir.glob("**/*.json") if "IOHprofiler" in f.name]
-        if ioh_jsons:
-            try:
-                with open(ioh_jsons[0], "r", encoding="utf-8") as jf:
-                    meta = json.load(jf)
-                runs = meta.get("scenarios", [{}])[0].get("runs", [])
-                if runs:
-                    return len(runs)
-            except Exception:
-                pass
-
-        dat_files = [f for f in solver_dir.glob("**/*.dat") if f.stat().st_size > 0]
-        return len(dat_files)
+        return count_recorded_runs(solver_dir)
 
     @staticmethod
     def merge_run_logs(source_dir: Path, target_dir: Path) -> None:
@@ -465,8 +413,10 @@ class BenchmarkStateRepository(BenchmarkStateStore):
                     src_runs = src_data.get("scenarios", [{}])[0].get("runs", [])
                     if "scenarios" in tgt_data and tgt_data["scenarios"]:
                         tgt_data["scenarios"][0].setdefault("runs", []).extend(src_runs)
-                        tgt_json.write_text(json.dumps(tgt_data, indent=2), encoding="utf-8")
-                except Exception:
-                    pass
+                        atomic_write(tgt_json, json.dumps(tgt_data, indent=2).encode("utf-8"))
+                except (OSError, ValueError, TypeError, KeyError, IndexError) as error:
+                    raise ArtifactError(
+                        f"Cannot merge IOH metadata: {src_json} into {tgt_json}"
+                    ) from error
             else:
                 shutil.copy2(src_json, tgt_json)

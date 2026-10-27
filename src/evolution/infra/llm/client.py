@@ -18,7 +18,8 @@ import openai
 from llamea import LLM, Gemini_LLM, OpenAI_LLM
 from llamea.solution import Solution
 
-from evolution.infra.llm.gateway import GatewayLLM, GatewayRequestLimiter
+from evolution.application.exceptions import ProviderError
+from evolution.infra.llm.gateway import GatewayLLM, GatewayRequestLimiter, provider_error
 
 
 class Provider(StrEnum):
@@ -90,6 +91,7 @@ class LLMClient:
         self.provider = provider if isinstance(provider, Provider) else Provider(provider)
         self.validate_on_init = validate_on_init
         self.kwargs = kwargs
+        self._terminal_error: ProviderError | None = None
         self._client = self._init_client()
 
     def validate_connection(self) -> None:
@@ -122,14 +124,14 @@ class LLMClient:
             )
             with urllib.request.urlopen(req, timeout=10.0):
                 pass
-        except Exception as e:
+        except (OSError, ValueError) as e:
             raise ConnectionError(
                 f"Could not connect to the {provider_name} LLM server at '{base_url}'.\n"
                 f"Error details: {e}\n"
                 f"Troubleshooting:\n"
                 "Check the endpoint URL, API key and network/VPN access. "
                 "For a local server, also check that scripts/llm.sh is running."
-            ) from None
+            ) from e
 
     @staticmethod
     def _get_local_model_name(base_url: str, api_key: str) -> str:
@@ -147,13 +149,13 @@ class LLMClient:
                 data = json.loads(response.read().decode("utf-8"))
                 if (models := data.get("data")) and (model_id := models[0].get("id")):
                     return model_id
-        except Exception as e:
+        except (OSError, ValueError) as e:
             raise ConnectionError(
                 f"Could not fetch active model from local server at '{models_url}'.\n"
                 f"Error details: {e}\n"
                 f"Ensure your model server is running (e.g. bash scripts/llm.sh start) "
                 f"or specify the model explicitly via LOCAL_LLM_MODEL or model='...'."
-            ) from None
+            ) from e
 
         raise RuntimeError(
             f"No models found on the local LLM server at '{models_url}'. "
@@ -202,15 +204,7 @@ class LLMClient:
                     llm.client.models.list()
                 except openai.APIError as error:
                     llm.client.close()
-                    status = (
-                        error.status_code
-                        if isinstance(error, openai.APIStatusError)
-                        else type(error).__name__
-                    )
-                    raise ConnectionError(
-                        f"Could not connect to the {config.display_name} LLM server at '{base_url}' "
-                        f"({status}). Check credentials, quota and network/VPN access."
-                    ) from None
+                    raise provider_error(error, model) from error
             return llm
 
         if should_validate:
@@ -240,6 +234,7 @@ class LLMClient:
         """Samples a solution from the LLM with retry and telemetry tracking."""
         max_retries = 3
         backoff = 2.0
+        self._terminal_error = None
 
         for attempt in range(1, max_retries + 1):
             try:
@@ -256,11 +251,15 @@ class LLMClient:
                     sol.add_metadata("llm_generation_time", elapsed)
                 return sol
             except Exception as error:
+                if isinstance(error, ProviderError):
+                    self._terminal_error = error
+                    raise
+                if isinstance(error, openai.APIError):
+                    self._terminal_error = provider_error(error, str(self.model))
+                    raise self._terminal_error from error
                 # GatewayLLM already owns paced network retries. Keep the existing
                 # outer retries for malformed candidate output, not API failures.
-                if attempt == max_retries or (
-                    self.provider == Provider.UPB and isinstance(error, openai.APIError)
-                ):
+                if attempt == max_retries:
                     raise
                 time.sleep(backoff * attempt)
 
@@ -291,8 +290,14 @@ class LLMClient:
         self.provider = state["provider"]
         self.validate_on_init = False
         self.kwargs = state["kwargs"].copy()
+        self._terminal_error = None
         if state.get("model"):
             self.kwargs.setdefault("model", state["model"])
         self._client = self._init_client()
         if state.get("model"):
             self._client.model = state["model"]
+
+    def raise_if_failed(self) -> None:
+        """Preserve terminal IO failure through third-party candidate exception catches."""
+        if self._terminal_error is not None:
+            raise self._terminal_error

@@ -7,8 +7,8 @@ import pytest
 from study_fixtures import run_parameters
 
 from evolution.application.campaign.audit import CampaignAuditor
-from evolution.application.campaign.plan import CampaignPlanner
-from evolution.application.synthesis_config import SynthesisConfig
+from evolution.application.campaign.planner import CampaignPlanner
+from evolution.application.campaign.settings import CampaignSettings
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from shared.domain.noise_model import NoiseModelEnum
 
@@ -34,7 +34,7 @@ def experiment(
     )
 
 
-def planner(config: SynthesisConfig, selected: list[SimpleNamespace]) -> CampaignPlanner:
+def planner(config: CampaignSettings, selected: list[SimpleNamespace]) -> CampaignPlanner:
     repository = MagicMock()
     repository.load_by_ids.return_value = selected
     repository.load.return_value = [experiment(1), experiment(2)]
@@ -46,7 +46,7 @@ def planner(config: SynthesisConfig, selected: list[SimpleNamespace]) -> Campaig
 
 
 def test_reruns_replace_exact_ids_without_using_matrix_quota() -> None:
-    config = SynthesisConfig(runs_per_config=5)
+    config = CampaignSettings(runs_per_config=5)
     campaign = planner(config, [experiment(1), experiment(2)])
     assert campaign.build_tasks(rerun_experiment_ids=[1, 2]) == ["existing", "existing"]
     assert [call.args[0].id for call in campaign._build_task_from_summary.call_args_list] == [1, 2]
@@ -56,7 +56,7 @@ def test_reruns_replace_exact_ids_without_using_matrix_quota() -> None:
 
 
 def test_unknown_ids_fail_before_creating_records() -> None:
-    campaign = planner(SynthesisConfig(), [experiment(1)])
+    campaign = planner(CampaignSettings(), [experiment(1)])
     with pytest.raises(ValueError, match="Unknown rerun"):
         campaign.build_tasks(rerun_experiment_ids=[1, 99])
     campaign._build_fresh_task.assert_not_called()
@@ -64,7 +64,7 @@ def test_unknown_ids_fail_before_creating_records() -> None:
 
 def test_other_models_are_not_dispatched() -> None:
     campaign = planner(
-        SynthesisConfig(),
+        CampaignSettings(),
         [experiment(1, "another-model")],
     )
     assert campaign.build_tasks(rerun_experiment_ids=[1]) == []
@@ -72,7 +72,7 @@ def test_other_models_are_not_dispatched() -> None:
 
 
 def test_empty_rerun_list_uses_normal_campaign_planning() -> None:
-    campaign = planner(SynthesisConfig(), [])
+    campaign = planner(CampaignSettings(), [])
     campaign.auditor = MagicMock()
     campaign.auditor.group_experiments_by_condition.return_value = ({}, {}, {})
     assert campaign.build_tasks() == []
@@ -90,7 +90,7 @@ def test_manual_reruns_include_unresolved_failures_and_running_conditions() -> N
         CampaignAuditor._condition_from_summary(exp)
         for exp in [selected, invalid, running, resolved_failure]
     ]
-    campaign = planner(SynthesisConfig(matrix_conditions=conditions), [selected])
+    campaign = planner(CampaignSettings(matrix_conditions=conditions), [selected])
     campaign.sqlite_repo.load.return_value = [
         selected,
         invalid,
@@ -111,7 +111,7 @@ def test_manual_reruns_include_unresolved_failures_and_running_conditions() -> N
 
 
 def test_manual_replacement_keeps_requested_id_not_other_pending_record() -> None:
-    campaign = planner(SynthesisConfig(), [experiment(1)])
+    campaign = planner(CampaignSettings(), [experiment(1)])
     running = experiment(3, status="running", error=None)
     campaign.sqlite_repo.load.return_value = [experiment(1), running]
     campaign._build_task_from_summary = MagicMock(return_value="resume")
@@ -120,7 +120,7 @@ def test_manual_replacement_keeps_requested_id_not_other_pending_record() -> Non
 
 
 def test_duplicate_requested_ids_restart_once() -> None:
-    campaign = planner(SynthesisConfig(), [experiment(1)])
+    campaign = planner(CampaignSettings(), [experiment(1)])
     campaign.sqlite_repo.load.return_value = [
         experiment(1),
         experiment(3, status="running", error=None),
@@ -135,7 +135,7 @@ def test_duplicate_requested_ids_restart_once() -> None:
 
 def test_manual_and_automatic_failure_share_one_repair_slot() -> None:
     failed = experiment(1, status="failed", error=None)
-    campaign = planner(SynthesisConfig(), [failed])
+    campaign = planner(CampaignSettings(), [failed])
     campaign.sqlite_repo.load.return_value = [failed]
     assert campaign.build_tasks(rerun_experiment_ids=[1]) == ["existing"]
     campaign._build_fresh_task.assert_not_called()
@@ -145,7 +145,7 @@ def test_retry_disabled_keeps_only_manual_repairs() -> None:
     selected = experiment(1)
     failed = experiment(3, status="failed", error=None, problem_id=8)
     campaign = planner(
-        SynthesisConfig(
+        CampaignSettings(
             retry_failed_synthesis=False,
             matrix_conditions=[CampaignAuditor._condition_from_summary(failed)],
         ),
@@ -158,7 +158,7 @@ def test_retry_disabled_keeps_only_manual_repairs() -> None:
 
 def test_fresh_repeat_keys_are_unique() -> None:
     selected = experiment(1)
-    campaign = planner(SynthesisConfig(), [selected])
+    campaign = planner(CampaignSettings(), [selected])
     campaign.problem_factory.create.return_value = SimpleNamespace(
         problem_id=1,
         dim=2,
@@ -185,7 +185,7 @@ def test_fresh_repeat_keys_are_unique() -> None:
     ],
 )
 def test_invalid_selections_are_rejected(kwargs: dict[str, object]) -> None:
-    campaign = planner(SynthesisConfig(), [])
+    campaign = planner(CampaignSettings(), [])
     with pytest.raises(ValueError):
         campaign.build_tasks(**kwargs)
     campaign.sqlite_repo.create_experiment.assert_not_called()
@@ -193,7 +193,7 @@ def test_invalid_selections_are_rejected(kwargs: dict[str, object]) -> None:
 
 def test_recovery_without_manual_ids_discovers_failures() -> None:
     failed = experiment(3, status="failed", error=None)
-    config = SynthesisConfig(matrix_conditions=[CampaignAuditor._condition_from_summary(failed)])
+    config = CampaignSettings(matrix_conditions=[CampaignAuditor._condition_from_summary(failed)])
     campaign = planner(config, [])
     campaign.sqlite_repo.load.return_value = [failed]
     assert campaign.build_tasks(recover=True) == ["existing"]
@@ -202,7 +202,7 @@ def test_recovery_without_manual_ids_discovers_failures() -> None:
 
 
 def test_selection_is_not_retained_between_calls() -> None:
-    campaign = planner(SynthesisConfig(), [experiment(1)])
+    campaign = planner(CampaignSettings(), [experiment(1)])
     assert campaign.build_tasks(rerun_experiment_ids=[1]) == ["existing"]
     campaign._build_fresh_task.reset_mock()
     assert campaign.build_tasks() == []
@@ -212,7 +212,7 @@ def test_selection_is_not_retained_between_calls() -> None:
 def test_explicit_resume_filters_model_and_completed_records() -> None:
     pending = experiment(1, status="running", error=None)
     campaign = planner(
-        SynthesisConfig(), [pending, experiment(2), experiment(3, "other", status="running")]
+        CampaignSettings(), [pending, experiment(2), experiment(3, "other", status="running")]
     )
     campaign._build_task_from_summary = MagicMock(return_value="resume")
     assert campaign.build_tasks(resume_experiment_ids=[1, 1, 2, 3]) == ["resume"]
@@ -221,11 +221,11 @@ def test_explicit_resume_filters_model_and_completed_records() -> None:
 
 
 def test_campaign_forwards_runtime_request_without_changing_protocol() -> None:
-    from evolution.application.campaign.run import SynthesisCampaignCoordinator
+    from evolution.application.campaign.service import SynthesisCampaign
 
-    config = SynthesisConfig()
+    config = CampaignSettings()
     original = config.model_dump()
-    service = SynthesisCampaignCoordinator(
+    service = SynthesisCampaign(
         sqlite_repo=MagicMock(),
         worker_count=1,
         logger=MagicMock(),
@@ -237,7 +237,7 @@ def test_campaign_forwards_runtime_request_without_changing_protocol() -> None:
     )
     service._build_planner = MagicMock()
     service._build_planner.return_value.build_tasks.return_value = []
-    service.run_campaign(**run_parameters(config), recover=True, rerun_experiment_ids=[1])
+    service.run(**run_parameters(config), recover=True, rerun_experiment_ids=[1])
     service._build_planner.return_value.build_tasks.assert_called_once_with(
         recover=True,
         rerun_experiment_ids=[1],
@@ -251,7 +251,7 @@ def test_champion_prevents_automatic_retry_of_newer_failures_and_queued_runs() -
     champion = experiment(1)
     champion.iterations = [SimpleNamespace(timed_out=True)] * 9
     condition = CampaignAuditor._condition_from_summary(champion)
-    campaign = planner(SynthesisConfig(matrix_conditions=[condition]), [])
+    campaign = planner(CampaignSettings(matrix_conditions=[condition]), [])
     campaign.sqlite_repo.load.return_value = [
         champion,
         experiment(2, status="failed", error=None),
@@ -273,7 +273,7 @@ def test_champion_prevents_automatic_retry_of_newer_failures_and_queued_runs() -
 def test_coverage_is_champion_availability_not_replicate_quota() -> None:
     champion = experiment(1)
     condition = CampaignAuditor._condition_from_summary(champion)
-    campaign = planner(SynthesisConfig(matrix_conditions=[condition], runs_per_config=5), [])
+    campaign = planner(CampaignSettings(matrix_conditions=[condition], runs_per_config=5), [])
     campaign.sqlite_repo.load.return_value = [champion]
     _, summary = campaign.auditor.audit_matrix()
     assert summary["progress_pct"] == 100.0
@@ -284,7 +284,7 @@ def test_failed_session_is_not_coverage_when_retry_is_disabled() -> None:
     failed = experiment(1, status="failed", error=None)
     condition = CampaignAuditor._condition_from_summary(failed)
     campaign = planner(
-        SynthesisConfig(matrix_conditions=[condition], retry_failed_synthesis=False), []
+        CampaignSettings(matrix_conditions=[condition], retry_failed_synthesis=False), []
     )
     campaign.sqlite_repo.load.return_value = [failed]
     _, summary = campaign.auditor.audit_matrix()
@@ -294,7 +294,7 @@ def test_failed_session_is_not_coverage_when_retry_is_disabled() -> None:
 
 def test_normal_scheduling_replaces_failed_record_without_creating_new_row() -> None:
     failed = experiment(1, status="failed", error=None)
-    config = SynthesisConfig(matrix_conditions=[CampaignAuditor._condition_from_summary(failed)])
+    config = CampaignSettings(matrix_conditions=[CampaignAuditor._condition_from_summary(failed)])
     campaign = planner(config, [])
     campaign.sqlite_repo.load.return_value = [failed]
     assert campaign.build_tasks() == ["existing"]
@@ -308,7 +308,7 @@ def test_replacement_payload_keeps_id_and_starts_at_generation_one() -> None:
     selected.max_iterations = 10
     selected.synthesis_seed = 43
     selected.problem.instance_id = 1
-    campaign = planner(SynthesisConfig(), [selected])
+    campaign = planner(CampaignSettings(), [selected])
     task = CampaignPlanner._build_task_from_summary(campaign, selected, tag="replace", restart=True)
     assert task["experiment_id"] == 1401
     assert task["initial_iteration"] == 0
@@ -325,7 +325,7 @@ def test_resume_preserves_seed_and_budget() -> None:
     selected.max_iterations = 10
     selected.synthesis_seed = 43
     selected.problem.instance_id = 1
-    campaign = planner(SynthesisConfig(budget=100000), [selected])
+    campaign = planner(CampaignSettings(budget=100000), [selected])
     task = CampaignPlanner._build_task_from_summary(campaign, selected)
     assert task["initial_iteration"] == 1
     assert task["config"].budget == selected.budget
@@ -338,7 +338,7 @@ def test_unsafe_resume_fails_before_problem_creation(budget: int | None, seed: i
     selected.iterations = [object()]
     selected.budget = budget
     selected.synthesis_seed = seed
-    campaign = planner(SynthesisConfig(budget=100000), [selected])
+    campaign = planner(CampaignSettings(budget=100000), [selected])
     with pytest.raises(ValueError, match="Cannot resume"):
         CampaignPlanner._build_task_from_summary(campaign, selected)
     campaign.problem_factory.create.assert_not_called()

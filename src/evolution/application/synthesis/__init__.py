@@ -1,1 +1,1 @@
-"""Single-session synthesis workflow and its evaluation components."""
+"""Single-experiment synthesis workflow and its evaluation components."""

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from benchmark.domain.services.resolvers import LLMModelSpec, ModelNames
+from shared.application.errors import ArtifactError
 
 
 @lru_cache(maxsize=1)
@@ -41,8 +42,8 @@ def load_llm_registry(toml_path: Optional[Path] = None) -> list[LLMModelSpec]:
     try:
         with open(toml_path, "rb") as f:
             data = tomllib.load(f)
-    except Exception:
-        return []
+    except (OSError, ValueError) as error:
+        raise ArtifactError(f"Cannot load model registry: {toml_path}") from error
 
     registry: list[LLMModelSpec] = []
     for cat_name, cat_data in data.items():

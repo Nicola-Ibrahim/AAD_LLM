@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from benchmark.application.interfaces.candidate_code_reader import CandidateCodeReader
+from shared.application.errors import ArtifactError
 from shared.config import PROJECT_ROOT
 
 
@@ -18,4 +19,7 @@ class FilesystemCodeReader(CandidateCodeReader):
         return self.resolve(code_path).is_file()
 
     def read(self, code_path: str | Path) -> str:
-        return self.resolve(code_path).read_text(encoding="utf-8")
+        try:
+            return self.resolve(code_path).read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            raise ArtifactError(f"Cannot read champion code: {code_path}") from error

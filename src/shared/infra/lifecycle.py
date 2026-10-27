@@ -1,6 +1,7 @@
 """Resource ownership for long-lived synchronous workflows and interactive hosts."""
 
 import atexit
+import logging
 import os
 from contextlib import ExitStack
 from typing import TypeVar
@@ -8,6 +9,7 @@ from typing import TypeVar
 from dishka import Provider
 
 from shared.infra import di
+from shared.infra.logging.runtime import start_logging
 
 T = TypeVar("T")
 
@@ -29,12 +31,19 @@ class WorkflowScope:
         self._owner_pid = os.getpid()
         self._closed = False
         self._resources = ExitStack()
+        workflow = providers[0].__class__.__module__.split(".")[0] if providers else "workflow"
+        self.logging = start_logging(workflow)
+        self._resources.callback(self.logging.close)
         try:
-            self._services = self._resources.enter_context(
-                di.container_scope(*providers, context=context, request_context=request_context)
-            )
+            with self.logging.operation("setup"):
+                logging.getLogger(__name__).info(
+                    "Diagnostic log: %s", self.logging.path, extra={"progress": True}
+                )
+                self._services = self._resources.enter_context(
+                    di.container_scope(*providers, context=context, request_context=request_context)
+                )
         except BaseException:
-            self.close()
+            self._close_after_failure()
             raise
         atexit.register(self.close)
 
@@ -45,10 +54,20 @@ class WorkflowScope:
         if self._closed:
             raise RuntimeError("This workflow scope is closed; rerun setup.")
         try:
-            return self._services.get(dependency)
+            with self.logging.operation(f"resolve {dependency.__name__}"):
+                return self._services.get(dependency)
         except BaseException:
-            self.close()
+            self._close_after_failure()
             raise
+
+    def _close_after_failure(self) -> None:
+        """Preserve the setup/resolve error even if resource teardown also fails."""
+        try:
+            self.close()
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "Cleanup failed; preserving the original error", exc_info=True
+            )
 
     def close(self) -> None:
         """Release resources once, only in the process that created them."""

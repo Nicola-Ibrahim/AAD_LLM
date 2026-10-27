@@ -45,8 +45,8 @@ The scientific contexts remain `src/evolution`, `src/benchmark`, and `src/shared
 
 | When | Adapter calls | Responsibility | Duration |
 | --- | --- | --- | --- |
-| `POST /jobs/synthesis` | `SubmitSynthesisJob` in `src/operations/application` | Validate the request, reserve the study, save a `QUEUED` job and outbox row, return its ID. It **does not** call `run_campaign()`. | Short HTTP request. |
-| Celery receives the job ID | Task wrapper calls `ClaimJob`, then `SynthesisCampaignCoordinator.run_campaign()` | Load frozen inputs, acquire task-scoped resources, run the existing scientific workflow, record progress and terminal state. | Long worker task. |
+| `POST /jobs/synthesis` | `SubmitSynthesisJob` in `src/operations/application` | Validate the request, reserve the study, save a `QUEUED` job and outbox row, return its ID. It **does not** call `run()`. | Short HTTP request. |
+| Celery receives the job ID | Task wrapper calls `ClaimJob`, then `SynthesisCampaign.run()` | Load frozen inputs, acquire task-scoped resources, run the existing scientific workflow, record progress and terminal state. | Long worker task. |
 | `GET /jobs/{id}` or `/events` | `GetJob` / `ReadJobEvents` in `src/operations/application` | Read persisted status/events; SSE streams them to the browser. | Short snapshot request or long read-only stream. |
 
 The API talks to the **operations application layer first**, because submitting a job is its own use case. The operations use case writes an outbox record; an infrastructure dispatcher later publishes the job ID to Celery. Celery is only the transport and execution host. Its task adapter calls the **scientific application layer** directly. A progress-observer port lets synthesis report milestones without importing Celery or the operations database. Operations use cases depend on repository ports; the dispatcher uses a queue-publisher port. DI supplies their adapters.
@@ -94,7 +94,7 @@ Never share a SQLAlchemy `Session`, engine, Redis connection, LLM client, or DI 
 | --- | --- | --- |
 | Experiment list/detail/iterations | `SQLiteSynthesisRepository`; `experiments`, `iterations`, `error_logs` | New indexed, paginated read queries. Existing `load()` and DataFrame helpers load too much for a table. |
 | Synthesis coverage | `CampaignAuditor.audit_matrix()` | Read-only composition and bounded response; distinguish historical `running` rows from an active job. |
-| Synthesis run/recover/replace/resume | `SynthesisCampaignCoordinator.run_campaign()` | Worker wrapper, strict ID validation, immutable inputs, progress hooks, and checkpoint validation. |
+| Synthesis run/recover/replace/resume | `SynthesisCampaign.run()` | Worker wrapper, strict ID validation, immutable inputs, progress hooks, and checkpoint validation. |
 | Synthesis preview | `CampaignPlanner.build_tasks()` is mutating | New non-mutating preview use case; never call `build_tasks()` from preview. |
 | Champion catalog | `ChampionSelectionService` | Typed filtered projection; no export on GET. |
 | Benchmark coverage/comparisons | `BenchmarkAuditService.get_audit_data()`, `BenchmarkCoordinator.summarize_results()`, condition-status policy | Reuse scientific validity rules; cache or materialize bounded responses. Existing methods return broad DataFrames. |
@@ -142,7 +142,7 @@ Use Pydantic schemas at the HTTP edge, explicit application arguments/request mo
 
 ### Synthesis submission contract
 
-The UI offers four modes: `full_matrix`, `recover`, `resume_ids`, `replace_ids`. Map them to the existing `run_campaign(recover=..., resume_experiment_ids=..., rerun_experiment_ids=...)`. Validate that selected IDs belong to the chosen model/study and that mode/ID combinations are legal. Preview must show affected IDs, estimated task count, and checkpoint readiness without creating rows. `replace_ids` clearly states that it replaces iterations, champion/code, and checkpoint. An invalid or missing checkpoint blocks **resume**; starting fresh must be an explicit different choice.
+The UI offers four modes: `full_matrix`, `recover`, `resume_ids`, `replace_ids`. Map them to the existing `run(recover=..., resume_experiment_ids=..., rerun_experiment_ids=...)`. Validate that selected IDs belong to the chosen model/study and that mode/ID combinations are legal. Preview must show affected IDs, estimated task count, and checkpoint readiness without creating rows. `replace_ids` clearly states that it replaces iterations, champion/code, and checkpoint. An invalid or missing checkpoint blocks **resume**; starting fresh must be an explicit different choice.
 
 ## 5. Durable job lifecycle
 
@@ -208,7 +208,7 @@ sequenceDiagram
   J->>DB: Replay committed events after cursor
   W->>J: ClaimJob.execute(job ID)
   J->>DB: Claim job + write STARTED event
-  W->>S: run_campaign(...)
+  W->>S: run(...)
   S-->>W: Verified unit milestones
   W->>J: Record progress / terminal state
   J->>DB: Commit progress / terminal event
@@ -253,6 +253,6 @@ For local development run Vite, FastAPI, Redis, and workers as separate processe
 
 ## References
 
-Repository: [`src/evolution/application/campaign/run.py`](../../src/evolution/application/campaign/run.py), [`src/benchmark/application/trials/coordinator.py`](../../src/benchmark/application/trials/coordinator.py), [`src/benchmark/infra/di.py`](../../src/benchmark/infra/di.py), [`src/evolution/infra/concurrency/runner.py`](../../src/evolution/infra/concurrency/runner.py), and [campaign isolation](campaign_isolation.md).
+Repository: [`src/evolution/application/campaign/service.py`](../../src/evolution/application/campaign/service.py), [`src/benchmark/application/trials/coordinator.py`](../../src/benchmark/application/trials/coordinator.py), [`src/benchmark/infra/di.py`](../../src/benchmark/infra/di.py), [`src/evolution/infra/concurrency/runner.py`](../../src/evolution/infra/concurrency/runner.py), and [campaign isolation](campaign_isolation.md).
 
 External: [Dishka scopes](https://dishka.readthedocs.io/en/stable/advanced/scopes.html), [Celery concurrency](https://docs.celeryq.dev/en/main/userguide/concurrency/), [Celery task semantics](https://docs.celeryq.dev/en/stable/userguide/tasks.html), [FastAPI SSE](https://fastapi.tiangolo.com/tutorial/server-sent-events/), [MDN EventSource](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events), [SQLAlchemy multiprocessing](https://docs.sqlalchemy.org/en/21/core/pooling.html#using-connection-pools-with-multiprocessing-or-os-fork), and [SQLite WAL](https://www.sqlite.org/wal.html).

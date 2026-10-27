@@ -6,14 +6,14 @@ from contextlib import contextmanager
 
 from dishka import AnyOf, Provider, Scope, from_context, provide
 
-from evolution.application.campaign.models import CampaignTask
-from evolution.application.campaign.run import SynthesisCampaignCoordinator
+from evolution.application.campaign.service import SynthesisCampaign
+from evolution.application.campaign.tasks import CampaignTask
 from evolution.application.interfaces.code_store import SynthesisCodeStore
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
 from evolution.application.interfaces.task_dispatcher import TaskDispatcher
-from evolution.application.synthesis.models import SessionResult
-from evolution.application.synthesis.run import SingleSynthesisUseCase
+from evolution.application.synthesis.result import SynthesisResult
+from evolution.application.synthesis.service import Synthesis
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.infra.concurrency.runner import ProcessPoolRunner
 from evolution.infra.concurrency.worker import run_synthesis_worker
@@ -29,7 +29,6 @@ from shared.infra.di import container_scope
 
 class EvolutionProvider(Provider):
     scope = Scope.REQUEST
-    worker_engine = from_context(provides=SynthesisEngine)
 
     @provide(scope=Scope.APP)
     def llm(self) -> Iterator[LLMClient]:
@@ -42,8 +41,8 @@ class EvolutionProvider(Provider):
     repository = provide(
         SQLiteSynthesisRepository, provides=AnyOf[SQLiteSynthesisRepository, SynthesisRepository]
     )
-    engine = provide(LLaMEAEngine)
-    single_synthesis = provide(SingleSynthesisUseCase)
+    engine = provide(LLaMEAEngine, provides=AnyOf[LLaMEAEngine, SynthesisEngine])
+    synthesis = provide(Synthesis)
 
     @provide
     def logger(self) -> AnyOf[SynthesisLogger, BaseLogger]:
@@ -62,7 +61,8 @@ class EvolutionProvider(Provider):
     def dispatcher(
         self, workers: int
     ) -> AnyOf[
-        ProcessPoolRunner[CampaignTask, SessionResult], TaskDispatcher[CampaignTask, SessionResult]
+        ProcessPoolRunner[CampaignTask, SynthesisResult],
+        TaskDispatcher[CampaignTask, SynthesisResult],
     ]:
         return ProcessPoolRunner(max_workers=workers)
 
@@ -74,10 +74,10 @@ class EvolutionProvider(Provider):
         engine: LLaMEAEngine,
         llm: LLMClient,
         problem_factory: ProblemFactory,
-        dispatcher: TaskDispatcher[CampaignTask, SessionResult],
+        dispatcher: TaskDispatcher[CampaignTask, SynthesisResult],
         workers: int,
-    ) -> SynthesisCampaignCoordinator:
-        return SynthesisCampaignCoordinator(
+    ) -> SynthesisCampaign:
+        return SynthesisCampaign(
             sqlite_repo=repository,
             logger=logger,
             engine=engine,
@@ -89,12 +89,19 @@ class EvolutionProvider(Provider):
         )
 
 
+class SynthesisWorkerProvider(Provider):
+    """Workers reuse their serialized engine and must not open another LLM client."""
+
+    worker_engine = from_context(provides=SynthesisEngine, scope=Scope.REQUEST, override=True)
+
+
 @contextmanager
-def synthesis_worker_scope(engine: SynthesisEngine) -> Iterator[SingleSynthesisUseCase]:
+def synthesis_worker_scope(engine: SynthesisEngine) -> Iterator[Synthesis]:
     """Open resources in the worker process, never in its serialized task payload."""
     with container_scope(
         EvolutionProvider(),
+        SynthesisWorkerProvider(),
         context={},
         request_context={SynthesisEngine: engine},
     ) as container:
-        yield container.get(SingleSynthesisUseCase)
+        yield container.get(Synthesis)

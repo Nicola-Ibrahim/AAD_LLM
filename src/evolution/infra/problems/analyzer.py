@@ -1,11 +1,13 @@
 """IOH Analyzer Telemetry Component for BBOB Benchmark Experiments."""
 
+import logging
 from pathlib import Path
 from types import TracebackType
 from typing import Any
 
 import ioh
 
+from shared.application.errors import StorageError
 from shared.config import DATA_DIR
 from shared.domain.problem import BaseProblem
 
@@ -80,9 +82,13 @@ class ProblemAnalyzer:
             elif hasattr(self.problem, "_clean_problem"):
                 getattr(self.problem, "_clean_problem").attach_logger(self._logger)
         except Exception as e:
-            print(f"[!] Could not attach IOH Analyzer: {e}")
-            self._logger = None
-            self._triggers = None
+            try:
+                self.close()
+            except StorageError:
+                logging.getLogger(__name__).warning(
+                    "Analyzer cleanup failed after attachment error", exc_info=True
+                )
+            raise StorageError(f"Could not attach IOH Analyzer in {self.log_dir}") from e
 
         return self
 
@@ -91,10 +97,11 @@ class ProblemAnalyzer:
         if self._logger is not None:
             try:
                 self._logger.close()
-            except Exception:
-                pass
-            self._logger = None
-            self._triggers = None
+            except Exception as error:
+                raise StorageError(f"Could not flush IOH Analyzer in {self.log_dir}") from error
+            finally:
+                self._logger = None
+                self._triggers = None
 
     def __enter__(self) -> "ProblemAnalyzer":
         self.attach()
@@ -106,4 +113,12 @@ class ProblemAnalyzer:
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
-        self.close()
+        if exc_val is None:
+            self.close()
+        else:
+            try:
+                self.close()
+            except StorageError:
+                logging.getLogger(__name__).warning(
+                    "Analyzer cleanup failed; preserving the primary error", exc_info=True
+                )

@@ -16,7 +16,7 @@ from benchmark.domain.trial_schedule import (
     select_scheduled_trials,
 )
 
-ConditionState = Literal["MISSING_CODE", "PENDING", "NEEDS_RERUN", "COMPLETED"]
+ConditionState = Literal["MISSING_CODE", "PENDING", "NEEDS_RERUN", "COMPLETED", "INVALID_ARTIFACT"]
 
 
 @dataclass(frozen=True, slots=True)

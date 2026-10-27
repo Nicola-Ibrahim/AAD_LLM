@@ -10,14 +10,12 @@ from unittest.mock import Mock
 import pytest
 from llamea import Solution
 
-from evolution.application import (
-    SessionConfig,
-    SingleSynthesisUseCase,
-    SynthesisEngine,
-)
 from evolution.application.exceptions import OrchestrationError
 from evolution.application.interfaces.logger import BaseLogger
-from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
+from evolution.application.interfaces.synthesis_engine import SynthesisEngine
+from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
+from evolution.application.synthesis.service import Synthesis
+from evolution.application.synthesis.settings import SynthesisSettings
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.vos import (
@@ -40,10 +38,11 @@ from shared.infra.database import Database
 from shared.infra.database.tables import Base, ExperimentORM
 from shared.infra.execution.candidate_executor import create_candidate_executor
 from shared.infra.problems.bbob import BBOBProblem
+from shared.infra.problems.factory import BBOBProblemFactory
 
 
 def build_candidate_evaluation_service(*, problem, **kwargs):
-    return CandidateEvaluationService(
+    return CandidateEvaluator(
         problem=problem,
         executor=create_candidate_executor(kwargs.get("timeout_seconds", 30.0)),
         **kwargs,
@@ -123,7 +122,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
             "key": "clean",
             "problem": problem_clean,
             "experiment_id": exp_id_clean,
-            "config": SessionConfig(budget=100, iterations=2),
+            "config": SynthesisSettings(budget=100, iterations=2),
             "engine": engine,
             "prompt_strategy": PromptStrategy.BASELINE,
             "synthesis_mode": SynthesisMode.EXPLICIT,
@@ -133,7 +132,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
             "key": "noisy",
             "problem": problem_noisy,
             "experiment_id": exp_id_noisy,
-            "config": SessionConfig(budget=100, iterations=2),
+            "config": SynthesisSettings(budget=100, iterations=2),
             "engine": engine,
             "prompt_strategy": PromptStrategy.BASELINE,
             "synthesis_mode": SynthesisMode.EXPLICIT,
@@ -191,7 +190,7 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
             "key": "failing",
             "problem": problem_fail,
             "experiment_id": exp_id_fail,
-            "config": SessionConfig(budget=1000, iterations=1),
+            "config": SynthesisSettings(budget=1000, iterations=1),
             "engine": engine,
             "prompt_strategy": PromptStrategy.BASELINE,
             "synthesis_mode": SynthesisMode.EXPLICIT,
@@ -201,7 +200,7 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
             "key": "success",
             "problem": problem_succ,
             "experiment_id": exp_id_succ,
-            "config": SessionConfig(budget=1000, iterations=1),
+            "config": SynthesisSettings(budget=1000, iterations=1),
             "engine": engine,
             "prompt_strategy": PromptStrategy.BASELINE,
             "synthesis_mode": SynthesisMode.EXPLICIT,
@@ -263,7 +262,7 @@ def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
-        config=SessionConfig(budget=10),
+        config=SynthesisSettings(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )
     logger = Mock(spec=BaseLogger)
@@ -321,7 +320,7 @@ def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
-        config=SessionConfig(budget=10),
+        config=SynthesisSettings(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )
     logger = Mock(spec=BaseLogger)
@@ -500,7 +499,7 @@ def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
         llm_client=llm,
         db_repo=repo,
         code_repo=code_repo,
-        config=SessionConfig(iterations=2),
+        config=SynthesisSettings(iterations=2, budget=1_000_000),
     )
     res1 = session1.run()
 
@@ -537,7 +536,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
         llm_client=llm,
         db_repo=repo,
         code_repo=code_repo,
-        config=SessionConfig(iterations=2),
+        config=SynthesisSettings(iterations=2, budget=1_000_000),
     )
     res1 = session1.run()
 
@@ -559,7 +558,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
         llm_client=llm,
         db_repo=repo,
         code_repo=code_repo,
-        config=SessionConfig(iterations=2),
+        config=SynthesisSettings(iterations=2, budget=1_000_000),
     )
     res2 = session2.run()
 
@@ -601,7 +600,7 @@ def test_session_mark_failed_on_error(temp_dir, db_session_factory):
         llm_client=llm,
         db_repo=repo,
         code_repo=code_repo,
-        config=SessionConfig(iterations=2),
+        config=SynthesisSettings(iterations=2, budget=1_000_000),
     )
 
     # Inject an error into _setup_evaluator to force run() to fail
@@ -639,11 +638,13 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
         llm_client=llm,
         code_repo=CodeRepository(base_dir=temp_dir),
     )
-    usecase = SingleSynthesisUseCase(engine=engine, sqlite_repo=repo, logger=MagicMock())
+    usecase = Synthesis(
+        engine=engine, sqlite_repo=repo, logger=MagicMock(), problem_factory=BBOBProblemFactory()
+    )
     res = usecase.execute(
         problem=problem,
         experiment_id=exp_id,
-        config=SessionConfig(budget=2500, iterations=2),
+        config=SynthesisSettings(budget=2500, iterations=2),
         key="test_task_1",
     )
     assert res is not None
@@ -684,13 +685,15 @@ def test_evaluator_current_iteration_resumes_from_db(temp_dir, db_session_factor
     assert status == "running"
     assert max_iter == 0
 
-    candidate_evaluation_service1 = build_candidate_evaluation_service(problem=problem)
+    candidate_evaluation_service1 = build_candidate_evaluation_service(
+        problem=problem, budget=1_000_000
+    )
     evaluator1 = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
-        config=SessionConfig(),
+        config=SynthesisSettings(budget=1_000_000),
         candidate_evaluation_service=candidate_evaluation_service1,
     )
     assert evaluator1._current_iteration == 0
@@ -719,13 +722,15 @@ def test_evaluator_current_iteration_resumes_from_db(temp_dir, db_session_factor
     assert max_iter == 3
 
     # New Evaluator created for the same experiment_id (e.g. during warm start)
-    candidate_evaluation_service2 = build_candidate_evaluation_service(problem=problem)
+    candidate_evaluation_service2 = build_candidate_evaluation_service(
+        problem=problem, budget=1_000_000
+    )
     evaluator2 = Evaluator(
         problem=problem,
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
-        config=SessionConfig(),
+        config=SynthesisSettings(budget=1_000_000),
         candidate_evaluation_service=candidate_evaluation_service2,
         initial_iteration=max_iter,
     )
@@ -774,7 +779,7 @@ def test_all_executions_failed_session_handling(db_session_factory, tmp_path):
         llm_client=mock_llm,
         db_repo=repo,
         code_repo=code_repo,
-        config=SessionConfig(budget=10, iterations=2),
+        config=SynthesisSettings(budget=10, iterations=2),
     )
 
     # Must complete without throwing AttributeError or crashing
@@ -849,7 +854,7 @@ def test_evaluator_clean_reevaluation_with_tuple_return(db_session_factory, tmp_
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
-        config=SessionConfig(budget=10),
+        config=SynthesisSettings(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )
 
@@ -888,7 +893,7 @@ def test_evaluator_out_of_bounds_best_x_rejected(db_session_factory, tmp_path):
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
-        config=SessionConfig(budget=10),
+        config=SynthesisSettings(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )
 
@@ -901,8 +906,8 @@ class BadOpt:
 """
     sol = Solution(code=out_of_bounds_code, name="BadOpt", description="Out of bounds solution")
     scored_sol = evaluator(sol)
-    assert CandidateEvaluationService.is_failure(scored_sol.fitness)
-    assert scored_sol.fitness == CandidateEvaluationService.RUNTIME_FAILURE_FITNESS
+    assert CandidateEvaluator.is_failure(scored_sol.fitness)
+    assert scored_sol.fitness == CandidateEvaluator.RUNTIME_FAILURE_FITNESS
     assert "outside search space bounds" in scored_sol.feedback
 
 
@@ -938,7 +943,7 @@ def test_evaluator_failure_fitness_and_categorized_feedback(db_session_factory, 
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
-        config=SessionConfig(budget=10),
+        config=SynthesisSettings(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )
 
@@ -951,8 +956,8 @@ class ZeroDivOpt:
 """
     sol = Solution(code=zero_div_code, name="ZeroDivOpt", description="Zero div solution")
     scored = evaluator(sol)
-    assert CandidateEvaluationService.is_failure(scored.fitness)
-    assert scored.fitness == CandidateEvaluationService.RUNTIME_FAILURE_FITNESS
+    assert CandidateEvaluator.is_failure(scored.fitness)
+    assert scored.fitness == CandidateEvaluator.RUNTIME_FAILURE_FITNESS
     assert "[RUNTIME ERROR]" in scored.feedback
     assert "ZeroDivisionError" in scored.feedback
 
@@ -965,8 +970,8 @@ class NanOpt:
 """
     sol_nan = Solution(code=nan_return_code, name="NanOpt", description="Nan return solution")
     scored_nan = evaluator(sol_nan)
-    assert CandidateEvaluationService.is_failure(scored_nan.fitness)
-    assert scored_nan.fitness == CandidateEvaluationService.RUNTIME_FAILURE_FITNESS
+    assert CandidateEvaluator.is_failure(scored_nan.fitness)
+    assert scored_nan.fitness == CandidateEvaluator.RUNTIME_FAILURE_FITNESS
     assert "[INVALID RETURN]" in scored_nan.feedback
 
 
@@ -988,7 +993,7 @@ def test_evaluator_enriched_feedback_and_warnings(db_session_factory, tmp_path):
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
-        config=SessionConfig(budget=10),
+        config=SynthesisSettings(budget=10),
         candidate_evaluation_service=candidate_evaluation_service,
     )
 
@@ -1006,8 +1011,8 @@ class BadMatrixOpt:
     sol = Solution(code=runtime_err_code, name="BadMatrixOpt", description="Bad matrix option")
     scored = evaluator(sol)
 
-    assert CandidateEvaluationService.is_failure(scored.fitness)
-    assert scored.fitness == CandidateEvaluationService.RUNTIME_FAILURE_FITNESS
+    assert CandidateEvaluator.is_failure(scored.fitness)
+    assert scored.fitness == CandidateEvaluator.RUNTIME_FAILURE_FITNESS
     # Option A check: relevant code line extracted
     assert "Relevant code:" in scored.feedback
     assert "line   8:" in scored.feedback
@@ -1157,12 +1162,16 @@ def test_synthesis_engine_lsp_contract():
     from unittest.mock import MagicMock
 
     from evolution.application.interfaces.synthesis_engine import SynthesisEngine
-    from evolution.application.synthesis.models import SessionResult
+    from evolution.application.synthesis.result import SynthesisResult
     from evolution.domain.enums import SynthesisMode
     from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
     from shared.domain.problem import BaseProblem
 
     class CustomEngine(SynthesisEngine):
+        @property
+        def model_name(self) -> str:
+            return "custom-test-model"
+
         def __init__(self, tag: str, score: float):
             self.tag = tag
             self.score = score
@@ -1171,14 +1180,14 @@ def test_synthesis_engine_lsp_contract():
             self,
             problem: BaseProblem,
             experiment_id: int,
-            config: SessionConfig,
+            config: SynthesisSettings,
             db_repo: SynthesisRepository,
             prompt_strategy: PromptStrategy,
             synthesis_mode: SynthesisMode,
             initial_iteration: int = 0,
             restart: bool = False,
-        ) -> SessionResult:
-            return SessionResult(
+        ) -> SynthesisResult:
+            return SynthesisResult(
                 problem_id=1,
                 dim=2,
                 mode=synthesis_mode,
@@ -1193,7 +1202,7 @@ def test_synthesis_engine_lsp_contract():
     res = engine.run(
         problem=MagicMock(),
         experiment_id=10,
-        config=SessionConfig(iterations=2),
+        config=SynthesisSettings(iterations=2, budget=1_000_000),
         db_repo=MagicMock(),
         prompt_strategy=PromptStrategy.BASELINE,
         synthesis_mode=SynthesisMode.EXPLICIT,
@@ -1233,7 +1242,7 @@ def test_llamea_engine_init_and_run(temp_dir, db_session_factory):
     res = engine.run(
         problem=problem,
         experiment_id=exp_id,
-        config=SessionConfig(budget=1000, iterations=1),
+        config=SynthesisSettings(budget=1000, iterations=1),
         db_repo=repo,
         initial_iteration=0,
         prompt_strategy=PromptStrategy.BASELINE,
@@ -1257,7 +1266,7 @@ def test_campaign_item_and_engine_pickling(temp_dir):
         "key": "pickle_task",
         "problem": problem,
         "experiment_id": 42,
-        "config": SessionConfig(iterations=1),
+        "config": SynthesisSettings(iterations=1, budget=1_000_000),
         "engine": engine,
     }
     data = pickle.dumps(item)

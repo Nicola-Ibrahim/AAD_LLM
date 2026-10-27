@@ -1,15 +1,17 @@
 """Generic process pool runner for parallel task execution.
 
-Provides a decoupled, reusable concurrency engine using ProcessPoolExecutor.
-Has zero dependencies on application services or domain contracts.
+Implements application task dispatch using ProcessPoolExecutor and host-owned logging.
 """
 
+import logging
 from collections.abc import Callable
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from typing import Generic, TypeVar
 
-from evolution.application.exceptions import OrchestrationError
+from evolution.application.exceptions import OrchestrationError, ProviderError
 from evolution.application.interfaces.task_dispatcher import TaskDispatcher
+from shared.application.errors import ArtifactError, StorageError
+from shared.infra.logging.runtime import configure_worker_logging, current_runtime
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -52,17 +54,40 @@ class ProcessPoolRunner(Generic[T, R], TaskDispatcher[T, R]):
         errors: dict[str, Exception] = {}
         workers = self.max_workers if self.max_workers is not None else len(items)
 
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            future_to_key = {executor.submit(fn, item): key_fn(item) for item in items}
-
-            for future in as_completed(future_to_key):
-                key = future_to_key[future]
-                try:
-                    results[key] = future.result()
-                except Exception as e:
-                    errors[key] = e
+        runtime = current_runtime()
+        initializer = configure_worker_logging if runtime else None
+        initargs = (runtime.queue, runtime.invocation) if runtime else ()
+        remaining = iter(items)
+        stop_scheduling = False
+        with ProcessPoolExecutor(
+            max_workers=workers, initializer=initializer, initargs=initargs
+        ) as executor:
+            active = {}
+            for item in items[:workers]:
+                next(remaining)
+                active[executor.submit(fn, item)] = key_fn(item)
+            while active:
+                done, _ = wait(active, return_when=FIRST_COMPLETED)
+                for future in done:
+                    key = active.pop(future)
+                    try:
+                        results[key] = future.result()
+                    except Exception as error:
+                        errors[key] = error
+                        logging.getLogger(__name__).warning(
+                            "Task %s failed (%s); details retained for the workflow summary",
+                            key,
+                            type(error).__name__,
+                        )
+                        if isinstance(error, (ProviderError, StorageError, ArtifactError)):
+                            stop_scheduling = True
+                if not stop_scheduling:
+                    for _ in done:
+                        item = next(remaining, None)
+                        if item is not None:
+                            active[executor.submit(fn, item)] = key_fn(item)
 
         if errors:
-            raise OrchestrationError(errors) from None
+            raise OrchestrationError(errors, results) from next(iter(errors.values()))
 
         return results

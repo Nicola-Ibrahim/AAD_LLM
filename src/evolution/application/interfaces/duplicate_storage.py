@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 
-from evolution.application.maintenance.models import CleanupPlan, CleanupResult, DuplicateRow
+from evolution.application.maintenance.cleanup_types import CleanupPlan, CleanupResult, DuplicateRow
 
 
 class DuplicateStorage(ABC):

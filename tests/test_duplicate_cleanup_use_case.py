@@ -5,13 +5,13 @@ from collections.abc import Callable
 import pytest
 
 from evolution.application.interfaces.duplicate_storage import DuplicateStorage
-from evolution.application.maintenance.duplicates import SynthesisDuplicateMaintenance
-from evolution.application.maintenance.models import (
+from evolution.application.maintenance.cleanup_types import (
     CleanupPlan,
     CleanupResult,
     Condition,
     DuplicateRow,
 )
+from evolution.application.maintenance.duplicate_cleanup import SynthesisDuplicateMaintenance
 
 
 class SnapshotStorage(DuplicateStorage):

@@ -14,6 +14,7 @@ from benchmark.application.select_champions import ChampionSelectionService
 from benchmark.application.trials.models import BenchmarkTask
 from benchmark.domain.services.condition_status import ConditionStatus, inspect_condition
 from benchmark.domain.services.resolvers import ModelNames
+from shared.application.errors import ArtifactError
 from shared.application.interfaces.candidate_executor import CANDIDATE_EXECUTION_VERSION
 
 
@@ -71,10 +72,16 @@ class BenchmarkWorkload:
         config: BenchmarkConfig,
         champion: bool = False,
     ) -> ConditionStatus:
+        try:
+            provenance = self.state_repo.read_provenance(target_dir)
+        except ArtifactError as error:
+            return ConditionStatus(
+                "INVALID_ARTIFACT", 0, 0, config.trials_per_condition, None, str(error)
+            )
         return inspect_condition(
             code_available=code_valid,
             directory_exists=self.state_repo.solver_directory_exists(target_dir),
-            provenance=self.state_repo.read_provenance(target_dir),
+            provenance=provenance,
             expected_code_hash=expected_code_hash,
             expected_trials=config.trials_per_condition,
             expected_budget=config.budget,

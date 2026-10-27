@@ -4,8 +4,8 @@ import pytest
 from pydantic import ValidationError
 from study_fixtures import synthesis_config
 
-from evolution.application.synthesis.models import SessionConfig
-from evolution.application.synthesis_config import ProblemTarget, SynthesisConfig
+from evolution.application.campaign.settings import CampaignSettings, ProblemTarget
+from evolution.application.synthesis.settings import SynthesisSettings
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from shared.domain.noise_model import NoiseModelEnum
 
@@ -41,8 +41,8 @@ def test_config_and_session_transfer_keep_concrete_types():
     assert condition.mode is SynthesisMode.IMPLICIT
     assert condition.noise_model is NoiseModelEnum.HETEROSCEDASTIC
     assert condition.strategy is PromptStrategy.GUIDED
-    session = config.to_session_config(iterations=7)
-    assert isinstance(session, SessionConfig)
+    session = config.synthesis_settings(iterations=7)
+    assert isinstance(session, SynthesisSettings)
     assert session.iterations == 7
     assert config.iterations == 10
     assert session.budget == config.budget == 100_000
@@ -53,5 +53,5 @@ def test_explicit_matrix_and_protocol_defaults():
     assert config.dimensions == [2, 10, 50]
     assert config.noise_stds == [0.0, 0.05, 0.1, 0.2]
     assert len(config.matrix_conditions) == 480
-    assert SynthesisConfig().budget == 100_000
-    assert SynthesisConfig().matrix_conditions == []
+    assert CampaignSettings().budget == 100_000
+    assert CampaignSettings().matrix_conditions == []

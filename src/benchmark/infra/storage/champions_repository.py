@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from benchmark.application.champions import ChampionCatalog
 from benchmark.application.interfaces.champion_repository import ChampionRepository
 from shared.config import RESULTS_DIR
+from shared.infra.database.session import session_scope
 from shared.infra.database.tables import ExperimentORM, IterationORM
 
 
@@ -55,7 +56,7 @@ class ChampionsReadRepository(ChampionRepository):
                 ExperimentORM.noise_std,
             )
         )
-        with self.SessionLocal() as session:
+        with session_scope(self.SessionLocal, "query_candidates") as session:
             return pd.read_sql_query(stmt, session.connection())
 
     def write_champions_json(

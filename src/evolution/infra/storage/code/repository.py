@@ -2,7 +2,9 @@ import shutil
 from pathlib import Path
 
 from evolution.application.interfaces.code_store import SynthesisCodeStore
+from shared.application.errors import ArtifactError
 from shared.config import DATA_DIR, PROJECT_ROOT
+from shared.infra.artifacts import atomic_write
 
 
 class CodeRepository(SynthesisCodeStore):
@@ -24,7 +26,7 @@ class CodeRepository(SynthesisCodeStore):
         code_dir = self.base_dir / f"experiment_{experiment_id}"
         code_dir.mkdir(parents=True, exist_ok=True)
         code_path = code_dir / f"iter_{iteration_num}.py"
-        code_path.write_text(code, encoding="utf-8")
+        atomic_write(code_path, code.encode("utf-8"))
 
         try:
             return code_path.relative_to(PROJECT_ROOT)
@@ -42,7 +44,10 @@ class CodeRepository(SynthesisCodeStore):
     def load_code(self, code_path: str | Path) -> str:
         """Loads and returns the source code string from a stored code_path."""
         full_path = self.resolve_code_path(code_path)
-        return full_path.read_text(encoding="utf-8")
+        try:
+            return full_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            raise ArtifactError(f"Cannot read generated code: {full_path}") from error
 
     def clear_experiment(self, experiment_id: int) -> None:
         """Remove the exact per-experiment directory, refusing symbolic links."""

@@ -44,8 +44,11 @@ def cmd_backup(args: argparse.Namespace) -> None:
                 reader.backup(writer, pages=1024, progress=check_backup_progress)
                 if writer.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
                     raise RuntimeError("Backup integrity check failed; operation aborted.")
-    except Exception:
-        destination.unlink()
+    except BaseException:
+        try:
+            destination.unlink(missing_ok=True)
+        except OSError:
+            sys.stderr.write(f"Could not remove incomplete backup: {destination}\n")
         raise
     print(f"  Verified backup: {destination}")
 

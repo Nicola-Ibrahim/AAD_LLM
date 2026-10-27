@@ -19,7 +19,7 @@ from uuid import uuid4
 from sqlalchemy.engine import Connection
 
 from evolution.application.interfaces.duplicate_storage import DuplicateStorage
-from evolution.application.maintenance.models import (
+from evolution.application.maintenance.cleanup_types import (
     CleanupPlan,
     CleanupResult,
     Condition,

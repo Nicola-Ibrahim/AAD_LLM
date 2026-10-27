@@ -1,5 +1,6 @@
 """SQLite-based repository for LLaMEA algorithm synthesis sessions."""
 
+import logging
 from datetime import datetime, timezone
 from typing import cast
 
@@ -19,6 +20,8 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
+from shared.application.errors import StorageError
+from shared.infra.database.session import session_scope
 from shared.infra.database.tables import ErrorLogORM, ExperimentORM, IterationORM
 
 
@@ -27,7 +30,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
 
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self.SessionLocal = session_factory
-        with session_factory() as session:
+        with session_scope(session_factory, "__init__") as session:
             columns = inspect(session.get_bind()).get_columns("experiments")
         self._stores_synthesis_seed = any(column["name"] == "synthesis_seed" for column in columns)
         # Optional replicate metadata must not require changing an imported DB.
@@ -58,7 +61,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
         max_iterations: int = 10,
         synthesis_seed: int | None = None,
     ) -> int:
-        with self.SessionLocal() as session:
+        with session_scope(self.SessionLocal, "create_experiment") as session:
             values = dict(
                 problem_id=problem.problem_id,
                 instance_id=problem.instance_id,
@@ -83,7 +86,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
 
     def get_experiment_status(self, experiment_id: int) -> tuple[str | None, int]:
         """Returns tuple of (status_string, max_iteration_number) for a synthesis run, or (None, 0) if not found."""
-        with self.SessionLocal() as session:
+        with session_scope(self.SessionLocal, "get_experiment_status") as session:
             exp = session.get(ExperimentORM, experiment_id, options=self._experiment_options)
             if not exp:
                 return None, 0
@@ -138,17 +141,16 @@ class SQLiteSynthesisRepository(SynthesisRepository):
         if error_orm:
             iteration_orm.error_log = error_orm
 
-        with self.SessionLocal() as session:
+        with session_scope(self.SessionLocal, "append_iteration") as session:
             session.add(iteration_orm)
             session.commit()
 
     def save_experiment_summary(self, exp: ExperimentSummary) -> None:
         """Persists the domain-calculated summary and champion fields to the experiments table."""
-        with self.SessionLocal() as session:
+        with session_scope(self.SessionLocal, "save_experiment_summary") as session:
             row = session.get(ExperimentORM, exp.id, options=self._experiment_options)
             if not row:
-                print(f"[WARN] save_experiment_summary: no experiment row for id={exp.id}")
-                return
+                raise StorageError(f"Cannot save summary: experiment {exp.id} does not exist")
 
             row.best_iteration = exp.best_iteration
             row.best_algorithm = exp.best_algorithm
@@ -161,7 +163,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
 
     def mark_failed(self, experiment_id: int, reason: str = "") -> None:
         """Marks a synthesis session as failed so it is not left as 'running' forever."""
-        with self.SessionLocal() as session:
+        with session_scope(self.SessionLocal, "mark_failed") as session:
             exp = session.get(ExperimentORM, experiment_id, options=self._experiment_options)
             if exp:
                 exp.status = "failed"
@@ -172,7 +174,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
 
     def reset_experiment(self, experiment_id: int) -> None:
         """Atomically replace results without inserting a new experiment record."""
-        with self.SessionLocal.begin() as session:
+        with session_scope(self.SessionLocal, "reset_experiment", transaction=True) as session:
             experiment = session.get(ExperimentORM, experiment_id, options=self._experiment_options)
             if experiment is None:
                 raise ValueError(f"Unknown experiment ID: {experiment_id}")
@@ -196,11 +198,14 @@ class SQLiteSynthesisRepository(SynthesisRepository):
         from sqlalchemy import text
 
         try:
-            with self.SessionLocal() as session:
+            with session_scope(self.SessionLocal, "checkpoint_wal") as session:
                 session.execute(text("PRAGMA wal_checkpoint(PASSIVE)"))
                 session.commit()
-        except Exception as e:
-            print(f"[WARN] checkpoint_wal failed non-fatally: {e}")
+        except StorageError:
+            logging.getLogger(__name__).warning(
+                "Optional passive WAL checkpoint failed; committed data remains stored",
+                exc_info=True,
+            )
 
     def get_best_raw_fitness(self, experiment_id: int) -> float | None:
         """Returns raw algorithm objective value from the best iteration of a synthesis run."""
@@ -213,7 +218,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
             )
             .order_by(IterationORM.final_error.asc())
         )
-        with self.SessionLocal() as session:
+        with session_scope(self.SessionLocal, "get_best_raw_fitness") as session:
             best_val = session.execute(stmt).scalar()
             return float(best_val) if best_val is not None else None
 
@@ -264,7 +269,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
 
         stmt = stmt.order_by(ExperimentORM.problem_id.asc(), ExperimentORM.llm_name.asc())
 
-        with self.SessionLocal() as session:
+        with session_scope(self.SessionLocal, "load") as session:
             experiments = session.scalars(stmt).all()
             return [self._to_experiment_summary(exp) for exp in experiments]
 
@@ -281,7 +286,7 @@ class SQLiteSynthesisRepository(SynthesisRepository):
             .where(ExperimentORM.id.in_(experiment_ids))
             .order_by(ExperimentORM.id.asc())
         )
-        with self.SessionLocal() as session:
+        with session_scope(self.SessionLocal, "load_by_ids") as session:
             experiments = session.scalars(stmt).all()
             return [self._to_experiment_summary(exp) for exp in experiments]
 

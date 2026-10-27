@@ -5,6 +5,8 @@ from pathlib import Path
 
 from llamea import LLaMEA
 
+from evolution.infra.engines.llamea.runtime import FailureAwareLLaMEA
+
 
 class SynthesisCheckpointUnpickler(pickle.Unpickler):
     """Translate persisted type locations moved to the shared foundation."""
@@ -18,7 +20,34 @@ class SynthesisCheckpointUnpickler(pickle.Unpickler):
         "evolution.infra.execution.candidate_executor": "shared.infra.execution.candidate_executor",
     }
 
+    TYPE_RELOCATIONS = {
+        ("evolution.application.synthesis.models", "SessionConfig"): (
+            "evolution.application.synthesis.settings",
+            "SynthesisSettings",
+        ),
+        ("evolution.application.synthesis.models", "SessionResult"): (
+            "evolution.application.synthesis.result",
+            "SynthesisResult",
+        ),
+        ("evolution.application.synthesis.session_types", "SynthesisSessionSettings"): (
+            "evolution.application.synthesis.settings",
+            "SynthesisSettings",
+        ),
+        ("evolution.application.synthesis.session_types", "SynthesisSessionResult"): (
+            "evolution.application.synthesis.result",
+            "SynthesisResult",
+        ),
+        ("evolution.application.synthesis.evaluate_candidate", "CandidateEvaluationService"): (
+            "evolution.application.synthesis.candidate_evaluation",
+            "CandidateEvaluator",
+        ),
+    }
+
     def find_class(self, module: str, name: str) -> object:
+        if relocated := self.TYPE_RELOCATIONS.get((module, name)):
+            return super().find_class(*relocated)
+        if module == "llamea.llamea" and name == "LLaMEA":
+            return FailureAwareLLaMEA
         return super().find_class(self.MODULE_RELOCATIONS.get(module, module), name)
 
 

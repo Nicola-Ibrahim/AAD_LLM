@@ -29,8 +29,10 @@ from benchmark.domain.services.performance import PerformanceMetricsEngine
 from benchmark.domain.services.reliability import ReliabilityEngine
 from benchmark.domain.services.transfer import TransferAnalysisEngine
 from benchmark.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
+from benchmark.infra.logging import BenchmarkLogger
 from benchmark.infra.storage.analysis_results_store import AnalysisResultsStore
 from benchmark.infra.storage.model_registry import configured_model_names
+from shared.application.errors import StorageError
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOKS = [
@@ -151,10 +153,14 @@ def use_cases(snapshot: AnalysisSnapshot) -> AnalysisUseCases:
     loader = MagicMock()
     loader.load.return_value = snapshot
     return AnalysisUseCases(
-        AnalyzeEcdfAndConvergence(loader, EcdfConvergenceEngine()),
-        AnalyzeReliability(loader, TransferAnalysisEngine(), ReliabilityEngine()),
-        AnalyzeNoiseRobustness(loader, TransferAnalysisEngine()),
-        AnalyzePerformance(loader, EcdfConvergenceEngine(), PerformanceMetricsEngine()),
+        AnalyzeEcdfAndConvergence(loader, EcdfConvergenceEngine(), logger=BenchmarkLogger()),
+        AnalyzeReliability(
+            loader, TransferAnalysisEngine(), ReliabilityEngine(), logger=BenchmarkLogger()
+        ),
+        AnalyzeNoiseRobustness(loader, TransferAnalysisEngine(), logger=BenchmarkLogger()),
+        AnalyzePerformance(
+            loader, EcdfConvergenceEngine(), PerformanceMetricsEngine(), logger=BenchmarkLogger()
+        ),
     )
 
 
@@ -195,6 +201,8 @@ def test_notebooks_call_use_cases_directly_and_resolve_only_during_setup() -> No
         assert "ExitStack" not in source
         assert "partial(" not in source
         for cell in notebook_cells(name):
+            if cell["cell_type"] != "code":
+                continue
             cell_source = "".join(cell["source"])
             if "services.get(" in cell_source:
                 assert (
@@ -248,8 +256,9 @@ def test_failed_export_propagates_and_can_be_retried(tmp_path: Path, monkeypatch
     target = tmp_path / "figure.png"
     writer = MagicMock(side_effect=RuntimeError("Export failed"))
     monkeypatch.setattr(go.Figure, "write_image", writer)
-    with pytest.raises(RuntimeError, match="Export failed"):
+    with pytest.raises(StorageError, match="PNG export failed") as failure:
         exporter.export_figure(go.Figure(), target)
+    assert isinstance(failure.value.__cause__, RuntimeError)
     writer.side_effect = None
     exporter.export_figure(go.Figure(), target)
     assert writer.call_count == 2
@@ -438,7 +447,10 @@ def test_snapshot_failed_write_does_not_publish_manifest(inputs, tmp_path, monke
         mode="explicit", dims=None, problems=None, noise_stds=None
     )
     store = AnalysisResultsStore(tmp_path / "analysis")
-    monkeypatch.setattr(store, "_write", MagicMock(side_effect=OSError("Disk unavailable")))
+    monkeypatch.setattr(
+        "benchmark.infra.storage.analysis_results_store.atomic_write",
+        MagicMock(side_effect=OSError("Disk unavailable")),
+    )
     with pytest.raises(OSError, match="Disk unavailable"):
         store.save(result)
     assert not list(store.root.rglob("manifest.json"))

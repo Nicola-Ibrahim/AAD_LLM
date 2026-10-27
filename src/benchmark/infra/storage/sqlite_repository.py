@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from benchmark.application.interfaces.synthesis_read_repository import SynthesisReadRepository
+from shared.infra.database.session import session_scope
 from shared.infra.database.tables import ExperimentORM, IterationORM
 
 
@@ -41,7 +42,7 @@ class SQLiteSynthesisReadRepository(SynthesisReadRepository):
             )
         )
 
-        with self.SessionLocal() as session:
+        with session_scope(self.SessionLocal, "get_experiment_balance") as session:
             conn = session.connection()
             df = pd.read_sql_query(stmt, conn)
 
@@ -69,7 +70,7 @@ class SQLiteSynthesisReadRepository(SynthesisReadRepository):
             )
         )
 
-        with self.SessionLocal() as session:
+        with session_scope(self.SessionLocal, "get_target_conditions") as session:
             rows = session.execute(stmt).all()
 
         return [
@@ -100,13 +101,13 @@ class SQLiteSynthesisReadRepository(SynthesisReadRepository):
             )
         )
 
-        with self.SessionLocal() as session:
+        with session_scope(self.SessionLocal, "get_completed_experiments_matrix") as session:
             conn = session.connection()
             return pd.read_sql_query(stmt, conn)
 
     def get_synthesis_dataframes(self) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Load synthesis experiments and iterations tables into pandas DataFrames."""
-        with self.SessionLocal() as session:
+        with session_scope(self.SessionLocal, "get_synthesis_dataframes") as session:
             conn = session.connection()
             df_exp = pd.read_sql_table(ExperimentORM.__tablename__, conn)
             df_iter = pd.read_sql_table(IterationORM.__tablename__, conn)

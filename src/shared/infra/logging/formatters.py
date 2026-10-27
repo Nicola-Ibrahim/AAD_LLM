@@ -1,0 +1,65 @@
+"""Console presentation and plain, redacted diagnostic formatting."""
+
+import copy
+import logging
+import re
+import time
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+_SECRET = re.compile(r"(?i)(Bearer\s+\S+|sk-[a-zA-Z0-9_-]+)")
+
+
+class DiagnosticFormatter(logging.Formatter):
+    converter = time.gmtime
+
+    def format(self, record: logging.LogRecord) -> str:
+        record = copy.copy(record)
+        fields = " ".join(
+            f"{key}={record.__dict__[key]}"
+            for key in (
+                "invocation",
+                "operation",
+                "experiment_id",
+                "trial",
+                "instance_id",
+                "task",
+                "model",
+                "problem_id",
+                "dim",
+                "noise_std",
+                "mode",
+                "strategy",
+            )
+            if key in record.__dict__
+        )
+        rendered = super().format(record)
+        return _SECRET.sub("[REDACTED]", _ANSI.sub("", f"{rendered} {fields}"))
+
+
+class ConsoleFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        message = _SECRET.sub("[REDACTED]", record.getMessage())
+        if record.exc_info:
+            message += " (details in the diagnostic log)"
+        return message
+
+
+class ConsoleFilter(logging.Filter):
+    """Keep progress readable and coalesce repeated operational warnings."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.last_warning: dict[tuple[str, str], float] = {}
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno < logging.WARNING:
+            return bool(getattr(record, "progress", False))
+        if record.levelno == logging.WARNING:
+            key = (record.name, str(getattr(record, "message_template", record.msg)))
+            now = time.monotonic()
+            previous = self.last_warning.get(key, float("-inf"))
+            if now - previous < 60.0:
+                return False
+            self.last_warning[key] = now
+            return True
+        return True

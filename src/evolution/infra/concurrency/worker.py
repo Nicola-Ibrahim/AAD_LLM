@@ -1,13 +1,17 @@
 """Picklable process-pool worker entry point for one synthesis session."""
 
-from evolution.application.campaign.models import CampaignTask
-from evolution.application.synthesis.models import SessionResult
+from evolution.application.campaign.tasks import CampaignTask
+from evolution.application.synthesis.result import SynthesisResult
+from shared.infra.logging.runtime import diagnostic_context
 
 
-def run_synthesis_worker(item: CampaignTask) -> SessionResult:
+def run_synthesis_worker(item: CampaignTask) -> SynthesisResult:
     from evolution.infra.di import synthesis_worker_scope
 
-    with synthesis_worker_scope(item["engine"]) as use_case:
+    with (
+        diagnostic_context(experiment_id=item["experiment_id"], task=item["key"]),
+        synthesis_worker_scope(item["engine"]) as use_case,
+    ):
         return use_case.execute(
             problem=item["problem"],
             experiment_id=item["experiment_id"],

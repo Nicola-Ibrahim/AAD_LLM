@@ -1,14 +1,23 @@
 # System-wide error handling and logging
 
-**Status: Proposed — not implemented.**
+**Status: Implemented for the current notebook/CLI application.**
+
+The implementation uses standard logging, host-owned rotating diagnostic files,
+queue-based worker transport, portable provider/storage/artifact errors, strict
+artifact reads and explicit export summaries. Public application methods log
+terminal failures and re-raise them; notebooks call services directly. Normal Python exception behavior remains
+available to callers. See [operational guide](../operations/error_handling_and_logging.md).
+
+Future FastAPI error-response mapping and cloud log collection remain future host
+integrations. No new process-isolation mechanism or cloud service was introduced.
 
 This plan covers synthesis, native and optional benchmark workflows, audit,
 analysis, statistics storage, figure export, maintenance and command-line tools.
 It replaces scattered error reporting with a common operational policy while
 preserving the evolution and benchmark context boundaries.
 
-The gateway retry warning added during diagnosis remains a local visibility fix.
-It is not an implementation of this plan.
+The gateway retry warning added during diagnosis now participates in the central
+logging policy rather than configuring its own output.
 
 ## 1. Scope and safeguards
 
@@ -94,8 +103,8 @@ an operation scope for every service method.
 | --- | --- | --- |
 | Domain/shared science | Enforce invariants; return existing explicit unavailable/status results where absence is normal | No IO, handler setup, colored output or operational logging |
 | Infrastructure | Recover locally when safe, translate external failures at useful boundaries, retain causes, release resources | Emit contextual operational events through standard named loggers; never choose notebook/file destinations |
-| Application | Decide whether to continue, stop scheduling, persist a candidate failure or reject an operation | Emit workflow progress; attach scientific identity; do not log-and-rethrow the same terminal failure repeatedly |
-| Host/presentation | Own invocation lifecycle and final user-facing error mapping | Configure destinations and levels; record terminal workflow exceptions once |
+| Application | Decide whether to continue, stop scheduling, persist a candidate failure or reject an operation | Own workflow failure reporting; emit progress and scientific context; report nested failures once |
+| Host/presentation | Own invocation lifecycle and final user-facing error mapping | Configure destinations and levels; display outcomes without notebook logging wrappers |
 
 An exception should be caught only to recover, translate meaning, record a
 deliberate outcome, aggregate independent work or clean up. Cleanup-only catches
@@ -323,10 +332,10 @@ and defer it rather than changing execution behavior as a logging cleanup.
 ## 7. Terminal reporting: one owner
 
 The outer application operation classifies recoverable workflow conditions and
-preserves failure context, without repeatedly logging and rethrowing at every
-layer. The notebook/CLI host boundary owns the final diagnostic log and concise
-presentation. Provide one small reusable boundary helper only if necessary;
-do not put repetitive try/except blocks around every notebook cell or service.
+owns terminal failure reporting, without repeatedly logging and rethrowing at every
+layer. The notebook/CLI host configures destinations and presentation. Public
+workflow methods use a shared internal reporting helper; notebook cells require
+no logging wrappers or repetitive try/except blocks.
 
 Direct service calls must still raise useful typed failures without the host
 helper. Do not turn failures into successful empty returns merely to avoid a

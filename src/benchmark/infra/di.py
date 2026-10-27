@@ -156,8 +156,9 @@ class BenchmarkProvider(Provider):
         self,
         workload: BenchmarkWorkload,
         repository: SynthesisReadRepository,
+        logger: BenchmarkLoggerInterface,
     ) -> BenchmarkAuditService:
-        return BenchmarkAuditService(workload, repository, self.planned_conditions)
+        return BenchmarkAuditService(workload, repository, self.planned_conditions, logger)
 
     @provide
     def analysis_loader(

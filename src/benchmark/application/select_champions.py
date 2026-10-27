@@ -1,11 +1,13 @@
 """Select champion candidates using application-owned ranking policy."""
 
+import logging
 from pathlib import Path
 
 import pandas as pd
 
 from benchmark.application.champions import Champion, ChampionCatalog
 from benchmark.application.interfaces.champion_repository import ChampionRepository
+from shared.application.diagnostics import report_operation
 
 
 class ChampionSelectionService:
@@ -68,7 +70,10 @@ class ChampionSelectionService:
         return champions
 
     def get_champions(self) -> ChampionCatalog:
-        return self.select_candidates(self.champions_repo.query_candidates())
+        with report_operation(
+            logging.getLogger("benchmark.application.select_champions"), "get champions"
+        ):
+            return self.select_candidates(self.champions_repo.query_candidates())
 
     def flatten_champions(
         self, champions_dict: ChampionCatalog | None = None
@@ -85,14 +90,17 @@ class ChampionSelectionService:
     def export_champions(
         self, output_path: Path | None = None
     ) -> tuple[ChampionCatalog, pd.DataFrame]:
-        champions = self.get_champions()
-        self.champions_repo.write_champions_json(champions, output_path)
-        summary_rows = [
-            {"model": model, "key": key, **candidate}
-            for model, conditions in champions.items()
-            for key, candidate in conditions.items()
-        ]
-        return champions, pd.DataFrame(summary_rows)
+        with report_operation(
+            logging.getLogger("benchmark.application.select_champions"), "export champions"
+        ):
+            champions = self.get_champions()
+            self.champions_repo.write_champions_json(champions, output_path)
+            summary_rows = [
+                {"model": model, "key": key, **candidate}
+                for model, conditions in champions.items()
+                for key, candidate in conditions.items()
+            ]
+            return champions, pd.DataFrame(summary_rows)
 
 
 __all__ = ["ChampionSelectionService"]

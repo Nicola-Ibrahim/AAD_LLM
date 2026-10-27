@@ -5,6 +5,7 @@ Manages the evolutionary synthesis loop, prompt injection, warm-start checkpoint
 sandboxed evaluation, and persistence of iteration telemetry and champion algorithms.
 """
 
+import logging
 import math
 import shutil
 import warnings
@@ -16,8 +17,9 @@ from evolution.application.exceptions import SynthesisResumeError
 from evolution.application.interfaces.code_store import SynthesisCodeStore
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
-from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
-from evolution.application.synthesis.models import SessionConfig, SessionResult
+from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
+from evolution.application.synthesis.result import SynthesisResult
+from evolution.application.synthesis.settings import SynthesisSettings
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
@@ -28,6 +30,7 @@ from evolution.infra.engines.llamea.prompts import (
     SynthesisPrompts,
     build_synthesis_prompts,
 )
+from evolution.infra.engines.llamea.runtime import FailureAwareLLaMEA
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
 from shared.application.interfaces.candidate_executor import CANDIDATE_EXECUTION_VERSION
@@ -52,7 +55,7 @@ class LLaMEASession:
         3. Persist final ExperimentSummary
                │
                ▼
-        Print Summary Report & Return SessionResult
+        Print Summary Report & Return SynthesisResult
     """
 
     def __init__(
@@ -63,7 +66,7 @@ class LLaMEASession:
         llm_client: LLMClient,
         db_repo: SynthesisRepository,
         code_repo: SynthesisCodeStore,
-        config: SessionConfig,
+        config: SynthesisSettings,
         initial_iteration: int = 0,
         synthesis_mode: SynthesisMode = SynthesisMode.EXPLICIT,
         restart: bool = False,
@@ -139,15 +142,15 @@ class LLaMEASession:
 
     def _process_session_result(
         self, synthesis_engine: LLaMEA, evaluator: Evaluator
-    ) -> SessionResult:
-        """Extracts best candidate metrics, prints summary report, and builds SessionResult."""
+    ) -> SynthesisResult:
+        """Extracts best candidate metrics, prints summary report, and builds SynthesisResult."""
         best_so_far = synthesis_engine.best_so_far
         fitness_score = best_so_far.fitness  # This is -final_error (LLaMEA convention)
 
         if (
             fitness_score is not None
             and math.isfinite(fitness_score)
-            and not CandidateEvaluationService.is_failure(fitness_score)
+            and not CandidateEvaluator.is_failure(fitness_score)
         ):
             best_error = -fitness_score
             raw_fitness = self._db_repo.get_best_raw_fitness(self._experiment_id)
@@ -163,7 +166,7 @@ class LLaMEASession:
             true_opt=self._problem.true_optimum,
         )
 
-        return SessionResult(
+        return SynthesisResult(
             problem_id=self._problem.problem_id,
             dim=self._problem.dim,
             mode=self._synthesis_mode,
@@ -194,14 +197,21 @@ class LLaMEASession:
             raise
         except Exception as e:
             self._experiment.fail()
-            self._db_repo.mark_failed(self._experiment_id, str(e))
+            try:
+                self._db_repo.mark_failed(self._experiment_id, str(e))
+            except Exception:
+                logging.getLogger(__name__).warning(
+                    "Could not record failure for experiment %s; preserving original error",
+                    self._experiment_id,
+                    exc_info=True,
+                )
             raise
         else:
             self._experiment.complete()
             self._db_repo.save_experiment_summary(self._experiment)
             return synthesis_engine, evaluator
 
-    def run(self) -> SessionResult:
+    def run(self) -> SynthesisResult:
         """Runs the complete evolution loop for the problem."""
         if self._initial_iteration > 0 and not self._restart:
             records = self._db_repo.load_by_ids([self._experiment_id])
@@ -293,7 +303,7 @@ class LLaMEASession:
                     ) from e
                 self._logger.warning(f"Warm start failed, starting fresh: {e}")
 
-        synthesis_engine = LLaMEA(
+        synthesis_engine = FailureAwareLLaMEA(
             f=evaluator,
             llm=self._llm_client,
             n_parents=1,
@@ -313,7 +323,7 @@ class LLaMEASession:
 
     def _setup_evaluator(self) -> Evaluator:
         """Initializes the problem evaluator with experiment metadata and budget limits."""
-        candidate_evaluation_service = CandidateEvaluationService(
+        candidate_evaluation_service = CandidateEvaluator(
             problem=self._problem,
             budget=self._config.budget,
             timeout_seconds=self._config.timeout_seconds,
@@ -346,17 +356,21 @@ class LLaMEAEngine(SynthesisEngine):
         self.llm_client = llm_client
         self.code_repo = code_repo
 
+    @property
+    def model_name(self) -> str:
+        return self.llm_client.model.name
+
     def run(
         self,
         problem: BaseProblem,
         experiment_id: int,
-        config: SessionConfig,
+        config: SynthesisSettings,
         db_repo: SynthesisRepository,
         prompt_strategy: PromptStrategy,
         synthesis_mode: SynthesisMode,
         initial_iteration: int = 0,
         restart: bool = False,
-    ) -> SessionResult:
+    ) -> SynthesisResult:
         """Executes a single algorithm synthesis run using LLaMEASession."""
         session = LLaMEASession(
             problem=problem,

@@ -17,9 +17,29 @@ import httpx
 import openai
 from llamea import OpenAI_LLM
 
+from evolution.application.exceptions import ProviderError
+
 # Published per-person provider limits, with 20% headroom for other account use.
 DEFAULT_RPM = {"gwdg": 8.0, "kiconnect": 80.0, "openai": 80.0}
 logger = logging.getLogger(__name__)
+
+
+def provider_error(error: openai.APIError, model: str) -> ProviderError:
+    """Translate SDK errors without copying requests, keys or response bodies."""
+    status = getattr(error, "status_code", None)
+    if status in {401, 403}:
+        return ProviderError("authentication", model, "check gateway credentials and model access")
+    if status == 402 or error.code in {
+        "insufficient_quota",
+        "budget_exceeded",
+        "budget_exhausted",
+        "billing_hard_limit_reached",
+        "spend_limit_exceeded",
+    }:
+        return ProviderError("quota", model, "the provider quota or budget is exhausted")
+    if isinstance(error, openai.APITimeoutError):
+        return ProviderError("timeout", model, "the generation request timed out")
+    return ProviderError("unavailable", model, f"generation failed; HTTP status {status}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,12 +160,21 @@ class GatewayLLM(OpenAI_LLM):
     ) -> str:
         for attempt in range(max_retries + 1):
             try:
+                logger.debug(
+                    "Requesting generated code from %s, attempt %d", self.model, attempt + 1
+                )
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=session_messages,
                     temperature=self.temperature,
                 )
-                return response.choices[0].message.content or ""
+                content = response.choices[0].message.content if response.choices else None
+                if not content:
+                    raise ProviderError("invalid_response", self.model, "the API returned no text")
+                logger.debug(
+                    "Generated response received from %s (%d characters)", self.model, len(content)
+                )
+                return content
             except openai.APIError as error:
                 exhausted = error.code in {
                     "insufficient_quota",
@@ -158,15 +187,14 @@ class GatewayLLM(OpenAI_LLM):
                 if isinstance(error, openai.APIStatusError):
                     retryable = error.status_code in {408, 409, 429} or error.status_code >= 500
                 if exhausted or not retryable:
-                    raise
+                    raise provider_error(error, self.model) from error
                 # SystemRandom must not perturb the optimizer's seeded RNG stream.
                 delay = default_delay * 2**attempt + SystemRandom().uniform(0.0, 1.0)
                 if isinstance(error, openai.APIStatusError):
                     delay = retry_delay(error, delay)
                 self.limiter.defer(delay)
                 logger.warning(
-                    "Gateway %s: %s (status %s), attempt %d/%d; "
-                    "shared cooldown %.1fs%s",
+                    "Gateway %s: %s (status %s), attempt %d/%d; shared cooldown %.1fs%s",
                     self.model,
                     type(error).__name__,
                     getattr(error, "status_code", "unavailable"),
@@ -176,5 +204,5 @@ class GatewayLLM(OpenAI_LLM):
                     "; retries exhausted" if attempt == max_retries else "; will retry",
                 )
                 if attempt == max_retries:
-                    raise
+                    raise provider_error(error, self.model) from error
         raise AssertionError("Unreachable gateway retry state")

@@ -370,7 +370,7 @@ class IncrementalOptimizer:
     assert trace_repo.get_run_count(pso_dir) == 4
 
 
-def test_benchmark_logger(tmp_path: Path):
+def test_benchmark_logger(tmp_path: Path, make_progress_logger):
     """Verify BenchmarkLogger formatting and verbosity controls."""
     import io
 
@@ -378,7 +378,7 @@ def test_benchmark_logger(tmp_path: Path):
 
     # 1. BenchmarkLogger capturing output
     buf = io.StringIO()
-    logger = BenchmarkLogger(verbose=True, stream=buf)
+    logger = make_progress_logger(BenchmarkLogger, buf, verbose=True)
     logger.header("Test Header", subtitle="Testing logger")
     logger.info("Informational message")
     logger.success("Success message")
@@ -420,20 +420,20 @@ def test_benchmark_logger(tmp_path: Path):
 
     # 2. Quiet mode (verbose=False)
     buf_quiet = io.StringIO()
-    quiet_logger = BenchmarkLogger(verbose=False, stream=buf_quiet)
+    quiet_logger = make_progress_logger(BenchmarkLogger, buf_quiet, verbose=False)
     quiet_logger.header("Quiet Header")
     quiet_logger.info("Quiet info")
     assert buf_quiet.getvalue() == ""
 
 
-def test_benchmark_service_run_verbose_control(tmp_path: Path):
+def test_benchmark_service_run_verbose_control(tmp_path: Path, make_progress_logger):
     """Verify that verbose flag on BenchmarkCoordinator.run_* methods controls output dynamically."""
     import io
 
     from benchmark.infra.logging import BenchmarkLogger
 
     buf = io.StringIO()
-    custom_logger = BenchmarkLogger(verbose=True, stream=buf)
+    custom_logger = make_progress_logger(BenchmarkLogger, buf, verbose=True)
 
     benchmark_dir = tmp_path / "benchmarks"
 

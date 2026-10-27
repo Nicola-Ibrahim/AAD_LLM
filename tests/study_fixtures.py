@@ -1,12 +1,12 @@
 """Explicit small-study settings for isolated backend tests; no config files."""
 
 from benchmark.application.benchmark_config import BenchmarkConfig
-from evolution.application.synthesis_config import SynthesisConfig
+from evolution.application.campaign.settings import CampaignSettings
 
 
-def run_parameters(config: SynthesisConfig | BenchmarkConfig) -> dict[str, object]:
+def run_parameters(config: CampaignSettings | BenchmarkConfig) -> dict[str, object]:
     """Extract execution arguments for fixtures that also exercise internal components."""
-    if isinstance(config, SynthesisConfig):
+    if isinstance(config, CampaignSettings):
         fields = {
             "problem_targets",
             "noise_conditions",
@@ -36,7 +36,7 @@ def run_parameters(config: SynthesisConfig | BenchmarkConfig) -> dict[str, objec
     return config.model_dump(include=fields)
 
 
-def synthesis_config(**overrides: object) -> SynthesisConfig:
+def synthesis_config(**overrides: object) -> CampaignSettings:
     values = {
         "problem_targets": [
             {"id": problem, "dimensions": [2, 10, 50]} for problem in [1, 8, 11, 15, 21]
@@ -53,4 +53,4 @@ def synthesis_config(**overrides: object) -> SynthesisConfig:
         ],
         "budget": 100_000,
     }
-    return SynthesisConfig(**(values | overrides))
+    return CampaignSettings(**(values | overrides))

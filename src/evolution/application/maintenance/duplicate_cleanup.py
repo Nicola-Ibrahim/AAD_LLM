@@ -1,17 +1,19 @@
 """Review duplicate experiments and coordinate explicitly approved cleanup."""
 
+import logging
 import math
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import replace
 
 from evolution.application.interfaces.duplicate_storage import DuplicateStorage
-from evolution.application.maintenance.models import (
+from evolution.application.maintenance.cleanup_types import (
     CleanupPlan,
     CleanupResult,
     Condition,
     DuplicateRow,
 )
+from shared.application.diagnostics import report_operation
 
 
 class SynthesisDuplicateMaintenance:
@@ -74,12 +76,13 @@ class SynthesisDuplicateMaintenance:
         self, *, models: Sequence[str] = (), collapse_valid_runs: bool = False
     ) -> CleanupPlan:
         """Read a consistent snapshot; safe mode retains every valid completed run."""
-        records, fingerprint = self.storage.read_snapshot()
-        requested = tuple(dict.fromkeys(models))
-        unknown = set(requested) - {row.condition.model for row in records}
-        if unknown:
-            raise ValueError(f"Models not present in this database: {sorted(unknown)}")
-        return self._plan(records, fingerprint, requested, collapse_valid_runs)
+        with report_operation(logging.getLogger("evolution.maintenance"), "preview"):
+            records, fingerprint = self.storage.read_snapshot()
+            requested = tuple(dict.fromkeys(models))
+            unknown = set(requested) - {row.condition.model for row in records}
+            if unknown:
+                raise ValueError(f"Models not present in this database: {sorted(unknown)}")
+            return self._plan(records, fingerprint, requested, collapse_valid_runs)
 
     def apply(
         self,
@@ -90,18 +93,19 @@ class SynthesisDuplicateMaintenance:
         quarantine_files: bool = False,
     ) -> CleanupResult:
         """Authorize cleanup; revalidate the plan inside the storage transaction."""
-        if not jobs_stopped or confirmation != plan.confirmation:
-            raise ValueError(
-                "Stop synthesis/evaluation jobs and provide the exact preview confirmation"
-            )
-        if not plan.delete_ids:
-            raise ValueError("The preview contains no records to remove")
-
-        def validate(records: list[DuplicateRow], fingerprint: str) -> None:
-            current = self._plan(records, fingerprint, plan.models, plan.collapse_valid_runs)
-            if current != plan:
-                raise RuntimeError(
-                    "Database or candidate availability changed; generate and review a new preview"
+        with report_operation(logging.getLogger("evolution.maintenance"), "apply"):
+            if not jobs_stopped or confirmation != plan.confirmation:
+                raise ValueError(
+                    "Stop synthesis/evaluation jobs and provide the exact preview confirmation"
                 )
+            if not plan.delete_ids:
+                raise ValueError("The preview contains no records to remove")
 
-        return self.storage.apply(plan, validate=validate, quarantine_files=quarantine_files)
+            def validate(records: list[DuplicateRow], fingerprint: str) -> None:
+                current = self._plan(records, fingerprint, plan.models, plan.collapse_valid_runs)
+                if current != plan:
+                    raise RuntimeError(
+                        "Database or candidate availability changed; generate and review a new preview"
+                    )
+
+            return self.storage.apply(plan, validate=validate, quarantine_files=quarantine_files)

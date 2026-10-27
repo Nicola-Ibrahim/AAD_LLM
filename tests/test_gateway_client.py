@@ -9,6 +9,7 @@ import httpx
 import openai
 import pytest
 
+from evolution.application.exceptions import ProviderError
 from evolution.infra.llm.client import LLMClient, Provider
 
 
@@ -93,7 +94,7 @@ def test_gateway_does_not_discover_first_model(gateway_env, gateway_probe, monke
 def test_gateway_authentication_failure_is_clear(gateway_env, gateway_probe, monkeypatch) -> None:
     monkeypatch.delenv("SKIP_LLM_VALIDATION", raising=False)
     gateway_probe.return_value = httpx.Response(401, json={"error": {"message": "Unauthorized"}})
-    with pytest.raises(ConnectionError, match="401") as failure:
+    with pytest.raises(ProviderError, match="authentication") as failure:
         LLMClient("upb")
     assert "test-private-key" not in str(failure.value)
 

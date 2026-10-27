@@ -53,7 +53,7 @@ flowchart TD
     Runtime -->|requests generations| Provider
 
     click Researcher "https://github.com/nicola-ibrahim/aad_llm/tree/main/notebooks"
-    click Synthesis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/run.py"
+    click Synthesis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/service.py"
     click Benchmark "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/application/trials/coordinator.py"
     click Analysis "https://github.com/nicola-ibrahim/aad_llm/tree/main/notebooks/analysis"
     click Runtime "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/execution/executor.py"
@@ -85,10 +85,10 @@ and code links for an in-depth understanding of the project.
 flowchart TD
 
 subgraph group_synthesis["Algorithm synthesis"]
-  node_campaign["Synthesis campaign<br/>[run.py]"]
-  node_campaign_plan["Campaign planning<br/>[plan.py]"]
-  node_synth_config["Synthesis configuration<br/>[repository.py]"]
-  node_single_synthesis["Synthesis session<br/>[run.py]"]
+  node_campaign["Synthesis campaign<br/>[service.py]"]
+  node_campaign_plan["Campaign planning<br/>[planner.py]"]
+  node_synth_config["Campaign settings<br/>[settings.py]"]
+  node_single_synthesis["Optimizer synthesis<br/>[service.py]"]
 end
 
 subgraph group_runtime["Candidate execution"]
@@ -151,10 +151,10 @@ node_analysis -->|"computes metrics"| node_analysis_services
 node_analysis -->|"presents results"| node_figures
 node_transfer -.->|"writes isolated traces"| node_trace_repo
 
-click node_campaign "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/run.py"
-click node_campaign_plan "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/plan.py"
-click node_synth_config "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis_config/repository.py"
-click node_single_synthesis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/synthesis/run.py"
+click node_campaign "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/service.py"
+click node_campaign_plan "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/planner.py"
+click node_synth_config "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/settings.py"
+click node_single_synthesis "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/synthesis/service.py"
 click node_llamea "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/runner.py"
 click node_prompts "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/prompts/builder.py"
 click node_llm_client "https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/llm/client.py"
@@ -200,10 +200,10 @@ imports; analysis belongs to the benchmark context, not a third bounded context.
 <details>
 <summary>Component links (also available when a viewer disables diagram links)</summary>
 
-- [campaign](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/run.py)
-- [campaign plan](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/plan.py)
-- [synth config](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis_config/repository.py)
-- [single synthesis](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/synthesis/run.py)
+- [campaign](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/service.py)
+- [campaign plan](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/planner.py)
+- [campaign settings](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/campaign/settings.py)
+- [single synthesis](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/application/synthesis/service.py)
 - [llamea](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/runner.py)
 - [prompts](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/engines/llamea/prompts/builder.py)
 - [llm client](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/llm/client.py)

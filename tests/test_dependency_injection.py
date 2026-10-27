@@ -20,14 +20,14 @@ from benchmark.application.interfaces.synthesis_read_repository import Synthesis
 from benchmark.application.trials.audit import BenchmarkAuditService
 from benchmark.application.trials.coordinator import BenchmarkCoordinator
 from benchmark.infra.di import BenchmarkProvider
-from evolution.application.campaign.models import CampaignTask
-from evolution.application.campaign.run import SynthesisCampaignCoordinator
+from evolution.application.campaign.service import SynthesisCampaign
+from evolution.application.campaign.tasks import CampaignTask
 from evolution.application.interfaces.code_store import SynthesisCodeStore
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
 from evolution.application.interfaces.task_dispatcher import TaskDispatcher
-from evolution.application.synthesis.models import SessionResult
-from evolution.application.synthesis.run import SingleSynthesisUseCase
+from evolution.application.synthesis.result import SynthesisResult
+from evolution.application.synthesis.service import Synthesis
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.infra.di import EvolutionProvider
 from evolution.infra.llm.client import LLMClient
@@ -47,7 +47,7 @@ def test_provider_owns_configured_llm_connection(monkeypatch, interrupted):
 
     def resolve():
         with container_scope(EvolutionProvider(), context={}, request_context={}) as scope:
-            campaign = scope.get(SynthesisCampaignCoordinator)
+            campaign = scope.get(SynthesisCampaign)
             assert scope.get(LLMClient) is client
             assert campaign.model_name == client.model.name
             create_client.assert_called_once_with("upb")
@@ -70,8 +70,8 @@ def test_container_disposes_database_on_success_and_failure(monkeypatch, context
     monkeypatch.setattr(shared_di, "Database", lambda: database)
     monkeypatch.setattr(benchmark_di, "ChampionsReadRepository", MagicMock())
     dependency = {
-        "synthesis": SynthesisCampaignCoordinator,
-        "worker": SingleSynthesisUseCase,
+        "synthesis": SynthesisCampaign,
+        "worker": Synthesis,
         "analysis": AnalyzeEcdfAndConvergence,
         "benchmark": BenchmarkCoordinator,
     }[context]
@@ -101,7 +101,7 @@ def test_container_disposes_database_on_success_and_failure(monkeypatch, context
 @pytest.mark.parametrize(
     "provider,repository,dependency",
     [
-        (EvolutionProvider, "SQLiteSynthesisRepository", SynthesisCampaignCoordinator),
+        (EvolutionProvider, "SQLiteSynthesisRepository", SynthesisCampaign),
         (BenchmarkProvider, "SQLiteSynthesisReadRepository", BenchmarkCoordinator),
     ],
 )
@@ -136,11 +136,11 @@ def test_workflow_scope_finalizes_provider_resources(monkeypatch, construction_f
     try:
         if construction_fails:
             with pytest.raises(RuntimeError, match="construction"):
-                scope.get(SynthesisCampaignCoordinator)
+                scope.get(SynthesisCampaign)
             database.dispose.assert_called_once()
         else:
-            service = scope.get(SynthesisCampaignCoordinator)
-            assert scope.get(SynthesisCampaignCoordinator) is service
+            service = scope.get(SynthesisCampaign)
+            assert scope.get(SynthesisCampaign) is service
             database.dispose.assert_not_called()
     finally:
         scope.close()
@@ -156,11 +156,11 @@ def test_request_scopes_isolate_workflows_and_share_only_the_application_engine(
     root = make_container(SharedProvider(), EvolutionProvider(), context={LLMClient: MagicMock()})
     try:
         with root() as request:
-            first = request.get(SynthesisCampaignCoordinator)
-            assert request.get(SynthesisCampaignCoordinator) is first
+            first = request.get(SynthesisCampaign)
+            assert request.get(SynthesisCampaign) is first
         database.dispose.assert_not_called()
         with root() as request:
-            second = request.get(SynthesisCampaignCoordinator)
+            second = request.get(SynthesisCampaign)
             assert first is not second
             assert first.logger is not second.logger
         create_database.assert_called_once()
@@ -244,8 +244,8 @@ def test_direct_class_bindings_share_instances_with_their_interfaces(monkeypatch
                 (BenchmarkStateStore, benchmark_di.BenchmarkStateRepository),
                 (CandidateCodeReader, benchmark_di.FilesystemCodeReader),
                 (
-                    TaskDispatcher[CampaignTask, SessionResult],
-                    evolution_di.ProcessPoolRunner[CampaignTask, SessionResult],
+                    TaskDispatcher[CampaignTask, SynthesisResult],
+                    evolution_di.ProcessPoolRunner[CampaignTask, SynthesisResult],
                 ),
             )
             for interface, implementation in bindings:

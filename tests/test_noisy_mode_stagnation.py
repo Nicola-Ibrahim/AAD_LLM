@@ -1,7 +1,7 @@
 from llamea import Solution
 
-from evolution.application import SessionConfig
-from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
+from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
+from evolution.application.synthesis.settings import SynthesisSettings
 from evolution.domain.enums import SynthesisMode
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.engines.llamea import Evaluator
@@ -15,7 +15,7 @@ from shared.infra.problems.bbob import BBOBProblem
 
 
 def build_candidate_evaluation_service(*, problem, **kwargs):
-    return CandidateEvaluationService(
+    return CandidateEvaluator(
         problem=problem,
         executor=create_candidate_executor(kwargs.get("timeout_seconds", 30.0)),
         **kwargs,
@@ -23,23 +23,17 @@ def build_candidate_evaluation_service(*, problem, **kwargs):
 
 
 def test_failure_tiers_and_is_failure():
-    assert CandidateEvaluationService.is_failure(CandidateEvaluationService.FAILURE_FITNESS) is True
-    assert (
-        CandidateEvaluationService.is_failure(CandidateEvaluationService.RUNTIME_FAILURE_FITNESS)
-        is True
-    )
-    assert (
-        CandidateEvaluationService.is_failure(CandidateEvaluationService.TIMEOUT_FAILURE_FITNESS)
-        is True
-    )
-    assert CandidateEvaluationService.is_failure(float("-inf")) is True
-    assert CandidateEvaluationService.is_failure(float("nan")) is True
+    assert CandidateEvaluator.is_failure(CandidateEvaluator.FAILURE_FITNESS) is True
+    assert CandidateEvaluator.is_failure(CandidateEvaluator.RUNTIME_FAILURE_FITNESS) is True
+    assert CandidateEvaluator.is_failure(CandidateEvaluator.TIMEOUT_FAILURE_FITNESS) is True
+    assert CandidateEvaluator.is_failure(float("-inf")) is True
+    assert CandidateEvaluator.is_failure(float("nan")) is True
 
     # Real scores (e.g. -0.05, -100.0, 0.0) should NOT be failures
-    assert CandidateEvaluationService.is_failure(0.0) is False
-    assert CandidateEvaluationService.is_failure(-0.05) is False
-    assert CandidateEvaluationService.is_failure(-1000.0) is False
-    assert CandidateEvaluationService.is_failure(-1e6) is False
+    assert CandidateEvaluator.is_failure(0.0) is False
+    assert CandidateEvaluator.is_failure(-0.05) is False
+    assert CandidateEvaluator.is_failure(-1000.0) is False
+    assert CandidateEvaluator.is_failure(-1e6) is False
 
 
 def test_stagnation_diversity_injection(db_session_factory, tmp_path):
@@ -72,7 +66,7 @@ def test_stagnation_diversity_injection(db_session_factory, tmp_path):
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
-        config=SessionConfig(budget=100, stagnation_threshold=3),
+        config=SynthesisSettings(budget=100, stagnation_threshold=3),
         candidate_evaluation_service=candidate_evaluation_service,
     )
 
@@ -85,19 +79,19 @@ class FailingOpt:
     # 1st failure
     sol1 = Solution(code=failing_code, name="FailingOpt1")
     scored1 = evaluator(sol1)
-    assert CandidateEvaluationService.is_failure(scored1.fitness)
+    assert CandidateEvaluator.is_failure(scored1.fitness)
     assert "[META-FEEDBACK]" not in scored1.feedback
 
     # 2nd failure
     sol2 = Solution(code=failing_code, name="FailingOpt2")
     scored2 = evaluator(sol2)
-    assert CandidateEvaluationService.is_failure(scored2.fitness)
+    assert CandidateEvaluator.is_failure(scored2.fitness)
     assert "[META-FEEDBACK]" not in scored2.feedback
 
     # 3rd failure -> triggers stagnation diversity injection!
     sol3 = Solution(code=failing_code, name="FailingOpt3")
     scored3 = evaluator(sol3)
-    assert CandidateEvaluationService.is_failure(scored3.fitness)
+    assert CandidateEvaluator.is_failure(scored3.fitness)
     assert "[META-FEEDBACK]" in scored3.feedback
     assert "Try a substantially different search mechanism" in scored3.feedback
 
@@ -131,7 +125,7 @@ def test_evaluator_noisy_feedback_no_noise_std_leak(db_session_factory, tmp_path
         db_repo=repo,
         code_repo=code_repo,
         experiment_id=exp_id,
-        config=SessionConfig(budget=100),
+        config=SynthesisSettings(budget=100),
         candidate_evaluation_service=candidate_evaluation_service,
     )
 
@@ -144,7 +138,7 @@ class DummyOpt:
 """
     sol = Solution(code=success_code, name="DummyOpt")
     scored = evaluator(sol)
-    assert not CandidateEvaluationService.is_failure(scored.fitness)
+    assert not CandidateEvaluator.is_failure(scored.fitness)
     # Ensure noise std numeric value 0.75 is NOT leaked in feedback
     assert "noise std: 0.75" not in scored.feedback
     assert "noise std:" not in scored.feedback

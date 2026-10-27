@@ -38,7 +38,7 @@ UPB_MODEL=gwdg.glm-5.3-flash
 UPB_REQUESTS_PER_MINUTE=8
 ```
 
-Notebook 02 resolves `SynthesisCampaignCoordinator`; `EvolutionProvider` creates
+Notebook 02 resolves `SynthesisCampaign`; `EvolutionProvider` creates
 the LLM connection from `LLM_PROVIDER` and owns its cleanup. The notebook does not
 import, construct or call `LLMClient`. The existing LLaMEA `OpenAI_LLM` adapter
 issues synthesis requests, not a separate example script.
@@ -151,7 +151,7 @@ configuration-file dependency.
 
 | Method | Explicit study inputs |
 | --- | --- |
-| `run_campaign(...)`, `audit_matrix(...)` | `problem_targets`, `noise_conditions`, `synthesis_modes`, `iterations`, `budget`, `timeout_seconds`, `runs_per_config`, `auto_resume`, `skip_completed`, `retry_failed_synthesis` |
+| `run(...)`, `audit_matrix(...)` | `problem_targets`, `noise_conditions`, `synthesis_modes`, `iterations`, `budget`, `timeout_seconds`, `runs_per_config`, `auto_resume`, `skip_completed`, `retry_failed_synthesis` |
 | `run_benchmarks(...)`, `audit_workload(...)`, `summarize_results(...)` | `trials_per_condition`, `random_seed`, `first_instance_id`, `budget`, `trial_timeout_seconds`, `observation_trace_points`, `force_rerun`, `classical_baselines`, `noise_robustness_enabled`, `cross_function_enabled`, `cross_function_problem_ids` |
 | Summary thresholds | `primary_target`, `secondary_target` |
 | Selected benchmark reruns | `run_benchmarks(..., rerun_experiment_ids=[...])` explicitly reruns all scheduled trials for the selected completed champion experiments. This is a run argument, not a scientific configuration field. See [rerun semantics](../benchmark_protocol.md#selected-benchmark-reruns). |
@@ -176,7 +176,7 @@ For example, a small explicit synthesis request is:
 
 ```python
 # campaign is resolved once in notebook setup.
-results = campaign.run_campaign(
+results = campaign.run(
     problem_targets=[{"id": 15, "dimensions": [10]}],
     noise_conditions=[{"std": 0.1, "noise_model": "heteroscedastic"}],
     synthesis_modes=[{"mode": "explicit", "strategies": ["baseline"]}],
@@ -204,7 +204,7 @@ the scientific execution parameters and does not determine completed models.
 ### Selective synthesis reruns
 
 Keep study parameters explicit in each notebook campaign call. Add the following
-keyword arguments to the complete `run_campaign(...)` call shown above:
+keyword arguments to the complete `run(...)` call shown above:
 
 | Purpose | Additional arguments |
 | --- | --- |

@@ -5,12 +5,11 @@ synthesis campaigns, per-generation candidate evaluations, auto-resumption notic
 and task dispatch summaries utilizing Python's standard logging.Logger infrastructure.
 """
 
-import logging
-import sys
 from collections.abc import Mapping
-from typing import TextIO
+from contextlib import AbstractContextManager
 
 from evolution.application.interfaces.logger import BaseLogger
+from shared.infra.logging.progress import ProgressLogger
 
 
 class Colors:
@@ -34,13 +33,6 @@ class Colors:
     GRAY = "\033[90m"
 
 
-class SynthesisFormatter(logging.Formatter):
-    """Clean formatter outputting message text directly without verbose log headers."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        return record.getMessage()
-
-
 class SynthesisLogger(BaseLogger):
     """Specialized synthesis logger utilizing standard Python logging.Logger with custom colorization and emojis."""
 
@@ -48,30 +40,20 @@ class SynthesisLogger(BaseLogger):
         self,
         verbose: bool = True,
         logger_name: str = "evolution.synthesis",
-        stream: TextIO | None = None,
     ) -> None:
-        self.logger = logging.getLogger(logger_name)
-        self.logger.propagate = False
-        self._stream = stream or sys.stdout
+        self.logger = ProgressLogger(logger_name, verbose)
 
-        self._handler = logging.StreamHandler(self._stream)
-        self._handler.setFormatter(SynthesisFormatter())
-
-        self.logger.handlers.clear()
-        self.logger.addHandler(self._handler)
-
-        super().__init__(verbose=verbose)
+    def operation(self, name: str) -> AbstractContextManager[None]:
+        return self.logger.operation(name)
 
     @property
     def verbose(self) -> bool:
         """Current verbosity state."""
-        return self.logger.level <= logging.INFO
+        return self.logger.verbose
 
     @verbose.setter
     def verbose(self, value: bool) -> None:
-        level = logging.INFO if value else logging.WARNING
-        self.logger.setLevel(level)
-        self._handler.setLevel(level)
+        self.logger.verbose = value
 
     def header(self, title: str, subtitle: str | None = None, width: int = 80) -> None:
         """Logs a prominent visual banner for a synthesis session."""

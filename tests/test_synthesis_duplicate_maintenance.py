@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from evolution.application.maintenance.duplicates import SynthesisDuplicateMaintenance
+from evolution.application.maintenance.duplicate_cleanup import SynthesisDuplicateMaintenance
 from evolution.infra.storage.synthesis.maintenance import SQLiteDuplicateStorage
 from shared.infra.database import Base, Database
 from shared.infra.database.tables import ErrorLogORM, ExperimentORM, IterationORM

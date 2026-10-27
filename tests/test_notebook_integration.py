@@ -64,7 +64,7 @@ def build_benchmark_service(**kwargs):
 
 def test_nb00_prompts_pipeline():
     """Verify Notebook 00 (00_prompts.ipynb: Prompts & Diagnostic Feedback Inspection)."""
-    from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
+    from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
     from evolution.domain.enums import PromptStrategy, SynthesisMode
     from evolution.infra.engines.llamea.prompts import (
         META_FEEDBACK_DIVERSITY_INJECTION,
@@ -100,7 +100,7 @@ def test_nb00_prompts_pipeline():
     # 3. Failure feedback & code context extraction
     tb_str = 'Traceback (most recent call last):\n  File "<string>", line 4, in __call__\n    inv_cov = np.linalg.inv(cov)\nValueError: Matrix is singular'
     code = "import numpy as np\nclass Opt:\n  def __call__(self, p, b):\n    inv_cov = np.linalg.inv(cov)\n    return x, y"
-    code_ctx = CandidateEvaluationService.extract_code_context(tb_str, code)
+    code_ctx = CandidateEvaluator.extract_code_context(tb_str, code)
     assert "line   4" in code_ctx
     assert "inv_cov" in code_ctx
 
@@ -129,7 +129,7 @@ def test_nb01_noise_pipeline():
 
 def test_nb02_synthesis_pipeline(tmp_path: Path):
     """Verify Notebook 02 (02_synthesis.ipynb: Evolutionary Synthesis Campaign Use Case & Task Construction)."""
-    from evolution.application import SynthesisCampaignCoordinator
+    from evolution.application.campaign.service import SynthesisCampaign
     from evolution.application.interfaces.logger import BaseLogger
     from evolution.infra.engines.llamea import LLaMEAEngine
     from evolution.infra.llm.client import LLMClient
@@ -148,7 +148,7 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
     logger = SynthesisLogger(verbose=False)
     engine = LLaMEAEngine(llm_client=llm, code_repo=CodeRepository())
 
-    campaign_usecase = SynthesisCampaignCoordinator(
+    campaign_usecase = SynthesisCampaign(
         worker_count=1,
         sqlite_repo=sqlite_repo,
         model_name=llm.model.name,
@@ -167,7 +167,7 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
     assert isinstance(campaign_usecase.logger, BaseLogger)
     assert hasattr(campaign_usecase_planner.auditor, "audit_matrix")
     assert hasattr(campaign_usecase_planner, "build_tasks")
-    assert hasattr(campaign_usecase, "run_campaign")
+    assert hasattr(campaign_usecase, "run")
 
     cfg = config
     assert cfg.matrix_conditions
@@ -423,24 +423,25 @@ def test_custom_minimal_base_logger():
 
 
 def test_campaign_usecase_run_worker_and_campaign():
-    """Verify SynthesisCampaignCoordinator run_worker and run_campaign methods."""
+    """Verify SynthesisCampaign run_worker and run methods."""
     from unittest.mock import patch
 
-    from evolution.application import SessionResult, SynthesisCampaignCoordinator
+    from evolution.application.campaign.service import SynthesisCampaign
+    from evolution.application.synthesis.result import SynthesisResult
     from evolution.domain.enums import SynthesisMode
     from evolution.infra.concurrency.worker import run_synthesis_worker
 
     mock_sqlite = MagicMock()
-    from evolution.application.synthesis_config import SynthesisConfig
+    from evolution.application.campaign.settings import CampaignSettings
 
-    mock_config = SynthesisConfig()
+    mock_config = CampaignSettings()
     mock_llm = MagicMock()
     mock_llm.model.name = "mock_model"
     mock_logger = MagicMock()
 
     mock_engine = MagicMock()
     dispatcher = MagicMock()
-    service = SynthesisCampaignCoordinator(
+    service = SynthesisCampaign(
         worker_count=1,
         sqlite_repo=mock_sqlite,
         model_name=mock_llm.model.name,
@@ -453,13 +454,14 @@ def test_campaign_usecase_run_worker_and_campaign():
     service_planner = service._build_planner(mock_config)
 
     # 1. Test run_worker
-    from evolution.application import SessionConfig, SingleSynthesisUseCase
+    from evolution.application.synthesis.service import Synthesis
+    from evolution.application.synthesis.settings import SynthesisSettings
     from evolution.domain.enums import PromptStrategy
 
     mock_problem = MagicMock()
     mock_problem.problem_id = 1
     mock_problem.dim = 2
-    dummy_result = SessionResult(
+    dummy_result = SynthesisResult(
         problem_id=1,
         dim=2,
         mode=SynthesisMode.EXPLICIT,
@@ -473,7 +475,7 @@ def test_campaign_usecase_run_worker_and_campaign():
         "key": "test_task_key",
         "problem": mock_problem,
         "experiment_id": 999,
-        "config": SessionConfig(iterations=1),
+        "config": SynthesisSettings(iterations=1, budget=1_000_000),
         "engine": mock_engine,
         "prompt_strategy": PromptStrategy.BASELINE,
         "synthesis_mode": SynthesisMode.EXPLICIT,
@@ -487,33 +489,36 @@ def test_campaign_usecase_run_worker_and_campaign():
     assert res is dummy_result
     mock_engine.run.assert_called_once()
 
-    # 2. Test SingleSynthesisUseCase standalone execution
-    single_uc = SingleSynthesisUseCase(
-        engine=mock_engine, sqlite_repo=mock_sqlite, logger=mock_logger
+    # 2. Test Synthesis standalone execution
+    single_uc = Synthesis(
+        engine=mock_engine,
+        sqlite_repo=mock_sqlite,
+        logger=mock_logger,
+        problem_factory=BBOBProblemFactory(),
     )
     res_single = single_uc.execute(
         problem=mock_problem,
         experiment_id=999,
-        config=SessionConfig(iterations=1),
+        config=SynthesisSettings(iterations=1, budget=1_000_000),
         key="standalone_key",
     )
     assert res_single is dummy_result
 
-    # 3. Test run_campaign when no tasks
+    # 3. Test run when no tasks
     with (
         patch.object(service, "_build_planner", return_value=service_planner),
         patch.object(service_planner, "build_tasks", return_value=[]),
     ):
-        empty_res = service.run_campaign(**run_parameters(service_planner.config))
+        empty_res = service.run(**run_parameters(service_planner.config))
         assert empty_res.results == {}
         mock_logger.success.assert_called()
 
-    # 4. Test run_campaign when tasks exist
+    # 4. Test run when tasks exist
     mock_item = {
         "key": "test_task_key",
         "problem": mock_problem,
         "experiment_id": 999,
-        "config": SessionConfig(iterations=1),
+        "config": SynthesisSettings(iterations=1, budget=1_000_000),
         "engine": mock_engine,
         "initial_iteration": 0,
         "prompt_strategy": PromptStrategy.BASELINE,
@@ -523,7 +528,7 @@ def test_campaign_usecase_run_worker_and_campaign():
         patch.object(service, "_build_planner", return_value=service_planner),
         patch.object(service_planner, "build_tasks", return_value=[mock_item]),
     ):
-        campaign_res = service.run_campaign(**run_parameters(service_planner.config))
+        campaign_res = service.run(**run_parameters(service_planner.config))
         assert campaign_res.results == {"test_task_key": dummy_result}
         dispatcher.run.assert_called_once()
 
@@ -532,11 +537,11 @@ def test_campaign_usecase_audit_matrix_standalone():
     """Verify CampaignAuditor audits coverage for an explicitly selected model."""
 
     from evolution.application.campaign.audit import CampaignAuditor
-    from evolution.application.synthesis_config import SynthesisConfig
+    from evolution.application.campaign.settings import CampaignSettings
 
     mock_sqlite = MagicMock()
     mock_sqlite.load.return_value = []
-    config = SynthesisConfig(
+    config = CampaignSettings(
         runs_per_config=2,
         retry_failed_synthesis=True,
         auto_resume=True,

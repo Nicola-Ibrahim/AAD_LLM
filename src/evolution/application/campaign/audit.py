@@ -3,8 +3,8 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 
+from evolution.application.campaign.settings import CampaignSettings, MatrixCondition
 from evolution.application.interfaces.logger import BaseLogger
-from evolution.application.synthesis_config import MatrixCondition, SynthesisConfig
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import BBOBFunction
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
@@ -16,7 +16,7 @@ class CampaignAuditor:
     def __init__(
         self,
         sqlite_repo: SynthesisRepository,
-        config: SynthesisConfig,
+        config: CampaignSettings,
         logger: BaseLogger,
         model_name: str,
     ) -> None:
@@ -110,7 +110,7 @@ class CampaignAuditor:
                 {
                     "Problem": f"f{item.problem_id} ({BBOBFunction.get_short_name(item.problem_id)})",
                     "Dimension": f"{item.dim}D",
-                    "Environment": item.env_label,
+                    "Environment": f"{item.mode.value.title()} ({item.noise_std})",
                     "Strategy": item.strategy.capitalize(),
                     "Target Runs": self.config.runs_per_config,
                     "Completed": n_comp,

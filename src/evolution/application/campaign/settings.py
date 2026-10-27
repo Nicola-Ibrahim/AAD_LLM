@@ -2,8 +2,8 @@
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from evolution.application.synthesis.models import SessionConfig
-from evolution.domain.enums import NoiseEnvironment, PromptStrategy, SynthesisMode
+from evolution.application.synthesis.settings import SynthesisSettings
+from evolution.domain.enums import PromptStrategy, SynthesisMode
 from shared.domain.noise_model import NoiseModelEnum
 
 
@@ -53,31 +53,9 @@ class MatrixCondition(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    @property
-    def prompt_template(self) -> str:
-        """Resolve (SynthesisMode + noise_std) → mode template filename. Single decision point."""
-        if self.mode == SynthesisMode.IMPLICIT:
-            return "modes/implicit.j2"
-        env = NoiseEnvironment.from_std(self.noise_std)
-        return f"modes/{env}.j2"
 
-    @property
-    def env_label(self) -> str:
-        """Display label for environment status in audit table."""
-        if self.mode == SynthesisMode.IMPLICIT:
-            return f"Implicit ({self.noise_std})"
-        return f"Explicit ({self.noise_std})"
-
-    @property
-    def task_mode_label(self) -> str:
-        """Task mode label used for execution logging and task naming."""
-        if self.mode == SynthesisMode.IMPLICIT:
-            return f"implicit_std_{self.noise_std}"
-        return f"explicit_std_{self.noise_std}"
-
-
-class SynthesisConfig(BaseModel):
-    """Strongly-typed, structured domain configuration for evolutionary synthesis campaigns."""
+class CampaignSettings(BaseModel):
+    """Validated matrix and scheduling settings for one campaign invocation."""
 
     # 1. Search Space Matrix
     problem_targets: list[ProblemTarget] = Field(default_factory=list)
@@ -92,18 +70,15 @@ class SynthesisConfig(BaseModel):
     stagnation_threshold: int = 3
     convergence_threshold: float = 1e-6
     runs_per_config: int = Field(default=1, gt=0)
-    num_processes: int = 8
     auto_resume: bool = True
     skip_completed: bool = True
     retry_failed_synthesis: bool = True
     only_incomplete: bool = False
-    name: str = "bbob_comprehensive_matrix"
-    noise_model: NoiseModelEnum = NoiseModelEnum.HETEROSCEDASTIC
 
     model_config = ConfigDict(frozen=True)
 
     @model_validator(mode="after")
-    def resolve_matrix(self) -> "SynthesisConfig":
+    def resolve_matrix(self) -> "CampaignSettings":
         """Resolve the public matrix once, preserving declared iteration order."""
         if self.matrix_conditions or not self.problem_targets:
             return self
@@ -147,9 +122,9 @@ class SynthesisConfig(BaseModel):
         all_s = {s for m in self.synthesis_modes for s in m.strategies}
         return sorted(all_s, key=lambda strategy: strategy.value)
 
-    def to_session_config(self, *, iterations: int) -> SessionConfig:
-        """Pass typed session settings directly to the synthesis workflow."""
-        return SessionConfig(
+    def synthesis_settings(self, *, iterations: int) -> SynthesisSettings:
+        """Pass typed synthesis settings directly to the synthesis workflow."""
+        return SynthesisSettings(
             budget=self.budget,
             timeout_seconds=self.timeout_seconds,
             iterations=iterations,

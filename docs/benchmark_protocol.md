@@ -210,7 +210,7 @@ explicit replacement. These safeguards do not reset or delete records automatica
 
 Implementation:
 [executor](../src/shared/infra/execution/executor.py),
-[candidate evaluation](../src/evolution/application/synthesis/evaluate_candidate.py),
+[candidate evaluation](../src/evolution/application/synthesis/candidate_evaluation.py),
 [worker](../src/evolution/infra/concurrency/worker.py).
 
 ## Clean solution scoring

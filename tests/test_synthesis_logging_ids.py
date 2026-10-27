@@ -37,9 +37,9 @@ def assert_executing_id_only(output: str) -> None:
     assert "Session #" not in plain
 
 
-def test_console_logger_uses_one_consistent_experiment_id_label() -> None:
+def test_console_logger_uses_one_consistent_experiment_id_label(make_progress_logger) -> None:
     stream = StringIO()
-    logger = SynthesisLogger(stream=stream, logger_name="test.synthesis.executing-id")
+    logger = make_progress_logger(SynthesisLogger, stream)
     record_lifecycle(logger)
     assert_executing_id_only(stream.getvalue())
 

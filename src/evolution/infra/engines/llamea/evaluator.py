@@ -1,19 +1,21 @@
 """LLaMEA Evaluation Adapter (Infrastructure Component).
 
-Adapts the CandidateEvaluationService service to the LLaMEA Solution callable interface:
+Adapts the CandidateEvaluator service to the LLaMEA Solution callable interface:
 - Receives candidate solution from LLaMEA framework.
-- Delegates code execution, bounds validation, scoring, and failure classification to CandidateEvaluationService.
+- Delegates code execution, bounds validation, scoring, and failure classification to CandidateEvaluator.
 - Sets fitness and feedback scores onto the LLaMEA Solution.
 - Handles dual-repository persistence (filesystem code storage and database iteration telemetry).
 - Manages state serialization for picklable warm starts.
 """
 
+import logging
+
 from llamea import Solution
 
 from evolution.application.interfaces.code_store import SynthesisCodeStore
 from evolution.application.interfaces.logger import BaseLogger
-from evolution.application.synthesis.evaluate_candidate import CandidateEvaluationService
-from evolution.application.synthesis.models import SessionConfig
+from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
+from evolution.application.synthesis.settings import SynthesisSettings
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.vos import IterationMetadata, ProblemProfile
@@ -28,7 +30,7 @@ class Evaluator:
     """LLaMEA-compatible evaluator adapter for optimization problems.
 
     Acts as an infrastructure adapter delegating candidate evaluation to
-    CandidateEvaluationService while fulfilling LLaMEA's callable contract.
+    CandidateEvaluator while fulfilling LLaMEA's callable contract.
     """
 
     def __init__(
@@ -37,8 +39,8 @@ class Evaluator:
         db_repo: SynthesisRepository,
         code_repo: SynthesisCodeStore,
         experiment_id: int,
-        config: SessionConfig,
-        candidate_evaluation_service: CandidateEvaluationService,
+        config: SynthesisSettings,
+        candidate_evaluation_service: CandidateEvaluator,
         initial_iteration: int = 0,
     ) -> None:
         self._problem = problem
@@ -52,6 +54,7 @@ class Evaluator:
         self._candidate_evaluation_service = candidate_evaluation_service
         self._feedback_renderer = FeedbackRenderer()
         self._execution_contract = CANDIDATE_EXECUTION_VERSION
+        self._terminal_error: Exception | None = None
 
     @property
     def logger(self) -> BaseLogger:
@@ -120,37 +123,46 @@ class Evaluator:
         Returns:
             Solution: The modified solution object populated with fitness scores and feedback.
         """
-        llm_gen_time = solution.metadata.get("llm_generation_time")
-        result = self._candidate_evaluation_service.evaluate(
-            code=solution.code,
-            name=solution.name,
-            llm_generation_time=llm_gen_time,
-        )
-
-        feedback = self._feedback_renderer.render(result, problem=self._problem)
-        solution.set_scores(result.fitness_score, feedback)
-        self._persist_iteration(solution, result.metadata)
-
-        if self._logger is not None:
-            if result.is_stagnated:
-                self._logger.stagnation_warning(
-                    self._config.stagnation_threshold, self._config.stagnation_threshold
-                )
-            succeeded = not result.is_failure and result.final_error is not None
-            failure_reason = result.metadata.error.error_type if result.metadata.error else None
-            self._logger.generation(
-                gen_idx=self._current_iteration,
-                total_gens=self._config.iterations,
-                algo_name=solution.name or "Candidate",
-                error=result.final_error if succeeded else None,
-                fitness=result.fitness_score if succeeded else None,
-                evals_used=result.metadata.execution.evaluations_used,
-                runtime=result.metadata.execution.runtime_seconds,
-                is_failure=not succeeded,
-                failure_reason="" if succeeded else failure_reason or "ExecutionFailure",
+        try:
+            llm_gen_time = solution.metadata.get("llm_generation_time")
+            result = self._candidate_evaluation_service.evaluate(
+                code=solution.code,
+                name=solution.name,
+                llm_generation_time=llm_gen_time,
             )
 
-        return solution
+            feedback = self._feedback_renderer.render(result, problem=self._problem)
+            solution.set_scores(result.fitness_score, feedback)
+            self._persist_iteration(solution, result.metadata)
+
+            if self._logger is not None:
+                if result.is_stagnated:
+                    self._logger.stagnation_warning(
+                        self._config.stagnation_threshold, self._config.stagnation_threshold
+                    )
+                succeeded = not result.is_failure and result.final_error is not None
+                failure_reason = result.metadata.error.error_type if result.metadata.error else None
+                self._logger.generation(
+                    gen_idx=self._current_iteration,
+                    total_gens=self._config.iterations,
+                    algo_name=solution.name or "Candidate",
+                    error=result.final_error if succeeded else None,
+                    fitness=result.fitness_score if succeeded else None,
+                    evals_used=result.metadata.execution.evaluations_used,
+                    runtime=result.metadata.execution.runtime_seconds,
+                    is_failure=not succeeded,
+                    failure_reason="" if succeeded else failure_reason or "ExecutionFailure",
+                )
+
+            return solution
+        except Exception as error:
+            self._terminal_error = error
+            raise
+
+    def raise_if_failed(self) -> None:
+        """Persistence errors must escape LLaMEA's generated-individual catches."""
+        if self._terminal_error is not None:
+            raise self._terminal_error
 
     def __getstate__(self) -> dict[str, object]:
         state = self.__dict__.copy()
@@ -160,9 +172,10 @@ class Evaluator:
 
     def __setstate__(self, state: dict[str, object]) -> None:
         self.__dict__.update(state)
+        self._terminal_error = None
         self._logger = getattr(self, "_logger", None) or SynthesisLogger()
         self._feedback_renderer = getattr(self, "_feedback_renderer", None) or FeedbackRenderer()
-        self._candidate_evaluation_service = CandidateEvaluationService(
+        self._candidate_evaluation_service = CandidateEvaluator(
             problem=self._problem,
             budget=self._config.budget,
             timeout_seconds=self._config.timeout_seconds,
@@ -171,13 +184,13 @@ class Evaluator:
             executor=create_candidate_executor(self._config.timeout_seconds),
         )
         if getattr(self, "_db_repo", None) is None:
-            print(
+            logging.getLogger(__name__).warning(
                 "[WARN] Evaluator resumed from pickle with _db_repo=None. "
                 "Iteration persistence is DISABLED for this run. "
                 "Call evaluator._db_repo = repo to re-attach."
             )
         if getattr(self, "_code_repo", None) is None:
-            print(
+            logging.getLogger(__name__).warning(
                 "[WARN] Evaluator resumed from pickle with _code_repo=None. "
                 "Code file saving is DISABLED for this run."
             )

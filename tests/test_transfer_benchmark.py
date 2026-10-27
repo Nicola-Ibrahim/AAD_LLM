@@ -23,6 +23,7 @@ from benchmark.domain.benchmark_results import (
 )
 from benchmark.domain.services.transfer import TransferAnalysisEngine
 from benchmark.infra.io.trace_repository import IOHTraceReader
+from benchmark.infra.logging import BenchmarkLogger
 from benchmark.infra.storage.model_registry import configured_model_names
 from shared.domain.problem import ObservationSample
 
@@ -44,6 +45,7 @@ def audit_for(service: BenchmarkCoordinator) -> BenchmarkAuditService:
             SynthesisConditionSpec(1, 2, 0.0, "explicit", "baseline"),
             SynthesisConditionSpec(1, 2, 0.0, "implicit", "baseline"),
         ),
+        logger=BenchmarkLogger(),
     )
 
 

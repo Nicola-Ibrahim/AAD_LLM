@@ -1,3 +1,4 @@
+import logging
 import shutil
 import tempfile
 from pathlib import Path
@@ -8,14 +9,39 @@ from shared.infra.database import Database
 from shared.infra.database.tables import Base
 
 
+@pytest.fixture
+def make_progress_logger():
+    """Tests configure sinks explicitly, like a notebook or CLI host."""
+    handlers = []
+
+    def create(cls, stream, **kwargs):
+        name = f"{cls.__module__.split('.')[0]}.test.progress.{len(handlers)}"
+        logger = logging.getLogger(name)
+        handler = logging.StreamHandler(stream)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        old_level = logger.level
+        logger.setLevel(logging.INFO)
+        logger.addHandler(handler)
+        handlers.append((logger, handler, old_level))
+        return cls(logger_name=name, **kwargs)
+
+    yield create
+    for logger, handler, level in handlers:
+        logger.removeHandler(handler)
+        logger.setLevel(level)
+        handler.close()
+
+
 @pytest.fixture(autouse=True)
 def isolate_test_data_dir(tmp_path, monkeypatch):
     """Ensure tests write temporary logs and state to an isolated tmp directory."""
     import evolution.infra.engines.llamea.runner
     import evolution.infra.problems.analyzer
     import shared.config
+    import shared.infra.logging.runtime
 
     monkeypatch.setattr(shared.config, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(shared.infra.logging.runtime, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(evolution.infra.problems.analyzer, "DATA_DIR", tmp_path)
     monkeypatch.setattr(evolution.infra.engines.llamea.runner, "DATA_DIR", tmp_path)
 
@@ -24,6 +50,7 @@ def isolate_test_data_dir(tmp_path, monkeypatch):
 def default_test_llm_env(monkeypatch):
     """Ensure test suite does not attempt network connections to live LLM server."""
     monkeypatch.setenv("SKIP_LLM_VALIDATION", "True")
+    monkeypatch.setenv("LLM_PROVIDER", "local")
     monkeypatch.setenv("LOCAL_LLM_MODEL", "mock-test-model")
 
 
