@@ -12,11 +12,11 @@ import logging
 
 from llamea import Solution
 
-from evolution.application.interfaces.code_store import SynthesisCodeStore
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
 from evolution.application.synthesis.settings import SynthesisSettings
 from evolution.domain.entities import ExperimentSummary
+from evolution.domain.interfaces.code_repository import CodeRepository
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.vos import IterationMetadata, ProblemProfile
 from evolution.infra.engines.llamea.prompts import FeedbackRenderer
@@ -37,7 +37,7 @@ class Evaluator:
         self,
         problem: BaseProblem,
         db_repo: SynthesisRepository,
-        code_repo: SynthesisCodeStore,
+        code_repo: CodeRepository,
         experiment_id: int,
         config: SynthesisSettings,
         candidate_evaluation_service: CandidateEvaluator,
@@ -89,12 +89,11 @@ class Evaluator:
         code_path_str: str | None = None
 
         if self._code_repo is not None and solution.code:
-            code_path = self._code_repo.save_code(
+            code_path_str = self._code_repo.save_code(
                 code=solution.code,
                 iteration_num=self._current_iteration,
                 experiment_id=self._experiment_id,
             )
-            code_path_str = str(code_path)
 
         updated_code = metadata.code.model_copy(update={"code_path": code_path_str})
         final_metadata = metadata.model_copy(

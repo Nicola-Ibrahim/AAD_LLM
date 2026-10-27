@@ -12,7 +12,7 @@ from evolution.application.synthesis.settings import SynthesisSettings
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.engines.llamea import LLaMEASession
-from evolution.infra.storage.code.repository import CodeRepository
+from evolution.infra.storage.code.repository import FileCodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from shared.domain.noise import NoNoiseStrategy
 from shared.infra.database import Base, Database
@@ -103,7 +103,7 @@ def test_execution_clears_old_state_only_for_explicit_replacement(
                 noise_model=problem.noise_model,
             ),
         )
-        code_store = CodeRepository(base_dir=tmp_path / "code")
+        code_store = FileCodeRepository(base_dir=tmp_path / "code")
         old_code = code_store.save_code("old optimizer", 1, identifier)
         trailing_code = code_store.save_code("old trailing candidate", 9, identifier)
         other_code = code_store.save_code("unrelated optimizer", 1, identifier + 1)
@@ -131,9 +131,9 @@ def test_execution_clears_old_state_only_for_explicit_replacement(
         def fake_loop() -> tuple[object, object]:
             assert session._initial_iteration == (0 if restart else 5)
             assert checkpoint.exists() is not restart
-            assert old_code.exists() is not restart
-            assert trailing_code.exists() is not restart
-            assert other_code.exists()
+            assert Path(old_code).exists() is not restart
+            assert Path(trailing_code).exists() is not restart
+            assert Path(other_code).exists()
             assert repository.get_experiment_status(identifier) == (
                 ("running", 0) if restart else ("completed", 1)
             )
@@ -154,5 +154,5 @@ def test_code_cleanup_refuses_symlinks(tmp_path: Path) -> None:
     marker.write_text("keep")
     (tmp_path / "experiment_1").symlink_to(destination, target_is_directory=True)
     with pytest.raises(ValueError, match="symbolic-link"):
-        CodeRepository(tmp_path).clear_experiment(1)
+        FileCodeRepository(tmp_path).clear_experiment(1)
     assert marker.read_text() == "keep"

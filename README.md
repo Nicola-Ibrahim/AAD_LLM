@@ -116,7 +116,7 @@ subgraph group_analysis["Analysis and transfer"]
 end
 
 subgraph group_persistence["Experiment persistence"]
-  node_code_store["Candidate code store<br/>[repository.py]"]
+  node_code_store["Candidate code repository<br/>[repository.py]"]
   node_synthesis_store[("Synthesis records<br/>[repository.py]")]
   node_database[("SQLite database<br/>[engine.py]")]
   node_trace_repo["Benchmark traces"]
@@ -211,7 +211,7 @@ imports; analysis belongs to the benchmark context, not a third bounded context.
 - [guarded executor](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/execution/executor.py)
 - [problem factory](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/problems/factory.py)
 - [noise model](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/domain/noise_model.py)
-- [code store](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/code/repository.py)
+- [code repository](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/code/repository.py)
 - [synthesis store](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/evolution/infra/storage/synthesis/repository.py)
 - [database](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/shared/infra/database/engine.py)
 - [benchmark](https://github.com/nicola-ibrahim/aad_llm/blob/main/src/benchmark/application/trials/coordinator.py)

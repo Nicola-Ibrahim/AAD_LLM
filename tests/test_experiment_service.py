@@ -27,10 +27,10 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
-from evolution.infra.concurrency.runner import ProcessPoolRunner
+from evolution.infra.concurrency.process_worker_pool import ProcessWorkerPool
 from evolution.infra.concurrency.worker import run_synthesis_worker
 from evolution.infra.engines.llamea import Evaluator, LLaMEAEngine, LLaMEASession
-from evolution.infra.storage.code.repository import CodeRepository
+from evolution.infra.storage.code.repository import FileCodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from shared.domain.noise import HeteroscedasticNoiseStrategy, NoNoiseStrategy
 from shared.domain.noise_model import NoiseModelEnum
@@ -115,7 +115,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
 
     engine = LLaMEAEngine(
         llm_client=llm,
-        code_repo=CodeRepository(base_dir=temp_dir),
+        code_repo=FileCodeRepository(base_dir=temp_dir),
     )
     tasks = [
         {
@@ -140,8 +140,8 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
         },
     ]
 
-    runner = ProcessPoolRunner(max_workers=2)
-    results = runner.run(fn=run_synthesis_worker, items=tasks, key_fn=lambda t: t["key"])
+    runner = ProcessWorkerPool(max_workers=2)
+    results = runner.execute(fn=run_synthesis_worker, items=tasks, key_fn=lambda t: t["key"])
 
     assert "clean" in results
     assert "noisy" in results
@@ -183,7 +183,7 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
 
     engine = LLaMEAEngine(
         llm_client=DummyLLM(),
-        code_repo=CodeRepository(base_dir=temp_dir),
+        code_repo=FileCodeRepository(base_dir=temp_dir),
     )
     tasks = [
         {
@@ -209,7 +209,7 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
     ]
 
     with pytest.raises(OrchestrationError) as exc_info:
-        ProcessPoolRunner().run(fn=run_synthesis_worker, items=tasks, key_fn=lambda t: t["key"])
+        ProcessWorkerPool().execute(fn=run_synthesis_worker, items=tasks, key_fn=lambda t: t["key"])
 
     errors = exc_info.value.errors
     assert "failing" in errors
@@ -235,7 +235,7 @@ def db_session_factory(temp_dir, monkeypatch):
     # Workers construct their own Database: isolate their environment too.
     monkeypatch.setenv("DATABASE_URL", database_url)
     monkeypatch.setattr(
-        "evolution.infra.concurrency.runner.ProcessPoolExecutor",
+        "evolution.infra.concurrency.process_worker_pool.ProcessPoolExecutor",
         partial(ProcessPoolExecutor, mp_context=get_context("spawn")),
     )
     database = Database(database_url)
@@ -246,7 +246,7 @@ def db_session_factory(temp_dir, monkeypatch):
 def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
     repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=temp_dir)
+    code_repo = FileCodeRepository(base_dir=temp_dir)
 
     exp_id = repo.create_experiment(
         problem=ProblemProfile(
@@ -304,7 +304,7 @@ def test_evaluator_iteration_persistence(temp_dir, db_session_factory):
 def test_evaluator_iteration_persistence_on_failure(temp_dir, db_session_factory):
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
     repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=temp_dir)
+    code_repo = FileCodeRepository(base_dir=temp_dir)
 
     exp_id = repo.create_experiment(
         problem=ProblemProfile(
@@ -475,7 +475,7 @@ def test_sqlite_append_with_error(db_session_factory):
 
 def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
     repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=temp_dir)
+    code_repo = FileCodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
@@ -514,7 +514,7 @@ def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
 
 def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory):
     repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=temp_dir)
+    code_repo = FileCodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
@@ -577,7 +577,7 @@ def test_session_missing_required_params_raises_type_error():
 
 def test_session_mark_failed_on_error(temp_dir, db_session_factory):
     repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=temp_dir)
+    code_repo = FileCodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
@@ -636,7 +636,7 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
 
     engine = LLaMEAEngine(
         llm_client=llm,
-        code_repo=CodeRepository(base_dir=temp_dir),
+        code_repo=FileCodeRepository(base_dir=temp_dir),
     )
     usecase = Synthesis(
         engine=engine, sqlite_repo=repo, logger=MagicMock(), problem_factory=BBOBProblemFactory()
@@ -653,7 +653,7 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
 
 def test_session_missing_single_param_raises_type_error(temp_dir, db_session_factory):
     repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=temp_dir)
+    code_repo = FileCodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
@@ -672,7 +672,7 @@ def test_session_missing_single_param_raises_type_error(temp_dir, db_session_fac
 
 def test_evaluator_current_iteration_resumes_from_db(temp_dir, db_session_factory):
     repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=temp_dir)
+    code_repo = FileCodeRepository(base_dir=temp_dir)
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
 
     exp_id = repo.create_experiment(
@@ -756,7 +756,7 @@ class FailingLLM:
 def test_all_executions_failed_session_handling(db_session_factory, tmp_path):
     """Verify LLaMEASession handles cases gracefully when all generated candidate algorithms fail."""
     repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=tmp_path / "code_store")
+    code_repo = FileCodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(problem_id=24, dim=2, noise_strategy=NoNoiseStrategy())
     mock_llm = FailingLLM()
 
@@ -835,7 +835,7 @@ class BannedOptimizer:
 def test_evaluator_clean_reevaluation_with_tuple_return(db_session_factory, tmp_path):
     """Verify that Evaluator clean re-evaluates best_x when algorithm returns a (best_x, best_y) tuple."""
     repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=tmp_path / "code_store")
+    code_repo = FileCodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=HeteroscedasticNoiseStrategy(0.5))
     exp_id = repo.create_experiment(
         problem=ProblemProfile(
@@ -878,7 +878,7 @@ class CustomOpt:
 def test_evaluator_out_of_bounds_best_x_rejected(db_session_factory, tmp_path):
     """Verify that Evaluator marks algorithm as failed if returned best_x is out of search space bounds."""
     repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=tmp_path / "code_store")
+    code_repo = FileCodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
     exp_id = repo.create_experiment(
         problem=ProblemProfile(
@@ -928,7 +928,7 @@ def test_convergence_evaluate():
 def test_evaluator_failure_fitness_and_categorized_feedback(db_session_factory, tmp_path):
     """Verify that failure returns Evaluator failure tiers and categorized feedback prefixes."""
     repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=tmp_path / "code_store")
+    code_repo = FileCodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy())
     exp_id = repo.create_experiment(
         problem=ProblemProfile(
@@ -978,7 +978,7 @@ class NanOpt:
 def test_evaluator_enriched_feedback_and_warnings(db_session_factory, tmp_path):
     """Verify code snippet extraction (Option A), problem context footer (Option B), and warning capture (Option D)."""
     repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=tmp_path / "code_store")
+    code_repo = FileCodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(problem_id=8, dim=3, noise_strategy=NoNoiseStrategy())
     exp_id = repo.create_experiment(
         problem=ProblemProfile(
@@ -1215,13 +1215,13 @@ def test_llamea_engine_init_and_run(temp_dir, db_session_factory):
     """Verify LLaMEAEngine accepts collaborators in __init__ and executes via run()."""
     from evolution.domain.enums import PromptStrategy, SynthesisMode
     from evolution.infra.engines.llamea import LLaMEAEngine
-    from evolution.infra.storage.code.repository import CodeRepository
+    from evolution.infra.storage.code.repository import FileCodeRepository
     from evolution.infra.storage.synthesis import SQLiteSynthesisRepository
     from shared.domain.noise import NoNoiseStrategy
     from shared.infra.problems.bbob import BBOBProblem
 
     repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=temp_dir)
+    code_repo = FileCodeRepository(base_dir=temp_dir)
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
     exp_id = repo.create_experiment(
@@ -1261,7 +1261,7 @@ def test_campaign_item_and_engine_pickling(temp_dir):
 
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
-    engine = LLaMEAEngine(llm_client=llm, code_repo=CodeRepository())
+    engine = LLaMEAEngine(llm_client=llm, code_repo=FileCodeRepository())
     item = {
         "key": "pickle_task",
         "problem": problem,

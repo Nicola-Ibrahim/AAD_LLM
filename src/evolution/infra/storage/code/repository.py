@@ -1,13 +1,12 @@
 import shutil
 from pathlib import Path
 
-from evolution.application.interfaces.code_store import SynthesisCodeStore
-from shared.application.errors import ArtifactError
+from evolution.domain.interfaces.code_repository import CodeRepository
 from shared.config import DATA_DIR, PROJECT_ROOT
 from shared.infra.artifacts import atomic_write
 
 
-class CodeRepository(SynthesisCodeStore):
+class FileCodeRepository(CodeRepository):
     """Handles persistence of generated candidate algorithm source code on disk."""
 
     def __init__(self, base_dir: Path = DATA_DIR / "code") -> None:
@@ -18,10 +17,11 @@ class CodeRepository(SynthesisCodeStore):
         code: str,
         iteration_num: int,
         experiment_id: int,
-    ) -> Path:
+    ) -> str:
         """Save candidate algorithm source code to disk under its experiment folder.
 
-        Returns the relative Path (from PROJECT_ROOT) to the created iter_N.py file.
+        Return the relative reference from PROJECT_ROOT, or an absolute reference
+        when the configured storage is outside the project.
         """
         code_dir = self.base_dir / f"experiment_{experiment_id}"
         code_dir.mkdir(parents=True, exist_ok=True)
@@ -29,25 +29,9 @@ class CodeRepository(SynthesisCodeStore):
         atomic_write(code_path, code.encode("utf-8"))
 
         try:
-            return code_path.relative_to(PROJECT_ROOT)
+            return str(code_path.relative_to(PROJECT_ROOT))
         except ValueError:
-            return code_path
-
-    @staticmethod
-    def resolve_code_path(code_path: str | Path) -> Path:
-        """Resolves a relative or absolute code_path string to an absolute Path on the current system."""
-        path = Path(code_path)
-        if path.is_absolute():
-            return path
-        return PROJECT_ROOT / path
-
-    def load_code(self, code_path: str | Path) -> str:
-        """Loads and returns the source code string from a stored code_path."""
-        full_path = self.resolve_code_path(code_path)
-        try:
-            return full_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError) as error:
-            raise ArtifactError(f"Cannot read generated code: {full_path}") from error
+            return str(code_path)
 
     def clear_experiment(self, experiment_id: int) -> None:
         """Remove the exact per-experiment directory, refusing symbolic links."""

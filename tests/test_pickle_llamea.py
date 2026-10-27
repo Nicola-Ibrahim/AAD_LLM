@@ -16,7 +16,7 @@ from evolution.infra.engines.llamea import Evaluator, LLaMEASession
 from evolution.infra.engines.llamea.checkpoint import SynthesisCheckpointUnpickler
 from evolution.infra.engines.llamea.prompts import SynthesisPrompts
 from evolution.infra.llm.client import LLMClient, Provider
-from evolution.infra.storage.code.repository import CodeRepository
+from evolution.infra.storage.code.repository import FileCodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from shared.application.interfaces.candidate_executor import CANDIDATE_EXECUTION_VERSION
 from shared.domain.noise import NoNoiseStrategy
@@ -109,7 +109,7 @@ def test_repos(tmp_path):
     database = Database(f"sqlite:///{db_path}")
     Base.metadata.create_all(database.engine)
     db_repo = SQLiteSynthesisRepository(database.session_factory)
-    code_repo = CodeRepository(base_dir=tmp_path / "code")
+    code_repo = FileCodeRepository(base_dir=tmp_path / "code")
     return db_repo, code_repo
 
 

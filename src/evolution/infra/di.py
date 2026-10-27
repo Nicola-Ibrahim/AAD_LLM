@@ -6,21 +6,22 @@ from contextlib import contextmanager
 
 from dishka import AnyOf, Provider, Scope, from_context, provide
 
+from evolution.application.campaign.audit import CampaignAudit
+from evolution.application.campaign.experiment_task import ExperimentTask
 from evolution.application.campaign.service import SynthesisCampaign
-from evolution.application.campaign.tasks import CampaignTask
-from evolution.application.interfaces.code_store import SynthesisCodeStore
+from evolution.application.interfaces.experiment_worker_pool import ExperimentWorkerPool
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
-from evolution.application.interfaces.task_dispatcher import TaskDispatcher
 from evolution.application.synthesis.result import SynthesisResult
 from evolution.application.synthesis.service import Synthesis
+from evolution.domain.interfaces.code_repository import CodeRepository
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
-from evolution.infra.concurrency.runner import ProcessPoolRunner
+from evolution.infra.concurrency.process_worker_pool import ProcessWorkerPool
 from evolution.infra.concurrency.worker import run_synthesis_worker
 from evolution.infra.engines.llamea import LLaMEAEngine
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
-from evolution.infra.storage.code.repository import CodeRepository
+from evolution.infra.storage.code.repository import FileCodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from shared.domain.interfaces.problem_factory import ProblemFactory
 from shared.infra.cpu import available_cpu_count
@@ -50,40 +51,48 @@ class EvolutionProvider(Provider):
         return SynthesisLogger(verbose=True)
 
     @provide
-    def code_store(self) -> AnyOf[CodeRepository, SynthesisCodeStore]:
-        return CodeRepository()
+    def code_repository(self) -> AnyOf[FileCodeRepository, CodeRepository]:
+        return FileCodeRepository()
 
     @provide(scope=Scope.APP)
     def workers(self) -> int:
         return available_cpu_count()
 
     @provide
-    def dispatcher(
+    def worker_pool(
         self, workers: int
     ) -> AnyOf[
-        ProcessPoolRunner[CampaignTask, SynthesisResult],
-        TaskDispatcher[CampaignTask, SynthesisResult],
+        ProcessWorkerPool[ExperimentTask, SynthesisResult],
+        ExperimentWorkerPool[ExperimentTask, SynthesisResult],
     ]:
-        return ProcessPoolRunner(max_workers=workers)
+        return ProcessWorkerPool(max_workers=workers)
+
+    @provide
+    def audit(
+        self,
+        repository: SynthesisRepository,
+        logger: BaseLogger,
+        engine: SynthesisEngine,
+    ) -> CampaignAudit:
+        return CampaignAudit(repository, logger, engine.model_name)
 
     @provide
     def campaign(
         self,
         repository: SynthesisRepository,
         logger: BaseLogger,
-        engine: LLaMEAEngine,
-        llm: LLMClient,
+        engine: SynthesisEngine,
         problem_factory: ProblemFactory,
-        dispatcher: TaskDispatcher[CampaignTask, SynthesisResult],
+        worker_pool: ExperimentWorkerPool[ExperimentTask, SynthesisResult],
         workers: int,
     ) -> SynthesisCampaign:
         return SynthesisCampaign(
             sqlite_repo=repository,
             logger=logger,
             engine=engine,
-            model_name=llm.model.name,
+            model_name=engine.model_name,
             problem_factory=problem_factory,
-            dispatcher=dispatcher,
+            worker_pool=worker_pool,
             worker_fn=run_synthesis_worker,
             worker_count=workers,
         )

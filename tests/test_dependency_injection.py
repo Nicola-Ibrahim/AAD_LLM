@@ -20,14 +20,15 @@ from benchmark.application.interfaces.synthesis_read_repository import Synthesis
 from benchmark.application.trials.audit import BenchmarkAuditService
 from benchmark.application.trials.coordinator import BenchmarkCoordinator
 from benchmark.infra.di import BenchmarkProvider
+from evolution.application.campaign.audit import CampaignAudit
+from evolution.application.campaign.experiment_task import ExperimentTask
 from evolution.application.campaign.service import SynthesisCampaign
-from evolution.application.campaign.tasks import CampaignTask
-from evolution.application.interfaces.code_store import SynthesisCodeStore
+from evolution.application.interfaces.experiment_worker_pool import ExperimentWorkerPool
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
-from evolution.application.interfaces.task_dispatcher import TaskDispatcher
 from evolution.application.synthesis.result import SynthesisResult
 from evolution.application.synthesis.service import Synthesis
+from evolution.domain.interfaces.code_repository import CodeRepository
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.infra.di import EvolutionProvider
 from evolution.infra.llm.client import LLMClient
@@ -209,6 +210,33 @@ def test_worker_resolves_the_supplied_engine_without_an_llm_connection(monkeypat
     database.dispose.assert_called_once()
 
 
+def test_campaign_and_single_synthesis_use_the_same_engine_interface(monkeypatch):
+    database = MagicMock()
+    monkeypatch.setattr(shared_di, "Database", lambda: database)
+    monkeypatch.setattr(
+        evolution_di,
+        "LLMClient",
+        MagicMock(side_effect=AssertionError("An injected engine needs no extra client")),
+    )
+    engine = MagicMock(spec=SynthesisEngine)
+    engine.model_name = "substitute-model"
+    with container_scope(
+        EvolutionProvider(),
+        evolution_di.SynthesisWorkerProvider(),
+        context={},
+        request_context={SynthesisEngine: engine},
+    ) as scope:
+        campaign = scope.get(SynthesisCampaign)
+        synthesis = scope.get(Synthesis)
+        audit = scope.get(CampaignAudit)
+        assert campaign.engine is synthesis.engine is engine
+        assert campaign.model_name == engine.model_name
+        assert audit.sqlite_repo is campaign.sqlite_repo is synthesis.sqlite_repo
+        assert audit.model_name == engine.model_name
+        assert not hasattr(campaign, "audit_matrix")
+    database.dispose.assert_called_once()
+
+
 def test_nested_workflows_have_ready_collaborators_and_independent_lifetimes(monkeypatch):
     outer_db, inner_db = MagicMock(), MagicMock()
     monkeypatch.setattr(shared_di, "Database", MagicMock(side_effect=[outer_db, inner_db]))
@@ -236,7 +264,7 @@ def test_direct_class_bindings_share_instances_with_their_interfaces(monkeypatch
             bindings = (
                 (SynthesisRepository, evolution_di.SQLiteSynthesisRepository),
                 (BaseLogger, evolution_di.SynthesisLogger),
-                (SynthesisCodeStore, evolution_di.CodeRepository),
+                (CodeRepository, evolution_di.FileCodeRepository),
                 (SynthesisReadRepository, benchmark_di.SQLiteSynthesisReadRepository),
                 (ChampionRepository, benchmark_di.ChampionsReadRepository),
                 (BenchmarkLoggerInterface, benchmark_di.BenchmarkLogger),
@@ -244,14 +272,14 @@ def test_direct_class_bindings_share_instances_with_their_interfaces(monkeypatch
                 (BenchmarkStateStore, benchmark_di.BenchmarkStateRepository),
                 (CandidateCodeReader, benchmark_di.FilesystemCodeReader),
                 (
-                    TaskDispatcher[CampaignTask, SynthesisResult],
-                    evolution_di.ProcessPoolRunner[CampaignTask, SynthesisResult],
+                    ExperimentWorkerPool[ExperimentTask, SynthesisResult],
+                    evolution_di.ProcessWorkerPool[ExperimentTask, SynthesisResult],
                 ),
             )
             for interface, implementation in bindings:
                 assert request.get(interface) is request.get(implementation)
             engine = request.get(evolution_di.LLaMEAEngine)
-            assert engine.code_repo is request.get(SynthesisCodeStore)
+            assert engine.code_repo is request.get(CodeRepository)
             selection = request.get(benchmark_di.ChampionSelectionService)
             assert selection.champions_repo is request.get(ChampionRepository)
     finally:

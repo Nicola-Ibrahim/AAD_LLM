@@ -17,7 +17,7 @@ from benchmark.domain.services.hypothesis import HypothesisTestingEngine
 from benchmark.infra.io.code_reader import FilesystemCodeReader
 from benchmark.infra.solvers.baselines import get_baseline_runner
 from benchmark.infra.storage.model_registry import configured_model_names
-from evolution.infra.concurrency.runner import ProcessPoolRunner
+from evolution.infra.concurrency.process_worker_pool import ProcessWorkerPool
 from evolution.infra.concurrency.worker import run_synthesis_worker
 from shared.config import PROJECT_ROOT
 from shared.infra.execution.candidate_executor import create_candidate_executor
@@ -134,7 +134,7 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
     from evolution.infra.engines.llamea import LLaMEAEngine
     from evolution.infra.llm.client import LLMClient
     from evolution.infra.logging import SynthesisLogger
-    from evolution.infra.storage.code.repository import CodeRepository
+    from evolution.infra.storage.code.repository import FileCodeRepository
     from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
     from shared.infra.database import Database
     from shared.infra.database.tables import Base
@@ -146,7 +146,7 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
     config = synthesis_config()
     llm = LLMClient("local")
     logger = SynthesisLogger(verbose=False)
-    engine = LLaMEAEngine(llm_client=llm, code_repo=CodeRepository())
+    engine = LLaMEAEngine(llm_client=llm, code_repo=FileCodeRepository())
 
     campaign_usecase = SynthesisCampaign(
         worker_count=1,
@@ -155,7 +155,7 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
         logger=logger,
         engine=engine,
         problem_factory=BBOBProblemFactory(),
-        dispatcher=ProcessPoolRunner(max_workers=1),
+        worker_pool=ProcessWorkerPool(max_workers=1),
         worker_fn=run_synthesis_worker,
     )
     campaign_usecase_planner = campaign_usecase._build_planner(config)
@@ -165,7 +165,6 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
     assert campaign_usecase.model_name == llm.model.name
     assert campaign_usecase.logger is logger
     assert isinstance(campaign_usecase.logger, BaseLogger)
-    assert hasattr(campaign_usecase_planner.auditor, "audit_matrix")
     assert hasattr(campaign_usecase_planner, "build_tasks")
     assert hasattr(campaign_usecase, "run")
 
@@ -175,7 +174,10 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
     assert set(cfg.dimensions) == {condition.dim for condition in cfg.matrix_conditions}
     assert cfg.budget == 100_000
 
-    matrix_df, summary = campaign_usecase_planner.auditor.audit_matrix()
+    from evolution.application.campaign.audit import CampaignAudit
+
+    audit = CampaignAudit(sqlite_repo, logger, llm.model.name)
+    matrix_df, summary = audit.inspect(**run_parameters(config))
     assert not matrix_df.empty
     assert isinstance(matrix_df.index, pd.MultiIndex)
     assert list(matrix_df.index.names) == ["Problem", "Dimension", "Environment", "Strategy"]
@@ -440,7 +442,7 @@ def test_campaign_usecase_run_worker_and_campaign():
     mock_logger = MagicMock()
 
     mock_engine = MagicMock()
-    dispatcher = MagicMock()
+    worker_pool = MagicMock()
     service = SynthesisCampaign(
         worker_count=1,
         sqlite_repo=mock_sqlite,
@@ -448,7 +450,7 @@ def test_campaign_usecase_run_worker_and_campaign():
         logger=mock_logger,
         engine=mock_engine,
         problem_factory=BBOBProblemFactory(),
-        dispatcher=dispatcher,
+        worker_pool=worker_pool,
         worker_fn=run_synthesis_worker,
     )
     service_planner = service._build_planner(mock_config)
@@ -469,7 +471,7 @@ def test_campaign_usecase_run_worker_and_campaign():
         experiment_id=999,
         best_error=0.05,
     )
-    dispatcher.run.return_value = {"test_task_key": dummy_result}
+    worker_pool.execute.return_value = {"test_task_key": dummy_result}
     mock_engine.run.return_value = dummy_result
     mock_task = {
         "key": "test_task_key",
@@ -530,13 +532,13 @@ def test_campaign_usecase_run_worker_and_campaign():
     ):
         campaign_res = service.run(**run_parameters(service_planner.config))
         assert campaign_res.results == {"test_task_key": dummy_result}
-        dispatcher.run.assert_called_once()
+        worker_pool.execute.assert_called_once()
 
 
 def test_campaign_usecase_audit_matrix_standalone():
-    """Verify CampaignAuditor audits coverage for an explicitly selected model."""
+    """Verify CampaignAudit audits coverage for an explicitly selected model."""
 
-    from evolution.application.campaign.audit import CampaignAuditor
+    from evolution.application.campaign.audit import CampaignAudit
     from evolution.application.campaign.settings import CampaignSettings
 
     mock_sqlite = MagicMock()
@@ -549,14 +551,13 @@ def test_campaign_usecase_audit_matrix_standalone():
     )
     mock_logger = MagicMock()
 
-    auditor = CampaignAuditor(
+    auditor = CampaignAudit(
         sqlite_repo=mock_sqlite,
-        config=config,
         logger=mock_logger,
         model_name="mock_model_standalone",
     )
 
-    df_matrix, summary = auditor.audit_matrix()
+    df_matrix, summary = auditor.inspect(**run_parameters(config))
     assert df_matrix.empty
     assert summary["model_name"] == "mock_model_standalone"
     mock_sqlite.load.assert_called_once_with(llm_name="mock_model_standalone")

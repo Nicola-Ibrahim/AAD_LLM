@@ -18,7 +18,7 @@ from benchmark.infra.io.trace_repository import BenchmarkStateRepository, IOHTra
 from evolution.application.exceptions import OrchestrationError, ProviderError
 from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
 from evolution.domain.services.algorithm_scoring import AlgorithmScoringService
-from evolution.infra.concurrency.runner import ProcessPoolRunner
+from evolution.infra.concurrency.process_worker_pool import ProcessWorkerPool
 from evolution.infra.engines.llamea.runtime import FailureAwareLLaMEA
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
@@ -167,7 +167,7 @@ def test_llamea_cannot_turn_provider_failure_into_candidate_fitness(tmp_path, mo
 
 
 def test_systemic_task_failure_stops_admission_and_keeps_successes(monkeypatch):
-    import evolution.infra.concurrency.runner as module
+    import evolution.infra.concurrency.process_worker_pool as module
 
     submitted = []
 
@@ -192,7 +192,7 @@ def test_systemic_task_failure_stops_admission_and_keeps_successes(monkeypatch):
 
     monkeypatch.setattr(module, "ProcessPoolExecutor", Pool)
     with pytest.raises(OrchestrationError) as failure:
-        ProcessPoolRunner(max_workers=2).run(int, list(range(10)), str)
+        ProcessWorkerPool(max_workers=2).execute(int, list(range(10)), str)
     assert submitted == [0, 1]
     assert failure.value.results == {"0": 0}
     assert isinstance(failure.value.__cause__, ProviderError)
@@ -214,7 +214,9 @@ def test_pool_logs_reach_parent_with_traceback(tmp_path):
     runtime = LoggingRuntime("synthesis", tmp_path, io.StringIO())
     try:
         with runtime.operation("pool"):
-            assert ProcessPoolRunner(max_workers=1).run(emit_worker_failure, [1], str) == {"1": 1}
+            assert ProcessWorkerPool(max_workers=1).execute(emit_worker_failure, [1], str) == {
+                "1": 1
+            }
     finally:
         runtime.close()
     assert "worker diagnostic cause" in runtime.path.read_text()
@@ -316,20 +318,20 @@ def test_campaign_call_retains_worker_logging_without_a_notebook_wrapper(tmp_pat
     try:
         with runtime.operation("setup"):
             logger = SynthesisLogger()
-        dispatcher = MagicMock()
+        worker_pool = MagicMock()
 
         def dispatch(**kwargs):
             assert current_runtime() is runtime
             return {}
 
-        dispatcher.run.side_effect = dispatch
+        worker_pool.execute.side_effect = dispatch
         campaign = SynthesisCampaign(
             sqlite_repo=MagicMock(),
             logger=logger,
             engine=MagicMock(),
             model_name="test-model",
             problem_factory=MagicMock(),
-            dispatcher=dispatcher,
+            worker_pool=worker_pool,
             worker_fn=int,
             worker_count=1,
         )
@@ -337,7 +339,7 @@ def test_campaign_call_retains_worker_logging_without_a_notebook_wrapper(tmp_pat
         planner.build_tasks.return_value = [{"key": "test"}]
         monkeypatch.setattr(campaign, "_build_planner", lambda config: planner)
         campaign.run(**run_parameters(synthesis_config()))
-        dispatcher.run.assert_called_once()
+        worker_pool.execute.assert_called_once()
         assert current_runtime() is None
     finally:
         runtime.close()

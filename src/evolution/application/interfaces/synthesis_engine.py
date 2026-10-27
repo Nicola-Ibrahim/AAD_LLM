@@ -1,4 +1,4 @@
-"""Abstract interface for executing a synthesis session."""
+"""External optimizer-generation engine used by both synthesis workflows."""
 
 from abc import ABC, abstractmethod
 
@@ -10,7 +10,7 @@ from shared.domain.problem import BaseProblem
 
 
 class SynthesisEngine(ABC):
-    """Run one candidate-generation session for a problem condition."""
+    """Generate and improve candidates for one problem condition."""
 
     @property
     @abstractmethod
@@ -29,4 +29,4 @@ class SynthesisEngine(ABC):
         initial_iteration: int = 0,
         restart: bool = False,
     ) -> SynthesisResult:
-        """Execute one synthesis session and return its result."""
+        """Perform synthesis and return its result."""

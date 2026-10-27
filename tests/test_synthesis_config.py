@@ -4,7 +4,8 @@ import pytest
 from pydantic import ValidationError
 from study_fixtures import synthesis_config
 
-from evolution.application.campaign.settings import CampaignSettings, ProblemTarget
+from evolution.application.campaign.conditions import ProblemTarget
+from evolution.application.campaign.settings import CampaignSettings
 from evolution.application.synthesis.settings import SynthesisSettings
 from evolution.domain.enums import PromptStrategy, SynthesisMode
 from shared.domain.noise_model import NoiseModelEnum

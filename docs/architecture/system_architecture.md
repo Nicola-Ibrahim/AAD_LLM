@@ -22,8 +22,10 @@ flowchart TD
     subgraph Campaign["Campaign composition and dispatch"]
         direction LR
         Bootstrap["Notebook setup<br/>COMPOSITION ROOT<br/>Prepare workflow scope<br/>with Dishka providers"]
-        Coordinator["SynthesisCampaign<br/>EVOLUTION APPLICATION<br/>CampaignAuditor + CampaignPlanner<br/>Reconcile state; build CampaignTask payloads"]
-        Dispatcher["ProcessPoolRunner<br/>EVOLUTION INFRASTRUCTURE<br/>Dispatch worker processes<br/>run_synthesis_worker"]
+        Coordinator["SynthesisCampaign<br/>EVOLUTION APPLICATION<br/>CampaignPlanner<br/>Reconcile state; build ExperimentTask payloads"]
+        Audit["CampaignAudit<br/>EVOLUTION APPLICATION<br/>Read-only coverage<br/>Shared condition classification"]
+        Bootstrap --> Audit
+        Dispatcher["ProcessWorkerPool<br/>EVOLUTION INFRASTRUCTURE<br/>Dispatch worker processes<br/>run_synthesis_worker"]
         Bootstrap --> Coordinator --> Dispatcher
     end
     subgraph Session["Worker-local synthesis session"]
@@ -47,7 +49,7 @@ flowchart TD
     classDef infrastructure fill:#fef3c7,stroke:#d97706,color:#78350f;
     classDef composition fill:#e0e7ff,stroke:#4f46e5,color:#312e81;
     class Bootstrap composition;
-    class Coordinator,UseCase,Evaluation,Scoring application;
+    class Coordinator,Audit,UseCase,Evaluation,Scoring application;
     class Dispatcher,Engine,Evaluator,Executor infrastructure;
 ```
 
@@ -172,10 +174,11 @@ alone is not sufficient: a trace-loading workflow may also return domain data.
 | Owner | Contracts | Reason |
 | --- | --- | --- |
 | Evolution domain | `domain/interfaces/synthesis_repository.py` | Persists and restores experiment domain objects and iteration state |
+| Evolution domain | `domain/interfaces/code_repository.py` | Persists generated code under its experiment and iteration; returns a stored reference |
 | Shared scientific domain | `domain/problem.py`, `domain/interfaces/problem_factory.py` | Defines objective-problem capabilities and creation of scientific problem objects |
 | Benchmark application | `ChampionRepository`, `SynthesisReadRepository` | Query projections/DataFrames and workflow exports; not repositories for benchmark domain aggregates |
 | Benchmark application | `BenchmarkTraceReader`, `BenchmarkStateStore`, `CandidateCodeReader` | Workflow IO, provenance, trace lifecycle and code access |
-| Evolution application | `SynthesisEngine`, `SynthesisCodeStore`, `TaskDispatcher`, `DuplicateStorage` | Synthesis execution, source artifacts, dispatch and maintenance workflows |
+| Evolution application | `SynthesisEngine`, `ExperimentWorkerPool`, `DuplicateStorage` | Synthesis execution, dispatch and maintenance workflows |
 | Shared application | `CandidateExecutor` | External generated-code execution, warnings and timeout boundary |
 | Context application packages | `BaseLogger`, `BenchmarkLoggerInterface` | Workflow telemetry rather than scientific rules |
 
@@ -184,6 +187,17 @@ domain repository does not expose SQLite WAL checkpointing; that method remains
 an internal capability of `SQLiteSynthesisRepository`, with its existing calls
 and database behavior unchanged. Domain modules may not import application,
 infrastructure or Dishka. No replacement interface was introduced for WAL work.
+
+Both `SynthesisCampaign` and `Synthesis` receive `SynthesisEngine`; the connected
+model identity comes from that engine. `LLaMEAEngine` is its registered adapter,
+not a second workflow contract. The domain-owned `CodeRepository` covers synthesis
+writes and experiment cleanup; `FileCodeRepository` implements it using files.
+The domain receives string references and performs no filesystem operations.
+Scientific invariants remain in domain objects and scoring rules; repositories
+provide persistence rather than replacing those rules.
+Benchmark code reads use `CandidateCodeReader` in their own
+context. `DuplicateStorage` is used only by the optional, manually invoked
+duplicate-cleanup workflow, never by campaign scheduling or benchmarking.
 
 ### Application entry points and lifetimes
 
@@ -291,8 +305,8 @@ containers only when adapters need asynchronous lifetimes. See
 
 - `application/campaign/` separates audit, task planning, and campaign dispatch.
   `application/synthesis/` groups the single-session and candidate-evaluation use cases.
-- `domain/interfaces/` owns the synthesis experiment repository contract.
-  `application/interfaces/` owns engine, logging, code-store, dispatch and maintenance
+- `domain/interfaces/` owns synthesis experiment and generated-code repository contracts.
+  `application/interfaces/` owns engine, logging, worker-pool and maintenance
   contracts. The problem-factory contract belongs to the shared scientific domain;
   isolated execution belongs to shared application.
   Worker functions remain module-level for process pickling.
@@ -301,7 +315,7 @@ containers only when adapters need asynchronous lifetimes. See
 - `infra/` adapts SQLite/files, LLaMEA, logging, synthesis telemetry, and multiprocessing.
 
 Notebook 02 calls `SynthesisCampaign` directly; setup resolves the
-coordinator, repositories, problem factory, engine and automatically sized dispatcher. Setup does
+coordinator, repositories, problem factory, engine and automatically sized worker pool. Setup does
 not read study configuration files. The notebook supplies flat validated method arguments;
 the coordinator builds a fresh planner and configuration for each invocation.
 Benchmark composition injects concrete workload and trial-runner objects. Each

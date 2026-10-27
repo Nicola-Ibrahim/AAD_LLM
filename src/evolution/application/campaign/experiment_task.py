@@ -8,7 +8,7 @@ from evolution.domain.enums import PromptStrategy, SynthesisMode
 from shared.domain.problem import BaseProblem
 
 
-class CampaignTask(TypedDict):
+class ExperimentTask(TypedDict):
     """Typed, picklable payload passed from campaign planning to worker processes."""
 
     key: str

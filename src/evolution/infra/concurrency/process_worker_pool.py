@@ -1,4 +1,4 @@
-"""Generic process pool runner for parallel task execution.
+"""Multiprocessing worker pool for parallel experiment execution.
 
 Implements application task dispatch using ProcessPoolExecutor and host-owned logging.
 """
@@ -9,7 +9,7 @@ from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from typing import Generic, TypeVar
 
 from evolution.application.exceptions import OrchestrationError, ProviderError
-from evolution.application.interfaces.task_dispatcher import TaskDispatcher
+from evolution.application.interfaces.experiment_worker_pool import ExperimentWorkerPool
 from shared.application.errors import ArtifactError, StorageError
 from shared.infra.logging.runtime import configure_worker_logging, current_runtime
 
@@ -17,18 +17,18 @@ T = TypeVar("T")
 R = TypeVar("R")
 
 
-class ProcessPoolRunner(Generic[T, R], TaskDispatcher[T, R]):
+class ProcessWorkerPool(Generic[T, R], ExperimentWorkerPool[T, R]):
     """Manages multi-core parallel execution of arbitrary callable units via ProcessPoolExecutor."""
 
     def __init__(self, max_workers: int | None = None) -> None:
-        """Initializes the runner with worker configuration.
+        """Initialize the pool with worker configuration.
 
         Args:
             max_workers: Maximum process pool worker processes. If None, defaults to the number of tasks.
         """
         self.max_workers = max_workers
 
-    def run(
+    def execute(
         self,
         fn: Callable[[T], R],
         items: list[T],

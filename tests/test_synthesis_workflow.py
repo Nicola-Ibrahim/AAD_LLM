@@ -18,7 +18,7 @@ from evolution.infra.engines.llamea import LLaMEAEngine
 from evolution.infra.engines.llamea.checkpoint import SynthesisCheckpointUnpickler
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
-from evolution.infra.storage.code.repository import CodeRepository
+from evolution.infra.storage.code.repository import FileCodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from shared.infra.di import container_scope
 from shared.infra.problems.factory import BBOBProblemFactory
@@ -59,7 +59,7 @@ def parameters():
 
 def test_single_session_creates_one_experiment_without_a_campaign(db_session_factory, tmp_path):
     repository = SQLiteSynthesisRepository(db_session_factory)
-    engine = LLaMEAEngine(GeneratedModel(), CodeRepository(tmp_path / "code"))
+    engine = LLaMEAEngine(GeneratedModel(), FileCodeRepository(tmp_path / "code"))
     session = Synthesis(engine, repository, SynthesisLogger(), BBOBProblemFactory())
     result = session.run(**parameters())
     (stored,) = repository.load_by_ids([result.experiment_id])
@@ -145,3 +145,17 @@ def test_historical_session_settings_load_without_old_import_modules(
 def test_internal_session_budget_must_be_explicit():
     with pytest.raises(ValidationError):
         SynthesisSettings()
+
+
+def test_historical_code_repository_checkpoint_preserves_storage_location(monkeypatch, tmp_path):
+    import evolution.infra.storage.code.repository as storage
+
+    contract = storage.CodeRepository
+    legacy = type("CodeRepository", (FileCodeRepository,), {"__module__": storage.__name__})
+    monkeypatch.setattr(storage, "CodeRepository", legacy)
+    payload = pickle.dumps(legacy(tmp_path / "code"))
+    monkeypatch.setattr(storage, "CodeRepository", contract)
+    restored = SynthesisCheckpointUnpickler(io.BytesIO(payload)).load()
+    assert type(restored) is FileCodeRepository
+    assert restored.base_dir == tmp_path / "code"
+    assert storage.CodeRepository is contract

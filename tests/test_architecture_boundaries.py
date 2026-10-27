@@ -35,12 +35,15 @@ def test_domain_contracts_do_not_depend_on_application_or_infrastructure() -> No
 
 
 def test_domain_repository_contract_excludes_sqlite_maintenance() -> None:
+    from evolution.domain.interfaces.code_repository import CodeRepository
     from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
+    from evolution.infra.storage.code.repository import FileCodeRepository
     from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
     from shared.domain.interfaces.problem_factory import ProblemFactory
     from shared.infra.problems.factory import BBOBProblemFactory
 
     assert issubclass(SQLiteSynthesisRepository, SynthesisRepository)
+    assert issubclass(FileCodeRepository, CodeRepository)
     assert issubclass(BBOBProblemFactory, ProblemFactory)
     assert "checkpoint_wal" not in SynthesisRepository.__dict__
     assert callable(SQLiteSynthesisRepository.checkpoint_wal)

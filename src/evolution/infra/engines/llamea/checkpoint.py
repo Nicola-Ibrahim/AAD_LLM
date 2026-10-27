@@ -21,6 +21,10 @@ class SynthesisCheckpointUnpickler(pickle.Unpickler):
     }
 
     TYPE_RELOCATIONS = {
+        ("evolution.infra.storage.code.repository", "CodeRepository"): (
+            "evolution.infra.storage.code.repository",
+            "FileCodeRepository",
+        ),
         ("evolution.application.synthesis.models", "SessionConfig"): (
             "evolution.application.synthesis.settings",
             "SynthesisSettings",

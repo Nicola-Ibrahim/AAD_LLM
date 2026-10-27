@@ -50,6 +50,7 @@ def setup_namespace() -> dict[str, object]:
         "LLMClient",
         "BenchmarkConfig",
         "SynthesisCampaign",
+        "CampaignAudit",
         "BenchmarkCoordinator",
         "ChampionSelectionService",
         "SQLiteSynthesisReadRepository",

@@ -1,8 +1,12 @@
 from collections.abc import Sequence
 
-from evolution.application.campaign.audit import CampaignAuditor
-from evolution.application.campaign.settings import CampaignSettings, MatrixCondition
-from evolution.application.campaign.tasks import CampaignTask
+from evolution.application.campaign.conditions import (
+    MatrixCondition,
+    condition_from_summary,
+    group_experiments_by_condition,
+)
+from evolution.application.campaign.experiment_task import ExperimentTask
+from evolution.application.campaign.settings import CampaignSettings
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
@@ -20,14 +24,12 @@ class CampaignPlanner:
         engine: SynthesisEngine,
         model_name: str,
         problem_factory: ProblemFactory,
-        auditor: CampaignAuditor,
     ) -> None:
         self.sqlite_repo = sqlite_repo
         self.config = config
         self.engine = engine
         self.model_name = model_name
         self.problem_factory = problem_factory
-        self.auditor = auditor
 
     def build_tasks(
         self,
@@ -35,7 +37,7 @@ class CampaignPlanner:
         recover: bool = False,
         rerun_experiment_ids: Sequence[int] = (),
         resume_experiment_ids: Sequence[int] = (),
-    ) -> list[CampaignTask]:
+    ) -> list[ExperimentTask]:
         """Plan one invocation without storing its selection in protocol configuration."""
         if any(
             type(identifier) is not int or identifier <= 0
@@ -50,11 +52,11 @@ class CampaignPlanner:
             return self._build_targeted_tasks(target_ids=list(dict.fromkeys(resume_experiment_ids)))
 
         all_db_exps = self.sqlite_repo.load(llm_name=self.model_name)
-        db_comp, db_run, db_failed = self.auditor.group_experiments_by_condition(
+        db_comp, db_run, db_failed = group_experiments_by_condition(
             experiments=all_db_exps,
         )
 
-        tasks: list[CampaignTask] = []
+        tasks: list[ExperimentTask] = []
         for item in self.config.matrix_conditions:
             completed_list = db_comp.get(item, [])
             running_list = db_run.get(item, [])
@@ -95,7 +97,7 @@ class CampaignPlanner:
                     )
         return tasks
 
-    def _build_recovery_tasks(self, rerun_experiment_ids: Sequence[int]) -> list[CampaignTask]:
+    def _build_recovery_tasks(self, rerun_experiment_ids: Sequence[int]) -> list[ExperimentTask]:
         """Replace exact requested records and recover uncovered conditions without new rows."""
         requested = set(rerun_experiment_ids)
         selected = self.sqlite_repo.load_by_ids(sorted(requested)) if requested else []
@@ -106,11 +108,9 @@ class CampaignPlanner:
         # for another active model must never dispatch these experiments.
         selected = [experiment for experiment in selected if experiment.llm_name == self.model_name]
         existing = self.sqlite_repo.load(llm_name=self.model_name)
-        manual_conditions = dict.fromkeys(
-            self.auditor._condition_from_summary(exp) for exp in selected
-        )
+        manual_conditions = dict.fromkeys(condition_from_summary(exp) for exp in selected)
         eligible = set(self.config.matrix_conditions) | set(manual_conditions)
-        completed, running, failed = self.auditor.group_experiments_by_condition(
+        completed, running, failed = group_experiments_by_condition(
             experiments=existing,
         )
         tasks = [
@@ -150,7 +150,7 @@ class CampaignPlanner:
         exp: ExperimentSummary,
         tag: str = "resume",
         restart: bool = False,
-    ) -> CampaignTask:
+    ) -> ExperimentTask:
         """Constructs a work item for an existing experiment in the database."""
         if exp.id is None:
             raise ValueError(f"Cannot build task without a valid database id: {exp}")
@@ -181,7 +181,7 @@ class CampaignPlanner:
         )
         mode_label = f"{exp.mode}_std_{noise_std}"
         key = f"f{exp.problem.problem_id}_{exp.problem.dim}D_{mode_label}_{exp.prompt_strategy}_{tag}_exp{exp.id}"
-        return CampaignTask(
+        return ExperimentTask(
             key=key,
             problem=problem,
             experiment_id=exp.id,
@@ -196,7 +196,7 @@ class CampaignPlanner:
     def _build_targeted_tasks(
         self,
         target_ids: list[int],
-    ) -> list[CampaignTask]:
+    ) -> list[ExperimentTask]:
         targeted_experiments = self.sqlite_repo.load_by_ids(target_ids)
         found = {experiment.id for experiment in targeted_experiments}
         if missing := set(target_ids) - found:
@@ -212,7 +212,7 @@ class CampaignPlanner:
         condition: MatrixCondition,
         run_idx: int,
         key_prefix: str = "",
-    ) -> CampaignTask:
+    ) -> ExperimentTask:
         """Registers a new experiment record in the database and returns a fresh work item dictionary."""
         problem = self.problem_factory.create(
             problem_id=condition.problem_id,
@@ -244,7 +244,7 @@ class CampaignPlanner:
             if key_prefix
             else f"f{condition.problem_id}_{condition.dim}D_{condition.mode.value}_std_{condition.noise_std}_{condition.strategy}_run{run_idx}"
         )
-        return CampaignTask(
+        return ExperimentTask(
             key=key,
             problem=problem,
             experiment_id=exp_id,

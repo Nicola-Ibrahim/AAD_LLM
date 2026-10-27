@@ -1,5 +1,10 @@
 # Synthesis database maintenance
 
+This is an optional duplicate-cleanup tool, not a stage of synthesis or
+benchmarking. Keep it for reviewing historical or imported databases; normal
+campaigns do not call it. Its `DuplicateStorage` interface exists only to separate
+the cleanup policy from SQLite backups, transactions and file quarantine.
+
 The notebook wires the application `SynthesisDuplicateMaintenance` use case to
 `SQLiteDuplicateStorage`. Retention policy, preview validation and authorization
 belong to the application; database access, backups and artifact quarantine belong

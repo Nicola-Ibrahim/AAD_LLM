@@ -5,7 +5,7 @@ from evolution.application.synthesis.settings import SynthesisSettings
 from evolution.domain.enums import SynthesisMode
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.engines.llamea import Evaluator
-from evolution.infra.storage.code.repository import CodeRepository
+from evolution.infra.storage.code.repository import FileCodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from shared.domain.noise import HeteroscedasticNoiseStrategy
 from shared.domain.noise_model import NoiseModelEnum
@@ -38,7 +38,7 @@ def test_failure_tiers_and_is_failure():
 
 def test_stagnation_diversity_injection(db_session_factory, tmp_path):
     repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=tmp_path / "code_store")
+    code_repo = FileCodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(
         problem_id=15,
         dim=3,
@@ -98,7 +98,7 @@ class FailingOpt:
 
 def test_evaluator_noisy_feedback_no_noise_std_leak(db_session_factory, tmp_path):
     repo = SQLiteSynthesisRepository(db_session_factory)
-    code_repo = CodeRepository(base_dir=tmp_path / "code_store")
+    code_repo = FileCodeRepository(base_dir=tmp_path / "code_store")
     problem = BBOBProblem(
         problem_id=15,
         dim=3,

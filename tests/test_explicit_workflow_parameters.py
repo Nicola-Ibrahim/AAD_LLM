@@ -25,7 +25,7 @@ def synthesis_service() -> SynthesisCampaign:
         engine=MagicMock(),
         model_name="connected-model",
         problem_factory=MagicMock(),
-        dispatcher=MagicMock(),
+        worker_pool=MagicMock(),
         worker_fn=MagicMock(),
         worker_count=4,
     )
@@ -69,7 +69,7 @@ def test_synthesis_parameters_are_local_to_each_call() -> None:
     assert payload["budget"] == 100_000
     assert service.worker_count == 4
     assert service.model_name == "connected-model"
-    service.dispatcher.run.assert_not_called()
+    service.worker_pool.execute.assert_not_called()
     service.sqlite_repo.create_experiment.assert_not_called()
 
 
@@ -94,7 +94,7 @@ def test_invalid_synthesis_inputs_never_dispatch_or_write(changes: dict[str, obj
     payload = run_parameters(synthesis_config()) | changes
     with pytest.raises((ValueError, ValidationError)):
         service.run(**payload)
-    service.dispatcher.run.assert_not_called()
+    service.worker_pool.execute.assert_not_called()
     service.sqlite_repo.create_experiment.assert_not_called()
 
 
@@ -200,7 +200,7 @@ def test_synthesis_composition_gets_model_from_client_not_parameters(
     ) as scope:
         workflow = scope.get(SynthesisCampaign)
         assert workflow.model_name == "live-server-model"
-        assert workflow.worker_count == workflow.dispatcher.max_workers == 6
+        assert workflow.worker_count == workflow.worker_pool.max_workers == 6
     database.dispose.assert_called_once()
 
 
@@ -215,8 +215,7 @@ def test_notebook_study_parameters_are_executable_and_preserve_the_protocol() ->
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
         and isinstance(node.func.value, ast.Name)
-        and node.func.value.id == "campaign"
-        and node.func.attr in {"run", "audit_matrix"}
+        and (node.func.value.id, node.func.attr) in {("campaign", "run"), ("audit", "inspect")}
     ]
     assert len(synthesis_calls) == 2
     synthesis_configurations = []

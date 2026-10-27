@@ -2,9 +2,12 @@
 
 [Documentation map](../README.md) · [Project README](../../README.md)
 
-## Two application workflows
+## Independent application workflows
 
-The application exposes two independently usable entry points:
+The application exposes independently usable entry points:
+
+- `CampaignAudit.inspect(...)` reads synthesis coverage without planning tasks,
+  creating experiments or dispatching workers.
 
 - `SynthesisCampaign.run(...)` discovers and schedules a
   matrix of experiments, including existing skip/recovery behavior and workers.
@@ -13,7 +16,7 @@ The application exposes two independently usable entry points:
   Calling it again creates another experiment; use the campaign for automatic
   discovery, skipping and recovery.
 
-Resolve either workflow from the same `EvolutionProvider` and existing workflow
+Resolve each workflow from the same `EvolutionProvider` and existing workflow
 scope. No local model client, repository or objective object needs to be created
 in the notebook:
 
@@ -44,11 +47,13 @@ Application files are grouped by their owner:
 ```text
 evolution/application/
 ├── campaign/
-│   ├── service.py           # Campaign API and aggregate result
+│   ├── service.py           # Campaign API
+│   ├── result.py            # Aggregate campaign result
 │   ├── planner.py           # Fresh, resumed and replacement work
 │   ├── audit.py             # Read-only synthesis coverage
+│   ├── conditions.py        # Condition types, identity and classification
 │   ├── settings.py          # Validated matrix and scheduling settings
-│   └── tasks.py             # Picklable worker payload
+│   └── experiment_task.py   # Picklable worker payload
 ├── synthesis/
 │   ├── service.py           # Generate one optimizer
 │   ├── settings.py          # Synthesis settings
@@ -73,7 +78,8 @@ the notebook.
 [SynthesisCampaign](../../src/evolution/application/campaign/service.py)
 is resolved once during notebook setup through `EvolutionProvider`.
 Notebook 02 calls `campaign.run(...)` directly with explicit study keyword arguments and
-owns the workflow scope until setup is replaced or the kernel shuts down.
+calls `audit.inspect(...)` separately for coverage, and owns the workflow scope
+until setup is replaced or the kernel shuts down.
 The parameters are defined visibly,
 are keyword-only and are Pydantic-validated before planning or writes.
 Worker count is automatic; model identity comes from the connected LLM.
@@ -81,12 +87,18 @@ No container or framework dependency enters application/domain code.
 
 The coordinator delegates task construction to
 [CampaignPlanner](../../src/evolution/application/campaign/planner.py).
-The planner reads experiments and uses `CampaignAuditor` to group their state.
+The planner reads current experiments and groups their state using the same pure
+condition-classification functions as `CampaignAudit`. Neither workflow calls
+the other. The audit and campaign share injected repositories and explicit study
+parameters, not a cached audit report or mutable settings.
 It respects targeted IDs, `auto_resume`, `skip_completed`, repeat count and the
 other configured recovery gates. Fresh tasks create experiment records before
 dispatch; resume tasks retain the experiment ID and recorded iteration count.
 
-The process dispatcher calls the module-level
+`ExperimentWorkerPool` is the application interface; `ProcessWorkerPool` supplies
+the multiprocessing implementation. The campaign passes prepared experiment
+tasks to `worker_pool.execute(...)`, which waits for the workers' results.
+The pool calls the module-level
 [run_synthesis_worker](../../src/evolution/infra/concurrency/worker.py).
 Each worker opens a process-local Dishka scope, resolves its database/repository and invokes
 `Synthesis.execute()`, and disposes the database in a `finally` block.

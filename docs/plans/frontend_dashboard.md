@@ -93,7 +93,7 @@ Never share a SQLAlchemy `Session`, engine, Redis connection, LLM client, or DI 
 | Screen/action | Existing entry point | Work needed at the boundary |
 | --- | --- | --- |
 | Experiment list/detail/iterations | `SQLiteSynthesisRepository`; `experiments`, `iterations`, `error_logs` | New indexed, paginated read queries. Existing `load()` and DataFrame helpers load too much for a table. |
-| Synthesis coverage | `CampaignAuditor.audit_matrix()` | Read-only composition and bounded response; distinguish historical `running` rows from an active job. |
+| Synthesis coverage | `CampaignAudit.inspect(...)` | Read-only composition and bounded response; distinguish historical `running` rows from an active job. |
 | Synthesis run/recover/replace/resume | `SynthesisCampaign.run()` | Worker wrapper, strict ID validation, immutable inputs, progress hooks, and checkpoint validation. |
 | Synthesis preview | `CampaignPlanner.build_tasks()` is mutating | New non-mutating preview use case; never call `build_tasks()` from preview. |
 | Champion catalog | `ChampionSelectionService` | Typed filtered projection; no export on GET. |
@@ -228,7 +228,7 @@ For remote access, authenticate SSE and every job command against the study. Use
 
 | Queue | Initial execution | Constraint |
 | --- | --- | --- |
-| `synthesis` | Dedicated Celery `solo` worker, one campaign for the active study | Existing `ProcessPoolRunner` owns session parallelism. Each child owns its DB engine and reconstructed LLM client. Cap total CPU/processes. |
+| `synthesis` | Dedicated Celery `solo` worker, one campaign for the active study | Existing `ProcessWorkerPool` owns session parallelism. Each child owns its DB engine and reconstructed LLM client. Cap total CPU/processes. |
 | `benchmark` | Dedicated single-writer `solo` worker | Serialize overlapping trace/code targets; freeze champion/code identity and trial protocol before executing. |
 | `analysis` | Separate worker over a stable snapshot | Prefork is optional only after verifying no nested child processes. Large reads stay off the API process. |
 
@@ -253,6 +253,6 @@ For local development run Vite, FastAPI, Redis, and workers as separate processe
 
 ## References
 
-Repository: [`src/evolution/application/campaign/service.py`](../../src/evolution/application/campaign/service.py), [`src/benchmark/application/trials/coordinator.py`](../../src/benchmark/application/trials/coordinator.py), [`src/benchmark/infra/di.py`](../../src/benchmark/infra/di.py), [`src/evolution/infra/concurrency/runner.py`](../../src/evolution/infra/concurrency/runner.py), and [campaign isolation](campaign_isolation.md).
+Repository: [`src/evolution/application/campaign/service.py`](../../src/evolution/application/campaign/service.py), [`src/benchmark/application/trials/coordinator.py`](../../src/benchmark/application/trials/coordinator.py), [`src/benchmark/infra/di.py`](../../src/benchmark/infra/di.py), [`src/evolution/infra/concurrency/process_worker_pool.py`](../../src/evolution/infra/concurrency/process_worker_pool.py), and [campaign isolation](campaign_isolation.md).
 
 External: [Dishka scopes](https://dishka.readthedocs.io/en/stable/advanced/scopes.html), [Celery concurrency](https://docs.celeryq.dev/en/main/userguide/concurrency/), [Celery task semantics](https://docs.celeryq.dev/en/stable/userguide/tasks.html), [FastAPI SSE](https://fastapi.tiangolo.com/tutorial/server-sent-events/), [MDN EventSource](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events), [SQLAlchemy multiprocessing](https://docs.sqlalchemy.org/en/21/core/pooling.html#using-connection-pools-with-multiprocessing-or-os-fork), and [SQLite WAL](https://www.sqlite.org/wal.html).

@@ -14,7 +14,6 @@ from types import SimpleNamespace
 from llamea import LLaMEA
 
 from evolution.application.exceptions import SynthesisResumeError
-from evolution.application.interfaces.code_store import SynthesisCodeStore
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
 from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
@@ -22,6 +21,7 @@ from evolution.application.synthesis.result import SynthesisResult
 from evolution.application.synthesis.settings import SynthesisSettings
 from evolution.domain.entities import ExperimentSummary
 from evolution.domain.enums import PromptStrategy, SynthesisMode
+from evolution.domain.interfaces.code_repository import CodeRepository
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.vos import ProblemProfile
 from evolution.infra.engines.llamea.checkpoint import load_synthesis_checkpoint
@@ -65,7 +65,7 @@ class LLaMEASession:
         prompt_strategy: PromptStrategy,
         llm_client: LLMClient,
         db_repo: SynthesisRepository,
-        code_repo: SynthesisCodeStore,
+        code_repo: CodeRepository,
         config: SynthesisSettings,
         initial_iteration: int = 0,
         synthesis_mode: SynthesisMode = SynthesisMode.EXPLICIT,
@@ -351,7 +351,7 @@ class LLaMEAEngine(SynthesisEngine):
     def __init__(
         self,
         llm_client: LLMClient,
-        code_repo: SynthesisCodeStore,
+        code_repo: CodeRepository,
     ) -> None:
         self.llm_client = llm_client
         self.code_repo = code_repo
