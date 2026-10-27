@@ -16,7 +16,11 @@ import pytest
 
 from evolution.application.exceptions import ProviderError
 from evolution.infra.llm.client import LLMClient
-from evolution.infra.llm.gateway import GatewayLLM, GatewayRequestLimiter, retry_delay
+from evolution.infra.llm.gateway import (
+    GatewayLLM,
+    GatewayRequestLimiter,
+    retry_delay,
+)
 
 
 class Clock:
@@ -202,14 +206,14 @@ def test_every_http_retry_is_paced_and_does_not_consume_optimizer_rng(
         return next(responses)
 
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", send)
+    caplog.set_level("DEBUG", logger="evolution.infra.llm.gateway")
     before = random.getstate()
     assert llm.query([{"role": "user", "content": "same prompt"}]) == "program"
     assert random.getstate() == before
     assert starts == [1_000_000, 1_000_020]
     assert payloads[0] == payloads[1]
     assert llm.client.max_retries == 0
-    assert "status 429" in caplog.text
-    assert "shared cooldown 20.0s" in caplog.text
+    assert not any(record.name == "evolution.infra.llm.gateway" for record in caplog.records)
     assert "test-key" not in caplog.text
     assert "same prompt" not in caplog.text
     llm.client.close()

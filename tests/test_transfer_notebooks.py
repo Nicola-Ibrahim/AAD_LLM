@@ -203,9 +203,9 @@ def test_notebooks_call_use_cases_directly_and_resolve_only_during_setup() -> No
                 continue
             cell_source = "".join(cell["source"])
             if "services.get(" in cell_source:
-                assert (
-                    "# Prepare services once; infrastructure owns shutdown cleanup." in cell_source
-                )
+                # Both persistent setup and the isolated transient experiment
+                # resolve services from a scope created in the same cell.
+                assert "WorkflowScope(" in cell_source
 
 
 def test_cross_function_figure_export_removed() -> None:

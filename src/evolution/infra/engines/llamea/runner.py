@@ -9,6 +9,7 @@ import logging
 import math
 import shutil
 import warnings
+from pathlib import Path
 from types import SimpleNamespace
 
 from llamea import LLaMEA
@@ -34,7 +35,6 @@ from evolution.infra.engines.llamea.runtime import FailureAwareLLaMEA
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
 from shared.application.interfaces.candidate_executor import CANDIDATE_EXECUTION_VERSION
-from shared.config import DATA_DIR
 from shared.domain.problem import BaseProblem
 from shared.infra.execution.candidate_executor import create_candidate_executor
 
@@ -67,6 +67,7 @@ class LLaMEASession:
         db_repo: SynthesisRepository,
         code_repo: CodeRepository,
         config: SynthesisSettings,
+        checkpoint_root: Path,
         initial_iteration: int = 0,
         synthesis_mode: SynthesisMode = SynthesisMode.EXPLICIT,
         restart: bool = False,
@@ -102,9 +103,9 @@ class LLaMEASession:
             max_iterations=self._config.iterations,
         )
 
+        self._checkpoint_root = checkpoint_root
         self._archive_dir = (
-            DATA_DIR
-            / "evolution_state"
+            checkpoint_root
             / f"{self._problem.dim}D"
             / f"std_{self._problem.noise_std}"
             / f"f{self._problem.problem_id}"
@@ -248,7 +249,7 @@ class LLaMEASession:
                 self._prompt_strategy,
             ):
                 raise ValueError("Replacement problem does not match the stored experiment")
-            archive_root = (DATA_DIR / "evolution_state").resolve()
+            archive_root = self._checkpoint_root.resolve()
             if self._archive_dir.is_symlink() or not self._archive_dir.resolve().is_relative_to(
                 archive_root
             ):
@@ -353,9 +354,11 @@ class LLaMEAEngine(SynthesisEngine):
         self,
         llm_client: LLMClient,
         code_repo: CodeRepository,
+        checkpoint_root: Path,
     ) -> None:
         self.llm_client = llm_client
         self.code_repo = code_repo
+        self.checkpoint_root = checkpoint_root
 
     @property
     def model_name(self) -> str:
@@ -381,6 +384,7 @@ class LLaMEAEngine(SynthesisEngine):
             db_repo=db_repo,
             code_repo=self.code_repo,
             config=config,
+            checkpoint_root=self.checkpoint_root,
             initial_iteration=initial_iteration,
             synthesis_mode=synthesis_mode,
             restart=restart,

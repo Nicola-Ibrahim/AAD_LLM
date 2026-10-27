@@ -43,7 +43,6 @@ def isolate_test_data_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(shared.config, "DATA_DIR", tmp_path)
     monkeypatch.setattr(shared.infra.logging.runtime, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(evolution.infra.problems.analyzer, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(evolution.infra.engines.llamea.runner, "DATA_DIR", tmp_path)
 
 
 @pytest.fixture(autouse=True)

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 from sqlalchemy import func, select
 
+import shared.config as shared_config
 from evolution.application.synthesis.result import SynthesisResult
 from evolution.application.synthesis.settings import SynthesisSettings
 from evolution.domain.enums import PromptStrategy, SynthesisMode
@@ -91,9 +92,8 @@ def test_reset_retains_id_and_condition_and_preserves_other_experiments() -> Non
 def test_execution_clears_old_state_only_for_explicit_replacement(
     tmp_path: Path, monkeypatch, restart: bool
 ) -> None:
-    import evolution.infra.engines.llamea.runner as runner
 
-    monkeypatch.setattr(runner, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(shared_config, "DATA_DIR", tmp_path / "data")
     database = Database("sqlite:///:memory:")
     try:
         Base.metadata.create_all(database.engine)
@@ -122,6 +122,7 @@ def test_execution_clears_old_state_only_for_explicit_replacement(
             config=SynthesisSettings(budget=1_000_000),
             initial_iteration=5,
             restart=restart,
+            checkpoint_root=shared_config.DATA_DIR / "evolution_state",
         )
         checkpoint = session._archive_dir / "llamea_config.pkl"
         checkpoint.write_bytes(b"old checkpoint")

@@ -1,7 +1,6 @@
 """UPB request pacing shared by local worker processes, independent of CPU scheduling."""
 
 import hashlib
-import logging
 import math
 import os
 import sqlite3
@@ -21,7 +20,6 @@ from evolution.application.exceptions import ProviderError
 
 # Published per-person provider limits, with 20% headroom for other account use.
 DEFAULT_RPM = {"gwdg": 8.0, "kiconnect": 80.0, "openai": 80.0}
-logger = logging.getLogger(__name__)
 
 
 def provider_error(error: openai.APIError, model: str) -> ProviderError:
@@ -160,9 +158,6 @@ class GatewayLLM(OpenAI_LLM):
     ) -> str:
         for attempt in range(max_retries + 1):
             try:
-                logger.debug(
-                    "Requesting generated code from %s, attempt %d", self.model, attempt + 1
-                )
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=session_messages,
@@ -171,9 +166,6 @@ class GatewayLLM(OpenAI_LLM):
                 content = response.choices[0].message.content if response.choices else None
                 if not content:
                     raise ProviderError("invalid_response", self.model, "the API returned no text")
-                logger.debug(
-                    "Generated response received from %s (%d characters)", self.model, len(content)
-                )
                 return content
             except openai.APIError as error:
                 exhausted = error.code in {
@@ -193,16 +185,6 @@ class GatewayLLM(OpenAI_LLM):
                 if isinstance(error, openai.APIStatusError):
                     delay = retry_delay(error, delay)
                 self.limiter.defer(delay)
-                logger.warning(
-                    "Gateway %s: %s (status %s), attempt %d/%d; shared cooldown %.1fs%s",
-                    self.model,
-                    type(error).__name__,
-                    getattr(error, "status_code", "unavailable"),
-                    attempt + 1,
-                    max_retries + 1,
-                    delay,
-                    "; retries exhausted" if attempt == max_retries else "; will retry",
-                )
                 if attempt == max_retries:
                     raise provider_error(error, self.model) from error
         raise AssertionError("Unreachable gateway retry state")

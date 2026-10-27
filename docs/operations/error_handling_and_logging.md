@@ -26,6 +26,26 @@ Diagnostic files are written to:
 logs/<provider-context>/<UTC-timestamp-and-id>/diagnostics.log
 ```
 
+New invocation folders use readable, sortable names such as
+`2026-10-27_18-53-56_UTC-8a643c85`. Existing logs are left untouched.
+From a separate terminal, including while a notebook is busy, read the most
+recently updated synthesis log with:
+
+```bash
+python scripts/show_logs.py --lines 60
+```
+
+Use `--workflow benchmark` for benchmark/analysis logs. This command only reads
+logs; it does not start or retry work.
+
+Gateway and LLM client adapters do not configure or emit logs. They retain bounded
+transport retries and shared pacing, then translate terminal provider failures
+into `ProviderError`, preserving the SDK exception as the cause. Application
+operation boundaries report the propagated failure once, with workflow context.
+Transient retries are intentionally silent; these adapters do not report progress
+or duplicate the application's error report. The HTTP read timeout remains 600
+seconds, with shared throttle waiting additional to that timeout.
+
 The provider context is normally `evolution` or `benchmark`; benchmark also hosts
 audit and analysis. Each file rotates at 5 MB, keeping three backups. Rotation is
 per invocation; whole invocation directories are not automatically deleted.

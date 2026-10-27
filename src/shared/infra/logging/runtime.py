@@ -57,7 +57,7 @@ class LoggingRuntime:
     """Own only this invocation's handlers; leave notebook/server handlers intact."""
 
     def __init__(self, workflow: str, directory: Path, stream: TextIO) -> None:
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S_UTC")
         self.invocation = f"{stamp}-{uuid4().hex[:8]}"
         self.path = directory / workflow / self.invocation / "diagnostics.log"
         self.path.parent.mkdir(parents=True, exist_ok=True)

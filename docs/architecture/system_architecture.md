@@ -195,6 +195,20 @@ writes and experiment cleanup; `FileCodeRepository` implements it using files.
 The domain receives string references and performs no filesystem operations.
 Scientific invariants remain in domain objects and scoring rules; repositories
 provide persistence rather than replacing those rules.
+
+For a single non-persistent experiment, `TransientEvolutionProvider` resolves the
+same `Synthesis` use case and LLaMEA engine with `MemorySynthesisRepository` and
+`MemoryCodeRepository`. Required collaborators remain explicit; repositories are
+not omitted or replaced by console output. Experiment history, scoring and
+champion selection still work normally in memory. Checkpoint storage is an
+explicit engine dependency: the normal provider uses `data/evolution_state`,
+while the transient provider owns an isolated temporary directory and removes it
+when its scope closes, including after a failure. No research database is opened.
+Operational logs and gateway throttle state are separate and remain available.
+Transient IDs are local memory identifiers, not SQLite experiment IDs; this mode
+supports a sequential single experiment, not campaign recovery across processes.
+The returned result retains the champion's code after the scope closes.
+
 Benchmark code reads use `CandidateCodeReader` in their own
 context. `DuplicateStorage` is used only by the optional, manually invoked
 duplicate-cleanup workflow, never by campaign scheduling or benchmarking.

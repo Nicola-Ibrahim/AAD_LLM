@@ -4,6 +4,7 @@ import ast
 import io
 import logging
 import pickle
+import re
 from concurrent.futures import Future
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -27,6 +28,15 @@ from shared.infra.artifacts import atomic_write
 from shared.infra.database import Database
 from shared.infra.database.session import session_scope
 from shared.infra.logging.runtime import LoggingRuntime, diagnostic_context
+
+
+def test_readable_log_folder(tmp_path):
+    console = io.StringIO()
+    runtime = LoggingRuntime("evolution", tmp_path, console)
+    runtime.close()
+    assert re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_UTC-[a-f0-9]{8}", runtime.path.parent.name
+    )
 
 
 def test_logging_preserves_context_cause_and_secrets_without_duplicate_failure(tmp_path):

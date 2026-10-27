@@ -10,6 +10,7 @@ import pytest
 from llamea import Solution
 from pydantic import ValidationError, create_model
 
+import shared.config as shared_config
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
 from evolution.application.synthesis.service import Synthesis
 from evolution.application.synthesis.settings import SynthesisSettings
@@ -59,7 +60,11 @@ def parameters():
 
 def test_single_session_creates_one_experiment_without_a_campaign(db_session_factory, tmp_path):
     repository = SQLiteSynthesisRepository(db_session_factory)
-    engine = LLaMEAEngine(GeneratedModel(), FileCodeRepository(tmp_path / "code"))
+    engine = LLaMEAEngine(
+        GeneratedModel(),
+        FileCodeRepository(tmp_path / "code"),
+        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
+    )
     session = Synthesis(engine, repository, SynthesisLogger(), BBOBProblemFactory())
     result = session.run(**parameters())
     (stored,) = repository.load_by_ids([result.experiment_id])
@@ -182,3 +187,74 @@ def test_historical_experiment_checkpoint_retains_its_database_identity(monkeypa
     assert type(restored) is Experiment
     assert restored.id == restored.experiment_id == 42
     assert "ExperimentSummary" not in module.__dict__
+
+
+def test_transient_synthesis_never_opens_database_and_cleans_checkpoints(monkeypatch, tmp_path):
+    from pathlib import Path
+    from typing import cast
+
+    from dishka import Provider, Scope, provide
+
+    from evolution.domain.interfaces.code_repository import CodeRepository
+    from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
+    from evolution.infra.di import TransientEvolutionProvider
+    from evolution.infra.storage.code.memory import MemoryCodeRepository
+    from evolution.infra.storage.synthesis.memory import MemorySynthesisRepository
+    from shared.infra.database import Database
+
+    class ModelProvider(Provider):
+        @provide(scope=Scope.APP, override=True)
+        def llm(self) -> LLMClient:
+            return cast(LLMClient, GeneratedModel())
+
+    def forbidden_database(*args, **kwargs):
+        raise AssertionError("Transient synthesis must not open the research database")
+
+    monkeypatch.setattr(Database, "__init__", forbidden_database)
+    before = set(tmp_path.rglob("*"))
+    with container_scope(
+        TransientEvolutionProvider(), ModelProvider(), context={}, request_context={}
+    ) as container:
+        synthesis = container.get(Synthesis)
+        repository = container.get(SynthesisRepository)
+        code = container.get(CodeRepository)
+        checkpoint_root = container.get(Path)
+        assert isinstance(repository, MemorySynthesisRepository)
+        assert isinstance(code, MemoryCodeRepository)
+        result = synthesis.run(**parameters())
+        (stored,) = repository.load_by_ids([result.experiment_id])
+        assert stored.status == "completed"
+        assert len(stored.iterations) == 2
+        assert stored.best_final_error == result.best_error
+        assert result.best_solution.code
+        assert len(code.code) == 2
+        assert all(item.code.code_path.startswith("memory://") for item in stored.iterations)
+        assert checkpoint_root.is_dir()
+    assert not checkpoint_root.exists()
+    assert set(tmp_path.rglob("*")) == before
+    assert result.best_solution.code
+
+
+def test_transient_scope_cleans_checkpoints_when_engine_fails(monkeypatch):
+    from pathlib import Path
+
+    from evolution.application.exceptions import ProviderError
+    from evolution.infra.di import TransientEvolutionProvider
+    from shared.infra.database import Database
+
+    def forbidden_database(*args, **kwargs):
+        raise AssertionError("Transient synthesis must not open the research database")
+
+    def fail_engine(*args, **kwargs):
+        raise ProviderError("unavailable", "test-model", "gateway unavailable")
+
+    monkeypatch.setattr(Database, "__init__", forbidden_database)
+    monkeypatch.setattr(LLaMEAEngine, "run", fail_engine)
+    with pytest.raises(ProviderError):
+        with container_scope(
+            TransientEvolutionProvider(), context={}, request_context={}
+        ) as container:
+            checkpoint_root = container.get(Path)
+            (checkpoint_root / "partial-checkpoint").write_text("unfinished")
+            container.get(Synthesis).run(**parameters())
+    assert not checkpoint_root.exists()

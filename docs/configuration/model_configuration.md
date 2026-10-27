@@ -28,6 +28,25 @@ Keep API keys in local environment configuration, not committed documents.
 
 ### University gateway through LLaMEA
 
+To check the gateway independently of synthesis, run from the repository root:
+
+```bash
+python scripts/check_upb.py
+python scripts/check_upb.py --list-only
+```
+
+The script loads `UPB_API_BASE`, `UPB_API_KEY` and `UPB_MODEL` from the environment
+or project `.env`. It checks authenticated model discovery, then asks the selected
+model what 2 + 2 is. It uses the actual `GatewayLLM` adapter: its SDK client for
+model discovery and its `query()` method for generation, including shared request
+pacing and provider-error translation. It uses the adapter's temperature and
+provider-default output allowance, just as synthesis does. No synthesis campaign
+or research database operation is started. The runtime throttle database is used.
+The smoke test makes one attempt, with a 60-second HTTP timeout (shared pacing
+wait is additional); `--timeout` changes only this test. It prints the response,
+safe failures and elapsed time without printing credentials. Run it with the
+Jupyter kernel's interpreter when diagnosing a server-specific problem.
+
 Set these values in the ignored `.env` file; never put a real key in a notebook:
 
 ```dotenv

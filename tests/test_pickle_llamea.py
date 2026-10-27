@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 from llamea import LLaMEA
 
+import shared.config as shared_config
 from evolution.application.exceptions import SynthesisResumeError
 from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
 from evolution.application.synthesis.settings import SynthesisSettings
@@ -196,6 +197,7 @@ def test_warm_start_rehydration(tmp_path, test_repos):
         db_repo=db_repo,
         code_repo=code_repo,
         config=SynthesisSettings(iterations=5, budget=1_000_000),
+        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
     )
 
     evaluator = session._setup_evaluator()

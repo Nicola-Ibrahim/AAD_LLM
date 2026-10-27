@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 from study_fixtures import run_parameters, synthesis_config
 
+import shared.config as shared_config
 from benchmark.application.benchmark_config import BenchmarkConfig
 from benchmark.application.model_names import folder_solver_name
 from benchmark.application.select_champions import ChampionSelectionService
@@ -145,7 +146,11 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
     config = synthesis_config()
     llm = LLMClient("local")
     logger = SynthesisLogger(verbose=False)
-    engine = LLaMEAEngine(llm_client=llm, code_repo=FileCodeRepository())
+    engine = LLaMEAEngine(
+        llm_client=llm,
+        code_repo=FileCodeRepository(),
+        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
+    )
 
     campaign_usecase = SynthesisCampaign(
         worker_count=1,

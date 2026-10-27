@@ -10,6 +10,7 @@ from unittest.mock import Mock
 import pytest
 from llamea import Solution
 
+import shared.config as shared_config
 from evolution.application.exceptions import OrchestrationError
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
@@ -116,6 +117,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
     engine = LLaMEAEngine(
         llm_client=llm,
         code_repo=FileCodeRepository(base_dir=temp_dir),
+        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
     )
     tasks = [
         {
@@ -184,6 +186,7 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
     engine = LLaMEAEngine(
         llm_client=DummyLLM(),
         code_repo=FileCodeRepository(base_dir=temp_dir),
+        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
     )
     tasks = [
         {
@@ -508,6 +511,7 @@ def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
         db_repo=repo,
         code_repo=code_repo,
         config=SynthesisSettings(iterations=2, budget=1_000_000),
+        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
     )
     res1 = session1.run()
 
@@ -545,6 +549,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
         db_repo=repo,
         code_repo=code_repo,
         config=SynthesisSettings(iterations=2, budget=1_000_000),
+        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
     )
     res1 = session1.run()
 
@@ -567,6 +572,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
         db_repo=repo,
         code_repo=code_repo,
         config=SynthesisSettings(iterations=2, budget=1_000_000),
+        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
     )
     res2 = session2.run()
 
@@ -609,6 +615,7 @@ def test_session_mark_failed_on_error(temp_dir, db_session_factory):
         db_repo=repo,
         code_repo=code_repo,
         config=SynthesisSettings(iterations=2, budget=1_000_000),
+        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
     )
 
     # Inject an error into _setup_evaluator to force run() to fail
@@ -646,6 +653,7 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
     engine = LLaMEAEngine(
         llm_client=llm,
         code_repo=FileCodeRepository(base_dir=temp_dir),
+        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
     )
     usecase = Synthesis(
         engine=engine, sqlite_repo=repo, logger=MagicMock(), problem_factory=BBOBProblemFactory()
@@ -676,6 +684,7 @@ def test_session_missing_single_param_raises_type_error(temp_dir, db_session_fac
             db_repo=repo,
             code_repo=code_repo,
             # config is omitted
+            checkpoint_root=shared_config.DATA_DIR / "evolution_state",
         )
 
 
@@ -791,6 +800,7 @@ def test_all_executions_failed_session_handling(db_session_factory, tmp_path):
         db_repo=repo,
         code_repo=code_repo,
         config=SynthesisSettings(budget=10, iterations=2),
+        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
     )
 
     # Must complete without throwing AttributeError or crashing
@@ -1260,6 +1270,7 @@ def test_llamea_engine_init_and_run(temp_dir, db_session_factory):
     engine = LLaMEAEngine(
         llm_client=llm,
         code_repo=code_repo,
+        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
     )
     assert isinstance(engine, SynthesisEngine)
     res = engine.run(
@@ -1284,7 +1295,11 @@ def test_campaign_item_and_engine_pickling(temp_dir):
 
     llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
-    engine = LLaMEAEngine(llm_client=llm, code_repo=FileCodeRepository())
+    engine = LLaMEAEngine(
+        llm_client=llm,
+        code_repo=FileCodeRepository(),
+        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
+    )
     item = {
         "key": "pickle_task",
         "problem": problem,
