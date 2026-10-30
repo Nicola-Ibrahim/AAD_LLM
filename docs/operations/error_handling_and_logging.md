@@ -43,8 +43,11 @@ transport retries and shared pacing, then translate terminal provider failures
 into `ProviderError`, preserving the SDK exception as the cause. Application
 operation boundaries report the propagated failure once, with workflow context.
 Transient retries are intentionally silent; these adapters do not report progress
-or duplicate the application's error report. The HTTP read timeout remains 600
-seconds, with shared throttle waiting additional to that timeout.
+or duplicate the application's error report. Generation uses a 600-second HTTP read timeout and up to three retries (four
+attempts per query). Shared pacing waits are additional. The explicit startup
+ping makes one attempt using the configured client timeout. Provider defaults
+control output length; no additional token cap or finish-reason rejection is
+applied. Normal candidate parsing and execution validation remain in place.
 
 The provider context is normally `evolution` or `benchmark`; benchmark also hosts
 audit and analysis. Each file rotates at 5 MB, keeping three backups. Rotation is

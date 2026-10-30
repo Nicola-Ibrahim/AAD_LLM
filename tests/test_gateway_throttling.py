@@ -267,3 +267,40 @@ def test_local_provider_does_not_create_gateway_gate(tmp_path, monkeypatch):
     assert not isinstance(client._client, GatewayLLM)
     assert not path.exists()
     client._client.client.close()
+
+
+def test_generation_keeps_provider_output_defaults(tmp_path, monkeypatch):
+    import json
+
+    limiter = GatewayRequestLimiter(tmp_path / "limits.sqlite3", "shared", 8.0)
+    llm = GatewayLLM("test-key", "gwdg.qwen", "https://gateway.test/v1", limiter)
+    requests = []
+
+    def handle(transport, request):
+        requests.append(request)
+        assert request.extensions["timeout"]["read"] == 600
+        assert "max_tokens" not in json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={"choices": [{"finish_reason": "length", "message": {"content": "partial code"}}]},
+        )
+
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", handle)
+    try:
+        assert llm.query([{"role": "user", "content": "generate code"}]) == "partial code"
+        assert len(requests) == 1
+    finally:
+        llm.client.close()
+
+
+def test_default_transport_retry_limit_is_four_attempts(tmp_path, clock, monkeypatch):
+    limiter = GatewayRequestLimiter(tmp_path / "limits.sqlite3", "shared", 8.0)
+    llm = GatewayLLM("test-key", "gwdg.qwen", "https://gateway.test/v1", limiter)
+    probe = MagicMock(side_effect=lambda request: _response(503))
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", lambda self, request: probe(request))
+    try:
+        with pytest.raises(ProviderError):
+            llm.query([{"role": "user", "content": "test"}])
+        assert probe.call_count == 4
+    finally:
+        llm.client.close()

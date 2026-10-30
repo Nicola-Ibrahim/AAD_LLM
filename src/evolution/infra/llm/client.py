@@ -110,6 +110,31 @@ class LLMClient:
             raise ValueError("Model listing requires an OpenAI-compatible provider.")
         return [model.id for model in self._client.client.models.list()]
 
+    def ping(self) -> str:
+        """Explicit one-attempt generation probe through the configured transport.
+
+        No candidate parsing, persistence or logging. Failures propagate without
+        poisoning a later synthesis session. UPB uses its shared throttle.
+        """
+        if self.provider not in _OPENAI_ENDPOINTS:
+            raise NotImplementedError("Model probes require an OpenAI-compatible provider")
+        messages = [{"role": "user", "content": "Reply only with OK."}]
+        try:
+            probe = self._client.client.with_options(max_retries=0)
+            completion = probe.chat.completions.create(
+                model=str(self.model),
+                messages=messages,
+                temperature=self._client.temperature
+                if self._client.temperature is not None
+                else openai.NOT_GIVEN,
+            )
+            response = completion.choices[0].message.content if completion.choices else None
+            if not response or not response.strip():
+                raise ProviderError("invalid_response", str(self.model), "the API returned no text")
+            return response
+        except openai.APIError as error:
+            raise provider_error(error, str(self.model)) from error
+
     @staticmethod
     def _check_connection(base_url: str, provider_name: str, api_key: str) -> None:
         """Check reachability and credentials without issuing a generation request."""
@@ -192,6 +217,8 @@ class LLMClient:
             raise ValueError("Set UPB_MODEL or pass model= with an exact gateway model ID.")
 
         if self.provider == Provider.UPB:
+            if model == "gwdg.qwen3-coder-next":
+                self.kwargs.setdefault("temperature", None)
             llm = GatewayLLM(
                 api_key=api_key,
                 model=model,

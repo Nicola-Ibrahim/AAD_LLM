@@ -28,32 +28,13 @@ Keep API keys in local environment configuration, not committed documents.
 
 ### University gateway through LLaMEA
 
-To check the gateway independently of synthesis, run from the repository root:
-
-```bash
-python scripts/check_upb.py
-python scripts/check_upb.py --list-only
-```
-
-The script loads `UPB_API_BASE`, `UPB_API_KEY` and `UPB_MODEL` from the environment
-or project `.env`. It checks authenticated model discovery, then asks the selected
-model what 2 + 2 is. It uses the actual `GatewayLLM` adapter: its SDK client for
-model discovery and its `query()` method for generation, including shared request
-pacing and provider-error translation. It uses the adapter's temperature and
-provider-default output allowance, just as synthesis does. No synthesis campaign
-or research database operation is started. The runtime throttle database is used.
-The smoke test makes one attempt, with a 60-second HTTP timeout (shared pacing
-wait is additional); `--timeout` changes only this test. It prints the response,
-safe failures and elapsed time without printing credentials. Run it with the
-Jupyter kernel's interpreter when diagnosing a server-specific problem.
-
 Set these values in the ignored `.env` file; never put a real key in a notebook:
 
 ```dotenv
 LLM_PROVIDER=upb
 UPB_API_BASE=https://ai-gateway.uni-paderborn.de/v1/
 UPB_API_KEY=replace-with-your-private-key
-UPB_MODEL=gwdg.glm-5.3-flash
+UPB_MODEL=gwdg.qwen3-coder-next
 UPB_REQUESTS_PER_MINUTE=8
 ```
 
@@ -61,6 +42,18 @@ Notebook 02 resolves `SynthesisCampaign`; `EvolutionProvider` creates
 the LLM connection from `LLM_PROVIDER` and owns its cleanup. The notebook does not
 import, construct or call `LLMClient`. The existing LLaMEA `OpenAI_LLM` adapter
 issues synthesis requests, not a separate example script.
+
+Notebook setup explicitly uses `EvolutionProvider(test_generation_on_startup=True)`
+(or its transient variant). Before yielding the client for injection, the provider
+sends a single `Reply only with OK` probe through the configured transport and
+shared UPB pacing. A failure propagates to the setup boundary and closes the
+client; no experiment has been created. The notebook prints the model name only
+after this check succeeds. `Synthesis` and campaign services do not initialize,
+probe or repair LLM connections. The flag defaults to `False` for other hosts and
+workers, so resolving services normally does not generate text unexpectedly.
+Endpoint validation remains controlled separately by `SKIP_LLM_VALIDATION`;
+that flag does not disable an explicitly requested generation probe.
+
 Connection checks and model discovery send Bearer authentication. Unlike a local
 single-model server, the gateway requires an explicit model ID: it never silently
 selects the first catalogue entry. List your accessible IDs without generating text:
@@ -284,3 +277,13 @@ substituted into the original thesis results.
 Quantization labels identify model artifacts; they do not establish guaranteed
 memory requirements, runtime or optimization quality. Report the exact model
 artifact and actual experimental settings when comparing results.
+
+Gateway generation uses a 600-second HTTP read timeout and up to three retries
+(four attempts per query). Shared pacing and provider cooldown waits are
+additional. Output length uses provider defaults; there is no application-added
+token cap or finish-reason truncation rejection. Normal code parsing, execution
+validation and provider error propagation remain unchanged.
+
+For `gwdg.qwen3-coder-next`, the synthesis adapter omits temperature by default
+for both startup probes and generation. An explicitly supplied temperature
+argument remains an opt-in override; use it only if the model supports it.

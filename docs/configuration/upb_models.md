@@ -36,8 +36,9 @@ Worker count is selected automatically from available CPU capacity for either
 local or hosted synthesis. Gateway request pacing is automatic and shared across
 workers on one host: defaults are 8 RPM for GWDG and 80 RPM for KIConnect/OpenAI.
 See [model configuration](model_configuration.md) for overrides, scope and limitations.
-This is not a token/minute or monthly-spending limiter. Current LLaMEA sends a temperature parameter; some reasoning
-models may require a different request adapter and are not automatically interchangeable.
+This is not a token/minute or monthly-spending limiter. Temperature support varies
+by model. Synthesis with `gwdg.qwen3-coder-next` omits it by default. Other models may require different supported parameters
+and are not automatically interchangeable.
 
 ## gwdg (20)
 

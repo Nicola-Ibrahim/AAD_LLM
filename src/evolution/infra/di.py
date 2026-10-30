@@ -36,10 +36,16 @@ from shared.infra.di import container_scope
 class EvolutionProvider(Provider):
     scope = Scope.REQUEST
 
+    def __init__(self, *, test_generation_on_startup: bool = False) -> None:
+        super().__init__()
+        self.test_generation_on_startup = test_generation_on_startup
+
     @provide(scope=Scope.APP)
     def llm(self) -> Iterator[LLMClient]:
         client = LLMClient(os.getenv("LLM_PROVIDER", "local"))
         try:
+            if self.test_generation_on_startup:
+                client.ping()
             yield client
         finally:
             client.close()

@@ -133,9 +133,10 @@ class GatewayLLM(OpenAI_LLM):
         model: str,
         base_url: str,
         limiter: GatewayRequestLimiter,
+        temperature: float | None = 0.8,
         **kwargs: object,
     ) -> None:
-        super().__init__(api_key=api_key, model=model, **kwargs)
+        super().__init__(api_key=api_key, model=model, temperature=temperature, **kwargs)
         self.limiter = limiter
         self.client.close()
         self.base_url = base_url
@@ -161,7 +162,9 @@ class GatewayLLM(OpenAI_LLM):
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=session_messages,
-                    temperature=self.temperature,
+                    temperature=self.temperature
+                    if self.temperature is not None
+                    else openai.NOT_GIVEN,
                 )
                 content = response.choices[0].message.content if response.choices else None
                 if not content:

@@ -133,3 +133,103 @@ def test_gateway_worker_pickle_restores_model_and_endpoint_without_embedding_key
     assert restored._client.client.api_key == "test-private-key"
     assert restored._client.limiter.scope == llm._client.limiter.scope
     assert restored._client.limiter.state_path == llm._client.limiter.state_path
+
+
+def test_ping_uses_configured_transport_once(gateway_env, monkeypatch):
+    llm = LLMClient("upb")
+    requests = []
+
+    def handle(transport, request):
+        requests.append(request)
+        payload = json.loads(request.content)
+        assert payload["messages"] == [{"role": "user", "content": "Reply only with OK."}]
+        return httpx.Response(200, json={"choices": [{"message": {"content": "OK"}}]})
+
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", handle)
+    try:
+        assert llm.ping() == "OK"
+        assert len(requests) == 1
+        assert llm._terminal_error is None
+    finally:
+        llm.close()
+
+
+@pytest.mark.parametrize("response", ["", "   "])
+def test_ping_rejects_empty_text(gateway_env, monkeypatch, response):
+    llm = LLMClient("upb")
+    monkeypatch.setattr(
+        httpx.HTTPTransport,
+        "handle_request",
+        lambda *args: httpx.Response(200, json={"choices": [{"message": {"content": response}}]}),
+    )
+    try:
+        with pytest.raises(ProviderError, match="invalid_response"):
+            llm.ping()
+    finally:
+        llm.close()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_provider_probe_is_explicit_and_runs_once_before_injection(monkeypatch, enabled):
+    from evolution.infra.di import EvolutionProvider
+    from shared.infra.di import container_scope
+
+    probe = MagicMock(return_value="OK")
+    monkeypatch.setattr(LLMClient, "ping", probe)
+    with container_scope(
+        EvolutionProvider(test_generation_on_startup=enabled), context={}, request_context={}
+    ) as container:
+        llm = container.get(LLMClient)
+        assert container.get(LLMClient) is llm
+        assert probe.call_count == int(enabled)
+
+
+def test_provider_probe_failure_closes_client_and_prevents_injection(monkeypatch):
+    from evolution.infra.di import EvolutionProvider
+    from shared.infra.di import container_scope
+
+    probe = MagicMock(side_effect=ProviderError("unavailable", "test-model", "probe failed"))
+    close = MagicMock()
+    monkeypatch.setattr(LLMClient, "ping", probe)
+    monkeypatch.setattr(LLMClient, "close", close)
+    with container_scope(
+        EvolutionProvider(test_generation_on_startup=True), context={}, request_context={}
+    ) as container:
+        with pytest.raises(ProviderError, match="probe failed"):
+            container.get(LLMClient)
+    probe.assert_called_once()
+    close.assert_called_once()
+
+
+def test_ping_rate_limit_is_not_retried(gateway_env, monkeypatch):
+    llm = LLMClient("upb")
+    probe = MagicMock(return_value=httpx.Response(429, json={"error": {"message": "limited"}}))
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", lambda self, request: probe(request))
+    try:
+        with pytest.raises(ProviderError) as failure:
+            llm.ping()
+        assert isinstance(failure.value.__cause__, openai.RateLimitError)
+        assert probe.call_count == 1
+    finally:
+        llm.close()
+
+
+def test_qwen_synthesis_and_ping_omit_temperature_by_default(gateway_env, monkeypatch):
+    monkeypatch.setenv("UPB_MODEL", "gwdg.qwen3-coder-next")
+    llm = LLMClient("upb")
+    requests = []
+
+    def handle(transport, request):
+        requests.append(request)
+        payload = json.loads(request.content)
+        assert payload["model"] == "gwdg.qwen3-coder-next"
+        assert "temperature" not in payload
+        return httpx.Response(200, json={"choices": [{"message": {"content": "OK"}}]})
+
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", handle)
+    try:
+        assert llm.ping() == "OK"
+        assert llm._client.query([{"role": "user", "content": "Generate an optimizer"}]) == "OK"
+        assert len(requests) == 2
+    finally:
+        llm.close()
