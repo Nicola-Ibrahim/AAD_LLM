@@ -66,7 +66,7 @@ def test_single_session_creates_one_experiment_without_a_campaign(db_session_fac
         checkpoint_root=shared_config.DATA_DIR / "evolution_state",
     )
     session = Synthesis(engine, repository, SynthesisLogger(), BBOBProblemFactory())
-    result = session.run(**parameters())
+    result = session.run(**parameters()).value
     (stored,) = repository.load_by_ids([result.experiment_id])
     assert engine.model_name == stored.llm_name == "connected-test-model"
     assert stored.status == "completed"
@@ -91,8 +91,9 @@ def test_invalid_single_session_does_not_create_records(change):
     repository = MagicMock()
     factory = MagicMock()
     session = Synthesis(MagicMock(), repository, SynthesisLogger(), factory)
-    with pytest.raises((ValueError, ValidationError)):
-        session.run(**(parameters() | change))
+    result = session.run(**(parameters() | change))
+    assert not result.is_success
+    assert isinstance(result.exception, (ValueError, ValidationError))
     factory.create.assert_not_called()
     repository.create_experiment.assert_not_called()
 
@@ -221,7 +222,7 @@ def test_transient_synthesis_never_opens_database_and_cleans_checkpoints(monkeyp
         checkpoint_root = container.get(Path)
         assert isinstance(repository, MemorySynthesisRepository)
         assert isinstance(code, MemoryCodeRepository)
-        result = synthesis.run(**parameters())
+        result = synthesis.run(**parameters()).value
         (stored,) = repository.load_by_ids([result.experiment_id])
         assert stored.status == "completed"
         assert len(stored.iterations) == 2
@@ -250,11 +251,10 @@ def test_transient_scope_cleans_checkpoints_when_engine_fails(monkeypatch):
 
     monkeypatch.setattr(Database, "__init__", forbidden_database)
     monkeypatch.setattr(LLaMEAEngine, "run", fail_engine)
-    with pytest.raises(ProviderError):
-        with container_scope(
-            TransientEvolutionProvider(), context={}, request_context={}
-        ) as container:
-            checkpoint_root = container.get(Path)
-            (checkpoint_root / "partial-checkpoint").write_text("unfinished")
-            container.get(Synthesis).run(**parameters())
+    with container_scope(TransientEvolutionProvider(), context={}, request_context={}) as container:
+        checkpoint_root = container.get(Path)
+        (checkpoint_root / "partial-checkpoint").write_text("unfinished")
+        result = container.get(Synthesis).run(**parameters())
+    assert not result.is_success
+    assert isinstance(result.exception, ProviderError)
     assert not checkpoint_root.exists()

@@ -308,8 +308,12 @@ def test_analysis_service_reports_without_a_notebook_wrapper(tmp_path):
             logger = BenchmarkLogger()
         loader = MagicMock(load=MagicMock(side_effect=ArtifactError("unreadable provenance")))
         analysis = AnalyzeEcdfAndConvergence(loader, MagicMock(), logger)
-        with pytest.raises(ArtifactError, match="unreadable provenance"):
-            analysis.execute(mode="explicit", dims=None, problems=None, noise_stds=None)
+        result = analysis.execute(mode="explicit", dims=None, problems=None, noise_stds=None)
+        assert not result.is_success
+        assert isinstance(result.exception, ArtifactError)
+        assert result.error.code == "ArtifactError"
+        assert "unreadable provenance" in result.error.message
+        assert result.error.diagnostic_log == str(runtime.path)
     finally:
         runtime.close()
     assert runtime.path.read_text().count("Operation failed:") == 1
@@ -347,7 +351,7 @@ def test_campaign_call_retains_worker_logging_without_a_notebook_wrapper(tmp_pat
         planner = MagicMock()
         planner.build_tasks.return_value = [{"key": "test"}]
         monkeypatch.setattr(campaign, "_build_planner", lambda config: planner)
-        campaign.run(**run_parameters(synthesis_config()))
+        campaign.run(**run_parameters(synthesis_config())).value
         worker_pool.execute.assert_called_once()
         assert current_runtime() is None
     finally:

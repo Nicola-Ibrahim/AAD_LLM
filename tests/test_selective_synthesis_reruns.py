@@ -55,7 +55,11 @@ def inspect_coverage(planned: CampaignPlanner) -> tuple[pd.DataFrame, dict[str, 
         noise_conditions=[{"std": condition.noise_std, "noise_model": condition.noise_model}],
         synthesis_modes=[{"mode": condition.mode, "strategies": [condition.strategy]}],
     )
-    return CampaignAudit(planned.sqlite_repo, MagicMock(), planned.model_name).inspect(**parameters)
+    return (
+        CampaignAudit(planned.sqlite_repo, MagicMock(), planned.model_name)
+        .inspect(**parameters)
+        .value
+    )
 
 
 def test_reruns_replace_exact_ids_without_using_matrix_quota() -> None:
@@ -252,7 +256,7 @@ def test_campaign_forwards_runtime_request_without_changing_protocol() -> None:
     )
     service._build_planner = MagicMock()
     service._build_planner.return_value.build_tasks.return_value = []
-    service.run(**run_parameters(config), recover=True, rerun_experiment_ids=[1])
+    service.run(**run_parameters(config), recover=True, rerun_experiment_ids=[1]).value
     service._build_planner.return_value.build_tasks.assert_called_once_with(
         recover=True,
         rerun_experiment_ids=[1],

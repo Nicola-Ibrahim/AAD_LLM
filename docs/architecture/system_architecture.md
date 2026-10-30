@@ -227,11 +227,21 @@ benchmark calls list their study settings as explicit keyword arguments, shown i
 [notebook 03](../../notebooks/03_benchmark.ipynb). Analysis follows the same pattern:
 
 ```python
-profiles = profile_analysis.execute(
+outcome = profile_analysis.execute(
     mode="explicit", dims=[2], problems=None, noise_stds=[0.1]
 )
-results_store.save(profiles)
+if outcome.is_success:
+    profiles = outcome.value
+    results_exporter.save(profiles)
+else:
+    print(outcome.error.message)
 ```
+
+Public workflow methods return `Result[T]`, with calculated data or a structured
+application error. Internal collaborators keep raising failures; the application
+reports once and converts the terminal workflow failure to a Result. No command
+bus, service locator or generic handler wrapper is introduced. Original causes
+remain internal and are excluded from response serialization.
 
 The database engine/session factory and provider-owned LLM client have APP/process
 scope. Repositories, mutable loggers and use cases have REQUEST scope, held for

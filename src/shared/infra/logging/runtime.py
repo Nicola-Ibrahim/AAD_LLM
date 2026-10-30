@@ -5,7 +5,6 @@ import io
 import logging
 import multiprocessing
 import sys
-import traceback
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -16,8 +15,14 @@ from pathlib import Path
 from typing import TextIO
 from uuid import uuid4
 
-from shared.application.diagnostics import diagnostic_context, diagnostic_fields, report_operation
+from shared.application.diagnostics import (
+    diagnostic_context,
+    diagnostic_fields,
+    report_operation,
+    reset_process_diagnostics,
+)
 from shared.config import PROJECT_ROOT
+from shared.infra.logging.exceptions import format_diagnostic_exception
 from shared.infra.logging.formatters import ConsoleFilter, ConsoleFormatter, DiagnosticFormatter
 
 _runtime: ContextVar["LoggingRuntime | None"] = ContextVar("logging_runtime", default=None)
@@ -48,7 +53,7 @@ class DiagnosticQueueHandler(QueueHandler):
         record.msg = record.getMessage()
         record.args = None
         if record.exc_info:
-            record.exc_text = "".join(traceback.format_exception(*record.exc_info))
+            record.exc_text = format_diagnostic_exception(record.exc_info[1])
             record.exc_info = None
         return record
 
@@ -123,6 +128,8 @@ class LoggingRuntime:
 
 def configure_worker_logging(queue: Queue, invocation: str) -> None:
     """Process initializer: workers emit records; only the parent writes files."""
+    reset_process_diagnostics()
+    _runtime.set(None)
     handler = DiagnosticQueueHandler(queue)
     handler.addFilter(ContextFilter(invocation))
     for name in _ROOTS:

@@ -1,10 +1,10 @@
 """Strict artifact reads and atomic writes with portable application errors."""
 
 import json
-import logging
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+from shared.application.diagnostics import record_diagnostic
 from shared.application.errors import ArtifactError, StorageError
 
 
@@ -35,7 +35,5 @@ def atomic_write(path: Path, data: bytes) -> None:
         if temporary is not None:
             try:
                 temporary.unlink(missing_ok=True)
-            except OSError:
-                logging.getLogger(__name__).warning(
-                    "Cannot remove temporary artifact: %s", temporary, exc_info=True
-                )
+            except OSError as cleanup:
+                record_diagnostic(f"Cannot remove temporary artifact {temporary}", cleanup)

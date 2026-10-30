@@ -8,8 +8,6 @@ Adapts the CandidateEvaluator service to the LLaMEA Solution callable interface:
 - Manages state serialization for picklable warm starts.
 """
 
-import logging
-
 from llamea import Solution
 
 from evolution.application.interfaces.logger import BaseLogger
@@ -21,6 +19,7 @@ from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.vos import IterationMetadata, ProblemProfile
 from evolution.infra.engines.llamea.prompts import FeedbackRenderer
 from evolution.infra.logging import SynthesisLogger
+from shared.application.diagnostics import record_diagnostic
 from shared.application.interfaces.candidate_executor import CANDIDATE_EXECUTION_VERSION
 from shared.domain.problem import BaseProblem
 from shared.infra.execution.candidate_executor import create_candidate_executor
@@ -175,13 +174,13 @@ class Evaluator:
             executor=create_candidate_executor(self._config.timeout_seconds),
         )
         if getattr(self, "_db_repo", None) is None:
-            logging.getLogger(__name__).warning(
+            record_diagnostic(
                 "[WARN] Evaluator resumed from pickle with _db_repo=None. "
                 "Reattach the repository before candidate execution. "
                 "Call evaluator._db_repo = repo to re-attach."
             )
         if getattr(self, "_code_repo", None) is None:
-            logging.getLogger(__name__).warning(
+            record_diagnostic(
                 "[WARN] Evaluator resumed from pickle with _code_repo=None. "
                 "Reattach the code repository before candidate execution."
             )

@@ -5,8 +5,10 @@ import logging
 import re
 import time
 
+from shared.application.result import ApplicationError
+from shared.infra.logging.exceptions import format_diagnostic_exception
+
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
-_SECRET = re.compile(r"(?i)(Bearer\s+\S+|sk-[a-zA-Z0-9_-]+)")
 
 
 class DiagnosticFormatter(logging.Formatter):
@@ -14,6 +16,9 @@ class DiagnosticFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         record = copy.copy(record)
+        if record.exc_info:
+            record.exc_text = format_diagnostic_exception(record.exc_info[1])
+            record.exc_info = None
         fields = " ".join(
             f"{key}={record.__dict__[key]}"
             for key in (
@@ -33,12 +38,12 @@ class DiagnosticFormatter(logging.Formatter):
             if key in record.__dict__
         )
         rendered = super().format(record)
-        return _SECRET.sub("[REDACTED]", _ANSI.sub("", f"{rendered} {fields}"))
+        return ApplicationError.sanitize(_ANSI.sub("", f"{rendered} {fields}"))
 
 
 class ConsoleFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        message = _SECRET.sub("[REDACTED]", record.getMessage())
+        message = ApplicationError.sanitize(record.getMessage())
         if record.exc_info:
             message += " (details in the diagnostic log)"
         return message

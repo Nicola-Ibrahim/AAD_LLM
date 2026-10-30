@@ -1,12 +1,12 @@
 """IOH Analyzer Telemetry Component for BBOB Benchmark Experiments."""
 
-import logging
 from pathlib import Path
 from types import TracebackType
 from typing import Any
 
 import ioh
 
+from shared.application.diagnostics import preserve_primary_failure
 from shared.application.errors import StorageError
 from shared.config import DATA_DIR
 from shared.domain.problem import BaseProblem
@@ -82,12 +82,8 @@ class ProblemAnalyzer:
             elif hasattr(self.problem, "_clean_problem"):
                 getattr(self.problem, "_clean_problem").attach_logger(self._logger)
         except Exception as e:
-            try:
+            with preserve_primary_failure("IOH analyzer attachment cleanup"):
                 self.close()
-            except StorageError:
-                logging.getLogger(__name__).warning(
-                    "Analyzer cleanup failed after attachment error", exc_info=True
-                )
             raise StorageError(f"Could not attach IOH Analyzer in {self.log_dir}") from e
 
         return self
@@ -113,12 +109,5 @@ class ProblemAnalyzer:
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
-        if exc_val is None:
+        with preserve_primary_failure("IOH analyzer close"):
             self.close()
-        else:
-            try:
-                self.close()
-            except StorageError:
-                logging.getLogger(__name__).warning(
-                    "Analyzer cleanup failed; preserving the primary error", exc_info=True
-                )

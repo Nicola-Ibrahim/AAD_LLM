@@ -459,13 +459,13 @@ def test_benchmark_service_run_verbose_control(tmp_path: Path, make_progress_log
     # 1. Run with verbose=False -> No output captured in buffer
     service.service.run_benchmarks(
         **run_parameters(service.config), solver_type="baselines", verbose=False
-    )
+    ).value
     assert buf.getvalue() == ""
 
     # 2. Run with verbose=True -> Output is captured
     service.service.run_benchmarks(
         **run_parameters(service.config), solver_type="baselines", verbose=True
-    )
+    ).value
     assert len(buf.getvalue()) > 0
     assert "CMA-ES" in buf.getvalue()
 

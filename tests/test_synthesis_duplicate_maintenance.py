@@ -85,7 +85,7 @@ def test_safe_preview_preserves_valid_runs_and_progress(database: Database, tmp_
     maintenance = SynthesisDuplicateMaintenance(
         SQLiteDuplicateStorage(database, data_directory=tmp_path)
     )
-    plan = maintenance.preview()
+    plan = maintenance.preview().value
     assert plan.delete_ids == (3, 4)
     assert counts(database) == before
     assert (tmp_path / "code/experiment_3").is_dir()
@@ -98,8 +98,10 @@ def test_collapse_uses_error_then_null_first_evaluation_ranking(
     add(database, tmp_path, 2, error=0.1, evaluations=10)
     add(database, tmp_path, 3, error=0.1, evaluations=None)
     add(database, tmp_path, 4, error=0.1, evaluations=None)
-    plan = SynthesisDuplicateMaintenance(SQLiteDuplicateStorage(database)).preview(
-        collapse_valid_runs=True
+    plan = (
+        SynthesisDuplicateMaintenance(SQLiteDuplicateStorage(database))
+        .preview(collapse_valid_runs=True)
+        .value
     )
     assert plan.delete_ids == (1, 2, 4)
     assert [row.experiment_id for row in plan.rows if row.action == "keep"] == [3]
@@ -128,7 +130,7 @@ def test_distinct_conditions_and_protocols_never_merge(
     assert (
         SynthesisDuplicateMaintenance(SQLiteDuplicateStorage(database))
         .preview(collapse_valid_runs=True)
-        .rows
+        .value.rows
         == ()
     )
 
@@ -145,10 +147,10 @@ def test_backup_and_quarantine_preserve_recovery_and_unrelated_records(
     maintenance = SynthesisDuplicateMaintenance(
         SQLiteDuplicateStorage(database, data_directory=tmp_path)
     )
-    plan = maintenance.preview()
+    plan = maintenance.preview().value
     result = maintenance.apply(
         plan, confirmation=plan.confirmation, jobs_stopped=True, quarantine_files=True
-    )
+    ).value
     assert result.deleted_ids == (2,)
     assert counts(database) == (2, 2, 2)
     assert (tmp_path / "code/experiment_1/iter_1.py").is_file()
@@ -162,7 +164,7 @@ def test_backup_and_quarantine_preserve_recovery_and_unrelated_records(
     manifest = json.loads((result.backup_directory / "manifest.json").read_text())
     assert manifest["plan"]["collapse_valid_runs"] is False
     assert len(manifest["quarantined_artifacts"]) == 2
-    assert maintenance.preview().delete_ids == ()
+    assert maintenance.preview().value.delete_ids == ()
 
 
 def test_stale_plan_and_missing_confirmation_cannot_delete(
@@ -173,14 +175,20 @@ def test_stale_plan_and_missing_confirmation_cannot_delete(
     maintenance = SynthesisDuplicateMaintenance(
         SQLiteDuplicateStorage(database, data_directory=tmp_path)
     )
-    plan = maintenance.preview()
-    with pytest.raises(ValueError, match="exact preview"):
-        maintenance.apply(plan, confirmation="", jobs_stopped=True)
-    with pytest.raises(ValueError, match="Stop"):
-        maintenance.apply(plan, confirmation=plan.confirmation, jobs_stopped=False)
+    plan = maintenance.preview().value
+    outcome = maintenance.apply(plan, confirmation="", jobs_stopped=True)
+    assert not outcome.is_success
+    assert isinstance(outcome.exception, ValueError)
+    assert "exact preview" in outcome.error.message
+    outcome = maintenance.apply(plan, confirmation=plan.confirmation, jobs_stopped=False)
+    assert not outcome.is_success
+    assert isinstance(outcome.exception, ValueError)
+    assert "Stop" in outcome.error.message
     add(database, tmp_path, 3, problem_id=8)
-    with pytest.raises(RuntimeError, match="changed"):
-        maintenance.apply(plan, confirmation=plan.confirmation, jobs_stopped=True)
+    outcome = maintenance.apply(plan, confirmation=plan.confirmation, jobs_stopped=True)
+    assert not outcome.is_success
+    assert isinstance(outcome.exception, RuntimeError)
+    assert "changed" in outcome.error.message
     assert counts(database) == (3, 3, 3)
     assert not (tmp_path / "maintenance_backups").exists()
 
@@ -191,10 +199,12 @@ def test_forged_plan_cannot_delete_protected_winner(database: Database, tmp_path
     maintenance = SynthesisDuplicateMaintenance(
         SQLiteDuplicateStorage(database, data_directory=tmp_path)
     )
-    plan = maintenance.preview()
+    plan = maintenance.preview().value
     forged = replace(plan, rows=tuple(replace(row, action="delete") for row in plan.rows))
-    with pytest.raises(RuntimeError, match="changed"):
-        maintenance.apply(forged, confirmation=forged.confirmation, jobs_stopped=True)
+    outcome = maintenance.apply(forged, confirmation=forged.confirmation, jobs_stopped=True)
+    assert not outcome.is_success
+    assert isinstance(outcome.exception, RuntimeError)
+    assert "changed" in outcome.error.message
     assert counts(database) == (2, 2, 2)
 
 
@@ -209,11 +219,13 @@ def test_shared_code_cannot_be_quarantined(database: Database, tmp_path: Path) -
     maintenance = SynthesisDuplicateMaintenance(
         SQLiteDuplicateStorage(database, data_directory=tmp_path)
     )
-    plan = maintenance.preview()
-    with pytest.raises(ValueError, match="retained experiment"):
-        maintenance.apply(
-            plan, confirmation=plan.confirmation, jobs_stopped=True, quarantine_files=True
-        )
+    plan = maintenance.preview().value
+    outcome = maintenance.apply(
+        plan, confirmation=plan.confirmation, jobs_stopped=True, quarantine_files=True
+    )
+    assert not outcome.is_success
+    assert isinstance(outcome.exception, ValueError)
+    assert "retained experiment" in outcome.error.message
     assert counts(database) == (2, 2, 2)
 
 
@@ -227,7 +239,7 @@ def test_legacy_database_without_seed_column_is_supported(
     maintenance = SynthesisDuplicateMaintenance(
         SQLiteDuplicateStorage(database, data_directory=tmp_path)
     )
-    assert maintenance.preview().delete_ids == (2,)
+    assert maintenance.preview().value.delete_ids == (2,)
 
 
 def test_notebook_compiles_and_defaults_to_preview_only() -> None:
@@ -255,7 +267,7 @@ def test_missing_summary_does_not_delete_a_completed_finite_candidate(
     add(database, tmp_path, 2)
     with database.engine.begin() as connection:
         connection.exec_driver_sql("UPDATE iterations SET final_error=0.2 WHERE experiment_id=1")
-    plan = SynthesisDuplicateMaintenance(SQLiteDuplicateStorage(database)).preview()
+    plan = SynthesisDuplicateMaintenance(SQLiteDuplicateStorage(database)).preview().value
     assert plan.delete_ids == ()
     assert all(row.valid_completed for row in plan.rows)
 
@@ -270,11 +282,13 @@ def test_model_scope_does_not_remove_another_models_records(
     maintenance = SynthesisDuplicateMaintenance(
         SQLiteDuplicateStorage(database, data_directory=tmp_path)
     )
-    plan = maintenance.preview(models=["full-model-name"])
+    plan = maintenance.preview(models=["full-model-name"]).value
     assert plan.delete_ids == (2,)
     assert {row.experiment_id for row in plan.rows} == {1, 2}
-    with pytest.raises(ValueError, match="not present"):
-        maintenance.preview(models=["missing-model"])
+    outcome = maintenance.preview(models=["missing-model"])
+    assert not outcome.is_success
+    assert isinstance(outcome.exception, ValueError)
+    assert "not present" in outcome.error.message
 
 
 def test_failed_deletion_rolls_back_rows_and_restores_quarantined_files(
@@ -289,11 +303,13 @@ def test_failed_deletion_rolls_back_rows_and_restores_quarantined_files(
     maintenance = SynthesisDuplicateMaintenance(
         SQLiteDuplicateStorage(database, data_directory=tmp_path)
     )
-    plan = maintenance.preview()
-    with pytest.raises(Exception, match="protected"):
-        maintenance.apply(
-            plan, confirmation=plan.confirmation, jobs_stopped=True, quarantine_files=True
-        )
+    plan = maintenance.preview().value
+    outcome = maintenance.apply(
+        plan, confirmation=plan.confirmation, jobs_stopped=True, quarantine_files=True
+    )
+    assert not outcome.is_success
+    assert isinstance(outcome.exception, Exception)
+    assert "protected" in outcome.error.message
     assert counts(database) == (2, 2, 2)
     assert (tmp_path / "code/experiment_2/iter_1.py").is_file()
     assert list((tmp_path / "maintenance_backups").glob("*/database.sqlite3"))
@@ -311,11 +327,13 @@ def test_symlink_artifact_is_refused_before_any_deletion(
     maintenance = SynthesisDuplicateMaintenance(
         SQLiteDuplicateStorage(database, data_directory=tmp_path)
     )
-    plan = maintenance.preview()
-    with pytest.raises(ValueError, match="Unsafe artifact"):
-        maintenance.apply(
-            plan, confirmation=plan.confirmation, jobs_stopped=True, quarantine_files=True
-        )
+    plan = maintenance.preview().value
+    outcome = maintenance.apply(
+        plan, confirmation=plan.confirmation, jobs_stopped=True, quarantine_files=True
+    )
+    assert not outcome.is_success
+    assert isinstance(outcome.exception, ValueError)
+    assert "Unsafe artifact" in outcome.error.message
     assert counts(database) == (2, 2, 2)
     assert (outside / "iter_1.py").is_file()
     assert not (tmp_path / "maintenance_backups").exists()

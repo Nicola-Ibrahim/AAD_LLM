@@ -67,7 +67,7 @@ def test_audit_does_not_substitute_implicit_counts_or_count_synthesis_gaps(
         "clean_errors": [0.0] * 20,
     }
     original = dict(service.trials.state_repo.records)
-    snapshot = audit_for(service).get_audit_data()
+    snapshot = audit_for(service).get_audit_data().value
     stale = snapshot.benchmarks.loc[snapshot.benchmarks["key"] == row["key"]].iloc[0]
     assert stale["status"] == "NEEDS_RERUN"
     assert stale["runs_found"] == 0
@@ -85,7 +85,7 @@ def test_audit_excludes_missing_code_and_keeps_baselines_without_models(
     service = transfer_service
     audit = audit_for(service)
     service.workload.code_reader.exists.return_value = False
-    snapshot = audit.get_audit_data()
+    snapshot = audit.get_audit_data().value
     assert snapshot.coverage_summary.missing_code_cells > 0
     assert snapshot.coverage_summary.total_cells == int(snapshot.benchmarks["eligible"].sum())
     service.workload.sqlite_repo.get_synthesis_dataframes.return_value = (
@@ -96,7 +96,7 @@ def test_audit_excludes_missing_code_and_keeps_baselines_without_models(
     repo = service.workload.champion_selection.champions_repo
     repo.query_candidates.return_value = repo.query_candidates.return_value.iloc[:0]
     service.workload.planned_target_conditions = ((2, 0.0, 1),)
-    snapshot = audit.get_audit_data()
+    snapshot = audit.get_audit_data().value
     assert snapshot.completed_models == ()
     assert not snapshot.benchmarks.empty
     assert set(snapshot.benchmarks["solver_type"]) == {"baseline"}
@@ -330,7 +330,7 @@ def test_execution_uses_exact_candidates_and_one_selection_snapshot(transfer_ser
 
     results = service.service.run_benchmarks(
         **run_parameters(service.config), solver_type="champions", verbose=False
-    )
+    ).value
 
     assert len(results) == 2
     selection.flatten_champions.assert_called_once_with()
@@ -344,7 +344,7 @@ def test_readiness_and_resumption_agree_on_incompatible_partial_history(transfer
     service = transfer_service
     service.service.run_benchmarks(
         **run_parameters(service.config), solver_type="champions", verbose=False
-    )
+    ).value
     task = service.workload.discover("champions", config=service.config)[0]
     state = service.trials.state_repo
     provenance = state.records[task.target_dir]
@@ -356,10 +356,12 @@ def test_readiness_and_resumption_agree_on_incompatible_partial_history(transfer
     assert inspection.reason == "incompatible_execution"
     assert inspection.recorded_trials == 3
     assert inspection.reusable_trials == 0
-    with pytest.raises(ValueError, match="unknown execution contract"):
-        service.service.run_benchmarks(
-            **run_parameters(service.config), solver_type="champions", verbose=False
-        )
+    result = service.service.run_benchmarks(
+        **run_parameters(service.config), solver_type="champions", verbose=False
+    )
+    assert not result.is_success
+    assert isinstance(result.exception, ValueError)
+    assert "unknown execution contract" in result.error.message
     assert state.records[task.target_dir] == original
 
 
@@ -369,7 +371,7 @@ def test_frozen_target_execution_pairing_and_baseline_reuse(
     service = transfer_service
     rows = service.service.run_benchmarks(
         **run_parameters(service.config), solver_type="cross_function", verbose=False
-    )
+    ).value
     assert len(rows) == 6  # Four source-target pairs; two shared baselines.
     records = service.trials.state_repo.records
     transfer = [r for r in records.values() if "code_hash" in r]
@@ -395,7 +397,7 @@ def test_frozen_target_execution_pairing_and_baseline_reuse(
     count = executor.execute_algorithm.call_count
     cached = service.service.run_benchmarks(
         **run_parameters(service.config), solver_type="cross_function", verbose=False
-    )
+    ).value
     assert set(cached["status"]) == {"CACHED"}
     assert executor.execute_algorithm.call_count == count
 
@@ -437,12 +439,12 @@ def test_native_diagonals_are_reused_without_reexecution(
     service = transfer_service
     service.service.run_benchmarks(
         **run_parameters(service.config), solver_type="champions", verbose=False
-    )
+    ).value
     executor = service.trials.executor_factory(1)
     before = executor.execute_algorithm.call_count
     rows = service.service.run_benchmarks(
         **run_parameters(service.config), solver_type="cross_function", verbose=False
-    )
+    ).value
     assert (
         executor.execute_algorithm.call_count == before + 6
     )  # Two off-diagonal pairs × three trials.
@@ -478,7 +480,7 @@ def test_workflow_flags_and_baseline_targets(transfer_service: BenchmarkCoordina
     assert service.service.run_benchmarks(
         **run_parameters(service.config),
         solver_type="cross_function",
-    ).empty
+    ).value.empty
     service.config.cross_function_enabled = True
     assert set(
         service.workload.audit_workload("cross_function", config=service.config)["problem_id"]
@@ -562,3 +564,20 @@ def test_reader_excludes_skipped_tail_but_retains_actual_prequery_failure(tmp_pa
     runs = reader.load_benchmark_traces().get_runs(2, 0.0, 1, "pso")
     assert len(runs) == 1  # Actual zero-query failure, not the absent finite-result trace.
     assert not runs[0].is_success()
+
+
+@pytest.mark.parametrize("operation", ["eval_clean", "is_in_bounds"])
+def test_champion_backend_defect_does_not_record_failed_trial(
+    transfer_service, monkeypatch, operation
+):
+    from shared.application.errors import ProblemEvaluationError
+
+    service = transfer_service
+    monkeypatch.setattr(
+        Problem, operation, MagicMock(side_effect=RuntimeError("problem backend defect"))
+    )
+    champion = next(iter(service.workload.champion_selection.flatten_champions().values()))
+    with pytest.raises(ProblemEvaluationError) as caught:
+        service.trials.run_champion_trials(champion, verbose=False, config=service.config)
+    assert isinstance(caught.value.__cause__, RuntimeError)
+    assert service.trials.state_repo.records == {}

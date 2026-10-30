@@ -1,7 +1,6 @@
 """Trace reader for parsing and scanning empirical IOHprofiler benchmark logs."""
 
 import json
-import logging
 import re
 import shutil
 from collections import defaultdict, deque
@@ -21,7 +20,8 @@ from benchmark.domain.benchmark_results import (
 from benchmark.domain.services.condition_status import inspect_condition
 from benchmark.domain.trial_schedule import TrialIdentity, matching_trial_indices
 from benchmark.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
-from shared.application.errors import ArtifactError
+from shared.application.diagnostics import preserve_primary_failure, record_diagnostic
+from shared.application.errors import ArtifactError, StorageError
 from shared.config import RESULTS_DIR
 from shared.infra.artifacts import atomic_write, read_json_object
 
@@ -64,44 +64,51 @@ class IOHTraceReader(BenchmarkTraceReader):
         runs: list[RunTrace] = []
         current_evals: list[float] = []
         current_raw: list[float] = []
+        excluded = 0
 
         if not dat_path.exists():
             return runs
 
-        with open(dat_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                if line.startswith(("function", "evaluations", '"evaluations"', "#", "instance")):
-                    if current_evals:
-                        runs.append(
-                            RunTrace(
-                                evaluations=np.array(current_evals, dtype=float),
-                                raw_objectives=np.array(current_raw, dtype=float),
-                            )
-                        )
-                        current_evals, current_raw = [], []
-                    continue
-                parts = line.split()
-                if len(parts) >= 2:
-                    try:
-                        eval_val = float(parts[0])
-                        raw_str = parts[1].strip()
-                        if raw_str.lower() in ("none", "null", "nan"):
-                            if current_raw:
-                                raw_val = current_raw[-1]
-                            else:
-                                continue
-                        else:
-                            raw_val = float(raw_str)
-                        current_evals.append(eval_val)
-                        current_raw.append(raw_val)
-                    except ValueError:
-                        logging.getLogger(__name__).warning(
-                            "Unparseable trace row excluded from %s", dat_path
-                        )
+        try:
+            with open(dat_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
                         continue
+                    if line.startswith(
+                        ("function", "evaluations", '"evaluations"', "#", "instance")
+                    ):
+                        if current_evals:
+                            runs.append(
+                                RunTrace(
+                                    evaluations=np.array(current_evals, dtype=float),
+                                    raw_objectives=np.array(current_raw, dtype=float),
+                                )
+                            )
+                            current_evals, current_raw = [], []
+                        continue
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        try:
+                            eval_val = float(parts[0])
+                            raw_str = parts[1].strip()
+                            if raw_str.lower() in ("none", "null", "nan"):
+                                if current_raw:
+                                    raw_val = current_raw[-1]
+                                else:
+                                    excluded += 1
+                                    continue
+                            else:
+                                raw_val = float(raw_str)
+                            current_evals.append(eval_val)
+                            current_raw.append(raw_val)
+                        except ValueError:
+                            excluded += 1
+                            continue
+                    else:
+                        excluded += 1
+        except (OSError, UnicodeError) as error:
+            raise ArtifactError(f"Cannot read IOH trace: {dat_path}") from error
 
         if current_evals:
             runs.append(
@@ -111,6 +118,8 @@ class IOHTraceReader(BenchmarkTraceReader):
                 )
             )
 
+        if excluded:
+            record_diagnostic(f"Excluded {excluded} unusable trace rows from {dat_path}")
         return runs
 
     def get_run_count(self, solver_dir: Path) -> int:
@@ -356,7 +365,10 @@ class BenchmarkStateRepository(BenchmarkStateStore):
     def remove_solver_traces(self, solver_dir: Path) -> None:
         """Remove one stale solver condition directory before a clean evaluation."""
         if solver_dir.exists():
-            shutil.rmtree(solver_dir)
+            try:
+                shutil.rmtree(solver_dir)
+            except OSError as error:
+                raise StorageError(f"Cannot remove solver traces: {solver_dir}") from error
 
     @staticmethod
     def solver_directory_exists(solver_dir: Path) -> bool:
@@ -365,7 +377,7 @@ class BenchmarkStateRepository(BenchmarkStateStore):
     def get_trace_run_count(self, solver_dir: Path) -> int:
         count = 0
         for path in solver_dir.glob("IOHprofiler*.json"):
-            metadata = json.loads(path.read_text(encoding="utf-8"))
+            metadata = read_json_object(path)
             count += sum(
                 int(run.get("evals", 0) > 0)
                 for scenario in metadata.get("scenarios", [])
@@ -373,41 +385,57 @@ class BenchmarkStateRepository(BenchmarkStateStore):
             )
         return count
 
+    @staticmethod
+    def _create_logger(target_dir: Path, algorithm_name: str) -> object:
+        try:
+            target_dir.parent.mkdir(parents=True, exist_ok=True)
+            return ioh.logger.Analyzer(
+                root=str(target_dir.parent),
+                folder_name=target_dir.name,
+                algorithm_name=algorithm_name,
+                store_positions=False,
+            )
+        except Exception as error:
+            raise StorageError(f"Cannot create IOH logger: {target_dir}") from error
+
     @contextmanager
     def open_run_logger(
         self, target_dir: Path, algorithm_name: str, incremental: bool
     ) -> Iterator[object]:
-        """Own temporary log staging, IOH logger construction, and incremental merging."""
+        """Close/merge in the original order, without masking a trial failure."""
         if incremental:
             from tempfile import TemporaryDirectory
 
-            with TemporaryDirectory() as tmpdir:
-                run_dir = Path(tmpdir) / target_dir.name
-                run_dir.parent.mkdir(parents=True, exist_ok=True)
-                logger = ioh.logger.Analyzer(
-                    root=str(run_dir.parent),
-                    folder_name=run_dir.name,
-                    algorithm_name=algorithm_name,
-                    store_positions=False,
-                )
+            try:
+                temporary = TemporaryDirectory()
+            except OSError as error:
+                raise StorageError(f"Cannot stage IOH traces for {target_dir}") from error
+            try:
+                run_dir = Path(temporary.name) / target_dir.name
+                logger = self._create_logger(run_dir, algorithm_name)
                 try:
                     yield logger
                 finally:
-                    logger.close()
-                    self.merge_run_logs(run_dir, target_dir)
+                    with preserve_primary_failure(f"Close/merge IOH traces for {target_dir}"):
+                        try:
+                            logger.close()
+                        except Exception as error:
+                            raise StorageError(f"Cannot close IOH logger: {run_dir}") from error
+                        self.merge_run_logs(run_dir, target_dir)
+            finally:
+                with preserve_primary_failure(f"Remove IOH staging for {target_dir}"):
+                    temporary.cleanup()
             return
 
-        target_dir.parent.mkdir(parents=True, exist_ok=True)
-        logger = ioh.logger.Analyzer(
-            root=str(target_dir.parent),
-            folder_name=target_dir.name,
-            algorithm_name=algorithm_name,
-            store_positions=False,
-        )
+        logger = self._create_logger(target_dir, algorithm_name)
         try:
             yield logger
         finally:
-            logger.close()
+            with preserve_primary_failure(f"Close IOH logger for {target_dir}"):
+                try:
+                    logger.close()
+                except Exception as error:
+                    raise StorageError(f"Cannot close IOH logger: {target_dir}") from error
 
     def read_provenance(self, solver_dir: Path) -> dict[str, object] | None:
         """Reads and parses provenance.json for a solver directory if it exists."""
@@ -418,7 +446,10 @@ class BenchmarkStateRepository(BenchmarkStateStore):
 
     def write_provenance(self, solver_dir: Path, data: dict[str, object]) -> None:
         """Atomically replace provenance so an interrupted write preserves prior outcomes."""
-        solver_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            solver_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            raise StorageError(f"Cannot create provenance directory: {solver_dir}") from error
         prov_path = solver_dir / "provenance.json"
         atomic_write(prov_path, json.dumps(data, indent=2).encode("utf-8"))
 
@@ -428,34 +459,39 @@ class BenchmarkStateRepository(BenchmarkStateStore):
     @staticmethod
     def merge_run_logs(source_dir: Path, target_dir: Path) -> None:
         """Merge incremental IOHprofiler .dat and .json run traces into primary target directory."""
-        for src_dat in source_dir.glob("**/*.dat"):
-            rel = src_dat.relative_to(source_dir)
-            tgt_dat = target_dir / rel
-            tgt_dat.parent.mkdir(parents=True, exist_ok=True)
-            if tgt_dat.exists() and tgt_dat.stat().st_size > 0:
-                content = src_dat.read_text(encoding="utf-8")
-                with open(tgt_dat, "a", encoding="utf-8") as f:
-                    f.write("\n" + content)
-            else:
-                shutil.copy2(src_dat, tgt_dat)
+        try:
+            for src_dat in source_dir.glob("**/*.dat"):
+                rel = src_dat.relative_to(source_dir)
+                tgt_dat = target_dir / rel
+                tgt_dat.parent.mkdir(parents=True, exist_ok=True)
+                if tgt_dat.exists() and tgt_dat.stat().st_size > 0:
+                    content = src_dat.read_text(encoding="utf-8")
+                    with open(tgt_dat, "a", encoding="utf-8") as f:
+                        f.write("\n" + content)
+                else:
+                    shutil.copy2(src_dat, tgt_dat)
 
-        for src_json in source_dir.glob("**/*.json"):
-            if "provenance" in src_json.name:
-                continue
-            rel = src_json.relative_to(source_dir)
-            tgt_json = target_dir / rel
-            tgt_json.parent.mkdir(parents=True, exist_ok=True)
-            if tgt_json.exists():
-                try:
-                    src_data = json.loads(src_json.read_text(encoding="utf-8"))
-                    tgt_data = json.loads(tgt_json.read_text(encoding="utf-8"))
-                    src_runs = src_data.get("scenarios", [{}])[0].get("runs", [])
-                    if "scenarios" in tgt_data and tgt_data["scenarios"]:
-                        tgt_data["scenarios"][0].setdefault("runs", []).extend(src_runs)
-                        atomic_write(tgt_json, json.dumps(tgt_data, indent=2).encode("utf-8"))
-                except (OSError, ValueError, TypeError, KeyError, IndexError) as error:
-                    raise ArtifactError(
-                        f"Cannot merge IOH metadata: {src_json} into {tgt_json}"
-                    ) from error
-            else:
-                shutil.copy2(src_json, tgt_json)
+            for src_json in source_dir.glob("**/*.json"):
+                if "provenance" in src_json.name:
+                    continue
+                rel = src_json.relative_to(source_dir)
+                tgt_json = target_dir / rel
+                tgt_json.parent.mkdir(parents=True, exist_ok=True)
+                if tgt_json.exists():
+                    try:
+                        src_data = json.loads(src_json.read_text(encoding="utf-8"))
+                        tgt_data = json.loads(tgt_json.read_text(encoding="utf-8"))
+                        src_runs = src_data.get("scenarios", [{}])[0].get("runs", [])
+                        if "scenarios" in tgt_data and tgt_data["scenarios"]:
+                            tgt_data["scenarios"][0].setdefault("runs", []).extend(src_runs)
+                            atomic_write(tgt_json, json.dumps(tgt_data, indent=2).encode("utf-8"))
+                    except (OSError, ValueError, TypeError, KeyError, IndexError) as error:
+                        raise ArtifactError(
+                            f"Cannot merge IOH metadata: {src_json} into {tgt_json}"
+                        ) from error
+                else:
+                    shutil.copy2(src_json, tgt_json)
+        except OSError as error:
+            raise StorageError(
+                f"Cannot merge IOH traces: {source_dir} into {target_dir}"
+            ) from error

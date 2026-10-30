@@ -12,6 +12,8 @@ from typing import Any
 
 import numpy as np
 
+from shared.application.errors import ProblemEvaluationError
+
 
 def run_cmaes(problem: Any, budget: int) -> tuple[float, float, int]:
     """Execute CMA-ES on the target problem."""
@@ -33,7 +35,10 @@ def run_cmaes(problem: Any, budget: int) -> tuple[float, float, int]:
     t1 = time.perf_counter()
 
     best_x = es.result.xbest
-    best_clean = problem.eval_clean(best_x)
+    try:
+        best_clean = problem.eval_clean(best_x)
+    except Exception as error:
+        raise ProblemEvaluationError("Trusted clean-objective evaluation failed") from error
     return best_clean, t1 - t0, evals
 
 
@@ -52,7 +57,10 @@ def run_de(problem: Any, budget: int) -> tuple[float, float, int]:
         polish=False,
     )
     t1 = time.perf_counter()
-    best_clean = problem.eval_clean(res.x)
+    try:
+        best_clean = problem.eval_clean(res.x)
+    except Exception as error:
+        raise ProblemEvaluationError("Trusted clean-objective evaluation failed") from error
     return best_clean, t1 - t0, res.nfev
 
 
@@ -97,7 +105,10 @@ def run_pso(problem: Any, budget: int) -> tuple[float, float, int]:
                     gbest_X = X[i].copy()
 
     t1 = time.perf_counter()
-    best_clean = problem.eval_clean(gbest_X)
+    try:
+        best_clean = problem.eval_clean(gbest_X)
+    except Exception as error:
+        raise ProblemEvaluationError("Trusted clean-objective evaluation failed") from error
     return best_clean, t1 - t0, evals
 
 

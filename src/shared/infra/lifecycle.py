@@ -3,11 +3,13 @@
 import atexit
 import logging
 import os
-from contextlib import ExitStack
+import sys
+from contextlib import ExitStack, nullcontext
 from typing import TypeVar
 
 from dishka import Provider
 
+from shared.application.diagnostics import preserve_primary_failure
 from shared.infra import di
 from shared.infra.logging.runtime import start_logging
 
@@ -33,17 +35,23 @@ class WorkflowScope:
         self._resources = ExitStack()
         workflow = providers[0].__class__.__module__.split(".")[0] if providers else "workflow"
         self.logging = start_logging(workflow)
-        self._resources.callback(self.logging.close)
         try:
             with self.logging.operation("setup"):
                 logging.getLogger(__name__).info(
                     "Diagnostic log: %s", self.logging.path, extra={"progress": True}
                 )
-                self._services = self._resources.enter_context(
-                    di.container_scope(*providers, context=context, request_context=request_context)
-                )
+                try:
+                    self._services = self._resources.enter_context(
+                        di.container_scope(
+                            *providers, context=context, request_context=request_context
+                        )
+                    )
+                except BaseException:
+                    self._close_after_failure()
+                    raise
         except BaseException:
-            self._close_after_failure()
+            with preserve_primary_failure("Diagnostic logging close"):
+                self.logging.close()
             raise
         atexit.register(self.close)
 
@@ -55,19 +63,22 @@ class WorkflowScope:
             raise RuntimeError("This workflow scope is closed; rerun setup.")
         try:
             with self.logging.operation(f"resolve {dependency.__name__}"):
-                return self._services.get(dependency)
+                try:
+                    return self._services.get(dependency)
+                except BaseException:
+                    self._close_after_failure()
+                    raise
         except BaseException:
-            self._close_after_failure()
+            with preserve_primary_failure("Diagnostic logging close"):
+                self.logging.close()
             raise
 
     def _close_after_failure(self) -> None:
         """Preserve the setup/resolve error even if resource teardown also fails."""
-        try:
-            self.close()
-        except Exception:
-            logging.getLogger(__name__).warning(
-                "Cleanup failed; preserving the original error", exc_info=True
-            )
+        self._closed = True
+        atexit.unregister(self.close)
+        with preserve_primary_failure("Workflow cleanup"):
+            self._resources.close()
 
     def close(self) -> None:
         """Release resources once, only in the process that created them."""
@@ -75,4 +86,11 @@ class WorkflowScope:
             return
         self._closed = True
         atexit.unregister(self.close)
-        self._resources.close()
+        with preserve_primary_failure("Workflow resource close"):
+            try:
+                operation = nullcontext() if sys.exception() else self.logging.operation("shutdown")
+                with operation:
+                    self._resources.close()
+            finally:
+                with preserve_primary_failure("Diagnostic logging close"):
+                    self.logging.close()

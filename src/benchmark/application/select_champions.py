@@ -8,6 +8,7 @@ import pandas as pd
 from benchmark.application.champions import Champion, ChampionCatalog
 from benchmark.application.interfaces.champion_repository import ChampionRepository
 from shared.application.diagnostics import report_operation
+from shared.application.result import Result
 
 
 class ChampionSelectionService:
@@ -70,10 +71,7 @@ class ChampionSelectionService:
         return champions
 
     def get_champions(self) -> ChampionCatalog:
-        with report_operation(
-            logging.getLogger("benchmark.application.select_champions"), "get champions"
-        ):
-            return self.select_candidates(self.champions_repo.query_candidates())
+        return self.select_candidates(self.champions_repo.query_candidates())
 
     def flatten_champions(
         self, champions_dict: ChampionCatalog | None = None
@@ -89,18 +87,21 @@ class ChampionSelectionService:
 
     def export_champions(
         self, output_path: Path | None = None
-    ) -> tuple[ChampionCatalog, pd.DataFrame]:
-        with report_operation(
-            logging.getLogger("benchmark.application.select_champions"), "export champions"
-        ):
-            champions = self.get_champions()
-            self.champions_repo.write_champions_json(champions, output_path)
-            summary_rows = [
-                {"model": model, "key": key, **candidate}
-                for model, conditions in champions.items()
-                for key, candidate in conditions.items()
-            ]
-            return champions, pd.DataFrame(summary_rows)
+    ) -> Result[tuple[ChampionCatalog, pd.DataFrame]]:
+        try:
+            with report_operation(
+                logging.getLogger("benchmark.application.select_champions"), "export champions"
+            ):
+                champions = self.get_champions()
+                self.champions_repo.write_champions_json(champions, output_path)
+                summary_rows = [
+                    {"model": model, "key": key, **candidate}
+                    for model, conditions in champions.items()
+                    for key, candidate in conditions.items()
+                ]
+                return Result.success((champions, pd.DataFrame(summary_rows)))
+        except Exception as error:
+            return Result.failure("export champions", error)
 
 
 __all__ = ["ChampionSelectionService"]

@@ -96,8 +96,10 @@ def test_profiles_match_existing_calculations_and_load_once(snapshot, mode):
     loader = loader_for(snapshot)
     engine = EcdfConvergenceEngine()
     spy = MagicMock(wraps=engine)
-    result = AnalyzeEcdfAndConvergence(loader, spy, logger=BenchmarkLogger()).execute(
-        mode=mode, dims=None, problems=None, noise_stds=None
+    result = (
+        AnalyzeEcdfAndConvergence(loader, spy, logger=BenchmarkLogger())
+        .execute(mode=mode, dims=None, problems=None, noise_stds=None)
+        .value
     )
     loader.load.assert_called_once()
     assert spy.compute_trajectory_and_ecdf.call_count == sum(
@@ -138,9 +140,13 @@ def test_profiles_match_existing_calculations_and_load_once(snapshot, mode):
 
 def test_profiles_use_configured_fixed_budget(snapshot):
     snapshot = replace(snapshot, config=BenchmarkConfig(budget=1234))
-    result = AnalyzeEcdfAndConvergence(
-        loader_for(snapshot), EcdfConvergenceEngine(), logger=BenchmarkLogger()
-    ).execute(mode="explicit", dims=None, problems=None, noise_stds=None)
+    result = (
+        AnalyzeEcdfAndConvergence(
+            loader_for(snapshot), EcdfConvergenceEngine(), logger=BenchmarkLogger()
+        )
+        .execute(mode="explicit", dims=None, problems=None, noise_stds=None)
+        .value
+    )
     for condition in result.conditions:
         assert condition.evaluations[-1] == 1234
     assert result.provenance.settings["profile_grid_policy"] == "fixed_budget_v3"
@@ -149,9 +155,13 @@ def test_profiles_use_configured_fixed_budget(snapshot):
 def test_performance_uses_configured_fixed_budget(snapshot):
     snapshot = replace(snapshot, config=BenchmarkConfig(budget=1234))
     ecdf = MagicMock(wraps=EcdfConvergenceEngine())
-    result = AnalyzePerformance(
-        loader_for(snapshot), ecdf, PerformanceMetricsEngine(), logger=BenchmarkLogger()
-    ).execute(dims=None, problems=None, noise_stds=None)
+    result = (
+        AnalyzePerformance(
+            loader_for(snapshot), ecdf, PerformanceMetricsEngine(), logger=BenchmarkLogger()
+        )
+        .execute(dims=None, problems=None, noise_stds=None)
+        .value
+    )
     assert ecdf.compute_auc_ecdf_matrix.call_args.kwargs["budget"] == 1234
     assert result.provenance.settings["auc_grid_policy"] == "fixed_budget_v3"
 
@@ -159,15 +169,23 @@ def test_performance_uses_configured_fixed_budget(snapshot):
 def test_fixed_budget_aligns_profiles_auc_and_attainment(snapshot):
     snapshot = replace(snapshot, config=BenchmarkConfig(budget=100_000, trials_per_condition=2))
     filters = dict(dims=None, problems=None, noise_stds=None)
-    profiles = AnalyzeEcdfAndConvergence(
-        loader_for(snapshot), EcdfConvergenceEngine(), logger=BenchmarkLogger()
-    ).execute(mode="explicit", **filters)
+    profiles = (
+        AnalyzeEcdfAndConvergence(
+            loader_for(snapshot), EcdfConvergenceEngine(), logger=BenchmarkLogger()
+        )
+        .execute(mode="explicit", **filters)
+        .value
+    )
     assert {c.evaluations[-1] for c in profiles.conditions} == {100_000}
 
     engine = MagicMock(wraps=EcdfConvergenceEngine())
-    performance = AnalyzePerformance(
-        loader_for(snapshot), engine, PerformanceMetricsEngine(), logger=BenchmarkLogger()
-    ).execute(**filters)
+    performance = (
+        AnalyzePerformance(
+            loader_for(snapshot), engine, PerformanceMetricsEngine(), logger=BenchmarkLogger()
+        )
+        .execute(**filters)
+        .value
+    )
     assert engine.compute_auc_ecdf_matrix.call_args.kwargs["budget"] == 100_000
     expected = EcdfConvergenceEngine().compute_auc_ecdf_matrix(
         snapshot.dataset,
@@ -184,12 +202,16 @@ def test_fixed_budget_aligns_profiles_auc_and_attainment(snapshot):
     )
     pd.testing.assert_frame_equal(performance.table.drop(columns="Canonical Solver"), expected)
 
-    reliability = AnalyzeReliability(
-        loader_for(snapshot),
-        TransferAnalysisEngine(),
-        ReliabilityEngine(),
-        logger=BenchmarkLogger(),
-    ).execute(**filters)
+    reliability = (
+        AnalyzeReliability(
+            loader_for(snapshot),
+            TransferAnalysisEngine(),
+            ReliabilityEngine(),
+            logger=BenchmarkLogger(),
+        )
+        .execute(**filters)
+        .value
+    )
     assert reliability.evaluations[-1] == 100_000
 
 
@@ -208,22 +230,30 @@ def test_performance_includes_50d(snapshot):
         RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([1.0, 0.0])),
     )
     snapshot = replace(snapshot, dataset=dataset, config=BenchmarkConfig(budget=100_000))
-    result = AnalyzePerformance(
-        loader_for(snapshot),
-        EcdfConvergenceEngine(),
-        PerformanceMetricsEngine(),
-        logger=BenchmarkLogger(),
-    ).execute(dims=None, problems=None, noise_stds=None)
+    result = (
+        AnalyzePerformance(
+            loader_for(snapshot),
+            EcdfConvergenceEngine(),
+            PerformanceMetricsEngine(),
+            logger=BenchmarkLogger(),
+        )
+        .execute(dims=None, problems=None, noise_stds=None)
+        .value
+    )
     assert result.dims == [2, 5, 50]
 
 
 def test_reliability_matches_bootstrap_and_preserves_raw_csv_identifiers(snapshot):
-    result = AnalyzeReliability(
-        loader_for(snapshot),
-        TransferAnalysisEngine(),
-        ReliabilityEngine(),
-        logger=BenchmarkLogger(),
-    ).execute(dims=None, problems=None, noise_stds=None)
+    result = (
+        AnalyzeReliability(
+            loader_for(snapshot),
+            TransferAnalysisEngine(),
+            ReliabilityEngine(),
+            logger=BenchmarkLogger(),
+        )
+        .execute(dims=None, problems=None, noise_stds=None)
+        .value
+    )
     assert result.native.iloc[0]["Model"] == "Model"
     assert result.primary.iloc[0]["Model"] == "Model"
     rel = snapshot.config.reliability
@@ -246,9 +276,11 @@ def test_reliability_matches_bootstrap_and_preserves_raw_csv_identifiers(snapsho
 def test_noise_and_performance_match_domain_services(snapshot):
     filters = dict(dims=None, problems=None, noise_stds=None)
     transfer = TransferAnalysisEngine()
-    noise = AnalyzeNoiseRobustness(
-        loader_for(snapshot), transfer, logger=BenchmarkLogger()
-    ).execute(**filters)
+    noise = (
+        AnalyzeNoiseRobustness(loader_for(snapshot), transfer, logger=BenchmarkLogger())
+        .execute(**filters)
+        .value
+    )
     rel = snapshot.config.reliability
     expected = transfer.condition_table(
         transfer.frozen_noise_records(snapshot.noise_records),
@@ -263,12 +295,16 @@ def test_noise_and_performance_match_domain_services(snapshot):
             expected, rel.primary_prompt_strategy, rel.bootstrap_samples, rel.bootstrap_seed
         ),
     )
-    performance = AnalyzePerformance(
-        loader_for(snapshot),
-        EcdfConvergenceEngine(),
-        PerformanceMetricsEngine(),
-        logger=BenchmarkLogger(),
-    ).execute(**filters)
+    performance = (
+        AnalyzePerformance(
+            loader_for(snapshot),
+            EcdfConvergenceEngine(),
+            PerformanceMetricsEngine(),
+            logger=BenchmarkLogger(),
+        )
+        .execute(**filters)
+        .value
+    )
     engine = EcdfConvergenceEngine()
     expected = engine.compute_auc_ecdf_matrix(
         snapshot.dataset,
@@ -303,9 +339,13 @@ def test_noise_and_performance_match_domain_services(snapshot):
 
 
 def test_missing_trace_is_not_a_zero_profile(snapshot):
-    result = AnalyzeEcdfAndConvergence(
-        loader_for(snapshot), EcdfConvergenceEngine(), logger=BenchmarkLogger()
-    ).execute(mode="explicit", dims=None, problems=None, noise_stds=None)
+    result = (
+        AnalyzeEcdfAndConvergence(
+            loader_for(snapshot), EcdfConvergenceEngine(), logger=BenchmarkLogger()
+        )
+        .execute(mode="explicit", dims=None, problems=None, noise_stds=None)
+        .value
+    )
     assert all(s.solver != "CMA-ES" for c in result.conditions for s in c.series)
     assert any("CMA-ES" in message for message in result.diagnostics)
 
@@ -327,9 +367,13 @@ def test_profiles_do_not_export_baseline_only_conditions(snapshot, mode, suffix)
                 for run in runs:
                     dataset.add_run(condition, name, run)
     snapshot = replace(snapshot, dataset=dataset, models_to_solvers={"Model": [solver]})
-    result = AnalyzeEcdfAndConvergence(
-        loader_for(snapshot), EcdfConvergenceEngine(), logger=BenchmarkLogger()
-    ).execute(mode=mode, dims=None, problems=None, noise_stds=None)
+    result = (
+        AnalyzeEcdfAndConvergence(
+            loader_for(snapshot), EcdfConvergenceEngine(), logger=BenchmarkLogger()
+        )
+        .execute(mode=mode, dims=None, problems=None, noise_stds=None)
+        .value
+    )
     assert len(result.conditions) == 1
     condition = result.conditions[0]
     assert (condition.dim, condition.noise_std, condition.problems) == (2, 0.1, [8])
@@ -338,9 +382,13 @@ def test_profiles_do_not_export_baseline_only_conditions(snapshot, mode, suffix)
 
 def test_profile_with_no_model_traces_is_empty(snapshot):
     snapshot = replace(snapshot, models_to_solvers={"Missing": ["Missing / baseline"]})
-    result = AnalyzeEcdfAndConvergence(
-        loader_for(snapshot), EcdfConvergenceEngine(), logger=BenchmarkLogger()
-    ).execute(mode="explicit", dims=None, problems=None, noise_stds=None)
+    result = (
+        AnalyzeEcdfAndConvergence(
+            loader_for(snapshot), EcdfConvergenceEngine(), logger=BenchmarkLogger()
+        )
+        .execute(mode="explicit", dims=None, problems=None, noise_stds=None)
+        .value
+    )
     assert not result.conditions
     assert any("No model traces" in message for message in result.diagnostics)
 
@@ -356,12 +404,16 @@ def test_hardness_uses_only_available_model_noise_levels(snapshot):
         }
     )
     snapshot = replace(snapshot, dataset=dataset)
-    result = AnalyzePerformance(
-        loader_for(snapshot),
-        EcdfConvergenceEngine(),
-        PerformanceMetricsEngine(),
-        logger=BenchmarkLogger(),
-    ).execute(dims=None, problems=None, noise_stds=None)
+    result = (
+        AnalyzePerformance(
+            loader_for(snapshot),
+            EcdfConvergenceEngine(),
+            PerformanceMetricsEngine(),
+            logger=BenchmarkLogger(),
+        )
+        .execute(dims=None, problems=None, noise_stds=None)
+        .value
+    )
     assert result.hardness
     for summary in result.hardness:
         assert set(summary.tables) == {0.1}
@@ -385,12 +437,16 @@ def test_model_performance_pairs_only_observed_model_conditions(snapshot):
         RunTrace(evaluations=np.array([1, 10]), raw_objectives=np.array([1e12, 1e8])),
     )
     snapshot = replace(snapshot, dataset=dataset)
-    result = AnalyzePerformance(
-        loader_for(snapshot),
-        EcdfConvergenceEngine(),
-        PerformanceMetricsEngine(),
-        logger=BenchmarkLogger(),
-    ).execute(dims=None, problems=None, noise_stds=None)
+    result = (
+        AnalyzePerformance(
+            loader_for(snapshot),
+            EcdfConvergenceEngine(),
+            PerformanceMetricsEngine(),
+            logger=BenchmarkLogger(),
+        )
+        .execute(dims=None, problems=None, noise_stds=None)
+        .value
+    )
     assert set(result.targets) == {0.1}
     np.testing.assert_array_equal(
         result.targets[0.1],
@@ -418,22 +474,37 @@ def test_empty_inputs_return_explicit_empty_results(snapshot):
             loader_for(empty), EcdfConvergenceEngine(), logger=BenchmarkLogger()
         )
         .execute(mode="explicit", **filters)
-        .conditions
+        .value.conditions
     )
-    reliability = AnalyzeReliability(
-        loader_for(empty), TransferAnalysisEngine(), ReliabilityEngine(), logger=BenchmarkLogger()
-    ).execute(**filters)
+    reliability = (
+        AnalyzeReliability(
+            loader_for(empty),
+            TransferAnalysisEngine(),
+            ReliabilityEngine(),
+            logger=BenchmarkLogger(),
+        )
+        .execute(**filters)
+        .value
+    )
     assert not reliability.attainment and reliability.diagnostics
-    noise = AnalyzeNoiseRobustness(
-        loader_for(empty), TransferAnalysisEngine(), logger=BenchmarkLogger()
-    ).execute(**filters)
+    noise = (
+        AnalyzeNoiseRobustness(
+            loader_for(empty), TransferAnalysisEngine(), logger=BenchmarkLogger()
+        )
+        .execute(**filters)
+        .value
+    )
     assert noise.aggregate.empty and noise.diagnostics
-    performance = AnalyzePerformance(
-        loader_for(empty),
-        EcdfConvergenceEngine(),
-        PerformanceMetricsEngine(),
-        logger=BenchmarkLogger(),
-    ).execute(**filters)
+    performance = (
+        AnalyzePerformance(
+            loader_for(empty),
+            EcdfConvergenceEngine(),
+            PerformanceMetricsEngine(),
+            logger=BenchmarkLogger(),
+        )
+        .execute(**filters)
+        .value
+    )
     assert performance.table.empty and performance.diagnostics
 
 
@@ -447,10 +518,12 @@ def test_dependencies_are_required_and_mode_validated_before_loading():
         for name, param in inspect.signature(cls.__init__).parameters.items():
             if name != "self":
                 assert param.default is inspect.Parameter.empty
-    with pytest.raises(ValueError):
-        AnalyzeEcdfAndConvergence(
-            MagicMock(), EcdfConvergenceEngine(), logger=BenchmarkLogger()
-        ).execute(mode="invalid", dims=None, problems=None, noise_stds=None)
+    result = AnalyzeEcdfAndConvergence(
+        MagicMock(), EcdfConvergenceEngine(), logger=BenchmarkLogger()
+    ).execute(mode="invalid", dims=None, problems=None, noise_stds=None)
+    assert not result.is_success
+    assert isinstance(result.exception, ValueError)
+    assert result.value is None
 
 
 def test_analysis_scope_disposes_on_use_case_failure(monkeypatch):
@@ -602,19 +675,19 @@ def test_calculation_never_exports_or_creates_directories(snapshot, monkeypatch)
     filters = dict(dims=None, problems=None, noise_stds=None)
     AnalyzeEcdfAndConvergence(
         loader_for(snapshot), EcdfConvergenceEngine(), logger=BenchmarkLogger()
-    ).execute(mode="explicit", **filters)
+    ).execute(mode="explicit", **filters).value
     AnalyzeReliability(
         loader_for(snapshot),
         TransferAnalysisEngine(),
         ReliabilityEngine(),
         logger=BenchmarkLogger(),
-    ).execute(**filters)
+    ).execute(**filters).value
     AnalyzeNoiseRobustness(
         loader_for(snapshot), TransferAnalysisEngine(), logger=BenchmarkLogger()
-    ).execute(**filters)
+    ).execute(**filters).value
     AnalyzePerformance(
         loader_for(snapshot),
         EcdfConvergenceEngine(),
         PerformanceMetricsEngine(),
         logger=BenchmarkLogger(),
-    ).execute(**filters)
+    ).execute(**filters).value

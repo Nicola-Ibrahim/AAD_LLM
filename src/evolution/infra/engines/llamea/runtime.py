@@ -1,6 +1,7 @@
 """Narrow LLaMEA hooks: preserve its algorithm, surface terminal external failures."""
 
 import logging
+import sys
 
 from llamea import LLaMEA, Solution
 
@@ -24,4 +25,8 @@ class FailureAwareLLaMEA(LLaMEA):
         return result
 
     def logevent(self, event: str) -> None:
-        logging.getLogger(__name__).debug("%s", event)
+        # LLaMEA passes rendered exception chains here inside its catches. Terminal
+        # dependency errors are surfaced by the guards; candidate errors already
+        # have scientific diagnostics. Do not duplicate unsafe vendor bodies.
+        if sys.exception() is None:
+            logging.getLogger(__name__).debug("%s", event)

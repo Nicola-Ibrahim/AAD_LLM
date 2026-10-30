@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from evolution.application.exceptions import ProviderError
 from evolution.domain.services.algorithm_scoring import AlgorithmScoringService, FailureKind
 from evolution.domain.vos.evaluation_result import AlgorithmEvaluationResult
 from evolution.domain.vos.iteration import IterationMetadata
@@ -23,10 +24,10 @@ from evolution.domain.vos.metrics import (
     Execution,
     Fitness,
 )
-from shared.application.errors import ArtifactError, StorageError
+from shared.application.errors import ArtifactError, ProblemEvaluationError, StorageError
 from shared.application.interfaces.candidate_executor import CandidateExecutor, CandidateTimeout
 from shared.domain.problem import BaseProblem
-from shared.domain.solution import validate_returned_point
+from shared.domain.solution import InvalidReturnedPoint, validate_returned_point
 
 
 @dataclass
@@ -101,6 +102,9 @@ class CandidateEvaluator:
         start_time = time.perf_counter()
 
         problem_fn = self._problem.get_objective_fn()
+        execution_error: Exception | None = None
+        best_x = None
+        algorithm_returned_fitness = 0.0
         try:
             best_x, algorithm_returned_fitness = self._executor.execute_algorithm(
                 code=code,
@@ -110,49 +114,59 @@ class CandidateEvaluator:
                 budget=self._budget,
             )
             runtime_seconds = time.perf_counter() - start_time
-            evaluations_used = self._problem.evaluations
-            captured = list(self._executor.last_captured_warnings)
-            ctx = _AlgorithmExecutionContext(
-                algorithm_name=name,
-                runtime_seconds=runtime_seconds,
-                code_lines=code_lines,
-                code_length=code_length,
-                llm_generation_time=llm_generation_time or 0.0,
-                evaluations_used=evaluations_used,
-                algorithm_returned_fitness=algorithm_returned_fitness,
-                best_x=best_x,
-                candidate_code=code,
-                captured_warnings=captured,
-            )
-            clean_y = self._resolve_clean_objective(best_x)
-
-        except (StorageError, ArtifactError):
+        except (StorageError, ArtifactError, ProviderError, ProblemEvaluationError):
             raise
         except Exception as error:
             runtime_seconds = time.perf_counter() - start_time
-            evaluations_used = self._problem.evaluations
-            captured = list(self._executor.last_captured_warnings)
-            ctx = _AlgorithmExecutionContext(
-                algorithm_name=name,
-                runtime_seconds=runtime_seconds,
-                code_lines=code_lines,
-                code_length=code_length,
-                llm_generation_time=llm_generation_time or 0.0,
-                evaluations_used=evaluations_used,
-                algorithm_returned_fitness=0.0,
-                best_x=None,
-                candidate_code=code,
-                captured_warnings=captured,
-            )
+            execution_error = error
+
+        if execution_error is None:
+            try:
+                validate_returned_point(self._problem, best_x)
+            except InvalidReturnedPoint as error:
+                execution_error = ValueError(str(error)).with_traceback(error.__traceback__)
+                runtime_seconds = time.perf_counter() - start_time
+
+        # These are trusted backend operations, not generated-code execution.
+        # Failure here must not be turned into a candidate fitness penalty.
+        ctx = _AlgorithmExecutionContext(
+            algorithm_name=name,
+            runtime_seconds=runtime_seconds,
+            code_lines=code_lines,
+            code_length=code_length,
+            llm_generation_time=llm_generation_time or 0.0,
+            evaluations_used=self._problem.evaluations,
+            algorithm_returned_fitness=algorithm_returned_fitness
+            if execution_error is None
+            else 0.0,
+            best_x=best_x if execution_error is None else None,
+            candidate_code=code,
+            captured_warnings=list(self._executor.last_captured_warnings),
+        )
+        if execution_error is None:
+            clean_y = self._problem.eval_clean(best_x)
+            # Preserve the existing scientific classification of a nonfinite return.
+            if not math.isfinite(clean_y):
+                try:
+                    raise ValueError(
+                        f"[INVALID RETURN] Algorithm returned a non-finite value ({clean_y}). "
+                        "Ensure __call__ returns a valid float — no NaN or inf."
+                    )
+                except ValueError as error:
+                    execution_error = error
+                ctx.runtime_seconds = time.perf_counter() - start_time
+                ctx.best_x = None
+                ctx.algorithm_returned_fitness = 0.0
+
+        if execution_error is not None:
             fitness_score, metadata, code_context = self._calculate_failure_result(
                 ctx=ctx,
-                error=error,
+                error=execution_error,
             )
             final_error = None
             is_failure = True
             self._consecutive_failures += 1
         else:
-            # Scoring/metadata bugs are backend failures, not candidate failures.
             fitness_score, final_error, metadata = self._calculate_success_result(ctx, clean_y)
             code_context = ""
             is_failure = False
@@ -176,22 +190,6 @@ class CandidateEvaluator:
             code_context=code_context,
             captured_warnings=ctx.captured_warnings,
         )
-
-    def _resolve_clean_objective(
-        self,
-        best_x: np.ndarray,
-    ) -> float:
-        """Validate best_x dimension and bounds, re-evaluate on clean objective, and check finite return."""
-        validate_returned_point(self._problem, best_x)
-        clean_y = self._problem.eval_clean(best_x)
-
-        if not math.isfinite(clean_y):
-            raise ValueError(
-                f"[INVALID RETURN] Algorithm returned a non-finite value ({clean_y}). "
-                "Ensure __call__ returns a valid float — no NaN or inf."
-            )
-
-        return clean_y
 
     @staticmethod
     def extract_code_context(tb_str: str, candidate_code: str) -> str:
@@ -311,7 +309,7 @@ class CandidateEvaluator:
             failure_kind = FailureKind.EXECUTION
         internal_score = AlgorithmScoringService.failure_score(failure_kind)
 
-        tb_str = "" if is_timeout else traceback.format_exc()
+        tb_str = "" if is_timeout else "".join(traceback.format_exception(error))
         code_context = self.extract_code_context(tb_str, ctx.candidate_code)
 
         metadata = self._build_failure_metadata(
@@ -329,7 +327,7 @@ class CandidateEvaluator:
         is_timeout: bool,
     ) -> IterationMetadata:
         """Construct IterationMetadata for a failed run."""
-        error_traceback = None if is_timeout else traceback.format_exc()
+        error_traceback = None if is_timeout else "".join(traceback.format_exception(error))
         budget_consumed_pct = (
             (ctx.evaluations_used / self._budget * 100) if self._budget > 0 else 0.0
         )

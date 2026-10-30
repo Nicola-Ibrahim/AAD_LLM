@@ -5,7 +5,6 @@ Manages the evolutionary synthesis loop, prompt injection, warm-start checkpoint
 sandboxed evaluation, and persistence of iteration telemetry and champion algorithms.
 """
 
-import logging
 import math
 import shutil
 import warnings
@@ -34,6 +33,7 @@ from evolution.infra.engines.llamea.prompts import (
 from evolution.infra.engines.llamea.runtime import FailureAwareLLaMEA
 from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
+from shared.application.diagnostics import preserve_primary_failure, record_diagnostic
 from shared.application.interfaces.candidate_executor import CANDIDATE_EXECUTION_VERSION
 from shared.domain.problem import BaseProblem
 from shared.infra.execution.candidate_executor import create_candidate_executor
@@ -199,15 +199,9 @@ class LLaMEASession:
         except SynthesisResumeError:
             raise
         except Exception as e:
-            self._experiment.fail()
-            try:
+            with preserve_primary_failure(f"Record failure for experiment {self._experiment_id}"):
+                self._experiment.fail()
                 self._db_repo.mark_failed(self._experiment_id, str(e))
-            except Exception:
-                logging.getLogger(__name__).warning(
-                    "Could not record failure for experiment %s; preserving original error",
-                    self._experiment_id,
-                    exc_info=True,
-                )
             raise
         else:
             self._experiment.complete()
@@ -267,7 +261,10 @@ class LLaMEASession:
         synthesis_engine, evaluator = self._execute_loop()
 
         if self._archive_dir.exists():
-            shutil.rmtree(self._archive_dir, ignore_errors=True)
+            try:
+                shutil.rmtree(self._archive_dir)
+            except OSError as error:
+                record_diagnostic(f"Cannot remove completed checkpoint {self._archive_dir}", error)
         return self._process_session_result(synthesis_engine, evaluator)
 
     def _create_synthesis_engine(self, evaluator: Evaluator, prompts: SynthesisPrompts) -> LLaMEA:
@@ -304,7 +301,7 @@ class LLaMEASession:
                         "Cannot safely restore this synthesis checkpoint. Restore matching "
                         "settings or explicitly replace the experiment."
                     ) from e
-                self._logger.warning(f"Warm start failed, starting fresh: {e}")
+                record_diagnostic("Warm start failed, starting fresh", e)
 
         synthesis_engine = FailureAwareLLaMEA(
             f=evaluator,

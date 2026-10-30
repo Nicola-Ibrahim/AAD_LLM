@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 
 from evolution.domain.interfaces.code_repository import CodeRepository
+from shared.application.errors import StorageError
 from shared.config import DATA_DIR, PROJECT_ROOT
 from shared.infra.artifacts import atomic_write
 
@@ -24,7 +25,10 @@ class FileCodeRepository(CodeRepository):
         when the configured storage is outside the project.
         """
         code_dir = self.base_dir / f"experiment_{experiment_id}"
-        code_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            code_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            raise StorageError(f"Cannot create code directory: {code_dir}") from error
         code_path = code_dir / f"iter_{iteration_num}.py"
         atomic_write(code_path, code.encode("utf-8"))
 
@@ -41,4 +45,7 @@ class FileCodeRepository(CodeRepository):
         if code_dir.is_symlink():
             raise ValueError(f"Refusing to remove symbolic-link code directory: {code_dir}")
         if code_dir.exists():
-            shutil.rmtree(code_dir)
+            try:
+                shutil.rmtree(code_dir)
+            except OSError as error:
+                raise StorageError(f"Cannot clear code directory: {code_dir}") from error

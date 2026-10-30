@@ -3,7 +3,6 @@
 Implements application task dispatch using ProcessPoolExecutor and host-owned logging.
 """
 
-import logging
 from collections.abc import Callable
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from typing import Generic, TypeVar
@@ -74,11 +73,6 @@ class ProcessWorkerPool(Generic[T, R], ExperimentWorkerPool[T, R]):
                         results[key] = future.result()
                     except Exception as error:
                         errors[key] = error
-                        logging.getLogger(__name__).warning(
-                            "Task %s failed (%s); details retained for the workflow summary",
-                            key,
-                            type(error).__name__,
-                        )
                         if isinstance(error, (ProviderError, StorageError, ArtifactError)):
                             stop_scheduling = True
                 if not stop_scheduling:

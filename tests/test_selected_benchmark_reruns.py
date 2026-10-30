@@ -165,7 +165,7 @@ def test_coordinator_reruns_selected_completed_experiment_only(ids):
     coordinator.run_benchmarks(
         **run_parameters(config),
         rerun_experiment_ids=ids,
-    )
+    ).value
     coordinator.trials.run_champion_trials.assert_called_once()
     assert coordinator.trials.run_champion_trials.call_args.args[0] is task.champion
     assert coordinator.trials.run_champion_trials.call_args.kwargs["rerun"] is True
@@ -184,8 +184,13 @@ def test_coordinator_reruns_selected_completed_experiment_only(ids):
 def test_invalid_rerun_selection_does_not_start_trials(selection):
     coordinator, _ = coordinator_fixture()
     config = BenchmarkConfig(trials_per_condition=5)
-    with pytest.raises(ValueError):
-        coordinator.run_benchmarks(**(run_parameters(config) | selection))
+    try:
+        result = coordinator.run_benchmarks(**(run_parameters(config) | selection))
+    except ValueError:
+        pass  # Existing strict call validation rejects bool IDs before invocation.
+    else:
+        assert not result.is_success
+        assert isinstance(result.exception, ValueError)
     coordinator.trials.run_champion_trials.assert_not_called()
     coordinator.trials.run_baseline_trials.assert_not_called()
 
@@ -194,11 +199,13 @@ def test_invalid_rerun_selection_does_not_start_trials(selection):
 def test_explicit_rerun_refuses_incompatible_results(reason):
     coordinator, task = coordinator_fixture()
     task.inspection = SimpleNamespace(reason=reason, status="PENDING")
-    with pytest.raises(ValueError, match="compatible"):
-        coordinator.run_benchmarks(
-            **run_parameters(BenchmarkConfig(trials_per_condition=5)),
-            rerun_experiment_ids=[11],
-        )
+    result = coordinator.run_benchmarks(
+        **run_parameters(BenchmarkConfig(trials_per_condition=5)),
+        rerun_experiment_ids=[11],
+    )
+    assert not result.is_success
+    assert isinstance(result.exception, ValueError)
+    assert "compatible" in result.error.message
     coordinator.trials.run_champion_trials.assert_not_called()
 
 
@@ -209,7 +216,7 @@ def test_other_workflows_are_skipped_during_selected_native_reruns():
             **run_parameters(BenchmarkConfig()),
             rerun_experiment_ids=[11],
             solver_type=solver_type,
-        )
+        ).value
         assert result.empty
     coordinator.workload.discover.assert_not_called()
 

@@ -181,7 +181,7 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
     from evolution.application.campaign.audit import CampaignAudit
 
     audit = CampaignAudit(sqlite_repo, logger, llm.model.name)
-    matrix_df, summary = audit.inspect(**run_parameters(config))
+    matrix_df, summary = audit.inspect(**run_parameters(config)).value
     assert not matrix_df.empty
     assert isinstance(matrix_df.index, pd.MultiIndex)
     assert list(matrix_df.index.names) == ["Problem", "Dimension", "Environment", "Strategy"]
@@ -266,7 +266,7 @@ def test_nb03_benchmark_pipeline(tmp_path, db_session_factory):
         logger=logger,
     )
     champions_path = tmp_path / "benchmark" / "champions.json"
-    champ_service.export_champions(champions_path)
+    champ_service.export_champions(champions_path).value
     assert champions_path.exists(), "champions.json does not exist!"
     with open(champions_path, "r", encoding="utf-8") as f:
         champions_raw = json.load(f)
@@ -300,7 +300,7 @@ def test_nb04_audit_pipeline():
     from shared.infra.di import container_scope
 
     with container_scope(BenchmarkProvider(), context={}, request_context={}) as scope:
-        snapshot = scope.get(BenchmarkAuditService).get_audit_data()
+        snapshot = scope.get(BenchmarkAuditService).get_audit_data().value
     assert isinstance(snapshot.benchmarks, pd.DataFrame)
     assert isinstance(snapshot.synthesis_gaps, pd.DataFrame)
     assert snapshot.coverage_summary.total_cells >= 0
@@ -517,7 +517,7 @@ def test_campaign_usecase_run_worker_and_campaign():
         patch.object(service, "_build_planner", return_value=service_planner),
         patch.object(service_planner, "build_tasks", return_value=[]),
     ):
-        empty_res = service.run(**run_parameters(service_planner.config))
+        empty_res = service.run(**run_parameters(service_planner.config)).value
         assert empty_res.results == {}
         mock_logger.success.assert_called()
 
@@ -536,7 +536,7 @@ def test_campaign_usecase_run_worker_and_campaign():
         patch.object(service, "_build_planner", return_value=service_planner),
         patch.object(service_planner, "build_tasks", return_value=[mock_item]),
     ):
-        campaign_res = service.run(**run_parameters(service_planner.config))
+        campaign_res = service.run(**run_parameters(service_planner.config)).value
         assert campaign_res.results == {"test_task_key": dummy_result}
         worker_pool.execute.assert_called_once()
 
@@ -563,7 +563,7 @@ def test_campaign_usecase_audit_matrix_standalone():
         model_name="mock_model_standalone",
     )
 
-    df_matrix, summary = auditor.inspect(**run_parameters(config))
+    df_matrix, summary = auditor.inspect(**run_parameters(config)).value
     assert df_matrix.empty
     assert summary["model_name"] == "mock_model_standalone"
     mock_sqlite.load.assert_called_once_with(llm_name="mock_model_standalone")

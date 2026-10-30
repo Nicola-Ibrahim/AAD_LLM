@@ -3,9 +3,9 @@
 import hashlib
 import io
 import json
-import logging
 from dataclasses import asdict
 from pathlib import Path
+from zipfile import BadZipFile
 
 import numpy as np
 import pandas as pd
@@ -21,7 +21,7 @@ from benchmark.application.analysis.results import (
     ProfileSeries,
     ReliabilityAnalysisResult,
 )
-from shared.application.diagnostics import report_operation
+from shared.application.errors import ArtifactError, StorageError
 from shared.infra.artifacts import atomic_write, read_json_object
 
 AnalysisResult = (
@@ -39,173 +39,153 @@ class AnalysisResultsStore:
         self.root = root
 
     def save(self, result: AnalysisResult) -> Path:
-        with report_operation(
-            logging.getLogger("benchmark.infra.storage.analysis_results_store"), "save"
-        ):
-            arrays: dict[str, np.ndarray] = {}
-            tables: dict[str, pd.DataFrame] = {}
-            metadata: dict[str, object] = {
-                "schema_version": 2,
-                "provenance": asdict(result.provenance),
-                "diagnostics": list(result.diagnostics),
-            }
-            if isinstance(result, ProfileAnalysisResult):
-                namespace = Path("profiles") / result.mode
-                metadata.update(kind="profiles", mode=result.mode)
-                conditions = []
-                for index, condition in enumerate(result.conditions):
-                    prefix = f"condition_{index}"
-                    arrays[f"{prefix}_evaluations"] = condition.evaluations
-                    arrays[f"{prefix}_targets"] = condition.targets
-                    series = []
-                    for j, curve in enumerate(condition.series):
-                        key = f"{prefix}_series_{j}"
-                        for name in ("median", "q25", "q75", "ecdf"):
-                            arrays[f"{key}_{name}"] = getattr(curve, name)
-                        series.append(
-                            dict(
-                                key=key,
-                                solver=curve.solver,
-                                problem_id=curve.problem_id,
-                                trace_count=curve.trace_count,
-                            )
-                        )
-                    conditions.append(
-                        dict(
-                            key=prefix,
-                            model=condition.model,
-                            dim=condition.dim,
-                            noise_std=condition.noise_std,
-                            problems=condition.problems,
-                            solvers=condition.solvers,
-                            series=series,
-                        )
-                    )
-                metadata["conditions"] = conditions
-            elif isinstance(result, ReliabilityAnalysisResult):
-                namespace = Path("reliability")
-                metadata.update(kind="reliability", model_order=result.model_order)
-                tables.update(
-                    native=result.native,
-                    noise_terminal=result.noise_terminal,
-                    primary=result.primary,
-                )
-                arrays["evaluations"] = result.evaluations
+        arrays: dict[str, np.ndarray] = {}
+        tables: dict[str, pd.DataFrame] = {}
+        metadata: dict[str, object] = {
+            "schema_version": 2,
+            "provenance": asdict(result.provenance),
+            "diagnostics": list(result.diagnostics),
+        }
+        if isinstance(result, ProfileAnalysisResult):
+            namespace = Path("profiles") / result.mode
+            metadata.update(kind="profiles", mode=result.mode)
+            conditions = []
+            for index, condition in enumerate(result.conditions):
+                prefix = f"condition_{index}"
+                arrays[f"{prefix}_evaluations"] = condition.evaluations
+                arrays[f"{prefix}_targets"] = condition.targets
                 series = []
-                for index, curve in enumerate(result.attainment):
-                    key = f"attainment_{index}"
-                    for name in ("probability", "lower", "upper"):
+                for j, curve in enumerate(condition.series):
+                    key = f"{prefix}_series_{j}"
+                    for name in ("median", "q25", "q75", "ecdf"):
                         arrays[f"{key}_{name}"] = getattr(curve, name)
                     series.append(
                         dict(
                             key=key,
                             solver=curve.solver,
-                            baseline=curve.baseline,
+                            problem_id=curve.problem_id,
                             trace_count=curve.trace_count,
                         )
                     )
-                metadata["attainment"] = series
-            elif isinstance(result, NoiseRobustnessResult):
-                namespace = Path("noise_robustness")
-                metadata.update(
-                    kind="noise_robustness",
-                    primary_target=result.primary_target,
-                )
-                tables.update(conditions=result.conditions, aggregate=result.aggregate)
-            elif isinstance(result, PerformanceAnalysisResult):
-                namespace = Path("performance")
-                metadata.update(
-                    kind="performance",
-                    models_to_solvers=result.models_to_solvers,
-                    classical_solvers=result.classical_solvers,
-                    dims=result.dims,
-                    clean_std=result.clean_std,
-                    noisy_std=result.noisy_std,
-                    rankings_name=result.rankings.name,
-                    rankings_index_name=result.rankings.index.name,
-                )
-                tables.update(table=result.table, model_scale=result.model_scale)
-                tables["rankings"] = result.rankings.rename_axis("solver").reset_index(name="value")
-                targets = []
-                for index, (noise, values) in enumerate(result.targets.items()):
-                    key = f"targets_{index}"
-                    arrays[key] = values
-                    targets.append(dict(noise_std=noise, key=key))
-                metadata["targets"] = targets
-                hardness = []
-                for index, summary in enumerate(result.hardness):
-                    entries = []
-                    for j, (noise, table) in enumerate(summary.tables.items()):
-                        key = f"hardness_{index}_{j}"
-                        tables[key] = table
-                        entries.append(dict(noise_std=noise, key=key))
-                    hardness.append(
-                        dict(
-                            model=summary.model,
-                            dim=summary.dim,
-                            solvers=summary.solvers,
-                            tables=entries,
-                        )
+                conditions.append(
+                    dict(
+                        key=prefix,
+                        model=condition.model,
+                        dim=condition.dim,
+                        noise_std=condition.noise_std,
+                        problems=condition.problems,
+                        solvers=condition.solvers,
+                        series=series,
                     )
-                metadata["hardness"] = hardness
-            else:
-                raise TypeError(f"Unsupported analysis result: {type(result).__name__}")
+                )
+            metadata["conditions"] = conditions
+        elif isinstance(result, ReliabilityAnalysisResult):
+            namespace = Path("reliability")
+            metadata.update(kind="reliability", model_order=result.model_order)
+            tables.update(
+                native=result.native,
+                noise_terminal=result.noise_terminal,
+                primary=result.primary,
+            )
+            arrays["evaluations"] = result.evaluations
+            series = []
+            for index, curve in enumerate(result.attainment):
+                key = f"attainment_{index}"
+                for name in ("probability", "lower", "upper"):
+                    arrays[f"{key}_{name}"] = getattr(curve, name)
+                series.append(
+                    dict(
+                        key=key,
+                        solver=curve.solver,
+                        baseline=curve.baseline,
+                        trace_count=curve.trace_count,
+                    )
+                )
+            metadata["attainment"] = series
+        elif isinstance(result, NoiseRobustnessResult):
+            namespace = Path("noise_robustness")
+            metadata.update(
+                kind="noise_robustness",
+                primary_target=result.primary_target,
+            )
+            tables.update(conditions=result.conditions, aggregate=result.aggregate)
+        elif isinstance(result, PerformanceAnalysisResult):
+            namespace = Path("performance")
+            metadata.update(
+                kind="performance",
+                models_to_solvers=result.models_to_solvers,
+                classical_solvers=result.classical_solvers,
+                dims=result.dims,
+                clean_std=result.clean_std,
+                noisy_std=result.noisy_std,
+                rankings_name=result.rankings.name,
+                rankings_index_name=result.rankings.index.name,
+            )
+            tables.update(table=result.table, model_scale=result.model_scale)
+            tables["rankings"] = result.rankings.rename_axis("solver").reset_index(name="value")
+            targets = []
+            for index, (noise, values) in enumerate(result.targets.items()):
+                key = f"targets_{index}"
+                arrays[key] = values
+                targets.append(dict(noise_std=noise, key=key))
+            metadata["targets"] = targets
+            hardness = []
+            for index, summary in enumerate(result.hardness):
+                entries = []
+                for j, (noise, table) in enumerate(summary.tables.items()):
+                    key = f"hardness_{index}_{j}"
+                    tables[key] = table
+                    entries.append(dict(noise_std=noise, key=key))
+                hardness.append(
+                    dict(
+                        model=summary.model,
+                        dim=summary.dim,
+                        solvers=summary.solvers,
+                        tables=entries,
+                    )
+                )
+            metadata["hardness"] = hardness
+        else:
+            raise TypeError(f"Unsupported analysis result: {type(result).__name__}")
 
-            files: dict[str, bytes] = {}
-            buffer = io.BytesIO()
-            np.savez_compressed(buffer, **arrays)
-            files["arrays.npz"] = buffer.getvalue()
-            metadata["tables"] = {
-                name: {
-                    "columns": list(table.columns),
-                    "dtypes": {str(c): str(t) for c, t in table.dtypes.items()},
-                    "missing": {
-                        str(c): np.flatnonzero(table[c].isna()).tolist() for c in table.columns
-                    },
-                    "index": table.index.tolist(),
-                    "index_name": table.index.name,
-                    "index_dtype": str(table.index.dtype),
-                }
-                for name, table in tables.items()
+        files: dict[str, bytes] = {}
+        buffer = io.BytesIO()
+        np.savez_compressed(buffer, **arrays)
+        files["arrays.npz"] = buffer.getvalue()
+        metadata["tables"] = {
+            name: {
+                "columns": list(table.columns),
+                "dtypes": {str(c): str(t) for c, t in table.dtypes.items()},
+                "missing": {
+                    str(c): np.flatnonzero(table[c].isna()).tolist() for c in table.columns
+                },
+                "index": table.index.tolist(),
+                "index_name": table.index.name,
+                "index_dtype": str(table.index.dtype),
             }
-            for name, table in tables.items():
-                files[f"{name}.csv"] = table.to_csv(index=False, float_format="%.17g").encode()
-            metadata["files"] = {
-                name: hashlib.sha256(data).hexdigest() for name, data in files.items()
-            }
-            encoded = json.dumps(metadata, sort_keys=True, default=str).encode()
-            signature = hashlib.sha256(encoded).hexdigest()
-            directory = self.root / namespace / signature
-            # Commit the manifest last. A partial write is never a loadable snapshot.
+            for name, table in tables.items()
+        }
+        for name, table in tables.items():
+            files[f"{name}.csv"] = table.to_csv(index=False, float_format="%.17g").encode()
+        metadata["files"] = {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}
+        encoded = json.dumps(metadata, sort_keys=True, default=str).encode()
+        signature = hashlib.sha256(encoded).hexdigest()
+        directory = self.root / namespace / signature
+        # Commit the manifest last. A partial write is never a loadable snapshot.
+        try:
             directory.mkdir(parents=True, exist_ok=True)
             for name, data in files.items():
                 atomic_write(directory / name, data)
             atomic_write(directory / "manifest.json", encoded)
-            # Keep established downstream report filenames and CSV schemas.
-            reports: dict[str, pd.DataFrame] = {}
-            if isinstance(result, ReliabilityAnalysisResult):
-                reports = {
-                    "native_reliability_v1.csv": result.native,
-                    "noise_robustness_terminal_v1.csv": result.noise_terminal,
-                }
-            elif isinstance(result, NoiseRobustnessResult):
-                reports = {"noise_success_rates_v1.csv": result.aggregate}
-            if reports:
-                report_dir = self.root.parent / "reports"
-                report_dir.mkdir(parents=True, exist_ok=True)
-                for name, table in reports.items():
-                    atomic_write(report_dir / name, table.to_csv(index=False).encode())
-            return directory
+        except OSError as error:
+            raise StorageError(f"Cannot save analysis snapshot: {directory}") from error
+        return directory
 
     def load(self, directory: Path) -> AnalysisResult:
         """Restore typed results without pickle, database access or calculations."""
-        with report_operation(
-            logging.getLogger("benchmark.infra.storage.analysis_results_store"), "load"
-        ):
-            if not directory.resolve().is_relative_to(self.root.resolve()):
-                raise ValueError(
-                    "Analysis snapshot must be inside the configured results directory."
-                )
+        if not directory.resolve().is_relative_to(self.root.resolve()):
+            raise ValueError("Analysis snapshot must be inside the configured results directory.")
+        try:
             metadata = read_json_object(directory / "manifest.json")
             if metadata["schema_version"] not in {1, 2}:
                 raise ValueError("Unsupported analysis snapshot schema.")
@@ -338,3 +318,16 @@ class AnalysisResultsStore:
                     diagnostics,
                 )
             raise ValueError(f"Unsupported analysis snapshot kind: {kind}")
+        except (
+            OSError,
+            UnicodeError,
+            ValueError,
+            KeyError,
+            TypeError,
+            AttributeError,
+            EOFError,
+            BadZipFile,
+        ) as error:
+            raise ArtifactError(
+                f"Cannot load analysis snapshot: {directory} ({type(error).__name__})"
+            ) from error

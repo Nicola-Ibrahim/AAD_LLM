@@ -31,7 +31,7 @@ from benchmark.domain.services.transfer import TransferAnalysisEngine
 from benchmark.domain.vos import BenchmarkCondition, BenchmarkDataset, RunTrace
 from benchmark.infra.logging import BenchmarkLogger
 from benchmark.infra.storage.analysis_results_store import AnalysisResultsStore
-from shared.application.errors import StorageError
+from shared.application.errors import ArtifactError, StorageError
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOKS = [
@@ -221,7 +221,7 @@ def test_summary_exports_only_attainment_png_and_rebuilds_each_time(
 
     from shared.config import RESULTS_DIR
 
-    result = use_cases(inputs).reliability.execute(dims=None, problems=None, noise_stds=None)
+    result = use_cases(inputs).reliability.execute(dims=None, problems=None, noise_stds=None).value
     builder = MagicMock(wraps=summary.build_attainment_figure)
     monkeypatch.setattr(summary, "build_attainment_figure", builder)
     exporter = AnalysisFigureExporter(RESULTS_DIR)
@@ -322,7 +322,9 @@ def test_notebooks_run_independently(
 def test_noise_success_rates_export(inputs: AnalysisSnapshot, png_exports) -> None:
     from shared.config import RESULTS_DIR
 
-    result = use_cases(inputs).noise_robustness.execute(dims=None, problems=None, noise_stds=None)
+    result = (
+        use_cases(inputs).noise_robustness.execute(dims=None, problems=None, noise_stds=None).value
+    )
     AnalysisFigureExporter(RESULTS_DIR).export_noise_robustness(result)
     table = result.aggregate
     assert len(png_exports) == 1
@@ -339,7 +341,9 @@ def test_noise_success_rates_do_not_plot_clean_only(inputs: AnalysisSnapshot, pn
     clean = replace(
         inputs, noise_records=[r for r in inputs.noise_records if r["noise_std"] == 0.0]
     )
-    result = use_cases(clean).noise_robustness.execute(dims=None, problems=None, noise_stds=None)
+    result = (
+        use_cases(clean).noise_robustness.execute(dims=None, problems=None, noise_stds=None).value
+    )
     AnalysisFigureExporter(RESULTS_DIR).export_noise_robustness(result)
     assert not png_exports
 
@@ -376,7 +380,7 @@ def test_analysis_snapshots_round_trip(inputs, tmp_path, workflow):
     options = dict(dims=None, problems=None, noise_stds=None)
     if workflow == "ecdf_and_convergence":
         options["mode"] = "explicit"
-    result = getattr(use_cases(inputs), workflow).execute(**options)
+    result = getattr(use_cases(inputs), workflow).execute(**options).value
     store = AnalysisResultsStore(tmp_path / "analysis")
     directory = store.save(result)
     assert directory.is_relative_to(tmp_path / "analysis")
@@ -392,22 +396,26 @@ def test_analysis_snapshots_round_trip(inputs, tmp_path, workflow):
 
 
 def test_snapshot_rejects_corruption_and_outside_paths(inputs, tmp_path):
-    result = use_cases(inputs).ecdf_and_convergence.execute(
-        mode="explicit", dims=None, problems=None, noise_stds=None
+    result = (
+        use_cases(inputs)
+        .ecdf_and_convergence.execute(mode="explicit", dims=None, problems=None, noise_stds=None)
+        .value
     )
     store = AnalysisResultsStore(tmp_path / "analysis")
     directory = store.save(result)
     with (directory / "arrays.npz").open("ab") as stream:
         stream.write(b"corruption")
-    with pytest.raises(ValueError, match="checksum"):
+    with pytest.raises(ArtifactError):
         store.load(directory)
     with pytest.raises(ValueError, match="inside"):
         store.load(tmp_path / "elsewhere")
 
 
 def test_snapshot_preserves_empty_profiles_and_nonfinite_arrays(inputs, tmp_path):
-    result = use_cases(inputs).ecdf_and_convergence.execute(
-        mode="explicit", dims=None, problems=None, noise_stds=None
+    result = (
+        use_cases(inputs)
+        .ecdf_and_convergence.execute(mode="explicit", dims=None, problems=None, noise_stds=None)
+        .value
     )
     store = AnalysisResultsStore(tmp_path / "analysis")
     empty = replace(result, conditions=[], diagnostics=("No traces available.",))
@@ -418,7 +426,7 @@ def test_snapshot_preserves_empty_profiles_and_nonfinite_arrays(inputs, tmp_path
 
 
 def test_snapshot_preserves_missing_values_empty_strings_and_table_index(inputs, tmp_path):
-    result = use_cases(inputs).reliability.execute(dims=None, problems=None, noise_stds=None)
+    result = use_cases(inputs).reliability.execute(dims=None, problems=None, noise_stds=None).value
     table = pd.DataFrame(
         {
             "label": pd.array(["", "NA", pd.NA], dtype="string"),
@@ -435,31 +443,39 @@ def test_snapshot_preserves_missing_values_empty_strings_and_table_index(inputs,
 @pytest.mark.parametrize("workflow", ["reliability", "noise_robustness", "performance"])
 def test_snapshot_preserves_empty_workflow_results(inputs, tmp_path, workflow):
     empty = replace(inputs, dataset=BenchmarkDataset(), native_records=[], noise_records=[])
-    result = getattr(use_cases(empty), workflow).execute(dims=None, problems=None, noise_stds=None)
+    result = (
+        getattr(use_cases(empty), workflow).execute(dims=None, problems=None, noise_stds=None).value
+    )
     store = AnalysisResultsStore(tmp_path / "analysis")
     assert_saved_equal(result, store.load(store.save(result)))
 
 
 def test_snapshot_failed_write_does_not_publish_manifest(inputs, tmp_path, monkeypatch):
-    result = use_cases(inputs).ecdf_and_convergence.execute(
-        mode="explicit", dims=None, problems=None, noise_stds=None
+    result = (
+        use_cases(inputs)
+        .ecdf_and_convergence.execute(mode="explicit", dims=None, problems=None, noise_stds=None)
+        .value
     )
     store = AnalysisResultsStore(tmp_path / "analysis")
     monkeypatch.setattr(
         "benchmark.infra.storage.analysis_results_store.atomic_write",
         MagicMock(side_effect=OSError("Disk unavailable")),
     )
-    with pytest.raises(OSError, match="Disk unavailable"):
+    with pytest.raises(StorageError):
         store.save(result)
     assert not list(store.root.rglob("manifest.json"))
 
 
 def test_previous_snapshot_folder_aliases_are_ignored_without_changing_statistics(inputs, tmp_path):
-    result = use_cases(inputs).ecdf_and_convergence.execute(
-        mode="explicit",
-        dims=None,
-        problems=None,
-        noise_stds=None,
+    result = (
+        use_cases(inputs)
+        .ecdf_and_convergence.execute(
+            mode="explicit",
+            dims=None,
+            problems=None,
+            noise_stds=None,
+        )
+        .value
     )
     store = AnalysisResultsStore(tmp_path / "analysis")
     directory = store.save(result)
@@ -471,3 +487,46 @@ def test_previous_snapshot_folder_aliases_are_ignored_without_changing_statistic
         condition["model_slug"] = "old_folder"
     manifest_path.write_text(json.dumps(manifest))
     assert_saved_equal(result, store.load(directory))
+
+
+def test_notebook_result_export_preserves_csv_schemas(inputs, tmp_path):
+    from notebooks.analysis.result_exports import AnalysisResultsExporter
+
+    result = use_cases(inputs).reliability.execute(dims=None, problems=None, noise_stds=None).value
+    store = AnalysisResultsStore(tmp_path / "analysis")
+    exporter = AnalysisResultsExporter(store)
+    directory = exporter.save(result)
+    assert_saved_equal(result, exporter.load(directory))
+    reports = tmp_path / "reports"
+    assert (reports / "native_reliability_v1.csv").read_text() == result.native.to_csv(index=False)
+    assert (
+        reports / "noise_robustness_terminal_v1.csv"
+    ).read_text() == result.noise_terminal.to_csv(index=False)
+
+
+@pytest.mark.parametrize("malformation", ["metadata_shape", "npz_archive"])
+def test_snapshot_malformed_parser_input_has_artifact_cause(
+    inputs, tmp_path, monkeypatch, malformation
+):
+    from zipfile import BadZipFile
+
+    result = (
+        use_cases(inputs)
+        .ecdf_and_convergence.execute(mode="explicit", dims=None, problems=None, noise_stds=None)
+        .value
+    )
+    store = AnalysisResultsStore(tmp_path / "analysis")
+    directory = store.save(result)
+    if malformation == "metadata_shape":
+        manifest = directory / "manifest.json"
+        data = json.loads(manifest.read_text())
+        data["files"] = []
+        manifest.write_text(json.dumps(data))
+    else:
+        monkeypatch.setattr(
+            "benchmark.infra.storage.analysis_results_store.np.load",
+            MagicMock(side_effect=BadZipFile("bad archive")),
+        )
+    with pytest.raises(ArtifactError) as failure:
+        store.load(directory)
+    assert isinstance(failure.value.__cause__, (AttributeError, BadZipFile))

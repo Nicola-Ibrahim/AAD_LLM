@@ -1,6 +1,6 @@
 # Error handling and application-owned reporting
 
-Status: planned — investigation complete; implementation not authorized
+Status: complete — implemented and verified, including the approved Result API revision
 Updated: 2026-10-30
 Initial investigation baseline: `main`, HEAD `6d1bac4`, including the then-staged
 and unstaged changes. Layer-boundary revision: `main`, HEAD `118c7db`; the working
@@ -13,9 +13,11 @@ inspected working files; recheck named symbols before implementation.
 
 The requested outcome is clear reporting at application/host boundaries,
 explicit exception causes, and no swallowed required failures or duplicated
-low-level reporting. This task is planning-only. No production reproduction,
-experiment run, study-database access, checkpoint load, API call or figure export
-was needed for this investigation.
+low-level reporting. The initial investigation was planning-only. The user subsequently authorized
+implementation and then explicitly requested Result-based public application
+responses and removal of redundant forwarding helpers. Those later instructions
+supersede the earlier public rethrow policy. Verification uses isolated fixtures;
+no production study, checkpoint, campaign or live API was accessed.
 
 ### Execution paths and existing protections
 
@@ -110,13 +112,13 @@ already enforced everywhere.
 External IO/provider fault
   -> infrastructure translation (raise ContractError(...) from original)
   -> intermediate workflows propagate; cleanup preserves the primary failure
-  -> outer application boundary reports once and rethrows
-  -> host displays/maps a sanitized user-facing error
+  -> application boundary reports once and returns Result.failure
+  -> host displays/maps the structured sanitized error
 
 Domain invariant or unexpected backend fault
   -> originating rule/service raises
   -> intermediate layers propagate unchanged unless translation adds real meaning
-  -> application/host boundary reports with operation and condition context
+  -> application boundary reports once and returns Result.failure; host presents its error
 
 Genuine generated optimizer failure or timeout
   -> isolated execution boundary captures execution diagnostics
@@ -124,7 +126,10 @@ Genuine generated optimizer failure or timeout
   -> recorded failure remains a scientific observation; workflow can continue
 ```
 
-The third path is intentional: propagating every invalid optimizer as a fatal
+Public success paths return Result.success(data). Internal collaborators continue
+to raise; a failed Result retains the original exception/cause internally, excluded
+from Pydantic serialization. Cancellation and pre-invocation strict call validation
+remain raising. The third path is intentional: propagating every invalid optimizer as a fatal
 campaign error would change the experiment. Conversely, a storage or provider
 failure must not acquire fitness, a terminal optimizer failure, or a success result.
 `raise` preserves an unchanged exception; `raise NewError(...) from error`
@@ -270,42 +275,50 @@ code, partial traces, checkpoints, archived results and saved notebook outputs.
 
 ## Acceptance criteria
 
-- [ ] Domain rules remain independent of logging, external exception classes and
+- [x] Domain rules remain independent of logging, external exception classes and
   transport concerns; state/scientific invariant violations remain observable.
-- [ ] Every changed catch has an explicit responsibility (translation, scientific
+- [x] Every changed catch has an explicit responsibility (translation, scientific
   classification, existing retry, cleanup or terminal reporting). Other failures
   propagate without redundant catch-and-wrap layers.
-- [ ] External failures, domain/input violations, scientific optimizer outcomes,
+- [x] External failures, domain/input violations, scientific optimizer outcomes,
   unexpected backend faults and cancellation follow distinct documented paths;
   exception type alone does not determine scientific classification.
-- [ ] User-facing reporting includes available operation/task/condition identity,
+- [x] User-facing reporting includes available operation/task/condition identity,
   a concise sanitized explanation and diagnostic location where configured;
   causes remain available in diagnostics, without exposing credentials or payloads.
-- [ ] One application/host terminal report per failed workflow, including nested
+- [x] One application/host terminal report per failed workflow, including nested
   operations and worker aggregates; no repeated adapter warning for the same failure.
-- [ ] Infrastructure performs IO/translation without owning routine workflow
+- [x] Infrastructure performs IO/translation without owning routine workflow
   logging. Concrete logging adapters, host setup and required third-party output
   capture remain legitimate infrastructure capabilities.
-- [ ] Translated required failures retain their cause and useful sanitized
+- [x] Translated required failures retain their cause and useful sanitized
   operation/path context; no failed required read/write returns fabricated success.
-- [ ] Dual failures preserve the original primary exception; sanitized secondary
+- [x] Dual failures preserve the original primary exception; sanitized secondary
   diagnostics survive. A sole required teardown failure is not hidden.
-- [ ] Optional WAL/cleanup maintenance remains nonfatal where currently intended,
+- [x] Optional WAL/cleanup maintenance remains nonfatal where currently intended,
   with an explicit nonfatal reporting path at the owning boundary.
-- [ ] Genuine candidate/solver/invalid-return/timeout outcomes retain their
+- [x] Genuine candidate/solver/invalid-return/timeout outcomes retain their
   recorded classification, penalties, infinite gaps, histories and trial counts.
-- [ ] Demonstrated trusted-backend defects propagate instead of becoming optimizer
+- [x] Demonstrated trusted-backend defects propagate instead of becoming optimizer
   outcomes. This correction is explicit, with synthetic before/after evidence.
-- [ ] Corrupt artifacts remain distinct from absence; tolerated trace exclusions
+- [x] Corrupt artifacts remain distinct from absence; tolerated trace exclusions
   become visible without changing parsing, included traces or numerical outputs.
-- [ ] Existing checkpoint refusal, status transitions, replacement rules and
+- [x] Existing checkpoint refusal, status transitions, replacement rules and
   worker scheduling decisions remain unchanged in this task.
-- [ ] Notebook calls stay service-oriented; no per-cell operation wrappers or
+- [x] Notebook calls stay service-oriented; no per-cell operation wrappers or
   direct SDK handling. Storage/export reporting ownership remains explicit.
-- [ ] Python 3.11 compatibility, exception pickling, contextual identity,
-  redaction, handler isolation and cleanup of failed setup are verified.
-- [ ] Appropriate numerical, resumption, storage, architecture and notebook
+- [x] Python 3.11 syntax/Ruff target compatibility, exception pickling, contextual
+  identity, redaction, handler isolation and failed-setup cleanup are verified.
+  Runtime tests used Python 3.13; a Python 3.11 interpreter was not available.
+- [x] Appropriate numerical, resumption, storage, architecture and notebook
   checks pass in isolated storage; no study artifacts are regenerated.
+
+- [x] Public workflow methods return Result[T] with data or a structured error;
+  notebooks branch explicitly and do not export stale data after failed calculations.
+- [x] Failed Results preserve original exceptions/causes and campaign partial
+  results internally; serialized responses exclude retained exception objects.
+- [x] Nested Result-returning operations still report failures exactly once and
+  retain the diagnostic path; repeated outer propagation does not duplicate logs.
 
 ## Plan and dependencies
 
@@ -369,8 +382,8 @@ status, checkpoint compatibility, resumption, replacement and historical-data po
   contracts, gateway/database translation and terminal reporting on `118c7db`.
   Added explicit layer responsibilities, propagation paths and acceptance criteria;
   no new test run or independent review was performed for this revision.
-- [ ] Implementation — not authorized by the current request.
-- [ ] Independent review of an implementation — not performed.
+- [x] Implemented the authorized scope, then the user-requested Result API revision.
+- [x] Independent reviewer investigated the actual diff, reproduced defects, and re-reviewed corrections.
 
 Decisions: no broad renaming, new DomainError/RepositoryError hierarchy, automatic
 experiment recovery, changes to statistical undefined cases, logging heartbeat
@@ -397,25 +410,96 @@ pytest.main([
 
 Result: **72 passed in 6.77 seconds**. These are existing regression tests; they
 establish current protections, not that every proposed correction already works.
-No new tests or backend changes were made. The 72-test result predates the
+At the initial planning stage no new tests or backend changes were made. The 72-test result predates the
 `118c7db` revision and is not claimed as a fresh check of that commit. The full suite and live scenarios
 were not run. No production checkpoint was unpickled or study artifact modified.
 
 Investigation: independent read-only investigator plus coordinator inspection.
 Review: coordinator self-review of this plan; no independent implementation
-review or approval is claimed. All findings remain open for implementation.
+review was claimed at the planning stage. Implementation review and resolutions
+are recorded below.
+
+### Implementation decisions and actual verification
+
+- Public campaign, fresh synthesis, audit, benchmark, analysis, maintenance and
+  champion-export APIs now return `Result[T]`. Internal workers, loaders, solver
+  adapters, scoring and repositories retain their raising/raw-data contracts.
+  This public return-type change was explicitly requested during implementation.
+- `Result` and `ApplicationError` are Pydantic models in
+  `shared/application/result.py`. No exception-per-repository hierarchy, mediator,
+  generic handler/decorator wrapper or compatibility `unwrap` API was added.
+  Required successful/error fields are explicit; meaningful absence uses None.
+- Removed the newly introduced shared solution forwarding module. Trusted scoring
+  translations live at actual solver boundaries. Explicit point-rule violations
+  retain historical ValueError diagnostics and penalties; trusted clean/bounds
+  defects now reach a failed workflow Result rather than fabricated trial outcomes.
+- Removed duplicate pool reports and adapter warnings. Optional maintenance and
+  tolerated row exclusions use scoped application diagnostics; standalone optional
+  calls remain nonfatal even with warnings configured as errors. Cleanup keeps
+  primary failures and sanitized secondary notes, including teardown groups.
+- SDK messages/bodies are omitted from diagnostic rendering. Local causes remain
+  attached; worker transport uses safe cause text instead of SDK request objects.
+  LLaMEA exception-rendering events are not duplicated; dependency guards remain.
+- Numerical storage is IO-only. Notebook-owned `AnalysisResultsExporter` coordinates
+  snapshots and downstream CSVs separately from plotting. Snapshot schema/hash,
+  manifest ordering and report filenames are preserved. Known invalid snapshots
+  now raise ArtifactError with parser/IO causes instead of raw parser errors.
+- Public failure branches clear prior calculated values, guard later plotting and
+  exporting, and show error messages. All notebook outputs/metadata are preserved.
+- F8 remains deferred: no changes to failed-experiment status, automatic replacement,
+  missing-checkpoint refusal, checkpoint compatibility or scheduling decisions.
+
+Verification command: the isolated harness documented in the workflow guide,
+using a fresh temporary SQLite DB plus data/results roots. For the final suite,
+`PYTHONPATH=src:.` and `.venv/bin/python /private/tmp/aad-run-tests.py` invoked
+`pytest.main(["-q", "--tb=short"])` under a guarded main entry point. The temporary
+runner initializes only its test schema, not the study database.
+
+| Actual check | Result | Limits |
+| --- | --- | --- |
+| Initial fault injection before fixes | Four tests failed as expected | Reproduced clean-scoring misclassification, masked startup, raw code-directory IO, absent diagnostics |
+| Final full isolated suite | **692 passed, 20 warnings in 51.66 s** | Python 3.13; synthetic fixtures/mock providers only |
+| Independent final focused review checks | **45 passed in 4.58 s** | Failure boundaries, reporting and worker pool; one optional CMA warning |
+| `.venv/bin/ruff check .` | Passed | Read-only final check |
+| `.venv/bin/ruff format . --check` | Passed, 250 files formatted | Read-only final check |
+| Python 3.11 AST syntax and Ruff target | Passed | No Python 3.11 runtime installed |
+| Notebook compilation and preservation comparison | All 50 code cells compile; outputs, metadata and cell counts preserved | Not a production notebook/campaign execution |
+| Numerical/snapshot/regression evidence | Existing characterization, noise, analysis, reliability, resumption, pickling and snapshot round-trip suites pass | Covered by full suite, not live-study regeneration |
+| `git diff --check` | Passed | Repository whitespace check |
+
+The 20 full-suite warnings are existing numerical inf-interpolation cases,
+optional CMA plotting support, a synthetic baseline budget-overrun case, and the
+third-party sequential-backend timeout notice. They were not suppressed or used
+to change scientific policy.
+
+Review resolutions: the reviewer reproduced and identified optional-warning
+escalation, optional unlink regression, private SDK rendering, late cleanup notes,
+bounds fault classification, incremental close translation, parser gaps and
+nonfinite timing/traceback changes; all were addressed and re-reviewed. The first
+full run caught a plotting/storage import violation; the host exporter was moved
+outside plotting without weakening the architecture test. Result migration tests
+were updated to assert structured failures rather than preserve an obsolete
+exception-only public API. A nested Result reporting defect was independently
+reproduced, fixed and covered by a regression.
+
+Review: independent read-only reviewer; final verdict **no remaining material
+issue in the reviewed scope**. Its earlier 106-test and 24-test checks were separate
+focused runs, not additional full-suite coverage. No independent full-suite run is
+claimed. User staging/commits observed during the work were left intact; the agent
+performed no stage, commit, reset or branch operation.
 
 ## Handoff
 
-Completed: investigation, existing baseline checks and this plan.
-Next action: obtain agreement to implement the scoped plan, then start with step 1.
+Completed: implementation, Result API/caller migration, isolated verification,
+independent review and documentation. No experiments or images need rerunning
+for these error-handling changes. Restart notebook kernels to load changed APIs.
 
-Before implementation, resolve the concrete nonfatal diagnostic path for optional
-maintenance and the ownership/API of calculated-result persistence reporting.
-These are design choices within the requested scope; prefer existing collaborators
-and typed data over new general infrastructure. They must not alter commit,
-scientific outcome or recovery semantics.
+Next action: review the final diff before any user-authorized commit or deployment.
 
-If the desired scope includes interruption-aware recovery or strict rejection of
-historically tolerated trace rows, record that as a separate behavior decision
-before changing code. Existing dirty working changes must remain intact.
+Remaining limits: Python 3.11 received static syntax/target checks only; external
+provider and filesystem failure modes were tested with synthetic injection, not
+live systems. Wrong signature/type calls rejected by existing validate_call and
+host setup/teardown still raise; workflow failures return Result. A future HTTP
+host must map successful DataFrames/arrays to its response DTOs and expose only
+Result.value/error, never retained internal exception objects. The separate F8
+recovery redesign and strict historical trace parsing remain unimplemented.

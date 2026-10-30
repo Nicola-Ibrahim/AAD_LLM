@@ -1,6 +1,5 @@
 """SQLite-based repository for LLaMEA algorithm synthesis sessions."""
 
-import logging
 from datetime import datetime, timezone
 from typing import cast
 
@@ -19,6 +18,7 @@ from evolution.domain.vos import (
     IterationMetadata,
     ProblemProfile,
 )
+from shared.application.diagnostics import record_diagnostic
 from shared.application.errors import StorageError
 from shared.infra.database.session import session_scope
 from shared.infra.database.tables import ErrorLogORM, ExperimentORM, IterationORM
@@ -212,10 +212,9 @@ class SQLiteSynthesisRepository(SynthesisRepository):
             with session_scope(self.SessionLocal, "checkpoint_wal") as session:
                 session.execute(text("PRAGMA wal_checkpoint(PASSIVE)"))
                 session.commit()
-        except StorageError:
-            logging.getLogger(__name__).warning(
-                "Optional passive WAL checkpoint failed; committed data remains stored",
-                exc_info=True,
+        except StorageError as error:
+            record_diagnostic(
+                "Optional passive WAL checkpoint failed; committed data remains stored", error
             )
 
     def load(

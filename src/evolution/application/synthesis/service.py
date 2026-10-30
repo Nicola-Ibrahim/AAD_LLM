@@ -12,6 +12,7 @@ from evolution.domain.enums import PromptStrategy, SynthesisMode
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.vos import ProblemProfile
 from shared.application.diagnostics import diagnostic_context
+from shared.application.result import Result
 from shared.domain.interfaces.problem_factory import ProblemFactory
 from shared.domain.noise_model import NoiseModelEnum
 from shared.domain.problem import BaseProblem
@@ -57,60 +58,67 @@ class Synthesis:
         instance_id: int = 1,
         stagnation_threshold: int = 3,
         convergence_threshold: float = 1e-6,
-    ) -> SynthesisResult:
+    ) -> Result[SynthesisResult]:
         """Start one new experiment and run its full LLaMEA loop, without a pool.
 
         Model identity comes from the connected engine. One fixed instance is used
         for all generations. Use the campaign workflow for discovery and recovery.
         """
-        with self.logger.operation("single synthesis"):
-            if not 1 <= problem_id <= 24 or dim <= 0:
-                raise ValueError("Choose a BBOB problem ID from 1 to 24 and a positive dimension")
-            if not math.isfinite(noise_std) or noise_std < 0:
-                raise ValueError("Noise standard deviation must be finite and nonnegative")
-            noise_model = NoiseModelEnum(noise_model)
-            mode = SynthesisMode(mode)
-            strategy = PromptStrategy(prompt_strategy)
-            if instance_id < 1:
-                raise ValueError("Instance ID must be a positive integer")
-            settings = SynthesisSettings(
-                budget=budget,
-                iterations=iterations,
-                timeout_seconds=timeout_seconds,
-                stagnation_threshold=stagnation_threshold,
-                convergence_threshold=convergence_threshold,
-            )
-            problem = self.problem_factory.create(
-                problem_id=problem_id,
-                dim=dim,
-                noise_std=noise_std,
-                noise_model=noise_model,
-                instance_id=instance_id,
-                seed=synthesis_seed,
-            )
-            experiment_id = self.sqlite_repo.create_experiment(
-                problem=ProblemProfile(
-                    problem_id=problem.problem_id,
-                    dim=problem.dim,
-                    noise_std=problem.noise_std,
-                    noise_model=problem.noise_model,
-                    instance_id=problem.instance_id,
-                    true_optimum=problem.true_optimum,
-                ),
-                mode=mode,
-                prompt_strategy=strategy,
-                llm_name=self.engine.model_name,
-                budget=settings.budget,
-                max_iterations=settings.iterations,
-                synthesis_seed=synthesis_seed,
-            )
-            return self.execute(
-                problem=problem,
-                experiment_id=experiment_id,
-                config=settings,
-                prompt_strategy=strategy,
-                synthesis_mode=mode,
-            )
+        try:
+            with self.logger.operation("single synthesis"):
+                if not 1 <= problem_id <= 24 or dim <= 0:
+                    raise ValueError(
+                        "Choose a BBOB problem ID from 1 to 24 and a positive dimension"
+                    )
+                if not math.isfinite(noise_std) or noise_std < 0:
+                    raise ValueError("Noise standard deviation must be finite and nonnegative")
+                noise_model = NoiseModelEnum(noise_model)
+                mode = SynthesisMode(mode)
+                strategy = PromptStrategy(prompt_strategy)
+                if instance_id < 1:
+                    raise ValueError("Instance ID must be a positive integer")
+                settings = SynthesisSettings(
+                    budget=budget,
+                    iterations=iterations,
+                    timeout_seconds=timeout_seconds,
+                    stagnation_threshold=stagnation_threshold,
+                    convergence_threshold=convergence_threshold,
+                )
+                problem = self.problem_factory.create(
+                    problem_id=problem_id,
+                    dim=dim,
+                    noise_std=noise_std,
+                    noise_model=noise_model,
+                    instance_id=instance_id,
+                    seed=synthesis_seed,
+                )
+                experiment_id = self.sqlite_repo.create_experiment(
+                    problem=ProblemProfile(
+                        problem_id=problem.problem_id,
+                        dim=problem.dim,
+                        noise_std=problem.noise_std,
+                        noise_model=problem.noise_model,
+                        instance_id=problem.instance_id,
+                        true_optimum=problem.true_optimum,
+                    ),
+                    mode=mode,
+                    prompt_strategy=strategy,
+                    llm_name=self.engine.model_name,
+                    budget=settings.budget,
+                    max_iterations=settings.iterations,
+                    synthesis_seed=synthesis_seed,
+                )
+                return Result.success(
+                    self.execute(
+                        problem=problem,
+                        experiment_id=experiment_id,
+                        config=settings,
+                        prompt_strategy=strategy,
+                        synthesis_mode=mode,
+                    )
+                )
+        except Exception as error:
+            return Result.failure("single synthesis", error)
 
     def execute(
         self,

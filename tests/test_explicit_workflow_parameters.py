@@ -62,8 +62,8 @@ def test_synthesis_parameters_are_local_to_each_call() -> None:
         return SimpleNamespace(build_tasks=lambda **selection: [])
 
     service._build_planner = planner
-    service.run(**payload)
-    service.run(**(payload | {"budget": 200_000}))
+    service.run(**payload).value
+    service.run(**(payload | {"budget": 200_000})).value
     assert [config.budget for config in plans] == [100_000, 200_000]
     assert plans[0] is not plans[1]
     assert payload["budget"] == 100_000
@@ -92,8 +92,14 @@ def test_synthesis_parameters_are_local_to_each_call() -> None:
 def test_invalid_synthesis_inputs_never_dispatch_or_write(changes: dict[str, object]) -> None:
     service = synthesis_service()
     payload = run_parameters(synthesis_config()) | changes
-    with pytest.raises((ValueError, ValidationError)):
-        service.run(**payload)
+    try:
+        result = service.run(**payload)
+    except ValidationError:
+        # Wrong call shapes/types are rejected by the existing method signature validator.
+        pass
+    else:
+        assert not result.is_success
+        assert isinstance(result.exception, (ValueError, ValidationError))
     service.worker_pool.execute.assert_not_called()
     service.sqlite_repo.create_experiment.assert_not_called()
 
@@ -107,8 +113,8 @@ def test_benchmark_json_parameters_are_validated_and_not_retained() -> None:
     )
     original = BenchmarkConfig()
     payload = json.loads(json.dumps(run_parameters(original)))
-    service.run_benchmarks(**payload, solver_type="champions")
-    service.run_benchmarks(**(payload | {"first_instance_id": 11}), solver_type="baselines")
+    service.run_benchmarks(**payload, solver_type="champions").value
+    service.run_benchmarks(**(payload | {"first_instance_id": 11}), solver_type="baselines").value
     configs = [call.kwargs["config"] for call in workload.discover.call_args_list]
     assert configs[0].trial_schedule == original.trial_schedule
     assert configs[0].budget == original.budget
@@ -139,8 +145,13 @@ def test_invalid_benchmark_inputs_fail_before_discovery(changes: dict[str, objec
     workload = MagicMock()
     trials = MagicMock()
     service = BenchmarkCoordinator(workload, trials, {}, MagicMock())
-    with pytest.raises(ValidationError):
-        service.run_benchmarks(**(run_parameters(BenchmarkConfig()) | changes))
+    try:
+        result = service.run_benchmarks(**(run_parameters(BenchmarkConfig()) | changes))
+    except ValidationError:
+        pass
+    else:
+        assert not result.is_success
+        assert isinstance(result.exception, ValidationError)
     workload.discover.assert_not_called()
     trials.run_champion_trials.assert_not_called()
 

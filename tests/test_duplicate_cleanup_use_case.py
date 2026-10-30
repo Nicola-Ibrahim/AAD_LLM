@@ -2,8 +2,6 @@
 
 from collections.abc import Callable
 
-import pytest
-
 from evolution.application.interfaces.duplicate_storage import DuplicateStorage
 from evolution.application.maintenance.cleanup_types import (
     CleanupPlan,
@@ -35,14 +33,20 @@ class SnapshotStorage(DuplicateStorage):
 
 def test_preview_and_authorization_without_database() -> None:
     workflow = SynthesisDuplicateMaintenance(SnapshotStorage())
-    plan = workflow.preview()
+    plan = workflow.preview().value
     assert plan.delete_ids == (2,)
-    with pytest.raises(ValueError, match="Stop synthesis"):
-        workflow.apply(plan, confirmation=plan.confirmation, jobs_stopped=False)
-    with pytest.raises(RuntimeError, match="valid authorization"):
-        workflow.apply(plan, confirmation=plan.confirmation, jobs_stopped=True)
+    refused = workflow.apply(plan, confirmation=plan.confirmation, jobs_stopped=False)
+    assert not refused.is_success
+    assert isinstance(refused.exception, ValueError)
+    assert "Stop synthesis" in refused.error.message
+    failed = workflow.apply(plan, confirmation=plan.confirmation, jobs_stopped=True)
+    assert not failed.is_success
+    assert isinstance(failed.exception, RuntimeError)
+    assert "valid authorization" in failed.error.message
 
 
 def test_model_validation_without_database() -> None:
-    with pytest.raises(ValueError, match="not present"):
-        SynthesisDuplicateMaintenance(SnapshotStorage()).preview(models=["unknown"])
+    result = SynthesisDuplicateMaintenance(SnapshotStorage()).preview(models=["unknown"])
+    assert not result.is_success
+    assert isinstance(result.exception, ValueError)
+    assert "not present" in result.error.message

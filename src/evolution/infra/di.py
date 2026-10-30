@@ -27,6 +27,7 @@ from evolution.infra.storage.code.memory import MemoryCodeRepository
 from evolution.infra.storage.code.repository import FileCodeRepository
 from evolution.infra.storage.synthesis.memory import MemorySynthesisRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
+from shared.application.diagnostics import preserve_primary_failure
 from shared.config import DATA_DIR
 from shared.domain.interfaces.problem_factory import ProblemFactory
 from shared.infra.cpu import available_cpu_count
@@ -48,7 +49,8 @@ class EvolutionProvider(Provider):
                 client.ping()
             yield client
         finally:
-            client.close()
+            with preserve_primary_failure("LLM client close"):
+                client.close()
 
     repository = provide(
         SQLiteSynthesisRepository, provides=AnyOf[SQLiteSynthesisRepository, SynthesisRepository]

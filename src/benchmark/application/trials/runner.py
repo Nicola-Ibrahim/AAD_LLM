@@ -26,7 +26,7 @@ from benchmark.domain.benchmark_results import (
 from benchmark.domain.services.condition_status import inspect_condition
 from benchmark.domain.trial_schedule import matching_trial_indices, select_scheduled_trials
 from shared.application.diagnostics import diagnostic_context
-from shared.application.errors import ArtifactError, StorageError
+from shared.application.errors import ArtifactError, ProblemEvaluationError, StorageError
 from shared.application.interfaces.candidate_executor import (
     CANDIDATE_EXECUTION_VERSION,
     CandidateTimeout,
@@ -35,7 +35,7 @@ from shared.domain.interfaces.problem_factory import ProblemFactory
 from shared.domain.noise_model import NoiseModelEnum
 from shared.domain.problem import BaseProblem
 from shared.domain.scoring import objective_gap
-from shared.domain.solution import validate_returned_point
+from shared.domain.solution import InvalidReturnedPoint, validate_returned_point
 
 
 class BenchmarkTrialRunner:
@@ -179,7 +179,7 @@ class BenchmarkTrialRunner:
                                 error_type="NonFiniteObjective",
                                 error_message="The solver returned a non-finite objective value.",
                             )
-                    except (StorageError, ArtifactError):
+                    except (StorageError, ArtifactError, ProblemEvaluationError):
                         raise
                     except Exception as error:
                         best_objective, best_error = float("inf"), float("inf")
@@ -344,8 +344,16 @@ class BenchmarkTrialRunner:
                 budget=budget,
             )
             t1 = time.perf_counter()
-            validate_returned_point(prob, best_x)
-            best_objective = prob.eval_clean(best_x)
+            try:
+                validate_returned_point(prob, best_x)
+            except InvalidReturnedPoint as error:
+                raise ValueError(str(error)) from error
+            except Exception as error:
+                raise ProblemEvaluationError("Trusted returned-point validation failed") from error
+            try:
+                best_objective = prob.eval_clean(best_x)
+            except Exception as error:
+                raise ProblemEvaluationError("Trusted clean-objective evaluation failed") from error
             return best_objective, (t1 - t0), prob.evaluations
 
         prov_metadata = {

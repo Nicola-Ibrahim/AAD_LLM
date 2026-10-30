@@ -250,7 +250,7 @@ class TestApplicationServicesIntegration:
         from shared.infra.di import container_scope
 
         with container_scope(BenchmarkProvider(), context={}, request_context={}) as scope:
-            snapshot = scope.get(BenchmarkAuditService).get_audit_data()
+            snapshot = scope.get(BenchmarkAuditService).get_audit_data().value
         assert isinstance(snapshot.benchmarks, pd.DataFrame)
         assert isinstance(snapshot.synthesis_gaps, pd.DataFrame)
         assert isinstance(snapshot.coverage_summary, AuditCoverageSummary)

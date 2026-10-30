@@ -30,11 +30,14 @@ in `src/benchmark/application/analysis/` coordinate profile, reliability,
 noise-robustness and performance analysis; domain engines own the scientific calculations. Notebook-owned
 helpers handle visual layout, styling and explicit PNG export, without figure caching.
 The infrastructure `AnalysisResultsStore` saves calculated arrays and statistics;
-it never queries experiments or invokes analysis engines.
+it never queries experiments or invokes analysis engines. The notebook host's
+`AnalysisResultsExporter` coordinates snapshot persistence and downstream CSV
+exports and reports errors once. Plotting helpers only consume calculated results.
 The helper modules are grouped by workflow: `summary.py`, `performance.py`,
 `profiles.py`, and `generalization.py`, with shared `style.py` and `exporter.py`.
 
-Use cases return typed calculated results: no live database repository, raw dataset
+Use cases return `Result[T]` containing typed calculated data or a structured error.
+On success: no live database repository, raw dataset
 or engine service is carried into plotting. Helpers consume arrays and tables,
 never call scientific engines. Profiles exclude
 stale champion identities; completed terminal trials do not imply that all their
@@ -55,24 +58,28 @@ resolved by infrastructure Dishka providers, not optional constructor fallbacks:
 
 ```python
 # profile_analysis and results_store are resolved in notebook setup.
-profiles = profile_analysis.execute(
+outcome = profile_analysis.execute(
     mode="explicit",
     dims=[2],
     problems=None,
     noise_stds=[0.05, 0.1, 0.2],
 )
+profiles = outcome.value
+if not outcome.is_success:
+    print(outcome.error.message)
 ```
 
-At this point no images or CSVs have been written. Inspect `profiles.conditions`,
+At this point no images or CSVs have been written. On success, inspect `profiles.conditions`,
 then run the optional export cell:
 
 ```python
 from notebooks.analysis.plotting.exporter import AnalysisFigureExporter
 from shared.config import RESULTS_DIR
 
-snapshot_path = results_store.save(profiles)
-exporter = AnalysisFigureExporter(RESULTS_DIR)
-exporter.export_profiles(profiles)
+if profiles is not None:
+    snapshot_path = results_exporter.save(profiles)
+    exporter = AnalysisFigureExporter(RESULTS_DIR)
+    exporter.export_profiles(profiles)
 ```
 
 For an individual figure, call `build_profile(condition, profiles.mode,
@@ -121,7 +128,9 @@ them. The printed snapshot path identifies the exact result.
 To reuse a snapshot after a kernel restart, skip calculation and load its printed path:
 
 ```python
-profiles = results_store.load(results_store.root / "profiles" / "explicit" / "<printed-signature>")
+profiles = results_exporter.load(
+    results_store.root / "profiles" / "explicit" / "<printed-signature>"
+)
 AnalysisFigureExporter(RESULTS_DIR).export_profiles(profiles)
 ```
 
