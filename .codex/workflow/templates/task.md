@@ -1,8 +1,20 @@
 # <Descriptive task title>
 
-Status: proposed | planned | in progress | verification | complete | blocked
+## Current state
+
 Updated: YYYY-MM-DD
-Scope/baseline: branch and commit, plus any relevant pre-existing working changes
+
+- **Phase and authorized scope:** proposed / planning / implementation / verification /
+  complete / blocked; state exactly what is authorized now.
+- **Next concrete step:** one action, or no remaining work within this task.
+- **Unresolved decisions:** list blocking decisions separately from deferred work;
+  write none if no decision is needed.
+- **Baseline:** branch, full HEAD commit, and relevant staged/unstaged changes.
+  For a substantial review identify the compared commit/diff scope or fingerprint.
+- **Latest verification and limits:** actual latest results, reviewed snapshot,
+  runtime/environment and any checks not performed. Keep older evidence below.
+
+Keep this summary concise and refresh it after a material change or handoff.
 
 ## Problem and evidence
 
@@ -45,6 +57,19 @@ Keep old conclusions only when they explain a current decision.
 
 Review: not performed | self-review | independent review by named agent
 Findings resolved / deferred, with reasons:
+
+### Agent activity evidence
+
+| Runtime agent/thread | Assigned role and how supplied | Scope/baseline reviewed | Actual findings/checks and limits |
+| --- | --- | --- | --- |
+| Not used yet | Not applicable | Not reviewed | No delegation or independent review claimed |
+
+Confirm actual delegation/completion from available Codex agent activity/threads
+or tool responses. Record the runtime identity and review baseline when available.
+Role configuration alone is not execution evidence. Distinguish explicit role
+instructions from verified automatic custom-role loading; write not verified
+when the runtime does not expose that information. A task record summarizes this
+evidence; it cannot itself prove external agent execution.
 
 ## Handoff
 

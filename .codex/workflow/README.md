@@ -22,9 +22,17 @@ Agent files and skills use Codex's recognized locations. This workflow folder
 has no automatic execution behavior: name the task file in the prompt. Skills
 are reusable procedures; agents are separate actors; task records are durable
 context. Defining roles does not start them or increase synthesis concurrency.
-Roles inherit the parent model/settings and permissions; no particular model,
-provider, extra tools or concurrency setting is forced by this setup. Their
-read-only instructions are behavioral constraints, not separate sandbox permissions.
+When these role files are applied, the investigator uses `gpt-6-luna` and the
+reviewer uses `gpt-6.1-sol`, both with medium reasoning and low verbosity. This
+keeps exploration economical and reserves the stronger model for review. Their
+instructions request concise evidence rather than repeated narration. Model
+availability depends on the account/runtime; report an unavailable configuration
+instead of silently substituting a different model.
+
+Permissions, provider and tools still inherit from the parent session. Read-only
+instructions are behavioral constraints, not separate sandbox permissions. These
+files configure future agent creation; they do not prove which settings an
+existing thread used. Record effective settings when runtime evidence is available.
 
 ## Working sequence
 
@@ -39,6 +47,25 @@ Keep small fixes lightweight. Read-only investigation and planning prompts do
 not authorize implementation. A resumed agent reads the task and current working
 tree; it must not assume previous agents' memories. Do not use arbitrary numeric
 quality scores as evidence that a change is correct.
+
+## Current state and agent evidence
+
+Start each task with a short current-state summary: authorized phase and scope,
+next step, unresolved decisions, baseline and latest verification limits. Keep the
+detailed investigation and older evidence below it. A new session reads the summary
+first, then verifies it against the working tree.
+
+For delegated work, confirm actual spawn/completion in available Codex agent
+activity/threads or tool responses. Record the runtime name/ID, assigned scope,
+reviewed HEAD plus relevant staged/unstaged diff, findings and actual checks.
+A diff fingerprint helps identify an uncommitted reviewed snapshot; it does not
+prove execution. Keep secrets and raw transcript dumps out of the task record.
+
+Configured roles and executed agents are different facts. If the coordinator asks
+a subagent to read a role file, record that as explicitly supplied instructions.
+Only claim automatic custom-role loading when the runtime confirms it; otherwise
+mark it unverified. If no agent ran, record self-review. Documentation preserves
+the evidence summary; execution is confirmed by the Codex activity itself.
 
 ## Verification commands
 

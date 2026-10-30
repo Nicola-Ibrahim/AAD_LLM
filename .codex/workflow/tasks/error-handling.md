@@ -1,5 +1,26 @@
 # Error handling and application-owned reporting
 
+## Current state
+
+- **Phase and authorized scope:** complete. Error-handling implementation and the
+  user-approved Result API revision are verified. This follow-up edits guidance
+  and task documentation only; no further backend work is authorized here.
+- **Next step:** review the staged/unstaged diff before deciding whether to commit.
+- **Unresolved decisions:** none blocking. F8 recovery redesign and strict historical
+  trace parsing remain deferred; they require separate authorization.
+- **Implementation/review baseline:** `main`, HEAD
+  `27751fa37bddb5be8de4a4fec82c7224c1ebdd75`, plus staged/unstaged changes under
+  `src/`, `tests/` and `notebooks/`. Diff SHA-256:
+  `64283f691824a857b3437f4b37e55d10d41b7d7e629728b2ea52c7072a010c71`.
+- **Latest verification:** coordinator full isolated suite **692 passed**, 20
+  existing/third-party warnings (Python 3.13); independent final focused review
+  **45 passed**. Lint/format, all 50 notebook code cells, and Python 3.11 syntax
+  checks pass. No Python 3.11 runtime or live-provider/study verification was run.
+  Saved notebook outputs and research artifacts are preserved.
+
+Detailed history and supporting evidence follow. Earlier planning-only statements
+and the 72-test baseline describe earlier phases, not the current implementation.
+
 Status: complete — implemented and verified, including the approved Result API revision
 Updated: 2026-10-30
 Initial investigation baseline: `main`, HEAD `6d1bac4`, including the then-staged
@@ -418,6 +439,40 @@ Investigation: independent read-only investigator plus coordinator inspection.
 Review: coordinator self-review of this plan; no independent implementation
 review was claimed at the planning stage. Implementation review and resolutions
 are recorded below.
+
+### Confirmed agent activity and review scope
+
+On 2026-10-30 the coordinator checked Codex's live agent activity through
+`collaboration.list_agents`: the following runtime threads were present and
+completed, with their returned findings. This confirms delegated work in this
+session, not automatic custom-role TOML loading.
+
+| Runtime thread | Assignment and instruction source | Evidence and limits |
+| --- | --- | --- |
+| `/root/investigator` | Read-only evolution/provider/worker/recovery investigation; explicitly instructed to follow `.codex/agents/investigator.toml` | Returned source-backed propagation, cleanup and recovery findings. No implementation or test run claimed; its planning-only wording belongs to that earlier phase. |
+| `/root/verification` | Bounded read-only candidate/benchmark failure-boundary investigation using the investigator role | Identified trusted clean/bounds fault handling and relevant test coverage. No edits or tests claimed; no tester-role file was assumed. |
+| `/root/reviewer` | Independent read-only implementation review; explicitly instructed to read `.codex/agents/reviewer.toml` | Confirmed it read the role file. Returned actionable findings, re-reviewed corrections, and independently ran the final 45-test subset. |
+
+The reviewer subsequently verified current HEAD
+`27751fa37bddb5be8de4a4fec82c7224c1ebdd75` and the combined code/test/notebook diff
+fingerprint shown in Current state. Its inspected scope is consistent with the
+final implementation reviewed. The fingerprint was captured during this follow-up,
+not at the earlier review instant; it is not retroactive proof of byte identity.
+Documentation and guidance changes in this follow-up are outside that code diff.
+
+Final reviewer findings: no remaining material issue after corrections to cleanup,
+optional maintenance, provider privacy, scientific/backend classification, export
+ownership, structured Result handling and nested reporting. Last actual independent
+check: isolated temporary DB/data/results, `PYTHONPATH=src:.`, then
+`/private/tmp/aad-run-tests.py` with `tests/test_failure_boundaries.py`,
+`tests/test_error_reporting.py`, and `tests/test_process_worker_pool.py`:
+**45 passed, one optional CMA/Matplotlib warning, in 4.58 seconds**. No tests were
+rerun for this documentation follow-up.
+
+Automatic project-role discovery remains **not verified**. The recorded mechanism
+is explicit role-file instructions passed during actual subagent delegation.
+Repository files summarize evidence; the Codex activity/tool responses are the
+execution evidence, and are not replaced by this table.
 
 ### Implementation decisions and actual verification
 

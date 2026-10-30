@@ -25,6 +25,11 @@ If independent review is unavailable, state that limitation and label self-revie
 
 Update the task with actual results,
 material decisions and remaining limitations.
+Keep the task's current-state summary at the top up to date: authorized phase,
+next action, unresolved decisions, baseline and latest verification limits.
+When agents are used, confirm their activity and record actual runtime identities,
+role-instruction source, reviewed commit/diff scope and findings/checks. Do not
+claim automatic role loading or independent review from configuration alone.
 Do not launch experiments, call live APIs, run migrations, regenerate results,
 stage or commit changes unless separately authorized.
 ```

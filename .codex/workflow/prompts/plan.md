@@ -23,6 +23,11 @@ The coordinator writes findings, scope, acceptance criteria, dependencies and a
 step-by-step plan in the task file. Preserve existing evidence and decisions;
 mark superseded conclusions clearly. Identify decisions needing my input.
 Do not implement yet or treat the plan as implementation authorization.
+Keep the task's current-state summary at the top up to date: authorized phase,
+next action, unresolved decisions, baseline and latest verification limits.
+When agents are used, confirm their activity and record actual runtime identities,
+role-instruction source, reviewed commit/diff scope and findings/checks. Do not
+claim automatic role loading or independent review from configuration alone.
 Do not launch experiments, call live APIs, run migrations, regenerate results,
 stage or commit changes. Only the task record may be edited.
 ```

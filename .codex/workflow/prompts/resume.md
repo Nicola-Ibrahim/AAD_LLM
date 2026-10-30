@@ -22,6 +22,11 @@ Do not claim independent review unless another agent actually performed it.
 
 Update the task with material decisions, actual verification, remaining limitations
 and the next action. If complete, confirm the evidence instead of reopening work.
+Keep the task's current-state summary at the top up to date: authorized phase,
+next action, unresolved decisions, baseline and latest verification limits.
+When agents are used, confirm their activity and record actual runtime identities,
+role-instruction source, reviewed commit/diff scope and findings/checks. Do not
+claim automatic role loading or independent review from configuration alone.
 Do not launch experiments, call live APIs, run migrations, regenerate results,
 stage or commit changes unless separately authorized.
 ```
