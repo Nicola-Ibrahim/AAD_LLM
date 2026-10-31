@@ -11,6 +11,15 @@ Follow AGENTS.md. Read the task and inspect staged and unstaged changes first.
 Preserve the task's scientific behavior, experiment data, checkpoints and recovery
 rules, as well as unrelated changes. Complete only the authorized scope.
 
+Use the main agent → investigator → coder → reviewer → main agent workflow.
+Reuse the task’s existing evidence; request further bounded read-only investigation
+only for unresolved questions. Assign a focused implementation part using
+.codex/agents/coder.toml, with explicit file ownership, acceptance criteria and
+safeguards. The coder is not alone in the workspace and must preserve others’ edits.
+Keep complex scientific decisions and integration with the main agent. Review the
+coder’s actual changes; do not accept its summary as verification.
+If a role is unavailable, report it and perform that work directly.
+
 Run appropriate isolated verification against the acceptance criteria. Delegate
 bounded testing to a separate agent when useful; give it explicit scope and
 safeguards, and avoid overlapping file edits. Do not require a tester role file

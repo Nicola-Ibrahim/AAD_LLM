@@ -62,11 +62,15 @@ than silently choosing a scientific interpretation.
   behavior; do not distort valid backend behavior to satisfy brittle assertions.
 - Use `.venv/bin/ruff check .` and `.venv/bin/ruff format . --check` for read-only
   checks. Run pytest with isolated study storage using the workflow guide.
-- For substantial independent investigations, delegation is useful when supported.
-  Give each agent an objective, scope, ownership and expected evidence. Avoid
-  overlapping edits. Review dependent implementation after it is ready.
+- For substantial authorized changes, use the workflow: main agent defines scope →
+  investigator gathers evidence → coder implements a bounded part → reviewer checks
+  the actual diff → main agent integrates and verifies. Planning stops before coding.
+  Give agents concise assignments with ownership, safeguards and expected evidence;
+  sequence dependent work and parallelize only independent, non-overlapping work.
 - `investigator` and `reviewer` are read-only roles by instruction, not separate
-  permission sandboxes. The main agent implements and integrates findings.
+  permission sandboxes. The coder edits only assigned files and must preserve others’
+  changes. The main agent owns scientific decisions, integration and final checks.
+  Keep small fixes lightweight; if delegation is unavailable, report that limitation.
 - Never claim independent review unless another agent performed it. If delegation
   is unavailable, label the review as a self-review and record the limitation.
 - Record material decisions and actual verification in the task file. Report

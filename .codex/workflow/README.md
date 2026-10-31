@@ -12,7 +12,7 @@ replace its placeholders and send it in Codex.
 | Location | Responsibility |
 | --- | --- |
 | [Root AGENTS.md](../../AGENTS.md) | Stable project rules, discovered by Codex |
-| [Agent roles](../agents/) | Project-scoped investigator/reviewer definitions |
+| [Agent roles](../agents/) | Project-scoped investigator, coder and reviewer definitions |
 | [Research-change skill](../../.agents/skills/research-change/SKILL.md) | Reusable procedure for substantial research-code changes |
 | [Prompts](prompts/README.md) | Copy-and-paste entry points for you |
 | [Task template](templates/task.md) | Starting structure for one substantial task |
@@ -22,9 +22,9 @@ Agent files and skills use Codex's recognized locations. This workflow folder
 has no automatic execution behavior: name the task file in the prompt. Skills
 are reusable procedures; agents are separate actors; task records are durable
 context. Defining roles does not start them or increase synthesis concurrency.
-When these role files are applied, the investigator uses `gpt-6-luna` and the
-reviewer uses `gpt-6.1-sol`, both with medium reasoning and low verbosity. This
-keeps exploration economical and reserves the stronger model for review. Their
+When these role files are applied, the investigator and coder use `gpt-6-luna`;
+the reviewer uses `gpt-6.1-terra`. All use medium reasoning and low verbosity.
+The main agent uses the session model and handles complex planning and integration. Their
 instructions request concise evidence rather than repeated narration. Model
 availability depends on the account/runtime; report an unavailable configuration
 instead of silently substituting a different model.
@@ -36,12 +36,27 @@ existing thread used. Record effective settings when runtime evidence is availab
 
 ## Working sequence
 
-1. Investigate the observed problem; identify evidence and ownership.
-2. Plan a substantial task and agree its behavior and acceptance criteria.
-3. Implement the authorized scope; record decisions and changed files.
-4. Run focused verification in isolated storage.
-5. Obtain an independent review when appropriate and available; fix findings.
-6. Re-verify affected behavior and leave a concise handoff in the task file.
+1. **Main agent defines scope:** inspect the working tree, identify safeguards and
+   assign a bounded investigation. Retain ownership of the task record.
+2. **Investigator gathers evidence:** trace relevant paths read-only; return facts,
+   file/symbol references and open questions. Main agent agrees the plan and criteria.
+3. **Coder implements a bounded part:** after implementation is authorized, assign
+   explicit files, behavior and isolated checks. The coder preserves others’ changes,
+   reports blockers and returns changed files plus actual verification. Complex or
+   scientifically ambiguous changes remain with the main agent.
+4. **Reviewer checks the diff:** independently review the completed relevant changes
+   against acceptance criteria and baseline. Report actionable findings read-only.
+5. **Main agent integrates and verifies:** inspect delegated edits, resolve findings,
+   rerun affected checks and update the task with actual evidence and limitations.
+
+Use these role files: [investigator](../agents/investigator.toml),
+[coder](../agents/coder.toml) and [reviewer](../agents/reviewer.toml).
+Send a compact handoff: objective, owned files, baseline, necessary findings,
+acceptance criteria, safeguards and expected output. Avoid copying the entire chat.
+Do not repeat a finished investigation without new evidence. Run dependent stages
+in order; parallelize only independent work with disjoint edit ownership. No agent
+stages or commits unless separately authorized. Browser debugging is optional future
+work, not a required stage or configured role in this workflow.
 
 Keep small fixes lightweight. Read-only investigation and planning prompts do
 not authorize implementation. A resumed agent reads the task and current working

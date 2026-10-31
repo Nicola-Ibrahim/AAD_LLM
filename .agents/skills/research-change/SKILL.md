@@ -17,7 +17,13 @@ isolated verification commands.
 2. Define observable acceptance criteria and an ordered plan. Identify material
    ambiguities; resolve routine implementation choices within the user's scope.
    If only planning was requested, stop after recording the plan.
-3. Implement coherent steps and verify the affected behavior as work proceeds.
+3. For authorized implementation, follow main agent defines scope → investigator
+   gathers evidence → coder implements a bounded part → reviewer checks the diff →
+   main agent integrates and verifies. Reuse completed evidence. Assign the coder
+   explicit file ownership, acceptance criteria and safeguards; it is not alone in
+   the workspace and must preserve others’ edits. Keep scientific decisions and
+   integration with the main agent. Small fixes may stay single-agent.
+   Implement coherent steps and verify the affected behavior as work proceeds.
    Use characterization checks where ownership or structure changes could alter
    numerical results, candidate selection, serialization or resumption.
 4. Delegate bounded independent investigation/review when useful and available.

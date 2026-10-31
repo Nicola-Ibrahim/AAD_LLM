@@ -14,8 +14,11 @@ scope. A planned task remains planning-only until implementation is authorized.
 Preserve scientific behavior, study data, checkpoints, recovery rules, notebook
 outputs and unrelated changes.
 
-Use the investigator or reviewer roles when the authorized phase needs their
-independent work. Give bounded assignments and state if delegation is unavailable.
+Follow the main agent → investigator → coder → reviewer → main agent workflow,
+resuming only unfinished stages. Use the coder role for a bounded implementation
+part only when implementation is authorized; assign explicit file ownership and
+preserve others’ edits. Use read-only investigation/review where needed. The main
+agent integrates and verifies. State if delegation is unavailable.
 Delegate bounded isolated testing when useful within that scope. Preserve
 read-only investigator/reviewer assignments and avoid overlapping edits.
 Do not claim independent review unless another agent actually performed it.
