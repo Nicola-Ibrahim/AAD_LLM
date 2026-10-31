@@ -99,7 +99,7 @@ def test_invalid_synthesis_inputs_never_dispatch_or_write(changes: dict[str, obj
         pass
     else:
         assert not result.is_success
-        assert isinstance(result.exception, (ValueError, ValidationError))
+        assert isinstance(result.error._original_exception, (ValueError, ValidationError))
     service.worker_pool.execute.assert_not_called()
     service.sqlite_repo.create_experiment.assert_not_called()
 
@@ -151,7 +151,7 @@ def test_invalid_benchmark_inputs_fail_before_discovery(changes: dict[str, objec
         pass
     else:
         assert not result.is_success
-        assert isinstance(result.exception, ValidationError)
+        assert isinstance(result.error._original_exception, ValidationError)
     workload.discover.assert_not_called()
     trials.run_champion_trials.assert_not_called()
 

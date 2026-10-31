@@ -522,7 +522,7 @@ def test_dependencies_are_required_and_mode_validated_before_loading():
         MagicMock(), EcdfConvergenceEngine(), logger=BenchmarkLogger()
     ).execute(mode="invalid", dims=None, problems=None, noise_stds=None)
     assert not result.is_success
-    assert isinstance(result.exception, ValueError)
+    assert isinstance(result.error._original_exception, ValueError)
     assert result.value is None
 
 

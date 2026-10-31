@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 
-from shared.application.result import ApplicationError
+from shared.application.result import Error
 
 _fields: ContextVar[dict[str, object]] = ContextVar("diagnostic_fields", default={})
 _operation_depth: ContextVar[int] = ContextVar("operation_depth", default=0)
@@ -22,8 +22,8 @@ def record_diagnostic(message: str, error: Exception | None = None) -> None:
     Outside an operation, the shared application reporter emits the diagnostic.
     Optional maintenance must remain nonfatal even under warnings-as-errors.
     """
-    detail = f"{message} ({ApplicationError.describe(error)})" if error else message
-    detail = ApplicationError.sanitize(detail)
+    detail = f"{message} ({Error.describe(error)})" if error else message
+    detail = Error.sanitize(detail)
     pending = _diagnostics.get()
     if pending is None:
         logging.getLogger("shared.workflow").warning("%s", detail)
@@ -43,11 +43,7 @@ def preserve_primary_failure(operation: str) -> Iterator[None]:
     except BaseException as cleanup:
         if primary is None:
             raise
-        primary.add_note(
-            ApplicationError.sanitize(
-                f"{operation} also failed ({ApplicationError.describe(cleanup)})"
-            )
-        )
+        primary.add_note(Error.sanitize(f"{operation} also failed ({Error.describe(cleanup)})"))
 
 
 def reset_process_diagnostics() -> None:

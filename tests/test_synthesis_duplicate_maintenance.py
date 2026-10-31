@@ -178,16 +178,16 @@ def test_stale_plan_and_missing_confirmation_cannot_delete(
     plan = maintenance.preview().value
     outcome = maintenance.apply(plan, confirmation="", jobs_stopped=True)
     assert not outcome.is_success
-    assert isinstance(outcome.exception, ValueError)
+    assert isinstance(outcome.error._original_exception, ValueError)
     assert "exact preview" in outcome.error.message
     outcome = maintenance.apply(plan, confirmation=plan.confirmation, jobs_stopped=False)
     assert not outcome.is_success
-    assert isinstance(outcome.exception, ValueError)
+    assert isinstance(outcome.error._original_exception, ValueError)
     assert "Stop" in outcome.error.message
     add(database, tmp_path, 3, problem_id=8)
     outcome = maintenance.apply(plan, confirmation=plan.confirmation, jobs_stopped=True)
     assert not outcome.is_success
-    assert isinstance(outcome.exception, RuntimeError)
+    assert isinstance(outcome.error._original_exception, RuntimeError)
     assert "changed" in outcome.error.message
     assert counts(database) == (3, 3, 3)
     assert not (tmp_path / "maintenance_backups").exists()
@@ -203,7 +203,7 @@ def test_forged_plan_cannot_delete_protected_winner(database: Database, tmp_path
     forged = replace(plan, rows=tuple(replace(row, action="delete") for row in plan.rows))
     outcome = maintenance.apply(forged, confirmation=forged.confirmation, jobs_stopped=True)
     assert not outcome.is_success
-    assert isinstance(outcome.exception, RuntimeError)
+    assert isinstance(outcome.error._original_exception, RuntimeError)
     assert "changed" in outcome.error.message
     assert counts(database) == (2, 2, 2)
 
@@ -224,7 +224,7 @@ def test_shared_code_cannot_be_quarantined(database: Database, tmp_path: Path) -
         plan, confirmation=plan.confirmation, jobs_stopped=True, quarantine_files=True
     )
     assert not outcome.is_success
-    assert isinstance(outcome.exception, ValueError)
+    assert isinstance(outcome.error._original_exception, ValueError)
     assert "retained experiment" in outcome.error.message
     assert counts(database) == (2, 2, 2)
 
@@ -287,7 +287,7 @@ def test_model_scope_does_not_remove_another_models_records(
     assert {row.experiment_id for row in plan.rows} == {1, 2}
     outcome = maintenance.preview(models=["missing-model"])
     assert not outcome.is_success
-    assert isinstance(outcome.exception, ValueError)
+    assert isinstance(outcome.error._original_exception, ValueError)
     assert "not present" in outcome.error.message
 
 
@@ -308,7 +308,7 @@ def test_failed_deletion_rolls_back_rows_and_restores_quarantined_files(
         plan, confirmation=plan.confirmation, jobs_stopped=True, quarantine_files=True
     )
     assert not outcome.is_success
-    assert isinstance(outcome.exception, Exception)
+    assert isinstance(outcome.error._original_exception, Exception)
     assert "protected" in outcome.error.message
     assert counts(database) == (2, 2, 2)
     assert (tmp_path / "code/experiment_2/iter_1.py").is_file()
@@ -332,7 +332,7 @@ def test_symlink_artifact_is_refused_before_any_deletion(
         plan, confirmation=plan.confirmation, jobs_stopped=True, quarantine_files=True
     )
     assert not outcome.is_success
-    assert isinstance(outcome.exception, ValueError)
+    assert isinstance(outcome.error._original_exception, ValueError)
     assert "Unsafe artifact" in outcome.error.message
     assert counts(database) == (2, 2, 2)
     assert (outside / "iter_1.py").is_file()

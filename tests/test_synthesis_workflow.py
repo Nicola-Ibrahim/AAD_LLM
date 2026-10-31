@@ -93,7 +93,7 @@ def test_invalid_single_session_does_not_create_records(change):
     session = Synthesis(MagicMock(), repository, SynthesisLogger(), factory)
     result = session.run(**(parameters() | change))
     assert not result.is_success
-    assert isinstance(result.exception, (ValueError, ValidationError))
+    assert isinstance(result.error._original_exception, (ValueError, ValidationError))
     factory.create.assert_not_called()
     repository.create_experiment.assert_not_called()
 
@@ -256,5 +256,5 @@ def test_transient_scope_cleans_checkpoints_when_engine_fails(monkeypatch):
         (checkpoint_root / "partial-checkpoint").write_text("unfinished")
         result = container.get(Synthesis).run(**parameters())
     assert not result.is_success
-    assert isinstance(result.exception, ProviderError)
+    assert isinstance(result.error._original_exception, ProviderError)
     assert not checkpoint_root.exists()

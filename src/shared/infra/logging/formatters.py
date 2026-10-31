@@ -5,7 +5,7 @@ import logging
 import re
 import time
 
-from shared.application.result import ApplicationError
+from shared.application.result import Error
 from shared.infra.logging.exceptions import format_diagnostic_exception
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
@@ -38,12 +38,12 @@ class DiagnosticFormatter(logging.Formatter):
             if key in record.__dict__
         )
         rendered = super().format(record)
-        return ApplicationError.sanitize(_ANSI.sub("", f"{rendered} {fields}"))
+        return Error.sanitize(_ANSI.sub("", f"{rendered} {fields}"))
 
 
 class ConsoleFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        message = ApplicationError.sanitize(record.getMessage())
+        message = Error.sanitize(record.getMessage())
         if record.exc_info:
             message += " (details in the diagnostic log)"
         return message

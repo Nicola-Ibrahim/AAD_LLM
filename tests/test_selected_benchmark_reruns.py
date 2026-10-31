@@ -190,7 +190,7 @@ def test_invalid_rerun_selection_does_not_start_trials(selection):
         pass  # Existing strict call validation rejects bool IDs before invocation.
     else:
         assert not result.is_success
-        assert isinstance(result.exception, ValueError)
+        assert isinstance(result.error._original_exception, ValueError)
     coordinator.trials.run_champion_trials.assert_not_called()
     coordinator.trials.run_baseline_trials.assert_not_called()
 
@@ -204,7 +204,7 @@ def test_explicit_rerun_refuses_incompatible_results(reason):
         rerun_experiment_ids=[11],
     )
     assert not result.is_success
-    assert isinstance(result.exception, ValueError)
+    assert isinstance(result.error._original_exception, ValueError)
     assert "compatible" in result.error.message
     coordinator.trials.run_champion_trials.assert_not_called()
 

@@ -8,22 +8,26 @@ configure global logging handlers.
 
 ```python
 outcome = benchmark_coordinator.run_benchmarks(...)  # Supply the usual explicit parameters.
-if outcome.is_success:
-    results = outcome.value
-else:
-    print(outcome.error.message)
+results = outcome.on(
+    on_success=lambda value: value,
+    on_failure=lambda error: print(error.message),
+)
 ```
 
 Public workflow APIs return `Result[T]`: successful data in `value`, or a useful
-`ApplicationError` in `error`. Errors contain an operation, code, sanitized
+`Error` in `error`. Errors contain an operation, code, sanitized
 message and diagnostic-log location when a host configured one. The original
-exception and its cause remain available internally as `outcome.exception`;
-that field is excluded from Pydantic serialization and representation. Failed
+exception and its cause are retained privately inside `Error`, excluded from
+serialization and representation. A single generic `Result` holds `value` and `error`; the inactive field is
+`None`. Validation requires exactly one non-None payload. There are no outcome
+subclasses or custom Pydantic schema hooks. `on(on_success, on_failure)` invokes the matching callback and returns
+its result; exceptions from callbacks propagate to their caller. Failed
 results never manufacture empty successful datasets.
 
 Application methods catch workflow failures after their operation boundary logs
 once, then return a failed Result instead of raising to notebook users. Notebook
-cells check `is_success` and clear failed calculated values before later exports.
+cells dispatch with `on()` or check `is_success`, clearing failed calculated
+values before later exports.
 They do not manage per-cell operation contexts. Internal domain services,
 repositories, analysis loaders, trial runners and the registered synthesis worker
 still raise errors so orchestration, partial-result aggregation and existing

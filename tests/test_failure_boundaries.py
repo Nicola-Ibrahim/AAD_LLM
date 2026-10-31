@@ -373,8 +373,8 @@ def test_public_application_returns_error_data_and_preserves_original_cause(tmp_
         assert outcome.value is None
         assert outcome.error.code == "StorageError"
         assert outcome.error.diagnostic_log == str(runtime.path)
-        assert outcome.exception is primary
-        assert outcome.exception.__cause__ is cause
+        assert outcome.error._original_exception is primary
+        assert outcome.error._original_exception.__cause__ is cause
         public = outcome.model_dump(mode="json")
         assert "exception" not in public
         assert public["error"]["code"] == "StorageError"
@@ -461,6 +461,5 @@ def test_result_success_keeps_detached_data_and_rejects_mixed_outcome():
     assert outcome.is_success
     assert outcome.value is values
     assert outcome.error is None
-    assert outcome.exception is None
     with pytest.raises(ValidationError):
-        Result(value=values, error=None, exception=RuntimeError("mixed"))
+        Result(value=values, error=RuntimeError("mixed"))

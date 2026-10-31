@@ -1,22 +1,24 @@
-"""Typed public workflow outcomes; internal collaborators continue to raise failures."""
+"""Typed public workflow outcomes with safe, serializable failure details."""
 
 import re
-from typing import Generic, TypeVar
+from typing import Callable, Generic, TypeVar, cast
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, PrivateAttr, model_validator
 
 T = TypeVar("T")
+R = TypeVar("R")
 
 
-class ApplicationError(BaseModel):
-    """Safe error information for a notebook, CLI or future HTTP response."""
+class Error(BaseModel):
+    """Safe error information, with its original exception kept private."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True, extra="forbid")
 
     operation: str
     code: str
     message: str
-    diagnostic_log: str | None
+    diagnostic_log: str | None = None
+    _original_exception: Exception | None = PrivateAttr(default=None)
 
     @staticmethod
     def sanitize(text: str) -> str:
@@ -32,46 +34,50 @@ class ApplicationError(BaseModel):
             return f"{kind.__name__}: " + "; ".join(cls.describe(e) for e in error.exceptions)
         return cls.sanitize(f"{kind.__name__}: {error}")
 
+    @classmethod
+    def from_exception(cls, operation: str, exception: Exception) -> "Error":
+        path = getattr(exception, "diagnostic_log", None)
+        error = cls(
+            operation=operation,
+            code=type(exception).__name__,
+            message=cls.describe(exception),
+            diagnostic_log=str(path) if path is not None else None,
+        )
+        error._original_exception = exception
+        return error
+
 
 class Result(BaseModel, Generic[T]):
-    """Exactly one public data/error outcome, retaining its exception internally.
+    """One successful value or one error; the inactive field is None."""
 
-    ``None`` means no successful value on failure, or no diagnostic file when no
-    host configured one. Serialize ``error``, never the retained exception.
-    """
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True, extra="forbid")
 
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
-
-    value: T | None
-    error: ApplicationError | None
-    exception: Exception | None = Field(exclude=True, repr=False)
+    value: T | None = None
+    error: Error | None = None
 
     @model_validator(mode="after")
     def validate_outcome(self) -> "Result[T]":
-        if (self.error is None) != (self.exception is None):
-            raise ValueError("A failed result must retain both its error and original exception")
-        if self.error is not None and self.value is not None:
-            raise ValueError("A failed result cannot also contain a successful value")
+        if (self.value is None) == (self.error is None):
+            raise ValueError("Provide either a value or an error")
         return self
+
+    @classmethod
+    def success(cls, value: T) -> "Result[T]":
+        return cls(value=value)
+
+    @classmethod
+    def failure(cls, operation: str, exception: Exception) -> "Result[T]":
+        return cls(error=Error.from_exception(operation, exception))
 
     @property
     def is_success(self) -> bool:
         return self.error is None
 
-    @classmethod
-    def success(cls, value: T) -> "Result[T]":
-        return cls(value=value, error=None, exception=None)
-
-    @classmethod
-    def failure(cls, operation: str, error: Exception) -> "Result[T]":
-        path = getattr(error, "diagnostic_log", None)
-        return cls(
-            value=None,
-            error=ApplicationError(
-                operation=operation,
-                code=type(error).__name__,
-                message=ApplicationError.describe(error),
-                diagnostic_log=str(path) if path is not None else None,
-            ),
-            exception=error,
-        )
+    def on(
+        self,
+        on_success: Callable[[T], R],
+        on_failure: Callable[[Error], R],
+    ) -> R:
+        if self.error is not None:
+            return on_failure(self.error)
+        return on_success(cast(T, self.value))

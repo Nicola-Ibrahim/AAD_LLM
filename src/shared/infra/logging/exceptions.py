@@ -2,7 +2,7 @@
 
 import traceback
 
-from shared.application.result import ApplicationError
+from shared.application.result import Error
 
 
 def format_diagnostic_exception(error: BaseException) -> str:
@@ -36,4 +36,4 @@ def format_diagnostic_exception(error: BaseException) -> str:
                 text += render(child)
         return text
 
-    return ApplicationError.sanitize(render(error))
+    return Error.sanitize(render(error))

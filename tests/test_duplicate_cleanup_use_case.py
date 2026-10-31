@@ -37,16 +37,16 @@ def test_preview_and_authorization_without_database() -> None:
     assert plan.delete_ids == (2,)
     refused = workflow.apply(plan, confirmation=plan.confirmation, jobs_stopped=False)
     assert not refused.is_success
-    assert isinstance(refused.exception, ValueError)
+    assert isinstance(refused.error._original_exception, ValueError)
     assert "Stop synthesis" in refused.error.message
     failed = workflow.apply(plan, confirmation=plan.confirmation, jobs_stopped=True)
     assert not failed.is_success
-    assert isinstance(failed.exception, RuntimeError)
+    assert isinstance(failed.error._original_exception, RuntimeError)
     assert "valid authorization" in failed.error.message
 
 
 def test_model_validation_without_database() -> None:
     result = SynthesisDuplicateMaintenance(SnapshotStorage()).preview(models=["unknown"])
     assert not result.is_success
-    assert isinstance(result.exception, ValueError)
+    assert isinstance(result.error._original_exception, ValueError)
     assert "not present" in result.error.message

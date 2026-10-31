@@ -360,7 +360,7 @@ def test_readiness_and_resumption_agree_on_incompatible_partial_history(transfer
         **run_parameters(service.config), solver_type="champions", verbose=False
     )
     assert not result.is_success
-    assert isinstance(result.exception, ValueError)
+    assert isinstance(result.error._original_exception, ValueError)
     assert "unknown execution contract" in result.error.message
     assert state.records[task.target_dir] == original
 

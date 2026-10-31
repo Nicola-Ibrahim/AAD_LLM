@@ -1,4 +1,27 @@
-# Implement an agreed task
+# Implement a change
+
+## Small tweak: no task record needed
+
+Use this for a focused change with limited impact. Replace the placeholders.
+For example: `Update the Result class to <describe the change>`.
+
+```text
+Update <class, method or component> to <describe the change>.
+
+Follow AGENTS.md. Inspect staged and unstaged changes, the implementation and
+its callers first. Preserve <required behavior> and unrelated changes.
+For Result changes, preserve exception causes, error reporting and scientific
+failure classifications unless the requested change explicitly alters them.
+
+Update affected callers and meaningful tests. Run focused isolated verification
+and report actual results and limitations. Keep the change bounded; if inspection
+reveals a cross-workflow contract change, explain the impact and propose a plan
+before broadening implementation.
+Do not launch experiments, call live APIs, run migrations, modify research data,
+regenerate results, stage or commit changes.
+```
+
+## Approved substantial task
 
 Replace `<task-name>` with the existing task record's name. Keep task-specific
 requirements and safeguards in that record.

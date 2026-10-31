@@ -310,7 +310,7 @@ def test_analysis_service_reports_without_a_notebook_wrapper(tmp_path):
         analysis = AnalyzeEcdfAndConvergence(loader, MagicMock(), logger)
         result = analysis.execute(mode="explicit", dims=None, problems=None, noise_stds=None)
         assert not result.is_success
-        assert isinstance(result.exception, ArtifactError)
+        assert isinstance(result.error._original_exception, ArtifactError)
         assert result.error.code == "ArtifactError"
         assert "unreadable provenance" in result.error.message
         assert result.error.diagnostic_log == str(runtime.path)
