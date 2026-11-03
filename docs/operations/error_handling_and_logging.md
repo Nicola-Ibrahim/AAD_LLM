@@ -171,7 +171,7 @@ Tolerated malformed trace rows are counted per file and reported through the sam
 boundary, preserving existing parsing, carry-forward and inclusion behavior.
 
 `AnalysisResultsStore` performs versioned snapshot IO without reporting, database
-queries or calculations. `notebooks/analysis/result_exports.py` owns snapshot/CSV
+queries or calculations. Analysis notebooks own snapshot and CSV
 export and reload reporting for notebook users. Plotting helpers remain separate
 and consume only calculated results. Corrupt snapshots raise `ArtifactError` with
 the parser/IO cause; invalid caller paths remain input validation errors. Snapshot

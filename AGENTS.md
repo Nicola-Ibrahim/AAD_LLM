@@ -1,77 +1,102 @@
 # AAD_LLM project guidance
 
-AAD_LLM uses LLaMEA to synthesize Python optimizers, benchmarks fixed champions
-on noisy BBOB conditions, and analyses the recorded results. Development agents
-assist with this repository; they are separate from synthesis workers and the
-LLMs being studied.
+## Goal and context
 
-## Start here
+AAD_LLM uses LLaMEA and LLMs to synthesize Python optimizers, benchmarks fixed
+champions on noisy BBOB problems, and analyses recorded results. Preserve
+reproducibility, scientific validity and recoverable experiments while improving
+the software. Development agents are separate from synthesis workers and studied LLMs.
 
-- Read the task file named in the request and inspect the relevant implementation.
-- For substantial new work, use the [task template](.codex/workflow/templates/task.md)
-  and [workflow guide](.codex/workflow/README.md). Small fixes need no task record.
-- Follow the requested phase: investigation and planning do not authorize implementation.
-- Inspect the working tree before edits. Preserve unrelated and staged changes;
-  do not stage, commit, reset, switch branches or rewrite history unless requested.
+This is a Python modular monolith with notebook entry points and practical DDD /
+hexagonal boundaries. There is currently no FastAPI server, frontend, Datadog
+integration or production deployment target. Do not describe proposals as implemented.
 
-## Ownership and boundaries
+## Project structure and boundaries
 
-- `src/evolution/` owns synthesis, campaigns, prompts, candidate feedback and scoring policy.
-- `src/benchmark/` owns champion selection, benchmark trials, resumption and analysis.
-- `src/shared/` owns common scientific/runtime capabilities and supporting adapters.
-- Application workflows coordinate injected collaborators. Domain code owns
-  scientific rules; infrastructure owns databases, files and external systems.
-- Shared code must not depend on either context. Core application/domain modules
-  must not import infrastructure or the other context. See the documented
-  read-only synthesis-data integration in benchmark infrastructure.
-- Dishka providers prepare dependencies; workflows receive ready collaborators.
-  Do not add service locators, generic repositories, mixins or forwarding-only APIs.
-- Required dependencies are explicit. Use `None` only for meaningful absence;
-  validate untrusted input at boundaries instead of repeatedly coercing typed data.
-- Analysis use cases return calculated data. Notebook plotting helpers own Plotly
-  presentation and image export; they must not perform scientific calculations.
+| Location | Owns |
+| --- | --- |
+| `src/evolution/` | Synthesis, campaigns, prompts, candidate feedback and scoring policy |
+| `src/benchmark/` | Champion selection, benchmark trials, resumption and analysis |
+| `src/shared/` | Common scientific/runtime capabilities and supporting adapters |
+| `notebooks/` | Research entry points; `analysis/plotting/` owns Plotly presentation and image export |
+| `tests/`, `scripts/`, `docs/` | Verification, operational helpers and application documentation |
+| `.agents/skills/`, `.codex/` | Reusable agent procedures; role definitions, prompts and task records |
 
-Consult the [documentation map](docs/README.md) and
-[architecture](docs/architecture/system_architecture.md) for current details.
-When implementation and documentation disagree, report the discrepancy rather
-than silently choosing a scientific interpretation.
+Within each context, application code coordinates injected collaborators, domain
+code owns scientific rules, and infrastructure owns files, databases and external
+systems. Core application/domain code must not import infrastructure or the other
+context. Shared code must not import either context. The documented read-only
+synthesis-data integration in benchmark infrastructure is an explicit exception.
 
-## Preserve the research
+Use the [documentation map](docs/README.md) for context-specific reading and the
+[architecture](docs/architecture/system_architecture.md) for ownership and DI.
+Report discrepancies between documentation and implementation before changing
+scientific behavior.
 
+## Setup, run and checks
+
+Run from the repository root. Dependencies and tasks are defined in `pyproject.toml`.
+
+| Purpose | Command |
+| --- | --- |
+| Install locked dependencies, dev tools and notebooks | `uv sync --locked --extra notebook` |
+| Open notebook workflows | `uv run jupyter notebook` |
+| Inspect an existing environment | `bash scripts/env.sh inspect` |
+| Check lint and formatting without edits | `uv run poe check` |
+| Sort imports and format code (modifies files) | `uv run poe format` |
+| Run tests against disposable storage | Use the harness in [research-verification](.agents/skills/research-verification/SKILL.md) |
+
+There is no separate application build or API-server command. Running synthesis
+or benchmarking notebook cells launches experiments; do so only when requested.
+Model-server and database operations are documented in `README.md` and `scripts/`.
+
+## Coding conventions
+
+- Keep Python syntax compatible with 3.11. Use explicit parameter/return types.
+- Use Pydantic at untrusted input boundaries and typed entities/results internally;
+  avoid repeated coercion or validation after the boundary.
+- Required constructor collaborators are explicit. Use `None` only for meaningful absence.
+- Dishka providers construct dependencies. Avoid service locators, generic repositories,
+  mixins and forwarding-only APIs.
+- NumPy/pandas own numerical data; analysis use cases return calculated data.
+  Plotting helpers must not query repositories or calculate scientific statistics.
+- Ruff handles linting, import sorting and formatting: 100 columns, Python 3.11.
+  Black is not configured. Use pytest for meaningful behavioral verification.
+- Keep infrastructure/provider failures distinct from candidate failures. Preserve
+  exception causes and report once at application/host boundaries; follow the
+  [failure policy](docs/operations/error_handling_and_logging.md).
+
+## When to use skills
+
+Use the matching skill for its workflow; load additional skills only when the task
+needs them. New substantial tasks use `research-change` and the existing task template.
+Small fixes need no task record or multi-agent ceremony.
+
+| Task | Skill |
+| --- | --- |
+| Plan, implement or resume a substantial change | [research-change](.agents/skills/research-change/SKILL.md) |
+| Review context boundaries, services or DI; plan architecture changes | [architecture-review](.agents/skills/architecture-review/SKILL.md) |
+| Change analysis calculations, curves, statistics or plotting | [analysis-change](.agents/skills/analysis-change/SKILL.md) |
+| Work on SQLite, repositories, checkpoints, archives or provenance storage | [research-storage](.agents/skills/research-storage/SKILL.md) |
+| Verify code, tests, notebook code or build/tooling changes | [research-verification](.agents/skills/research-verification/SKILL.md) |
+| Create or revise a skill | Use `skill-creator` if available in the session |
+| API, frontend, Datadog or deployment work | No local skill yet; establish the approved stack and add a focused skill when needed |
+
+The [workflow guide](.codex/workflow/README.md) links reusable prompts, agent roles
+and task records. Skills describe procedures; role files describe delegated actors.
+
+## Constraints that apply to every task
+
+- Inspect staged and unstaged changes; preserve unrelated work. Do not stage,
+  commit, reset, switch branches or rewrite history without authorization.
+- Follow the requested phase. Planning does not authorize implementation.
 - Do not silently change objective gaps, penalties, targets, interpolation,
   aggregation, bootstrap settings, instances/seeds, budgets or timeout policy.
-- Read current call parameters, database records and provenance separately.
-  Current defaults are not evidence of historical experimental settings.
-- Preserve databases, champion code, checkpoints, traces, archives and figures.
-  Do not launch campaigns, paid API calls, migrations, cleanup or regeneration
-  merely to verify a code/documentation change; follow the user's authorized scope.
-- A missing checkpoint cannot be reconstructed from final errors alone. Never
-  silently replace an experiment or delete partial work to make resumption pass.
-- Keep provider/storage failures separate from scientific candidate failures.
-  Infrastructure translates relevant external exceptions and preserves causes;
-  application/host boundaries report failures once. Avoid low-level progress logs
-  and duplicated reports. Follow the [failure policy](docs/operations/error_handling_and_logging.md).
-- Preserve notebook outputs unless refreshing or clearing them is requested.
-- Do not expose `.env`, API keys, authorization headers or private response bodies
-  in reports, prompts, logs, task records or commits.
-
-## Verification and coordination
-
-- Python must remain compatible with 3.11; follow the project's type hints and Ruff rules.
-- Run focused checks appropriate to the change. Improve tests for meaningful
-  behavior; do not distort valid backend behavior to satisfy brittle assertions.
-- Use `.venv/bin/ruff check .` and `.venv/bin/ruff format . --check` for read-only
-  checks. Run pytest with isolated study storage using the workflow guide.
-- For substantial authorized changes, use the workflow: main agent defines scope →
-  investigator gathers evidence → coder implements a bounded part → reviewer checks
-  the actual diff → main agent integrates and verifies. Planning stops before coding.
-  Give agents concise assignments with ownership, safeguards and expected evidence;
-  sequence dependent work and parallelize only independent, non-overlapping work.
-- `investigator` and `reviewer` are read-only roles by instruction, not separate
-  permission sandboxes. The coder edits only assigned files and must preserve others’
-  changes. The main agent owns scientific decisions, integration and final checks.
-  Keep small fixes lightweight; if delegation is unavailable, report that limitation.
-- Never claim independent review unless another agent performed it. If delegation
-  is unavailable, label the review as a self-review and record the limitation.
-- Record material decisions and actual verification in the task file. Report
-  outcomes, remaining limits and the next action without inventing test results.
+- Preserve databases, champion code, checkpoints, traces, archives, figures and
+  notebook outputs. Do not launch campaigns, call live providers, migrate, clean
+  storage or regenerate results merely to verify a change.
+- Current defaults do not establish historical settings: inspect recorded parameters
+  and provenance. Never replace an experiment because its checkpoint is missing.
+- Never expose `.env`, credentials, authorization headers or private response bodies.
+- Report actual checks and limitations. Claim independent review only when another
+  agent performed it; otherwise label self-review.

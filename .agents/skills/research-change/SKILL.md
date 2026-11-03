@@ -1,42 +1,78 @@
 ---
 name: research-change
-description: Plan and implement substantial AAD_LLM changes while preserving scientific behavior and recorded experiments. Use for changes spanning research workflows or layers, not routine small edits.
+description: Manage task phases, records, delegation and handoff for substantial AAD_LLM changes, including plan-only and resume requests. Routine fixes need no task record.
 ---
 
-# Research-preserving changes
+# Research change workflow
 
-Use the repository's `AGENTS.md` as the source of stable project rules.
-Read the named task file. If a substantial task has no record, create one from
-[the task template](../../../.codex/workflow/templates/task.md) under
-`.codex/workflow/tasks/`; use a descriptive name and preserve previous records.
-See [the workflow guide](../../../.codex/workflow/README.md) for navigation and
-isolated verification commands.
+## 1. Establish phase and output
 
-1. Trace the affected behavior before proposing a change. Record facts separately
-   from hypotheses and list the scientific/state behavior that must be preserved.
-2. Define observable acceptance criteria and an ordered plan. Identify material
-   ambiguities; resolve routine implementation choices within the user's scope.
-   If only planning was requested, stop after recording the plan.
-3. For authorized implementation, follow main agent defines scope → investigator
-   gathers evidence → coder implements a bounded part → reviewer checks the diff →
-   main agent integrates and verifies. Reuse completed evidence. Assign the coder
-   explicit file ownership, acceptance criteria and safeguards; it is not alone in
-   the workspace and must preserve others’ edits. Keep scientific decisions and
-   integration with the main agent. Small fixes may stay single-agent.
-   Implement coherent steps and verify the affected behavior as work proceeds.
-   Use characterization checks where ownership or structure changes could alter
-   numerical results, candidate selection, serialization or resumption.
-4. Delegate bounded independent investigation/review when useful and available.
-   Assign explicit scope and evidence expectations; keep edits non-overlapping.
-   For substantial changes obtain a separate review when possible. If unavailable,
-   identify the review as a self-review; do not fabricate independent sign-off.
-5. Resolve findings, rerun checks justified by the changes and record actual
-   commands/results, remaining limitations and next actions in the task file.
+Read `AGENTS.md`, applicable nested guidance and the user's brief. Identify the
+outcome, task-specific constraints, decisions to investigate and authorized phase.
+On resume, reconcile the existing task summary with current files and evidence;
+continue only unfinished work in the authorized phase.
 
-Treat model timeouts, scientific candidate failures and incomplete data distinctly.
-A passing check does not justify changing the experimental protocol or destroying
-partial state. A task file is a specification and handoff, not automatic permission
-to run experiments, mutate study data or call paid services.
+For substantial work, read the named task record, or create one under
+`.codex/workflow/tasks/` using the
+[task template](../../../.codex/workflow/templates/task.md). Preserve existing history.
+Create or update that record only when its path is permitted by the user's edit
+scope. Use chat when explicitly requested or when task-record writes are excluded;
+a limit to the named task file still permits saving that plan. If the user both
+requires a named record and prohibits writing it, flag the conflict and continue
+only permitted read-only investigation until resolved.
+The [workflow guide](../../../.codex/workflow/README.md) is the human navigation map.
 
-Keep reporting proportional. Do not create extra scorecards, status databases or
-report hierarchies; the task record holds the plan, decisions and handoff together.
+## 2. Investigate and plan
+
+Record verified behavior with file/symbol evidence, assumptions and unresolved
+questions. Identify preserved scientific/state behavior, affected callers, risks,
+observable acceptance criteria and ordered steps. For architecture tracing and
+design choices, use [architecture-review](../architecture-review/SKILL.md); for
+other changes inspect the relevant implementation and callers. Specialist skills
+define their own subject-specific evidence and proposed checks.
+
+Investigate and write the plan directly when one agent has enough context.
+Delegate a bounded read-only investigation only when an evidence gap or independent
+work justifies it. Request independent plan review when a concrete consequential
+assumption needs challenge; give the reviewer that question and evidence. No fixed
+agent sequence is required for every planning task.
+
+**If planning only:** return the findings/plan in the permitted output location.
+Keep useful proposed diagrams inside the task record or chat and label them as
+proposals. Stop before code edits, experiments, data mutations or implementation
+verification; explicitly requested safe read-only checks remain permitted. A written
+plan does not authorize its execution.
+
+## 3. Implement only when authorized
+
+When implementation is authorized, reuse existing evidence. Delegate a bounded
+coding part when it usefully separates the work, with file ownership, safeguards,
+acceptance criteria and expected checks. Tell the coder it shares the workspace
+and must preserve others' edits. The main agent owns scientific decisions,
+integration and the task record. Keep dependent work sequential.
+
+Use the relevant specialist skills from AGENTS.md only when their scope applies.
+Use [research-verification](../research-verification/SKILL.md) for affected executable
+behavior; specialists supply the checks to cover, verification owns safe execution.
+For substantial implementation, request a separate read-only reviewer for the actual
+diff, including the baseline and acceptance criteria.
+Ask for severity, file/symbol, trigger, impact and correction; distinguish confirmed
+bugs from hypotheses. Address findings and repeat affected checks when justified.
+If delegation is unavailable, continue within scope and record self-review and the limit.
+Role definitions are in `.codex/agents/`; configuration alone is not evidence they ran.
+
+## 4. Report and stop
+
+When a task record is permitted, refresh its top summary: phase/scope, next action,
+unresolved decisions, HEAD and relevant dirty changes, latest checks and limits.
+Below it, record material decisions, actual commands/results and agent identities
+from tool/activity evidence. Otherwise return those relevant facts in chat.
+State whether role instructions were explicitly supplied or automatically loaded
+when verified. Do not invent agent activity or independent sign-off.
+
+Keep at most one task record; do not add parallel scorecards or status hierarchies.
+Report completed work, actual verification and remaining decisions. Stop at the
+requested phase boundary; for implementation finish the authorized changes,
+verification and review, or identify the blocking condition and preserved partial
+state. Do not claim completion when required checks/review remain unresolved.
+No experiment, provider call or study mutation is authorized merely by using this skill.

@@ -232,7 +232,7 @@ outcome = profile_analysis.execute(
 )
 if outcome.is_success:
     profiles = outcome.value
-    results_exporter.save(profiles)
+    results_store.save(profiles)
 else:
     print(outcome.error.message)
 ```
