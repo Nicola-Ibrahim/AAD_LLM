@@ -19,7 +19,9 @@ from llamea import LLM, Gemini_LLM, OpenAI_LLM
 from llamea.solution import Solution
 
 from evolution.application.exceptions import ProviderError
-from evolution.infra.llm.gateway import GatewayLLM, GatewayRequestLimiter, provider_error
+from evolution.infra.llm.gateway import GatewayLLM
+from evolution.infra.llm.provider_errors import provider_error
+from evolution.infra.llm.request_limiter import GatewayRequestLimiter
 
 
 class Provider(StrEnum):

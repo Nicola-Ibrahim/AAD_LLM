@@ -68,7 +68,7 @@ class LLaMEASession:
         code_repo: CodeRepository,
         config: SynthesisSettings,
         checkpoint_root: Path,
-        study_name: str | None = None,
+        model_id: str | None = None,
         initial_iteration: int = 0,
         synthesis_mode: SynthesisMode = SynthesisMode.EXPLICIT,
         restart: bool = False,
@@ -78,9 +78,7 @@ class LLaMEASession:
         self._experiment_id = experiment_id
         self._prompt_strategy = PromptStrategy(prompt_strategy)
         self._llm_client = llm_client
-        # Keep the exact model ID on the client for requests, and use a
-        # provider-qualified identity for study records and experiment paths.
-        self._model_name = study_name or llm_client.model.name
+        self._model_name = model_id or str(llm_client.model)
         self._db_repo = db_repo
         self._code_repo = code_repo
         self._config = config
@@ -363,16 +361,16 @@ class LLaMEAEngine(SynthesisEngine):
         llm_client: LLMClient,
         code_repo: CodeRepository,
         checkpoint_root: Path,
-        study_name: str | None = None,
+        model_id: str | None = None,
     ) -> None:
         self.llm_client = llm_client
         self.code_repo = code_repo
         self.checkpoint_root = checkpoint_root
-        self.study_name = study_name or llm_client.model.name
+        self.model_id = model_id or str(llm_client.model)
 
     @property
     def model_name(self) -> str:
-        return self.study_name
+        return self.model_id
 
     def run(
         self,
@@ -395,7 +393,7 @@ class LLaMEAEngine(SynthesisEngine):
             code_repo=self.code_repo,
             config=config,
             checkpoint_root=self.checkpoint_root,
-            study_name=self.study_name,
+            model_id=self.model_id,
             initial_iteration=initial_iteration,
             synthesis_mode=synthesis_mode,
             restart=restart,

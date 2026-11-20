@@ -170,7 +170,7 @@ def test_provider_diagnostic_hides_response_body_but_keeps_cause(tmp_path):
     import httpx
     import openai
 
-    from evolution.infra.llm.gateway import provider_error
+    from evolution.infra.llm.provider_errors import provider_error
     from shared.infra.logging.runtime import LoggingRuntime
 
     request = httpx.Request("POST", "https://example.invalid/v1/chat/completions")
@@ -262,7 +262,7 @@ def test_provider_worker_transport_retains_safe_cause_only(monkeypatch):
 
     import evolution.infra.di as composition
     from evolution.infra.concurrency.worker import run_synthesis_worker
-    from evolution.infra.llm.gateway import provider_error
+    from evolution.infra.llm.provider_errors import provider_error
     from shared.infra.logging.exceptions import format_diagnostic_exception
 
     vendor = openai.AuthenticationError(

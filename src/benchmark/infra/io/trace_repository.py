@@ -25,6 +25,16 @@ from shared.application.errors import ArtifactError, StorageError
 from shared.config import RESULTS_DIR
 from shared.infra.artifacts import atomic_write, read_json_object
 
+_FOLDER_COMPONENT_ESCAPES = str.maketrans({"%": "%25", "/": "%2F", "\\": "%5C", "\0": "%00"})
+
+
+def _solver_path_component(solver: str) -> str:
+    """Keep raw solver identities in one directory component."""
+    path = Path(solver)
+    if path.is_absolute() or ".." in path.parts:
+        raise ValueError("A model identifier cannot point outside its benchmark condition")
+    return solver.translate(_FOLDER_COMPONENT_ESCAPES)
+
 
 def count_recorded_runs(solver_dir: Path) -> int:
     """Preserve counting fallbacks, but never hide a corrupt existing artifact."""
@@ -317,7 +327,8 @@ class BenchmarkStateRepository(BenchmarkStateStore):
 
     def condition_directory(self, dim: int, noise_std: float, problem_id: int, solver: str) -> Path:
         condition = self.benchmark_dir / f"{dim}D" / f"std_{noise_std}" / f"f{problem_id}"
-        return self._recorded_directory(condition, condition / solver, solver, None)
+        target = condition / _solver_path_component(solver)
+        return self._recorded_directory(condition, target, solver, None)
 
     def transfer_directory(
         self,
@@ -336,9 +347,8 @@ class BenchmarkStateRepository(BenchmarkStateStore):
             / f"std_{noise_std}"
             / f"f{problem_id}"
         )
-        return self._recorded_directory(
-            condition, condition / f"{solver}_{code_hash[:12]}", solver, code_hash
-        )
+        target = condition / f"{_solver_path_component(solver)}_{code_hash[:12]}"
+        return self._recorded_directory(condition, target, solver, code_hash)
 
     def _recorded_directory(
         self, condition: Path, target: Path, solver: str, code_hash: str | None

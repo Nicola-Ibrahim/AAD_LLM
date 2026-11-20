@@ -5,7 +5,6 @@ from contextlib import nullcontext
 from functools import partial
 from multiprocessing import get_context
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
@@ -56,7 +55,7 @@ class DummyLLM:
     """Mock LLM that returns a simple dummy search algorithm."""
 
     def __init__(self):
-        self.model = SimpleNamespace(name="dummy-llm-1.0")
+        self.model = "dummy-llm-1.0"
         self.calls = 0
 
     def sample_solution(self, prompt, parent_ids=None, **kwargs):
@@ -120,7 +119,7 @@ def test_dispatch_with_clean_and_noisy(db_session_factory):
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem_clean.true_optimum
         ),
         mode=SynthesisMode.EXPLICIT,
-        llm_name=TEST_MODEL.study_name,
+        llm_name=TEST_MODEL.model_id,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=100,
         max_iterations=2,
@@ -134,7 +133,7 @@ def test_dispatch_with_clean_and_noisy(db_session_factory):
             problem_id=1, dim=2, noise_std=0.5, true_optimum=problem_noisy.true_optimum
         ),
         mode=SynthesisMode.EXPLICIT,
-        llm_name=TEST_MODEL.study_name,
+        llm_name=TEST_MODEL.model_id,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=100,
         max_iterations=2,
@@ -190,7 +189,7 @@ def test_dispatch_partial_failure(db_session_factory):
     exp_id_fail = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0),
         mode=SynthesisMode.EXPLICIT,
-        llm_name=TEST_MODEL.study_name,
+        llm_name=TEST_MODEL.model_id,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000,
         max_iterations=1,
@@ -200,7 +199,7 @@ def test_dispatch_partial_failure(db_session_factory):
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem_succ.true_optimum
         ),
         mode=SynthesisMode.EXPLICIT,
-        llm_name=TEST_MODEL.study_name,
+        llm_name=TEST_MODEL.model_id,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000,
         max_iterations=1,
@@ -515,7 +514,7 @@ def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
         mode=SynthesisMode.EXPLICIT,
-        llm_name=llm.model.name,
+        llm_name=llm.model,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
         max_iterations=2,
@@ -555,7 +554,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
         mode=SynthesisMode.EXPLICIT,
-        llm_name=llm.model.name,
+        llm_name=llm.model,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
         max_iterations=2,
@@ -578,7 +577,7 @@ def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
         mode=SynthesisMode.EXPLICIT,
-        llm_name=llm.model.name,
+        llm_name=llm.model,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
         max_iterations=2,
@@ -620,7 +619,7 @@ def test_session_mark_failed_on_error(temp_dir, db_session_factory):
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
         mode=SynthesisMode.EXPLICIT,
-        llm_name=llm.model.name,
+        llm_name=llm.model,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000000,
         max_iterations=2,
@@ -665,7 +664,7 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
         mode=SynthesisMode.EXPLICIT,
-        llm_name=TEST_MODEL.study_name,
+        llm_name=TEST_MODEL.model_id,
         budget=2500,
         max_iterations=10,
     )
@@ -674,7 +673,7 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
         llm_client=llm,
         code_repo=FileCodeRepository(base_dir=temp_dir),
         checkpoint_root=shared_config.DATA_DIR / "evolution_state",
-        study_name=TEST_MODEL.study_name,
+        model_id=TEST_MODEL.model_id,
     )
     usecase = Synthesis(
         engine_factory=MagicMock(open=MagicMock(return_value=nullcontext(engine))),
@@ -786,7 +785,7 @@ class FailingLLM:
     """Mock LLM that returns invalid python code causing candidate execution failure."""
 
     def __init__(self):
-        self.model = SimpleNamespace(name="failing-llm-1.0")
+        self.model = "failing-llm-1.0"
 
     def sample_solution(self, prompt, parent_ids=None, **kwargs):
         sol = Solution(
@@ -810,7 +809,7 @@ def test_all_executions_failed_session_handling(db_session_factory, tmp_path):
             problem_id=24, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
         mode=SynthesisMode.EXPLICIT,
-        llm_name=mock_llm.model.name,
+        llm_name=mock_llm.model,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=10,
         max_iterations=2,

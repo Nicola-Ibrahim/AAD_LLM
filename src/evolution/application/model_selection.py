@@ -1,7 +1,6 @@
 """Explicit provider and model identity for synthesis workflows."""
 
 from typing import Literal
-from urllib.parse import quote
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -20,8 +19,3 @@ class ModelSelection(BaseModel):
         if not model_id.strip():
             raise ValueError("Model ID must not be blank")
         return model_id
-
-    @property
-    def study_name(self) -> str:
-        """Return a provider-qualified, reversible identity safe for path use."""
-        return f"{self.provider}--{quote(self.model_id, safe='')}"

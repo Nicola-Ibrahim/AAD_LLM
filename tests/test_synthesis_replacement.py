@@ -116,7 +116,7 @@ def test_execution_clears_old_state_only_for_explicit_replacement(
             problem=problem,
             experiment_id=identifier,
             prompt_strategy=PromptStrategy.BASELINE,
-            llm_client=SimpleNamespace(model=SimpleNamespace(name="test-model")),
+            llm_client=SimpleNamespace(model="test-model"),
             db_repo=repository,
             code_repo=code_store,
             config=SynthesisSettings(budget=1_000_000),

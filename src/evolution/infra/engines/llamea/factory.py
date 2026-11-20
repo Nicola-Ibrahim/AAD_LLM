@@ -30,7 +30,7 @@ class LLaMEAEngineFactory(SynthesisEngineFactory):
                 llm_client=client,
                 code_repo=self.code_repository,
                 checkpoint_root=self.checkpoint_root,
-                study_name=model.study_name,
+                model_id=model.model_id,
             )
         finally:
             with preserve_primary_failure("LLM client close"):

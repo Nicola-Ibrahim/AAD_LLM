@@ -59,7 +59,7 @@ class CampaignAudit:
                     skip_completed=skip_completed,
                     retry_failed_synthesis=retry_failed_synthesis,
                 )
-                llm_name = model.study_name
+                llm_name = model.model_id
                 all_db_exps = self.sqlite_repo.load(llm_name=llm_name)
 
                 db_completed, db_running, db_failed = group_experiments_by_condition(

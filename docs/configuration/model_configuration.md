@@ -120,7 +120,7 @@ limits, other account activity and university-wide load can still produce 429 er
 Check the gateway's Max TPM/Max RPM fields and remaining budget before a campaign;
 do not shorten scientific prompts or change objective-call budgets to work around quotas.
 No generation call is required to validate connectivity.
-The selected hosted model is recorded with its provider-qualified identity. Restart
+The selected hosted model is recorded under its exact model ID. Restart
 the notebook kernel after changing provider code or credentials; changing the
 `ModelSelection` value does not require changing environment variables.
 
@@ -150,13 +150,9 @@ as `0.0.0.0` is not the client connection URL.
 
 ## Presets and experiments
 
-New synthesis records identify a model with its provider and exact model ID; the
-provider-qualified identity uses a percent-encoded model ID so distinct provider
-namespaces cannot collide. Historical records with an unqualified `llm_name` remain
-historical identities. They are not automatically reused as records for a newly
-selected provider/model pair. This avoids treating a local artifact and a hosted
-model with similar display names as the same experiment. Existing stored data is
-left intact.
+New synthesis records use the exact selected model ID as `llm_name`. The provider
+still controls model requests. Synthesis and benchmark lookups use the exact model
+ID for the study. Providers that use the same exact model ID share a study name.
 
 [configs/llms.toml](../../configs/llms.toml) remains a set of local model download
 presets for management scripts. It does not rename database models or determine

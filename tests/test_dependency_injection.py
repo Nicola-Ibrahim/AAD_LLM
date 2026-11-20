@@ -64,11 +64,11 @@ def test_engine_factory_opens_selected_client_and_closes_it(monkeypatch, tmp_pat
     if raises:
         with pytest.raises(RuntimeError, match="synthesis failed"):
             with factory.open(model) as engine:
-                assert engine.model_name == model.study_name
+                assert engine.model_name == model.model_id
                 raise RuntimeError("synthesis failed")
     else:
         with factory.open(model) as engine:
-            assert engine.model_name == model.study_name
+            assert engine.model_name == model.model_id
 
     create_client.assert_called_once_with("upb", model="gwdg.glm-5.3-flash")
     client.close.assert_called_once_with()

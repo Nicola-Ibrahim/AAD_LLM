@@ -66,7 +66,7 @@ class Synthesis:
     ) -> Result[SynthesisResult]:
         """Start one new experiment and run its full LLaMEA loop, without a pool.
 
-        The selected provider-qualified model identity is stored with the experiment.
+        The selected model ID is stored with the experiment.
         One fixed instance is used for all generations. Use the campaign workflow
         for discovery and recovery.
         """
@@ -111,7 +111,7 @@ class Synthesis:
                         ),
                         mode=mode,
                         prompt_strategy=strategy,
-                        llm_name=model.study_name,
+                        llm_name=model.model_id,
                         budget=settings.budget,
                         max_iterations=settings.iterations,
                         synthesis_seed=synthesis_seed,
@@ -165,10 +165,10 @@ class Synthesis:
         )
         if experiment is None:
             raise ValueError(f"Unknown synthesis experiment #{experiment_id}")
-        if experiment.llm_name != model.study_name:
+        if experiment.llm_name != model.model_id:
             raise ValueError(
                 f"Experiment #{experiment_id} belongs to model {experiment.llm_name!r}, "
-                f"not selected model {model.study_name!r}; it was not changed."
+                f"not selected model {model.model_id!r}; it was not changed."
             )
 
         with self.engine_factory.open(model) as engine:
@@ -188,10 +188,10 @@ class Synthesis:
 
     @staticmethod
     def _check_engine_identity(engine: SynthesisEngine, model: ModelSelection) -> None:
-        if engine.model_name != model.study_name:
+        if engine.model_name != model.model_id:
             raise ValueError(
                 f"Engine identity {engine.model_name!r} does not match selected model "
-                f"{model.study_name!r}"
+                f"{model.model_id!r}"
             )
 
     def _execute_with_engine(

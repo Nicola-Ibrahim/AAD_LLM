@@ -66,12 +66,27 @@ def test_baselines_and_modes_have_no_model_alias_inference():
     assert folder_solver_name("my_pso_research_model") == "my_pso_research_model"
 
 
-def test_model_names_may_have_provider_namespaces_but_cannot_escape_storage(tmp_path):
+@pytest.mark.parametrize(
+    ("model", "escaped"),
+    [
+        ("provider/model", "provider%2Fmodel"),
+        ("provider%2Fmodel", "provider%252Fmodel"),
+        ("provider\\model", "provider%5Cmodel"),
+    ],
+)
+def test_model_names_use_one_trace_folder_component(tmp_path, model, escaped):
     state = BenchmarkStateRepository(tmp_path)
-    assert (
-        state.condition_directory(2, 0.0, 1, "provider/model_baseline")
-        == tmp_path / "2D/std_0.0/f1/provider/model_baseline"
+    solver = f"{model}_baseline"
+    path = state.condition_directory(2, 0.0, 1, solver)
+    assert path == tmp_path / "2D/std_0.0/f1" / f"{escaped}_baseline"
+    assert state.transfer_directory(1, 2, 0.0, 8, solver, "test-hash").name == (
+        f"{escaped}_baseline_test-hash"
     )
+    assert record_solver_name({"model": model, "solver_folder": path.name}) == f"{model} / baseline"
+
+
+def test_model_names_cannot_escape_storage(tmp_path):
+    state = BenchmarkStateRepository(tmp_path)
     with pytest.raises(ValueError, match="outside"):
         state.condition_directory(2, 0.0, 1, "../../../../outside_baseline")
 

@@ -50,7 +50,7 @@ class CampaignPlanner:
                 target_ids=list(dict.fromkeys(resume_experiment_ids)), model=model
             )
 
-        all_db_exps = self.sqlite_repo.load(llm_name=model.study_name)
+        all_db_exps = self.sqlite_repo.load(llm_name=model.model_id)
         db_comp, db_run, db_failed = group_experiments_by_condition(
             experiments=all_db_exps,
         )
@@ -111,13 +111,13 @@ class CampaignPlanner:
         # Validate every ID before creating any database records. A campaign
         # for another active model must never dispatch these experiments.
         wrong_model = [
-            experiment.id for experiment in selected if experiment.llm_name != model.study_name
+            experiment.id for experiment in selected if experiment.llm_name != model.model_id
         ]
         if wrong_model:
             raise ValueError(
-                f"Experiments {wrong_model} do not belong to selected model {model.study_name!r}"
+                f"Experiments {wrong_model} do not belong to selected model {model.model_id!r}"
             )
-        existing = self.sqlite_repo.load(llm_name=model.study_name)
+        existing = self.sqlite_repo.load(llm_name=model.model_id)
         manual_conditions = dict.fromkeys(condition_from_experiment(exp) for exp in selected)
         eligible = set(self.config.matrix_conditions) | set(manual_conditions)
         completed, running, failed = group_experiments_by_condition(
@@ -223,11 +223,11 @@ class CampaignPlanner:
         wrong_model = [
             experiment.id
             for experiment in targeted_experiments
-            if experiment.llm_name != model.study_name
+            if experiment.llm_name != model.model_id
         ]
         if wrong_model:
             raise ValueError(
-                f"Experiments {wrong_model} do not belong to selected model {model.study_name!r}"
+                f"Experiments {wrong_model} do not belong to selected model {model.model_id!r}"
             )
         return [
             self._build_task_from_experiment(exp, model=model, tag="target")
@@ -262,7 +262,7 @@ class CampaignPlanner:
                 true_optimum=problem.true_optimum,
             ),
             mode=condition.mode,
-            llm_name=model.study_name,
+            llm_name=model.model_id,
             prompt_strategy=condition.strategy,
             budget=fresh_cfg.budget,
             max_iterations=fresh_cfg.iterations,

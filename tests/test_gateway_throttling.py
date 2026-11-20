@@ -16,11 +16,8 @@ import pytest
 
 from evolution.application.exceptions import ProviderError
 from evolution.infra.llm.client import LLMClient
-from evolution.infra.llm.gateway import (
-    GatewayLLM,
-    GatewayRequestLimiter,
-    retry_delay,
-)
+from evolution.infra.llm.gateway import GatewayLLM, retry_delay
+from evolution.infra.llm.request_limiter import GatewayRequestLimiter
 
 
 class Clock:
@@ -39,8 +36,8 @@ class Clock:
 @pytest.fixture
 def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
     clock = Clock()
-    monkeypatch.setattr("evolution.infra.llm.gateway.time.time", clock.now)
-    monkeypatch.setattr("evolution.infra.llm.gateway.time.sleep", clock.sleep)
+    monkeypatch.setattr("evolution.infra.llm.request_limiter.time.time", clock.now)
+    monkeypatch.setattr("evolution.infra.llm.request_limiter.time.sleep", clock.sleep)
     return clock
 
 
@@ -105,6 +102,21 @@ def test_cooldown_survives_reconstruction_without_shortening_existing_delay(tmp_
     restored = pickle.loads(pickle.dumps(first))
     restored.wait(httpx.Request("GET", "https://gateway.test"))
     assert clock.sleeps == [30.0]
+
+
+def test_limiter_pickles_from_its_former_gateway_module_path(tmp_path):
+    limiter = GatewayRequestLimiter(tmp_path / "limits.sqlite3", "gwdg", 8.0)
+    limiter_type = type(limiter)
+    current_module = limiter_type.__module__
+    try:
+        limiter_type.__module__ = "evolution.infra.llm.gateway"
+        serialized = pickle.dumps(limiter)
+    finally:
+        limiter_type.__module__ = current_module
+
+    restored = pickle.loads(serialized)
+    assert type(restored) is GatewayRequestLimiter
+    assert restored == limiter
 
 
 def _take_slots(limiter, queue):

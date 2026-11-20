@@ -91,7 +91,7 @@ class SynthesisCampaign:
                     rerun_experiment_ids=rerun_experiment_ids,
                     resume_experiment_ids=resume_experiment_ids,
                 )
-                model_name = model.study_name
+                model_name = model.model_id
 
                 if not tasks:
                     self.logger.success(

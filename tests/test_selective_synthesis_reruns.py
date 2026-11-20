@@ -20,7 +20,7 @@ MODEL = ModelSelection(provider="local", model_id="model")
 
 def experiment(
     identifier: int,
-    model: str = MODEL.study_name,
+    model: str = MODEL.model_id,
     *,
     status: str = "completed",
     error: float | None = 0.0,
@@ -101,7 +101,7 @@ def test_empty_rerun_list_uses_normal_campaign_planning() -> None:
     campaign = planner(CampaignSettings(), [])
     assert plan(campaign) == []
     campaign.sqlite_repo.load_by_ids.assert_not_called()
-    campaign.sqlite_repo.load.assert_called_once_with(llm_name=MODEL.study_name)
+    campaign.sqlite_repo.load.assert_called_once_with(llm_name=MODEL.model_id)
 
 
 def test_manual_reruns_include_unresolved_failures_and_running_conditions() -> None:
@@ -244,8 +244,8 @@ def test_explicit_resume_selects_running_records_for_selected_model() -> None:
     campaign._build_fresh_task.assert_not_called()
 
 
-def test_explicit_resume_rejects_historical_unqualified_model_identity() -> None:
-    campaign = planner(CampaignSettings(), [experiment(3, "model", status="running")])
+def test_explicit_resume_rejects_a_different_model_id() -> None:
+    campaign = planner(CampaignSettings(), [experiment(3, "other-model", status="running")])
     with pytest.raises(ValueError, match="do not belong to selected model"):
         plan(campaign, resume_experiment_ids=[3])
 

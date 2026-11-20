@@ -70,7 +70,7 @@ def test_synthesis_parameters_are_local_to_each_call() -> None:
     service.run(model=hosted, **(payload | {"budget": 200_000})).value
     assert [config.budget for config, _ in plans] == [100_000, 200_000]
     assert [model for _, model in plans] == [local, hosted]
-    assert local.study_name != hosted.study_name
+    assert local.model_id == hosted.model_id == "shared-name"
     assert payload["budget"] == 100_000
     assert service.worker_count == 4
     service.worker_pool.execute.assert_not_called()

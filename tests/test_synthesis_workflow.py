@@ -65,19 +65,25 @@ def parameters():
     )
 
 
-def test_single_session_creates_one_experiment_without_a_campaign(db_session_factory, tmp_path):
+@pytest.mark.parametrize(
+    "model",
+    [TEST_MODEL, ModelSelection(provider="upb", model_id="gwdg.example/model")],
+)
+def test_single_session_creates_one_experiment_without_a_campaign(
+    db_session_factory, tmp_path, model
+):
     repository = SQLiteSynthesisRepository(db_session_factory)
     engine = LLaMEAEngine(
         GeneratedModel(),
         FileCodeRepository(tmp_path / "code"),
         checkpoint_root=shared_config.DATA_DIR / "evolution_state",
-        study_name=TEST_MODEL.study_name,
+        model_id=model.model_id,
     )
     factory = MagicMock(open=MagicMock(return_value=nullcontext(engine)))
     session = Synthesis(factory, repository, SynthesisLogger(), BBOBProblemFactory())
-    result = session.run(**parameters()).value
+    result = session.run(**(parameters() | {"model": model})).value
     (stored,) = repository.load_by_ids([result.experiment_id])
-    assert engine.model_name == stored.llm_name == TEST_MODEL.study_name
+    assert engine.model_name == stored.llm_name == model.model_id
     assert stored.status == "completed"
     assert stored.problem.instance_id == 1
     assert stored.synthesis_seed == 43

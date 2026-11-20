@@ -182,7 +182,7 @@ def test_nb02_synthesis_pipeline(tmp_path: Path):
     assert "Status" in matrix_df.columns
     assert "total_conditions" in summary
     assert "problem_targets" in summary
-    assert summary["model_name"] == model.study_name
+    assert summary["model_name"] == model.model_id
 
     tasks = campaign_usecase_planner.build_tasks(model=model)
     assert len(tasks) > 0
@@ -478,7 +478,7 @@ def test_campaign_usecase_run_worker_and_campaign():
         worker_pool.execute.assert_called_once()
 
     # The one-session use case opens the selected engine and records the same
-    # provider-qualified identity on its new experiment.
+    # exact model ID on its new experiment.
     problem = MagicMock()
     problem.problem_id = 1
     problem.dim = 2
@@ -491,7 +491,7 @@ def test_campaign_usecase_run_worker_and_campaign():
     repository.create_experiment.return_value = 999
 
     engine = MagicMock()
-    engine.model_name = model.study_name
+    engine.model_name = model.model_id
     engine.run.return_value = expected_result
     engine_factory = MagicMock()
     engine_factory.open.return_value.__enter__.return_value = engine
@@ -517,11 +517,11 @@ def test_campaign_usecase_run_worker_and_campaign():
     assert single_result.is_success
     assert single_result.value is expected_result
     assert engine_factory.open.call_args.args == (model,)
-    assert repository.create_experiment.call_args.kwargs["llm_name"] == model.study_name
+    assert repository.create_experiment.call_args.kwargs["llm_name"] == model.model_id
 
 
 def test_campaign_usecase_audit_matrix_standalone():
-    """Verify audit filters the requested provider-qualified model."""
+    """Verify audit filters the requested exact model ID."""
     from evolution.application.campaign.audit import CampaignAudit
     from evolution.application.campaign.settings import CampaignSettings
     from evolution.application.model_selection import ModelSelection
@@ -542,8 +542,8 @@ def test_campaign_usecase_audit_matrix_standalone():
     assert audit_result.is_success
     df_matrix, summary = audit_result.value
     assert df_matrix.empty
-    assert summary["model_name"] == model.study_name
-    mock_sqlite.load.assert_called_once_with(llm_name=model.study_name)
+    assert summary["model_name"] == model.model_id
+    mock_sqlite.load.assert_called_once_with(llm_name=model.model_id)
     mock_logger.audit_summary.assert_called_once()
 
 
