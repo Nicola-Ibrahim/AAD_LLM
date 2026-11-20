@@ -13,7 +13,7 @@ from evolution.application.campaign.result import CampaignResults
 from evolution.application.campaign.settings import CampaignSettings
 from evolution.application.interfaces.experiment_worker_pool import ExperimentWorkerPool
 from evolution.application.interfaces.logger import BaseLogger
-from evolution.application.interfaces.synthesis_engine import SynthesisEngine
+from evolution.application.model_selection import ModelSelection
 from evolution.application.synthesis.result import SynthesisResult
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from shared.application.result import Result
@@ -27,16 +27,12 @@ class SynthesisCampaign:
         self,
         sqlite_repo: SynthesisRepository,
         logger: BaseLogger,
-        engine: SynthesisEngine,
-        model_name: str,
         problem_factory: ProblemFactory,
         worker_pool: ExperimentWorkerPool[ExperimentTask, SynthesisResult],
         worker_fn: Callable[[ExperimentTask], SynthesisResult],
         worker_count: int,
     ) -> None:
         self.logger = logger
-        self.engine = engine
-        self.model_name = model_name
         self.worker_pool = worker_pool
         self.worker_fn = worker_fn
         self.sqlite_repo = sqlite_repo
@@ -44,14 +40,13 @@ class SynthesisCampaign:
         self.worker_count = worker_count
 
     def _build_planner(self, config: CampaignSettings) -> CampaignPlanner:
-        return CampaignPlanner(
-            self.sqlite_repo, config, self.engine, self.model_name, self.problem_factory
-        )
+        return CampaignPlanner(self.sqlite_repo, config, self.problem_factory)
 
     @validate_call(config={"strict": True})
     def run(
         self,
         *,
+        model: ModelSelection,
         problem_targets: list[ProblemTarget],
         noise_conditions: list[NoiseConditionConfig],
         synthesis_modes: list[SynthesisModeConfig],
@@ -91,11 +86,12 @@ class SynthesisCampaign:
                 workers = self.worker_count
 
                 tasks = self._build_planner(config).build_tasks(
+                    model=model,
                     recover=recover,
                     rerun_experiment_ids=rerun_experiment_ids,
                     resume_experiment_ids=resume_experiment_ids,
                 )
-                model_name = self.model_name
+                model_name = model.study_name
 
                 if not tasks:
                     self.logger.success(

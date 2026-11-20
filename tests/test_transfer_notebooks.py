@@ -489,20 +489,6 @@ def test_previous_snapshot_folder_aliases_are_ignored_without_changing_statistic
     assert_saved_equal(result, store.load(directory))
 
 
-def test_notebook_result_export_preserves_csv_schemas(inputs, tmp_path):
-    from notebooks.analysis.result_exports import AnalysisResultsExporter
-
-    result = use_cases(inputs).reliability.execute(dims=None, problems=None, noise_stds=None).value
-    store = AnalysisResultsStore(tmp_path / "analysis")
-    exporter = AnalysisResultsExporter(store)
-    directory = exporter.save(result)
-    assert_saved_equal(result, exporter.load(directory))
-    reports = tmp_path / "reports"
-    assert (reports / "native_reliability_v1.csv").read_text() == result.native.to_csv(index=False)
-    assert (
-        reports / "noise_robustness_terminal_v1.csv"
-    ).read_text() == result.noise_terminal.to_csv(index=False)
-
 
 @pytest.mark.parametrize("malformation", ["metadata_shape", "npz_archive"])
 def test_snapshot_malformed_parser_input_has_artifact_cause(

@@ -25,42 +25,52 @@ from evolution.application.campaign.experiment_task import ExperimentTask
 from evolution.application.campaign.service import SynthesisCampaign
 from evolution.application.interfaces.experiment_worker_pool import ExperimentWorkerPool
 from evolution.application.interfaces.logger import BaseLogger
-from evolution.application.interfaces.synthesis_engine import SynthesisEngine
+from evolution.application.interfaces.synthesis_engine import SynthesisEngineFactory
+from evolution.application.model_selection import ModelSelection
 from evolution.application.synthesis.result import SynthesisResult
 from evolution.application.synthesis.service import Synthesis
 from evolution.domain.interfaces.code_repository import CodeRepository
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.infra.di import EvolutionProvider
-from evolution.infra.llm.client import LLMClient
+from evolution.infra.engines.llamea.factory import LLaMEAEngineFactory
 from shared.domain.interfaces.problem_factory import ProblemFactory
 from shared.infra.di import SharedProvider, container_scope
 from shared.infra.lifecycle import WorkflowScope
 from shared.infra.problems.factory import BBOBProblemFactory
 
 
-@pytest.mark.parametrize("interrupted", [False, True])
-def test_provider_owns_configured_llm_connection(monkeypatch, interrupted):
+def test_model_is_selected_per_execution_not_during_di_setup(monkeypatch):
+    create_client = MagicMock(side_effect=AssertionError("No model was selected"))
+    monkeypatch.setattr("evolution.infra.engines.llamea.factory.LLMClient", create_client)
+    monkeypatch.setattr(shared_di, "Database", MagicMock())
+    with container_scope(EvolutionProvider(), context={}, request_context={}) as scope:
+        campaign = scope.get(SynthesisCampaign)
+        synthesis = scope.get(Synthesis)
+        factory = scope.get(SynthesisEngineFactory)
+        assert isinstance(campaign, SynthesisCampaign)
+        assert isinstance(synthesis, Synthesis)
+        assert isinstance(factory, LLaMEAEngineFactory)
+    create_client.assert_not_called()
+
+
+@pytest.mark.parametrize("raises", [False, True])
+def test_engine_factory_opens_selected_client_and_closes_it(monkeypatch, tmp_path, raises):
     client = MagicMock()
     create_client = MagicMock(return_value=client)
-    monkeypatch.setenv("LLM_PROVIDER", "upb")
-    monkeypatch.setattr(evolution_di, "LLMClient", create_client)
-    monkeypatch.setattr(shared_di, "Database", MagicMock())
+    monkeypatch.setattr("evolution.infra.engines.llamea.factory.LLMClient", create_client)
+    factory = LLaMEAEngineFactory(MagicMock(), tmp_path)
+    model = ModelSelection(provider="upb", model_id="gwdg.glm-5.3-flash")
 
-    def resolve():
-        with container_scope(EvolutionProvider(), context={}, request_context={}) as scope:
-            campaign = scope.get(SynthesisCampaign)
-            assert scope.get(LLMClient) is client
-            assert campaign.model_name == client.model.name
-            create_client.assert_called_once_with("upb")
-            client.close.assert_not_called()
-            if interrupted:
-                raise RuntimeError("interrupted")
-
-    if interrupted:
-        with pytest.raises(RuntimeError, match="interrupted"):
-            resolve()
+    if raises:
+        with pytest.raises(RuntimeError, match="synthesis failed"):
+            with factory.open(model) as engine:
+                assert engine.model_name == model.study_name
+                raise RuntimeError("synthesis failed")
     else:
-        resolve()
+        with factory.open(model) as engine:
+            assert engine.model_name == model.study_name
+
+    create_client.assert_called_once_with("upb", model="gwdg.glm-5.3-flash")
     client.close.assert_called_once_with()
 
 
@@ -78,9 +88,7 @@ def test_container_disposes_database_on_success_and_failure(monkeypatch, context
     }[context]
     provider = EvolutionProvider() if context in {"synthesis", "worker"} else BenchmarkProvider()
     manager = container_scope(
-        provider,
-        context={LLMClient: MagicMock()},
-        request_context={SynthesisEngine: MagicMock(), BenchmarkConfig: BenchmarkConfig()},
+        provider, context={}, request_context={BenchmarkConfig: BenchmarkConfig()}
     )
 
     def resolve():
@@ -116,9 +124,7 @@ def test_repository_construction_failure_still_disposes_database(
         getattr(module, repository), "__init__", MagicMock(side_effect=RuntimeError("construction"))
     )
     with pytest.raises(RuntimeError, match="construction"):
-        with container_scope(
-            provider(), context={LLMClient: MagicMock()}, request_context={}
-        ) as container:
+        with container_scope(provider(), context={}, request_context={}) as container:
             container.get(dependency)
     database.dispose.assert_called_once()
 
@@ -133,7 +139,7 @@ def test_workflow_scope_finalizes_provider_resources(monkeypatch, construction_f
             "__init__",
             MagicMock(side_effect=RuntimeError("construction")),
         )
-    scope = WorkflowScope(EvolutionProvider(), context={LLMClient: MagicMock()}, request_context={})
+    scope = WorkflowScope(EvolutionProvider(), context={}, request_context={})
     try:
         if construction_fails:
             with pytest.raises(RuntimeError, match="construction"):
@@ -154,7 +160,7 @@ def test_request_scopes_isolate_workflows_and_share_only_the_application_engine(
     monkeypatch.setattr(shared_di, "Database", create_database)
     repository = MagicMock(return_value=None)
     monkeypatch.setattr(evolution_di.SQLiteSynthesisRepository, "__init__", repository)
-    root = make_container(SharedProvider(), EvolutionProvider(), context={LLMClient: MagicMock()})
+    root = make_container(SharedProvider(), EvolutionProvider())
     try:
         with root() as request:
             first = request.get(SynthesisCampaign)
@@ -201,38 +207,33 @@ def test_analysis_settings_are_job_scoped_not_application_globals(monkeypatch):
     database.dispose.assert_called_once()
 
 
-def test_worker_resolves_the_supplied_engine_without_an_llm_connection(monkeypatch):
+def test_worker_scope_resolves_factory_without_opening_a_model(monkeypatch):
     database = MagicMock()
     monkeypatch.setattr(shared_di, "Database", lambda: database)
-    engine = MagicMock(spec=SynthesisEngine)
-    with evolution_di.synthesis_worker_scope(engine) as use_case:
-        assert use_case.engine is engine
+    create_client = MagicMock(side_effect=AssertionError("DI must not open an LLM client"))
+    monkeypatch.setattr("evolution.infra.engines.llamea.factory.LLMClient", create_client)
+    with evolution_di.synthesis_worker_scope() as use_case:
+        assert isinstance(use_case.engine_factory, LLaMEAEngineFactory)
+    create_client.assert_not_called()
     database.dispose.assert_called_once()
 
 
-def test_campaign_and_single_synthesis_use_the_same_engine_interface(monkeypatch):
+def test_campaign_and_synthesis_share_the_model_engine_factory(monkeypatch):
     database = MagicMock()
     monkeypatch.setattr(shared_di, "Database", lambda: database)
-    monkeypatch.setattr(
-        evolution_di,
-        "LLMClient",
-        MagicMock(side_effect=AssertionError("An injected engine needs no extra client")),
-    )
-    engine = MagicMock(spec=SynthesisEngine)
-    engine.model_name = "substitute-model"
     with container_scope(
         EvolutionProvider(),
-        evolution_di.SynthesisWorkerProvider(),
         context={},
-        request_context={SynthesisEngine: engine},
+        request_context={},
     ) as scope:
         campaign = scope.get(SynthesisCampaign)
         synthesis = scope.get(Synthesis)
         audit = scope.get(CampaignAudit)
-        assert campaign.engine is synthesis.engine is engine
-        assert campaign.model_name == engine.model_name
+        factory = scope.get(SynthesisEngineFactory)
+        assert isinstance(factory, LLaMEAEngineFactory)
+        assert synthesis.engine_factory is factory
+        assert campaign.worker_fn
         assert audit.sqlite_repo is campaign.sqlite_repo is synthesis.sqlite_repo
-        assert audit.model_name == engine.model_name
         assert not hasattr(campaign, "audit_matrix")
     database.dispose.assert_called_once()
 
@@ -256,9 +257,7 @@ def test_nested_workflows_have_ready_collaborators_and_independent_lifetimes(mon
 def test_direct_class_bindings_share_instances_with_their_interfaces(monkeypatch):
     database = MagicMock()
     monkeypatch.setattr(shared_di, "Database", lambda: database)
-    root = make_container(
-        SharedProvider(), EvolutionProvider(), BenchmarkProvider(), context={LLMClient: MagicMock()}
-    )
+    root = make_container(SharedProvider(), EvolutionProvider(), BenchmarkProvider())
     try:
         with root() as request:
             bindings = (
@@ -278,8 +277,9 @@ def test_direct_class_bindings_share_instances_with_their_interfaces(monkeypatch
             )
             for interface, implementation in bindings:
                 assert request.get(interface) is request.get(implementation)
-            engine = request.get(evolution_di.LLaMEAEngine)
-            assert engine.code_repo is request.get(CodeRepository)
+            factory = request.get(LLaMEAEngineFactory)
+            assert request.get(SynthesisEngineFactory) is factory
+            assert factory.code_repository is request.get(CodeRepository)
             selection = request.get(benchmark_di.ChampionSelectionService)
             assert selection.champions_repo is request.get(ChampionRepository)
     finally:

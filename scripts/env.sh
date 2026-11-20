@@ -69,9 +69,8 @@ if [ ! -f "$PROJECT_ROOT/.env" ]; then
         "# ---------------------------------------------------------------------" \
         "# Local LLaMA.cpp Server / LM Studio Configuration" \
         "# ---------------------------------------------------------------------" \
-        "LLM_PROVIDER=local" \
         "DATABASE_URL=sqlite:///data/db.sqlite3" \
-        "# Model selection is managed on server startup — use: bash scripts/llm.sh start" \
+        "# Load a local model with scripts/llm.sh start, then select its exact ID in notebook 02." \
         "LOCAL_LLM_BASE_URL=http://localhost:1234/v1" \
         "LOCAL_LLM_API_KEY=not-needed" \
         "" \
@@ -317,11 +316,6 @@ show_inspect() {
     # .env config check
     echo ""
     echo -e "  ${BOLD}.env Configuration:${NC}"
-    if [ -z "${LLM_PROVIDER:-}" ]; then
-        echo -e "  ${RED}✗ LLM_PROVIDER is not set${NC}"
-    else
-        echo -e "  ${GREEN}✓ LLM_PROVIDER:${NC}   ${LLM_PROVIDER}"
-    fi
     [ -n "${LOCAL_LLM_BASE_URL:-}" ] && echo -e "  ${GREEN}✓ LLM URL:${NC}        ${LOCAL_LLM_BASE_URL}"
     [ -n "${DATABASE_URL:-}" ]       && echo -e "  ${GREEN}✓ DATABASE_URL:${NC}   ${DATABASE_URL}"
 

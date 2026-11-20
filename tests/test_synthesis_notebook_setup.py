@@ -17,7 +17,8 @@ def test_notebook_uses_campaign_without_low_level_llm_access() -> None:
     tree = ast.parse(source)
     assert not any(isinstance(node, ast.Name) and node.id == "LLMClient" for node in ast.walk(tree))
     assert "evolution.infra.llm" not in source
-    assert "campaign.model_name" in source
+    assert "ModelSelection" in source
+    assert "model=model" in source
 
 
 def test_repeated_setup_keeps_synthesis_worker_picklable() -> None:

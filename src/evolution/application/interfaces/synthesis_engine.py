@@ -1,7 +1,9 @@
 """External optimizer-generation engine used by both synthesis workflows."""
 
 from abc import ABC, abstractmethod
+from contextlib import AbstractContextManager
 
+from evolution.application.model_selection import ModelSelection
 from evolution.application.synthesis.result import SynthesisResult
 from evolution.application.synthesis.settings import SynthesisSettings
 from evolution.domain.enums import PromptStrategy, SynthesisMode
@@ -30,3 +32,11 @@ class SynthesisEngine(ABC):
         restart: bool = False,
     ) -> SynthesisResult:
         """Perform synthesis and return its result."""
+
+
+class SynthesisEngineFactory(ABC):
+    """Open a synthesis engine configured for an explicit model selection."""
+
+    @abstractmethod
+    def open(self, model: ModelSelection) -> AbstractContextManager[SynthesisEngine]:
+        """Create a model-specific engine and release its resources on exit."""

@@ -7,7 +7,7 @@ from evolution.application.campaign.conditions import (
 )
 from evolution.application.campaign.experiment_task import ExperimentTask
 from evolution.application.campaign.settings import CampaignSettings
-from evolution.application.interfaces.synthesis_engine import SynthesisEngine
+from evolution.application.model_selection import ModelSelection
 from evolution.domain.entities import Experiment
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from evolution.domain.vos.problem_profile import ProblemProfile
@@ -21,19 +21,16 @@ class CampaignPlanner:
         self,
         sqlite_repo: SynthesisRepository,
         config: CampaignSettings,
-        engine: SynthesisEngine,
-        model_name: str,
         problem_factory: ProblemFactory,
     ) -> None:
         self.sqlite_repo = sqlite_repo
         self.config = config
-        self.engine = engine
-        self.model_name = model_name
         self.problem_factory = problem_factory
 
     def build_tasks(
         self,
         *,
+        model: ModelSelection,
         recover: bool = False,
         rerun_experiment_ids: Sequence[int] = (),
         resume_experiment_ids: Sequence[int] = (),
@@ -47,11 +44,13 @@ class CampaignPlanner:
         if resume_experiment_ids and (recover or rerun_experiment_ids):
             raise ValueError("Explicit resume IDs cannot be combined with recovery or replacement")
         if recover or rerun_experiment_ids:
-            return self._build_recovery_tasks(rerun_experiment_ids)
+            return self._build_recovery_tasks(rerun_experiment_ids, model=model)
         if resume_experiment_ids:
-            return self._build_targeted_tasks(target_ids=list(dict.fromkeys(resume_experiment_ids)))
+            return self._build_targeted_tasks(
+                target_ids=list(dict.fromkeys(resume_experiment_ids)), model=model
+            )
 
-        all_db_exps = self.sqlite_repo.load(llm_name=self.model_name)
+        all_db_exps = self.sqlite_repo.load(llm_name=model.study_name)
         db_comp, db_run, db_failed = group_experiments_by_condition(
             experiments=all_db_exps,
         )
@@ -67,7 +66,7 @@ class CampaignPlanner:
             # Step A: Resume interrupted/running runs from DB if AUTO_RESUME enabled
             if self.config.auto_resume:
                 for exp in running_list:
-                    tasks.append(self._build_task_from_experiment(exp, tag="resume"))
+                    tasks.append(self._build_task_from_experiment(exp, model=model, tag="resume"))
 
             # Step B: Calculate accounted count
             accounted_runs = (
@@ -86,7 +85,7 @@ class CampaignPlanner:
                     for experiment in replacements:
                         tasks.append(
                             self._build_task_from_experiment(
-                                experiment, tag="replace", restart=True
+                                experiment, model=model, tag="replace", restart=True
                             )
                         )
                     remaining_needed -= len(replacements)
@@ -95,11 +94,14 @@ class CampaignPlanner:
                         self._build_fresh_task(
                             condition=item,
                             run_idx=run_idx,
+                            model=model,
                         )
                     )
         return tasks
 
-    def _build_recovery_tasks(self, rerun_experiment_ids: Sequence[int]) -> list[ExperimentTask]:
+    def _build_recovery_tasks(
+        self, rerun_experiment_ids: Sequence[int], *, model: ModelSelection
+    ) -> list[ExperimentTask]:
         """Replace exact requested records and recover uncovered conditions without new rows."""
         requested = set(rerun_experiment_ids)
         selected = self.sqlite_repo.load_by_ids(sorted(requested)) if requested else []
@@ -108,15 +110,22 @@ class CampaignPlanner:
             raise ValueError(f"Unknown rerun experiment IDs: {sorted(missing)}")
         # Validate every ID before creating any database records. A campaign
         # for another active model must never dispatch these experiments.
-        selected = [experiment for experiment in selected if experiment.llm_name == self.model_name]
-        existing = self.sqlite_repo.load(llm_name=self.model_name)
+        wrong_model = [
+            experiment.id for experiment in selected if experiment.llm_name != model.study_name
+        ]
+        if wrong_model:
+            raise ValueError(
+                f"Experiments {wrong_model} do not belong to selected model {model.study_name!r}"
+            )
+        existing = self.sqlite_repo.load(llm_name=model.study_name)
         manual_conditions = dict.fromkeys(condition_from_experiment(exp) for exp in selected)
         eligible = set(self.config.matrix_conditions) | set(manual_conditions)
         completed, running, failed = group_experiments_by_condition(
             experiments=existing,
         )
         tasks = [
-            self._build_task_from_experiment(exp, tag="replace", restart=True) for exp in selected
+            self._build_task_from_experiment(exp, model=model, tag="replace", restart=True)
+            for exp in selected
         ]
         resumed: set[MatrixCondition] = set()
         if self.config.auto_resume:
@@ -127,7 +136,9 @@ class CampaignPlanner:
                     and not completed.get(condition)
                 ):
                     experiment = max(experiments, key=lambda exp: exp.id)
-                    tasks.append(self._build_task_from_experiment(experiment, tag="resume"))
+                    tasks.append(
+                        self._build_task_from_experiment(experiment, model=model, tag="resume")
+                    )
                     resumed.add(condition)
 
         # Any completed valid champion satisfies automatic recovery, regardless
@@ -143,7 +154,9 @@ class CampaignPlanner:
                     continue
                 experiment = max(experiments, key=lambda exp: exp.id)
                 tasks.append(
-                    self._build_task_from_experiment(experiment, tag="replace", restart=True)
+                    self._build_task_from_experiment(
+                        experiment, model=model, tag="replace", restart=True
+                    )
                 )
         return tasks
 
@@ -152,6 +165,8 @@ class CampaignPlanner:
     def _build_task_from_experiment(
         self,
         exp: Experiment,
+        *,
+        model: ModelSelection,
         tag: str = "resume",
         restart: bool = False,
     ) -> ExperimentTask:
@@ -188,7 +203,7 @@ class CampaignPlanner:
             problem=problem,
             experiment_id=exp.id,
             config=cfg,
-            engine=self.engine,
+            model=model,
             initial_iteration=initial_iter,
             prompt_strategy=exp.prompt_strategy,
             synthesis_mode=exp.mode,
@@ -198,21 +213,33 @@ class CampaignPlanner:
     def _build_targeted_tasks(
         self,
         target_ids: list[int],
+        *,
+        model: ModelSelection,
     ) -> list[ExperimentTask]:
         targeted_experiments = self.sqlite_repo.load_by_ids(target_ids)
         found = {experiment.id for experiment in targeted_experiments}
         if missing := set(target_ids) - found:
             raise ValueError(f"Unknown resume experiment IDs: {sorted(missing)}")
+        wrong_model = [
+            experiment.id
+            for experiment in targeted_experiments
+            if experiment.llm_name != model.study_name
+        ]
+        if wrong_model:
+            raise ValueError(
+                f"Experiments {wrong_model} do not belong to selected model {model.study_name!r}"
+            )
         return [
-            self._build_task_from_experiment(exp, tag="target")
+            self._build_task_from_experiment(exp, model=model, tag="target")
             for exp in targeted_experiments
-            if exp.llm_name == self.model_name and exp.status == "running"
+            if exp.status == "running"
         ]
 
     def _build_fresh_task(
         self,
         condition: MatrixCondition,
         run_idx: int,
+        model: ModelSelection,
         key_prefix: str = "",
     ) -> ExperimentTask:
         """Registers a new experiment record in the database and returns a fresh work item dictionary."""
@@ -235,7 +262,7 @@ class CampaignPlanner:
                 true_optimum=problem.true_optimum,
             ),
             mode=condition.mode,
-            llm_name=self.model_name,
+            llm_name=model.study_name,
             prompt_strategy=condition.strategy,
             budget=fresh_cfg.budget,
             max_iterations=fresh_cfg.iterations,
@@ -251,7 +278,7 @@ class CampaignPlanner:
             problem=problem,
             experiment_id=exp_id,
             config=fresh_cfg,
-            engine=self.engine,
+            model=model,
             initial_iteration=0,
             prompt_strategy=condition.strategy,
             synthesis_mode=condition.mode,

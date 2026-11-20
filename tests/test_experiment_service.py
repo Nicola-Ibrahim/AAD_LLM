@@ -1,11 +1,12 @@
 import shutil
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
+from contextlib import nullcontext
 from functools import partial
 from multiprocessing import get_context
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 from llamea import Solution
@@ -14,6 +15,7 @@ import shared.config as shared_config
 from evolution.application.exceptions import OrchestrationError
 from evolution.application.interfaces.logger import BaseLogger
 from evolution.application.interfaces.synthesis_engine import SynthesisEngine
+from evolution.application.model_selection import ModelSelection
 from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
 from evolution.application.synthesis.service import Synthesis
 from evolution.application.synthesis.settings import SynthesisSettings
@@ -82,9 +84,33 @@ class FailingProblem(BBOBProblem):
         raise ValueError("Job failed")
 
 
-def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
+TEST_MODEL = ModelSelection(provider="local", model_id="dummy-llm-1.0")
+
+
+def run_offline_synthesis_worker(item):
+    """Install process-local test collaborators before invoking the real worker."""
+    from sqlalchemy.engine import make_url
+
+    root = Path(make_url(shared_config.DATABASE_URL).database).parent
+    client = DummyLLM()
+    client.close = Mock()
+    with (
+        patch(
+            "evolution.infra.engines.llamea.factory.LLMClient", return_value=client
+        ) as client_factory,
+        patch("evolution.infra.di.DATA_DIR", root),
+        patch(
+            "evolution.infra.di.FileCodeRepository", return_value=FileCodeRepository(root / "code")
+        ),
+    ):
+        result = run_synthesis_worker(item)
+        client_factory.assert_called_once_with(item["model"].provider, model=item["model"].model_id)
+        client.close.assert_called_once()
+        return result
+
+
+def test_dispatch_with_clean_and_noisy(db_session_factory):
     repo = SQLiteSynthesisRepository(db_session_factory)
-    llm = DummyLLM()
 
     problem_clean = BBOBProblem(
         problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1
@@ -94,7 +120,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem_clean.true_optimum
         ),
         mode=SynthesisMode.EXPLICIT,
-        llm_name=llm.model.name,
+        llm_name=TEST_MODEL.study_name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=100,
         max_iterations=2,
@@ -108,24 +134,19 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
             problem_id=1, dim=2, noise_std=0.5, true_optimum=problem_noisy.true_optimum
         ),
         mode=SynthesisMode.EXPLICIT,
-        llm_name=llm.model.name,
+        llm_name=TEST_MODEL.study_name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=100,
         max_iterations=2,
     )
 
-    engine = LLaMEAEngine(
-        llm_client=llm,
-        code_repo=FileCodeRepository(base_dir=temp_dir),
-        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
-    )
     tasks = [
         {
             "key": "clean",
             "problem": problem_clean,
             "experiment_id": exp_id_clean,
             "config": SynthesisSettings(budget=100, iterations=2),
-            "engine": engine,
+            "model": TEST_MODEL,
             "prompt_strategy": PromptStrategy.BASELINE,
             "synthesis_mode": SynthesisMode.EXPLICIT,
             "initial_iteration": 0,
@@ -135,7 +156,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
             "problem": problem_noisy,
             "experiment_id": exp_id_noisy,
             "config": SynthesisSettings(budget=100, iterations=2),
-            "engine": engine,
+            "model": TEST_MODEL,
             "prompt_strategy": PromptStrategy.BASELINE,
             "synthesis_mode": SynthesisMode.EXPLICIT,
             "initial_iteration": 0,
@@ -143,7 +164,9 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
     ]
 
     runner = ProcessWorkerPool(max_workers=2)
-    results = runner.execute(fn=run_synthesis_worker, items=tasks, key_fn=lambda t: t["key"])
+    results = runner.execute(
+        fn=run_offline_synthesis_worker, items=tasks, key_fn=lambda t: t["key"]
+    )
 
     assert "clean" in results
     assert "noisy" in results
@@ -157,7 +180,7 @@ def test_dispatch_with_clean_and_noisy(temp_dir, db_session_factory):
     assert results["noisy"].experiment_id in loaded_ids
 
 
-def test_dispatch_partial_failure(temp_dir, db_session_factory):
+def test_dispatch_partial_failure(db_session_factory):
     repo = SQLiteSynthesisRepository(db_session_factory)
     problem_fail = FailingProblem(
         problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1
@@ -167,7 +190,7 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
     exp_id_fail = repo.create_experiment(
         problem=ProblemProfile(problem_id=1, dim=2, noise_std=0.0, true_optimum=0.0),
         mode=SynthesisMode.EXPLICIT,
-        llm_name="dummy-llm-1.0",
+        llm_name=TEST_MODEL.study_name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000,
         max_iterations=1,
@@ -177,24 +200,19 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem_succ.true_optimum
         ),
         mode=SynthesisMode.EXPLICIT,
-        llm_name="dummy-llm-1.0",
+        llm_name=TEST_MODEL.study_name,
         prompt_strategy=PromptStrategy.BASELINE,
         budget=1000,
         max_iterations=1,
     )
 
-    engine = LLaMEAEngine(
-        llm_client=DummyLLM(),
-        code_repo=FileCodeRepository(base_dir=temp_dir),
-        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
-    )
     tasks = [
         {
             "key": "failing",
             "problem": problem_fail,
             "experiment_id": exp_id_fail,
             "config": SynthesisSettings(budget=1000, iterations=1),
-            "engine": engine,
+            "model": TEST_MODEL,
             "prompt_strategy": PromptStrategy.BASELINE,
             "synthesis_mode": SynthesisMode.EXPLICIT,
             "initial_iteration": 0,
@@ -204,7 +222,7 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
             "problem": problem_succ,
             "experiment_id": exp_id_succ,
             "config": SynthesisSettings(budget=1000, iterations=1),
-            "engine": engine,
+            "model": TEST_MODEL,
             "prompt_strategy": PromptStrategy.BASELINE,
             "synthesis_mode": SynthesisMode.EXPLICIT,
             "initial_iteration": 0,
@@ -212,7 +230,9 @@ def test_dispatch_partial_failure(temp_dir, db_session_factory):
     ]
 
     with pytest.raises(OrchestrationError) as exc_info:
-        ProcessWorkerPool().execute(fn=run_synthesis_worker, items=tasks, key_fn=lambda t: t["key"])
+        ProcessWorkerPool().execute(
+            fn=run_offline_synthesis_worker, items=tasks, key_fn=lambda t: t["key"]
+        )
 
     errors = exc_info.value.errors
     assert "failing" in errors
@@ -645,7 +665,7 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
             problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
         ),
         mode=SynthesisMode.EXPLICIT,
-        llm_name=llm.model.name,
+        llm_name=TEST_MODEL.study_name,
         budget=2500,
         max_iterations=10,
     )
@@ -654,11 +674,16 @@ def test_evolution_task_execution(temp_dir, db_session_factory):
         llm_client=llm,
         code_repo=FileCodeRepository(base_dir=temp_dir),
         checkpoint_root=shared_config.DATA_DIR / "evolution_state",
+        study_name=TEST_MODEL.study_name,
     )
     usecase = Synthesis(
-        engine=engine, sqlite_repo=repo, logger=MagicMock(), problem_factory=BBOBProblemFactory()
+        engine_factory=MagicMock(open=MagicMock(return_value=nullcontext(engine))),
+        sqlite_repo=repo,
+        logger=MagicMock(),
+        problem_factory=BBOBProblemFactory(),
     )
     res = usecase.execute(
+        model=TEST_MODEL,
         problem=problem,
         experiment_id=exp_id,
         config=SynthesisSettings(budget=2500, iterations=2),
@@ -1285,33 +1310,27 @@ def test_llamea_engine_init_and_run(temp_dir, db_session_factory):
     assert res.experiment_id == exp_id
 
 
-def test_campaign_item_and_engine_pickling(temp_dir):
-    """Verify campaign work item with LLaMEAEngine pickles and unpickles without error."""
+def test_campaign_item_pickles_without_an_engine():
+    """Verify a task carries the selected provider and model across process boundaries."""
     import pickle
 
-    from evolution.infra.engines.llamea import LLaMEAEngine
     from shared.domain.noise import NoNoiseStrategy
     from shared.infra.problems.bbob import BBOBProblem
 
-    llm = DummyLLM()
     problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
-    engine = LLaMEAEngine(
-        llm_client=llm,
-        code_repo=FileCodeRepository(),
-        checkpoint_root=shared_config.DATA_DIR / "evolution_state",
-    )
     item = {
         "key": "pickle_task",
         "problem": problem,
         "experiment_id": 42,
         "config": SynthesisSettings(iterations=1, budget=1_000_000),
-        "engine": engine,
+        "model": TEST_MODEL,
     }
     data = pickle.dumps(item)
     restored_item = pickle.loads(data)
     assert restored_item["key"] == "pickle_task"
     assert restored_item["experiment_id"] == 42
-    assert isinstance(restored_item["engine"], LLaMEAEngine)
+    assert restored_item["model"] == TEST_MODEL
+    assert "engine" not in restored_item
 
 
 def test_problem_factory_seed_produces_reproducible_noise_streams():

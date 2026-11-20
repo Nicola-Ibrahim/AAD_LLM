@@ -2,57 +2,57 @@
 
 [Documentation map](../README.md) · [Project README](../../README.md)
 
-Provider connections, server settings, model presets and experimental settings
-have different owners; model selection is not entirely configuration-free.
+Provider connections, model selection, server settings and experimental settings
+have different owners. The application workflow receives model selection explicitly
+for each call; it is not inferred from environment configuration.
 
 ## Provider connections
 
 [LLMClient](../../src/evolution/infra/llm/client.py) supports `local`, `lmstudio`,
-`upb` and `gemini`. The notebook supplies the provider and optional client arguments.
-Environment variables provide defaults:
+`upb` and `gemini`. Application use cases receive a `ModelSelection` for every
+synthesis request; they do not infer a model from environment defaults.
 
-| Provider | URL | Model | API key |
-| --- | --- | --- | --- |
-| Local | `LOCAL_LLM_BASE_URL` | `LOCAL_LLM_MODEL` | `LOCAL_LLM_API_KEY` |
-| LM Studio | `LLM_STUDIO_BASE_URL` | `LLM_STUDIO_MODEL` | `LLM_STUDIO_API_KEY` |
-| Gemini | Provider-managed | `GEMINI_MODEL` | `GOOGLE_API_KEY` |
-| University Paderborn | `UPB_API_BASE` | `UPB_MODEL` | `UPB_API_KEY` |
+| Provider | Endpoint | Credentials |
+| --- | --- | --- |
+| Local | `LOCAL_LLM_BASE_URL` | `LOCAL_LLM_API_KEY` |
+| LM Studio | `LLM_STUDIO_BASE_URL` | `LLM_STUDIO_API_KEY` |
+| Gemini | Provider-managed | `GOOGLE_API_KEY` |
+| University Paderborn | `UPB_API_BASE` | `UPB_API_KEY` |
 
 Local and LM Studio default to `http://localhost:1234/v1`.
-An explicit `model=` argument takes precedence over the model environment variable.
-With connection validation enabled and no configured model, the client discovers
-the first model returned by the endpoint's `/models` response. With validation
-disabled, a model must be supplied. `SKIP_LLM_VALIDATION=True` disables the
-connection probe; it is not a substitute for configuring the model.
-Keep API keys in local environment configuration, not committed documents.
+Environment variables hold endpoints, credentials and operational settings, not
+the model selected for a synthesis run. Campaign and single-synthesis calls receive
+an explicit `ModelSelection(provider=..., model_id=...)`; neither the notebook's
+model choice nor a future API request needs to mutate process-wide environment
+state. Low-level client model environment variables may remain for direct adapter
+use, but application workflows do not use them to choose a model. Keep API keys in
+local environment configuration, not committed documents.
 
 ### University gateway through LLaMEA
 
 Set these values in the ignored `.env` file; never put a real key in a notebook:
 
 ```dotenv
-LLM_PROVIDER=upb
 UPB_API_BASE=https://ai-gateway.uni-paderborn.de/v1/
 UPB_API_KEY=replace-with-your-private-key
-UPB_MODEL=gwdg.qwen3-coder-next
 UPB_REQUESTS_PER_MINUTE=8
 ```
 
-Notebook 02 resolves `SynthesisCampaign`; `EvolutionProvider` creates
-the LLM connection from `LLM_PROVIDER` and owns its cleanup. The notebook does not
-import, construct or call `LLMClient`. The existing LLaMEA `OpenAI_LLM` adapter
-issues synthesis requests, not a separate example script.
+Notebook 02 selects the provider and exact model ID with
+`ModelSelection(provider="upb", model_id="gwdg.qwen3-coder-next")`, then passes
+that selection to audit and synthesis calls. Change the selection in the notebook
+to switch provider or model; do not change `.env` for model selection. The
+selection flows through the application to a model-specific engine/client;
+infrastructure constructs and cleans up that client. The notebook does not
+import, construct or call `LLMClient`.
+The existing LLaMEA `OpenAI_LLM` adapter issues synthesis requests, not a separate
+example script.
 
-Notebook setup explicitly uses `EvolutionProvider(test_generation_on_startup=True)`
-(or its transient variant). Before yielding the client for injection, the provider
-sends a single `Reply only with OK` probe through the configured transport and
-shared UPB pacing. A failure propagates to the setup boundary and closes the
-client; no experiment has been created. The notebook prints the model name only
-after this check succeeds. `Synthesis` and campaign services do not initialize,
-probe or repair LLM connections. The flag defaults to `False` for other hosts and
-workers, so resolving services normally does not generate text unexpectedly.
-Endpoint validation remains controlled separately by `SKIP_LLM_VALIDATION`;
-that flag does not disable an explicitly requested generation probe.
+The provider choice is per application call. `EvolutionProvider()` supplies the
+other workflow dependencies and does not select or probe a model during notebook
+setup. The notebook prints the selected provider and exact model ID directly from
+`ModelSelection`. Connection failures are reported by the call that needs the
+provider; no startup generation request is part of service resolution.
 
 Connection checks and model discovery send Bearer authentication. Unlike a local
 single-model server, the gateway requires an explicit model ID: it never silently
@@ -120,8 +120,9 @@ limits, other account activity and university-wide load can still produce 429 er
 Check the gateway's Max TPM/Max RPM fields and remaining budget before a campaign;
 do not shorten scientific prompts or change objective-call budgets to work around quotas.
 No generation call is required to validate connectivity.
-The hosted model is recorded separately from historical GGUF model IDs.
-Restart the notebook kernel after changing providers or model environment settings.
+The selected hosted model is recorded with its provider-qualified identity. Restart
+the notebook kernel after changing provider code or credentials; changing the
+`ModelSelection` value does not require changing environment variables.
 
 ## Local GGUF server
 
@@ -149,11 +150,13 @@ as `0.0.0.0` is not the client connection URL.
 
 ## Presets and experiments
 
-Benchmark labels and new model folders use the complete `llm_name` recorded in
-SQLite, including its original case, version and file suffix. There is no model
-slugification or alias registry. Existing result folders are located through
-their provenance's model ID, not guessed from folder names, so changing the
-presentation convention does not discard completed benchmarks.
+New synthesis records identify a model with its provider and exact model ID; the
+provider-qualified identity uses a percent-encoded model ID so distinct provider
+namespaces cannot collide. Historical records with an unqualified `llm_name` remain
+historical identities. They are not automatically reused as records for a newly
+selected provider/model pair. This avoids treating a local artifact and a hosted
+model with similar display names as the same experiment. Existing stored data is
+left intact.
 
 [configs/llms.toml](../../configs/llms.toml) remains a set of local model download
 presets for management scripts. It does not rename database models or determine
@@ -169,17 +172,18 @@ configuration-file dependency.
 
 | Method | Explicit study inputs |
 | --- | --- |
-| `run(...)`, `audit_matrix(...)` | `problem_targets`, `noise_conditions`, `synthesis_modes`, `iterations`, `budget`, `timeout_seconds`, `runs_per_config`, `auto_resume`, `skip_completed`, `retry_failed_synthesis` |
+| `run(...)`, `audit_matrix(...)` | `model`, `problem_targets`, `noise_conditions`, `synthesis_modes`, `iterations`, `budget`, `timeout_seconds`, `runs_per_config`, `auto_resume`, `skip_completed`, `retry_failed_synthesis` |
 | `run_benchmarks(...)`, `audit_workload(...)`, `summarize_results(...)` | `trials_per_condition`, `random_seed`, `first_instance_id`, `budget`, `trial_timeout_seconds`, `observation_trace_points`, `force_rerun`, `classical_baselines`, `noise_robustness_enabled`, `cross_function_enabled`, `cross_function_problem_ids` |
 | Summary thresholds | `primary_target`, `secondary_target` |
 | Selected benchmark reruns | `run_benchmarks(..., rerun_experiment_ids=[...])` explicitly reruns all scheduled trials for the selected completed champion experiments. This is a run argument, not a scientific configuration field. See [rerun semantics](../benchmark_protocol.md#selected-benchmark-reruns). |
 | Analysis operations | Setup supplies validated `BenchmarkConfig` and `ReliabilityConfig`; the four use cases accept condition filters through `execute(...)` |
 
-Parameters are keyword-only. Pydantic validates values before planning, discovery,
-dispatch or writes; ordinary model fields and validators describe structured
-problem/noise/mode entries. Model identity comes from the connected LLM, and
-CPU-worker capacity is selected automatically. Credentials, database paths and
-infrastructure collaborators are server-managed, not experiment body fields.
+Parameters are keyword-only. `model` is a typed `ModelSelection` containing the
+provider and exact model ID. Pydantic validates request values before planning,
+discovery, dispatch or writes; ordinary model fields and validators describe
+structured problem/noise/mode entries. CPU-worker capacity is selected
+automatically. Credentials, endpoint URLs, database paths and infrastructure
+collaborators are server-managed, not experiment body fields.
 
 Context-owned Dishka providers live in `evolution/infra/di.py` and
 `benchmark/infra/di.py`. The application coordinator receives concrete workload and trial-runner objects.
@@ -195,6 +199,7 @@ For example, a small explicit synthesis request is:
 ```python
 # campaign is resolved once in notebook setup.
 results = campaign.run(
+    model=ModelSelection(provider="upb", model_id="gwdg.qwen3-coder-next"),
     problem_targets=[{"id": 15, "dimensions": [10]}],
     noise_conditions=[{"std": 0.1, "noise_model": "heteroscedastic"}],
     synthesis_modes=[{"mode": "explicit", "strategies": ["baseline"]}],

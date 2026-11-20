@@ -29,10 +29,10 @@ The backend has no Plotly dependency or figure-export code. Application modules
 in `src/benchmark/application/analysis/` coordinate profile, reliability,
 noise-robustness and performance analysis; domain engines own the scientific calculations. Notebook-owned
 helpers handle visual layout, styling and explicit PNG export, without figure caching.
-The infrastructure `AnalysisResultsStore` saves calculated arrays and statistics;
-it never queries experiments or invokes analysis engines. The notebook host's
-`AnalysisResultsExporter` coordinates snapshot persistence and downstream CSV
-exports and reports errors once. Plotting helpers only consume calculated results.
+The infrastructure `AnalysisResultsStore` saves and reloads calculated arrays
+and statistics; it never queries experiments or invokes analysis engines.
+Notebooks call it directly and own downstream CSV exports. Plotting helpers only
+consume calculated results.
 The helper modules are grouped by workflow: `summary.py`, `performance.py`,
 `profiles.py`, and `generalization.py`, with shared `style.py` and `exporter.py`.
 
@@ -77,7 +77,7 @@ from notebooks.analysis.plotting.exporter import AnalysisFigureExporter
 from shared.config import RESULTS_DIR
 
 if profiles is not None:
-    snapshot_path = results_exporter.save(profiles)
+    snapshot_path = results_store.save(profiles)
     exporter = AnalysisFigureExporter(RESULTS_DIR)
     exporter.export_profiles(profiles)
 ```
@@ -128,7 +128,7 @@ them. The printed snapshot path identifies the exact result.
 To reuse a snapshot after a kernel restart, skip calculation and load its printed path:
 
 ```python
-profiles = results_exporter.load(
+profiles = results_store.load(
     results_store.root / "profiles" / "explicit" / "<printed-signature>"
 )
 AnalysisFigureExporter(RESULTS_DIR).export_profiles(profiles)

@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
+from evolution.application.model_selection import ModelSelection
 from evolution.application.synthesis.candidate_evaluation import CandidateEvaluator
-from evolution.infra.di import EvolutionProvider
 from evolution.infra.storage.code.repository import FileCodeRepository
 from shared.application.errors import StorageError
 from shared.domain.problem import BaseProblem
@@ -28,17 +28,18 @@ def test_clean_backend_failure_is_not_candidate_failure():
         evaluation.evaluate("generated source", "Optimizer")
 
 
-def test_startup_error_survives_client_close_failure(monkeypatch):
-    import evolution.infra.di as module
+def test_synthesis_error_survives_client_close_failure(monkeypatch, tmp_path):
+    import evolution.infra.engines.llamea.factory as module
 
     client = MagicMock()
-    primary = ValueError("probe failed")
-    client.ping.side_effect = primary
+    primary = ValueError("synthesis failed")
     client.close.side_effect = RuntimeError("close failed")
-    monkeypatch.setattr(module, "LLMClient", lambda *args: client)
-    generator = EvolutionProvider(test_generation_on_startup=True).llm()
-    with pytest.raises(ValueError, match="probe failed") as caught:
-        next(generator)
+    monkeypatch.setattr(module, "LLMClient", lambda *args, **kwargs: client)
+    factory = module.LLaMEAEngineFactory(MagicMock(), tmp_path)
+    model = ModelSelection(provider="local", model_id="test-model")
+    with pytest.raises(ValueError, match="synthesis failed") as caught:
+        with factory.open(model):
+            raise primary
     assert caught.value is primary
     assert any("close" in note.lower() for note in caught.value.__notes__)
 
@@ -274,14 +275,14 @@ def test_provider_worker_transport_retains_safe_cause_only(monkeypatch):
         raise provider_error(vendor, "test-model") from vendor
 
     @contextmanager
-    def scope(engine):
+    def scope():
         yield MagicMock(execute=fail)
 
     monkeypatch.setattr(composition, "synthesis_worker_scope", scope)
     item = dict(
         experiment_id=1,
         key="task",
-        engine=object(),
+        model=ModelSelection(provider="local", model_id="test-model"),
         problem=object(),
         config=object(),
         prompt_strategy="baseline",
@@ -410,7 +411,7 @@ def test_failed_notebook_calculation_does_not_export_stale_data(capsys):
         "FILTER_DIMS": None,
         "FILTER_PROBLEMS": None,
         "FILTER_NOISE_STDS": None,
-        "results_exporter": MagicMock(),
+        "results_store": MagicMock(),
         "figure_exporter": MagicMock(),
         "noise": object(),
         "display": MagicMock(),
@@ -425,7 +426,7 @@ def test_failed_notebook_calculation_does_not_export_stale_data(capsys):
         ):
             exec(compile(source, str(notebook), "exec"), namespace)
     assert namespace["noise"] is None
-    namespace["results_exporter"].save.assert_not_called()
+    namespace["results_store"].save.assert_not_called()
     namespace["figure_exporter"].export_noise_robustness.assert_not_called()
     assert "unreadable inputs" in capsys.readouterr().out
 

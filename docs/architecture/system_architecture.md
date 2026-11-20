@@ -243,8 +243,7 @@ reports once and converts the terminal workflow failure to a Result. No command
 bus, service locator or generic handler wrapper is introduced. Original causes
 remain internal and are excluded from response serialization.
 
-The database engine/session factory and provider-owned LLM client have APP/process
-scope. Repositories, mutable loggers and use cases have REQUEST scope, held for
+The database engine/session factory has APP/process scope. Repositories, mutable loggers and use cases have REQUEST scope, held for
 the notebook workflow. This is not a fresh scope per method call. Repositories
 still open short-lived database sessions for their operations. Analysis settings
 are supplied as a validated `BenchmarkConfig` in setup; execution methods retain
@@ -270,20 +269,18 @@ service construction fails and rejects resolution after closure or from another
 process. Its cleanup is idempotent and checks the owning process ID, so forked
 workers do not finalize parent resources. No cleanup callbacks, ExitStack or
 partial functions are needed in notebook cells. Force-killing a process cannot
-guarantee finalization. `EvolutionProvider` creates the LLM client from environment
-settings and closes its network connection when the root closes. Explicitly
-supplied context overrides remain caller-owned. WAL, foreign keys,
+guarantee finalization. The injected engine factory builds a client from the explicit
+model selection and closes it after the synthesis session. WAL, foreign keys,
 busy timeout and synchronous settings remain the database adapter's responsibility.
 
 Synthesis workers open their own container inside the worker process and resolve
-`Synthesis` with the engine from the unchanged task payload. No
-container, database engine or session is serialized into a task. The module-level
+`Synthesis` with the model selection from the task payload. The worker does not receive a
+serialized engine, client, container or database session. The module-level
 worker stays picklable. Calculated arrays and tables are detached and remain
 usable after scope exit; live services must only be used while their scope is open.
 
 Campaign and standalone session entry points are both resolved through the same
-provider. The worker-specific binding reuses its supplied engine and opens no
-additional LLM client. See [the two workflow APIs](execution_flow.md#two-application-workflows)
+provider. Both entry points use the same engine factory. See [the two workflow APIs](execution_flow.md#two-application-workflows)
 for single-session parameters and the application file layout.
 
 Registration, constructor injection and generator finalization follow the

@@ -68,6 +68,7 @@ class LLaMEASession:
         code_repo: CodeRepository,
         config: SynthesisSettings,
         checkpoint_root: Path,
+        study_name: str | None = None,
         initial_iteration: int = 0,
         synthesis_mode: SynthesisMode = SynthesisMode.EXPLICIT,
         restart: bool = False,
@@ -77,6 +78,9 @@ class LLaMEASession:
         self._experiment_id = experiment_id
         self._prompt_strategy = PromptStrategy(prompt_strategy)
         self._llm_client = llm_client
+        # Keep the exact model ID on the client for requests, and use a
+        # provider-qualified identity for study records and experiment paths.
+        self._model_name = study_name or llm_client.model.name
         self._db_repo = db_repo
         self._code_repo = code_repo
         self._config = config
@@ -97,7 +101,7 @@ class LLaMEASession:
             experiment_id=self._experiment_id,
             problem=problem_profile,
             mode=self._synthesis_mode,
-            llm_name=self._llm_client.model.name,
+            llm_name=self._model_name,
             prompt_strategy=self._prompt_strategy,
             budget=self._config.budget,
             max_iterations=self._config.iterations,
@@ -132,7 +136,7 @@ class LLaMEASession:
         self._logger.task_start(
             index=1,
             total=1,
-            model_name=self._llm_client.model.name,
+            model_name=self._model_name,
             dim=self._problem.dim,
             noise_std=self._problem.noise_std,
             problem_id=self._problem.problem_id,
@@ -178,7 +182,7 @@ class LLaMEASession:
             experiment_id=self._experiment_id,
             run_history=synthesis_engine.run_history,
             experiment_name=self._experiment_name,
-            llm_name=self._llm_client.model.name,
+            llm_name=self._model_name,
             best_solution=best_so_far,
             error_msg="",
             problem_profile=evaluator.problem_profile,
@@ -212,7 +216,9 @@ class LLaMEASession:
         """Runs the complete evolution loop for the problem."""
         if self._initial_iteration > 0 and not self._restart:
             records = self._db_repo.load_by_ids([self._experiment_id])
-            if not records or records[0].budget != self._config.budget:
+            if not records or records[0].llm_name != self._model_name:
+                raise ValueError(f"Cannot resume experiment #{self._experiment_id} for this model")
+            if records[0].budget != self._config.budget:
                 raise ValueError("Cannot resume with a changed or unknown synthesis budget.")
             if not (self._archive_dir / "llamea_config.pkl").is_file():
                 raise ValueError(
@@ -222,7 +228,7 @@ class LLaMEASession:
             self._experiment = records[0]
         if self._restart:
             records = self._db_repo.load_by_ids([self._experiment_id])
-            if not records or records[0].llm_name != self._llm_client.model.name:
+            if not records or records[0].llm_name != self._model_name:
                 raise ValueError(f"Cannot replace experiment #{self._experiment_id} for this model")
             stored = records[0]
             if (
@@ -274,6 +280,11 @@ class LLaMEASession:
         if state_file.exists():
             try:
                 synthesis_engine = load_synthesis_checkpoint(state_file)
+                saved_evaluator = synthesis_engine.f
+                saved_experiment = getattr(saved_evaluator, "_experiment", None)
+                saved_model_name = getattr(saved_experiment, "llm_name", None)
+                if saved_model_name is not None and saved_model_name != self._model_name:
+                    raise ValueError("Saved model identity does not match the selected model.")
                 if self._initial_iteration > 0:
                     saved = synthesis_engine.f
                     if (
@@ -352,14 +363,16 @@ class LLaMEAEngine(SynthesisEngine):
         llm_client: LLMClient,
         code_repo: CodeRepository,
         checkpoint_root: Path,
+        study_name: str | None = None,
     ) -> None:
         self.llm_client = llm_client
         self.code_repo = code_repo
         self.checkpoint_root = checkpoint_root
+        self.study_name = study_name or llm_client.model.name
 
     @property
     def model_name(self) -> str:
-        return self.llm_client.model.name
+        return self.study_name
 
     def run(
         self,
@@ -382,6 +395,7 @@ class LLaMEAEngine(SynthesisEngine):
             code_repo=self.code_repo,
             config=config,
             checkpoint_root=self.checkpoint_root,
+            study_name=self.study_name,
             initial_iteration=initial_iteration,
             synthesis_mode=synthesis_mode,
             restart=restart,

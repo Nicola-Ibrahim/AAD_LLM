@@ -1,7 +1,7 @@
 name = "investigator"
 description = "Trace code paths and gather evidence before changes."
 model = "gpt-6-luna"
-model_reasoning_effort = "medium"
+model_reasoning_effort = "low"
 model_verbosity = "low"
 developer_instructions = """
 Follow AGENTS.md and the assigned scope; work read-only. Trace relevant entry

@@ -225,8 +225,14 @@ def test_llm_client_model_resolution(monkeypatch):
 def test_llm_client_raises_when_server_not_running(monkeypatch):
     monkeypatch.delenv("SKIP_LLM_VALIDATION", raising=False)
     monkeypatch.setenv("LOCAL_LLM_BASE_URL", "http://127.0.0.1:59999/v1")
-    with pytest.raises(ConnectionError, match="Could not connect to the local LLM server"):
+
+    def refuse_connection(*args, **kwargs):
+        raise ConnectionRefusedError("server unavailable")
+
+    monkeypatch.setattr("urllib.request.urlopen", refuse_connection)
+    with pytest.raises(ConnectionError) as failure:
         LLMClient(Provider.LOCAL)
+    assert isinstance(failure.value.__cause__, ConnectionRefusedError)
 
 
 def test_legacy_problem_checkpoint_survives_module_relocation():

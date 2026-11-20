@@ -3,6 +3,7 @@
 import io
 import pickle
 import sys
+from contextlib import nullcontext
 from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -11,23 +12,28 @@ from llamea import Solution
 from pydantic import ValidationError, create_model
 
 import shared.config as shared_config
-from evolution.application.interfaces.synthesis_engine import SynthesisEngine
+from evolution.application.interfaces.synthesis_engine import SynthesisEngineFactory
+from evolution.application.model_selection import ModelSelection
 from evolution.application.synthesis.service import Synthesis
 from evolution.application.synthesis.settings import SynthesisSettings
 from evolution.infra.di import EvolutionProvider, synthesis_worker_scope
 from evolution.infra.engines.llamea import LLaMEAEngine
 from evolution.infra.engines.llamea.checkpoint import SynthesisCheckpointUnpickler
-from evolution.infra.llm.client import LLMClient
 from evolution.infra.logging import SynthesisLogger
 from evolution.infra.storage.code.repository import FileCodeRepository
 from evolution.infra.storage.synthesis.repository import SQLiteSynthesisRepository
 from shared.infra.di import container_scope
 from shared.infra.problems.factory import BBOBProblemFactory
 
+TEST_MODEL = ModelSelection(provider="local", model_id="connected-test-model")
+
 
 class GeneratedModel:
     def __init__(self):
         self.model = SimpleNamespace(name="connected-test-model")
+
+    def close(self):
+        pass
 
     def sample_solution(self, *args, **kwargs):
         return Solution(
@@ -45,6 +51,7 @@ class Optimizer:
 
 def parameters():
     return dict(
+        model=TEST_MODEL,
         problem_id=1,
         dim=2,
         noise_std=0.0,
@@ -64,11 +71,13 @@ def test_single_session_creates_one_experiment_without_a_campaign(db_session_fac
         GeneratedModel(),
         FileCodeRepository(tmp_path / "code"),
         checkpoint_root=shared_config.DATA_DIR / "evolution_state",
+        study_name=TEST_MODEL.study_name,
     )
-    session = Synthesis(engine, repository, SynthesisLogger(), BBOBProblemFactory())
+    factory = MagicMock(open=MagicMock(return_value=nullcontext(engine)))
+    session = Synthesis(factory, repository, SynthesisLogger(), BBOBProblemFactory())
     result = session.run(**parameters()).value
     (stored,) = repository.load_by_ids([result.experiment_id])
-    assert engine.model_name == stored.llm_name == "connected-test-model"
+    assert engine.model_name == stored.llm_name == TEST_MODEL.study_name
     assert stored.status == "completed"
     assert stored.problem.instance_id == 1
     assert stored.synthesis_seed == 43
@@ -102,26 +111,20 @@ def test_single_session_is_resolvable_without_a_worker_context(monkeypatch):
     import shared.infra.di as composition
 
     monkeypatch.setattr(composition, "Database", MagicMock())
-    client = MagicMock()
-    with container_scope(
-        EvolutionProvider(), context={LLMClient: client}, request_context={}
-    ) as scope:
+    with container_scope(EvolutionProvider(), context={}, request_context={}) as scope:
         session = scope.get(Synthesis)
-        assert session.engine is scope.get(SynthesisEngine)
-        assert session.engine is scope.get(LLaMEAEngine)
-        assert session.engine.llm_client is client
+        assert session.engine_factory is scope.get(SynthesisEngineFactory)
 
 
-def test_worker_session_never_constructs_another_client(monkeypatch):
-    import evolution.infra.di as composition
-    import shared.infra.di as shared_composition
+def test_worker_resolves_factory_without_connecting(monkeypatch):
+    from evolution.infra.engines.llamea import factory as factory_module
+    from shared.infra import di as shared_composition
 
     monkeypatch.setattr(shared_composition, "Database", MagicMock())
-    client_factory = MagicMock(side_effect=AssertionError("worker opened a new LLM connection"))
-    monkeypatch.setattr(composition, "LLMClient", client_factory)
-    engine = MagicMock(spec=SynthesisEngine)
-    with synthesis_worker_scope(engine) as session:
-        assert session.engine is engine
+    client_factory = MagicMock(side_effect=AssertionError("worker setup opened a client"))
+    monkeypatch.setattr(factory_module, "LLMClient", client_factory)
+    with synthesis_worker_scope() as session:
+        assert isinstance(session.engine_factory, SynthesisEngineFactory)
     client_factory.assert_not_called()
 
 
@@ -192,30 +195,23 @@ def test_historical_experiment_checkpoint_retains_its_database_identity(monkeypa
 
 def test_transient_synthesis_never_opens_database_and_cleans_checkpoints(monkeypatch, tmp_path):
     from pathlib import Path
-    from typing import cast
-
-    from dishka import Provider, Scope, provide
 
     from evolution.domain.interfaces.code_repository import CodeRepository
     from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
     from evolution.infra.di import TransientEvolutionProvider
+    from evolution.infra.engines.llamea import factory as factory_module
     from evolution.infra.storage.code.memory import MemoryCodeRepository
     from evolution.infra.storage.synthesis.memory import MemorySynthesisRepository
     from shared.infra.database import Database
 
-    class ModelProvider(Provider):
-        @provide(scope=Scope.APP, override=True)
-        def llm(self) -> LLMClient:
-            return cast(LLMClient, GeneratedModel())
+    monkeypatch.setattr(factory_module, "LLMClient", lambda *args, **kwargs: GeneratedModel())
 
     def forbidden_database(*args, **kwargs):
         raise AssertionError("Transient synthesis must not open the research database")
 
     monkeypatch.setattr(Database, "__init__", forbidden_database)
     before = set(tmp_path.rglob("*"))
-    with container_scope(
-        TransientEvolutionProvider(), ModelProvider(), context={}, request_context={}
-    ) as container:
+    with container_scope(TransientEvolutionProvider(), context={}, request_context={}) as container:
         synthesis = container.get(Synthesis)
         repository = container.get(SynthesisRepository)
         code = container.get(CodeRepository)
@@ -250,6 +246,9 @@ def test_transient_scope_cleans_checkpoints_when_engine_fails(monkeypatch):
         raise ProviderError("unavailable", "test-model", "gateway unavailable")
 
     monkeypatch.setattr(Database, "__init__", forbidden_database)
+    from evolution.infra.engines.llamea import factory as factory_module
+
+    monkeypatch.setattr(factory_module, "LLMClient", lambda *args, **kwargs: GeneratedModel())
     monkeypatch.setattr(LLaMEAEngine, "run", fail_engine)
     with container_scope(TransientEvolutionProvider(), context={}, request_context={}) as container:
         checkpoint_root = container.get(Path)

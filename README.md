@@ -307,7 +307,7 @@ scoring, storage, and thesis interpretation.
 | Notebook 03 setup parameters | Benchmark schedule (instances 2–21), 20 trials, 100,000-call budget, timeout and baseline algorithms. |
 | `configs/problems.toml` | BBOB problem descriptions and groupings. |
 | `configs/llms.toml` | Available local-model presets. |
-| `.env` | Active LLM provider and local model/server settings. |
+| `.env` | Credentials and infrastructure settings. Choose the synthesis provider and model in notebook 02. |
 
 The default synthesis matrix covers BBOB functions 1, 8, 11, 15, and 21 across
 2D, 10D, and 50D; clean and heteroscedastic-noise conditions; explicit and

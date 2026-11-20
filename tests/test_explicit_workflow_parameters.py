@@ -15,6 +15,7 @@ from benchmark.application.benchmark_config import BenchmarkConfig
 from benchmark.application.trials.coordinator import BenchmarkCoordinator
 from evolution.application.campaign.service import SynthesisCampaign
 from evolution.application.campaign.settings import CampaignSettings
+from evolution.application.model_selection import ModelSelection
 from shared.infra.cpu import available_cpu_count
 
 
@@ -22,8 +23,6 @@ def synthesis_service() -> SynthesisCampaign:
     return SynthesisCampaign(
         sqlite_repo=MagicMock(),
         logger=MagicMock(),
-        engine=MagicMock(),
-        model_name="connected-model",
         problem_factory=MagicMock(),
         worker_pool=MagicMock(),
         worker_fn=MagicMock(),
@@ -58,17 +57,22 @@ def test_synthesis_parameters_are_local_to_each_call() -> None:
     plans = []
 
     def planner(config: CampaignSettings) -> SimpleNamespace:
-        plans.append(config)
-        return SimpleNamespace(build_tasks=lambda **selection: [])
+        def build_tasks(*, model: ModelSelection, **selection: object) -> list:
+            plans.append((config, model))
+            return []
+
+        return SimpleNamespace(build_tasks=build_tasks)
 
     service._build_planner = planner
-    service.run(**payload).value
-    service.run(**(payload | {"budget": 200_000})).value
-    assert [config.budget for config in plans] == [100_000, 200_000]
-    assert plans[0] is not plans[1]
+    local = ModelSelection(provider="local", model_id="shared-name")
+    hosted = ModelSelection(provider="upb", model_id="shared-name")
+    service.run(model=local, **payload).value
+    service.run(model=hosted, **(payload | {"budget": 200_000})).value
+    assert [config.budget for config, _ in plans] == [100_000, 200_000]
+    assert [model for _, model in plans] == [local, hosted]
+    assert local.study_name != hosted.study_name
     assert payload["budget"] == 100_000
     assert service.worker_count == 4
-    assert service.model_name == "connected-model"
     service.worker_pool.execute.assert_not_called()
     service.sqlite_repo.create_experiment.assert_not_called()
 
@@ -91,7 +95,11 @@ def test_synthesis_parameters_are_local_to_each_call() -> None:
 )
 def test_invalid_synthesis_inputs_never_dispatch_or_write(changes: dict[str, object]) -> None:
     service = synthesis_service()
-    payload = run_parameters(synthesis_config()) | changes
+    payload = (
+        run_parameters(synthesis_config())
+        | {"model": ModelSelection(provider="local", model_id="test-model")}
+        | changes
+    )
     try:
         result = service.run(**payload)
     except ValidationError:
@@ -195,22 +203,23 @@ def test_benchmark_composition_injects_concrete_workflows(monkeypatch: pytest.Mo
     database.dispose.assert_called_once()
 
 
-def test_synthesis_composition_gets_model_from_client_not_parameters(
+def test_synthesis_composition_does_not_connect_during_setup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import evolution.infra.di as composition
+    import evolution.infra.engines.llamea.factory as factory_module
     import shared.infra.di
 
     database = MagicMock()
     client = MagicMock()
-    client.model.name = "live-server-model"
+    monkeypatch.setattr(factory_module, "LLMClient", client)
     monkeypatch.setattr(shared.infra.di, "Database", lambda: database)
     monkeypatch.setattr(composition, "available_cpu_count", lambda: 6)
     with shared.infra.di.container_scope(
-        composition.EvolutionProvider(), context={composition.LLMClient: client}, request_context={}
+        composition.EvolutionProvider(), context={}, request_context={}
     ) as scope:
         workflow = scope.get(SynthesisCampaign)
-        assert workflow.model_name == "live-server-model"
+        client.assert_not_called()
         assert workflow.worker_count == workflow.worker_pool.max_workers == 6
     database.dispose.assert_called_once()
 
@@ -278,8 +287,10 @@ def test_notebook_study_parameters_are_executable_and_preserve_the_protocol() ->
     benchmark = configurations[0]
     assert all(c == benchmark for c in configurations)
     assert synthesis.budget == benchmark.budget == 100_000
-    assert synthesis.dimensions == [2, 10, 50]
-    assert len(synthesis.matrix_conditions) == 480
+    assert synthesis.dimensions == [10]
+    assert synthesis.problem_ids == list(range(1, 25))
+    assert len(synthesis.matrix_conditions) == 24
+    assert all(any(k.arg == "model" for k in call.keywords) for call in synthesis_calls)
     assert benchmark.trial_schedule == tuple((instance, 42 + instance) for instance in range(2, 22))
     assert synthesis.timeout_seconds == 30.0
     assert benchmark.trial_timeout_seconds == 60.0

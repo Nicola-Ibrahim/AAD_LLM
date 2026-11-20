@@ -325,6 +325,7 @@ def test_campaign_call_retains_worker_logging_without_a_notebook_wrapper(tmp_pat
     from study_fixtures import run_parameters, synthesis_config
 
     from evolution.application.campaign.service import SynthesisCampaign
+    from evolution.application.model_selection import ModelSelection
     from shared.infra.logging.runtime import current_runtime
 
     runtime = LoggingRuntime("synthesis", tmp_path, io.StringIO())
@@ -341,8 +342,6 @@ def test_campaign_call_retains_worker_logging_without_a_notebook_wrapper(tmp_pat
         campaign = SynthesisCampaign(
             sqlite_repo=MagicMock(),
             logger=logger,
-            engine=MagicMock(),
-            model_name="test-model",
             problem_factory=MagicMock(),
             worker_pool=worker_pool,
             worker_fn=int,
@@ -351,7 +350,10 @@ def test_campaign_call_retains_worker_logging_without_a_notebook_wrapper(tmp_pat
         planner = MagicMock()
         planner.build_tasks.return_value = [{"key": "test"}]
         monkeypatch.setattr(campaign, "_build_planner", lambda config: planner)
-        campaign.run(**run_parameters(synthesis_config())).value
+        campaign.run(
+            model=ModelSelection(provider="local", model_id="test-model"),
+            **run_parameters(synthesis_config()),
+        ).value
         worker_pool.execute.assert_called_once()
         assert current_runtime() is None
     finally:

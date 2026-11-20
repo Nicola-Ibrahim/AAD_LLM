@@ -159,8 +159,8 @@ class LLMClient:
             ) from e
 
     @staticmethod
-    def _get_local_model_name(base_url: str, api_key: str) -> str:
-        """Queries the local server's /models endpoint to get the active model name."""
+    def _get_compatible_model_ids(base_url: str, api_key: str, provider_name: str) -> list[str]:
+        """List exact IDs advertised by a local or LM Studio OpenAI-compatible server."""
         models_url = f"{base_url.rstrip('/')}/models"
         try:
             req = urllib.request.Request(
@@ -172,20 +172,23 @@ class LLMClient:
             )
             with urllib.request.urlopen(req, timeout=5.0) as response:
                 data = json.loads(response.read().decode("utf-8"))
-                if (models := data.get("data")) and (model_id := models[0].get("id")):
-                    return model_id
+                if not isinstance(data, dict):
+                    raise ValueError("The /models response must be a JSON object")
+                models = data.get("data", [])
+                if not isinstance(models, list):
+                    raise ValueError("The /models response must contain a data list")
+                return [
+                    model_id
+                    for model in models
+                    if isinstance(model, dict) and isinstance((model_id := model.get("id")), str)
+                ]
         except (OSError, ValueError) as e:
             raise ConnectionError(
-                f"Could not fetch active model from local server at '{models_url}'.\n"
+                f"Could not list models from the {provider_name} server at '{models_url}'.\n"
                 f"Error details: {e}\n"
-                f"Ensure your model server is running (e.g. bash scripts/llm.sh start) "
-                f"or specify the model explicitly via LOCAL_LLM_MODEL or model='...'."
+                "Check the endpoint URL, API key and network access."
             ) from e
-
-        raise RuntimeError(
-            f"No models found on the local LLM server at '{models_url}'. "
-            f"Ensure a model is actively loaded on the server."
-        )
+        return []
 
     def _init_client(self) -> LLM:
         should_validate = self.validate_on_init and os.environ.get("SKIP_LLM_VALIDATION") != "True"
@@ -209,7 +212,8 @@ class LLMClient:
     def _init_openai_compatible(self, config: EndpointConfig, should_validate: bool) -> OpenAI_LLM:
         base_url = os.environ.get(config.base_url_env, config.default_base_url)
         api_key = os.environ.get(config.api_key_env, config.default_api_key)
-        model = self.kwargs.pop("model", None) or os.environ.get(config.model_env)
+        explicit_model = self.kwargs.pop("model", None)
+        model = explicit_model or os.environ.get(config.model_env)
 
         if not api_key:
             raise ValueError(f"Set {config.api_key_env} for {config.display_name}.")
@@ -235,8 +239,21 @@ class LLMClient:
             return llm
 
         if should_validate:
-            self._check_connection(base_url, config.display_name, api_key)
-            model = model or self._get_local_model_name(base_url, api_key)
+            available_models = self._get_compatible_model_ids(
+                base_url, api_key, config.display_name
+            )
+            if model is None:
+                model = available_models[0] if available_models else None
+            elif model not in available_models:
+                raise ValueError(
+                    f"Selected model '{model}' is not advertised by {config.display_name}. "
+                    "Choose an exact ID from its /models endpoint."
+                )
+            if model is None:
+                raise RuntimeError(
+                    f"No models found on the {config.display_name} server at "
+                    f"'{base_url.rstrip('/')}/models'. Ensure a model is loaded or pass an ID."
+                )
         elif not model:
             raise ValueError(
                 f"No model specified for {config.display_name} LLM provider. "

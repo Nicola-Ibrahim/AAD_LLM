@@ -11,6 +11,7 @@ from evolution.application.campaign.conditions import (
 )
 from evolution.application.campaign.settings import CampaignSettings
 from evolution.application.interfaces.logger import BaseLogger
+from evolution.application.model_selection import ModelSelection
 from evolution.domain.enums import BBOBFunction
 from evolution.domain.interfaces.synthesis_repository import SynthesisRepository
 from shared.application.result import Result
@@ -23,16 +24,15 @@ class CampaignAudit:
         self,
         sqlite_repo: SynthesisRepository,
         logger: BaseLogger,
-        model_name: str,
     ) -> None:
         self.sqlite_repo = sqlite_repo
         self.logger = logger
-        self.model_name = model_name
 
     @validate_call(config={"strict": True})
     def inspect(
         self,
         *,
+        model: ModelSelection,
         problem_targets: list[ProblemTarget],
         noise_conditions: list[NoiseConditionConfig],
         synthesis_modes: list[SynthesisModeConfig],
@@ -59,7 +59,7 @@ class CampaignAudit:
                     skip_completed=skip_completed,
                     retry_failed_synthesis=retry_failed_synthesis,
                 )
-                llm_name = self.model_name
+                llm_name = model.study_name
                 all_db_exps = self.sqlite_repo.load(llm_name=llm_name)
 
                 db_completed, db_running, db_failed = group_experiments_by_condition(

@@ -21,10 +21,12 @@ scope. No local model client, repository or objective object needs to be created
 in the notebook:
 
 ```python
+from evolution.application.model_selection import ModelSelection
 from evolution.application.synthesis.service import Synthesis
 
 synthesis = services.get(Synthesis)
 result = synthesis.run(
+    model=ModelSelection(provider="upb", model_id="gwdg.qwen3-coder-next"),
     problem_id=15,
     dim=10,
     noise_std=0.1,
@@ -38,7 +40,7 @@ result = synthesis.run(
 )
 ```
 
-The model name comes from the connected engine. `instance_id` defaults to 1 and
+The caller supplies the provider and exact model ID. `instance_id` defaults to 1 and
 is fixed throughout the loop. The seed is explicit; this does not introduce a
 rotating instance schedule. Logging and error reporting remain inside workflows.
 
@@ -82,7 +84,7 @@ calls `audit.inspect(...)` separately for coverage, and owns the workflow scope
 until setup is replaced or the kernel shuts down.
 The parameters are defined visibly,
 are keyword-only and are Pydantic-validated before planning or writes.
-Worker count is automatic; model identity comes from the connected LLM.
+Worker count is automatic. The audit and campaign take the same explicit model selection.
 No container or framework dependency enters application/domain code.
 
 The coordinator delegates task construction to
@@ -100,11 +102,11 @@ the multiprocessing implementation. The campaign passes prepared experiment
 tasks to `worker_pool.execute(...)`, which waits for the workers' results.
 The pool calls the module-level
 [run_synthesis_worker](../../src/evolution/infra/concurrency/worker.py).
-Each worker opens a process-local Dishka scope, resolves its database/repository and invokes
-`Synthesis.execute()`, and disposes the database in a `finally` block.
+Each worker opens a process-local Dishka scope, resolves its repository and
+invokes `Synthesis.execute()` with the task’s model selection.
 `execute()` accepts an already-registered experiment for worker/recovery execution;
-`run()` handles registration for the independent entry point. A dedicated
-worker provider reuses the serialized engine instead of creating another LLM client.
+`run()` handles registration for the independent entry point. The engine factory opens and closes the client
+for each synthesis session in the process that runs it.
 
 ## Session execution
 
@@ -140,9 +142,9 @@ path. This reader also handles historical relocated type names. It does not invo
 `LLaMEA.warm_start()`. Checkpoints are trusted local pickle files, not safe input
 from arbitrary sources.
 
-If loading fails, the session logs a warning and initializes a fresh LLaMEA engine.
-Therefore a database resume task alone does not guarantee restoration of the
-previous population; a usable checkpoint is required.
+A resume with recorded progress requires a usable checkpoint and matching model
+identity. An incompatible checkpoint stops the resume. A fresh session can
+initialize a new LLaMEA engine when no compatible warm start is available.
 
 A successful loop marks the experiment completed and saves its summary, then
 removes the temporary session archive before processing the session result.

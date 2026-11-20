@@ -113,11 +113,71 @@ def test_local_model_discovery_still_works_and_sends_auth(monkeypatch) -> None:
     monkeypatch.setattr("urllib.request.urlopen", probe)
     llm = LLMClient("local")
     assert llm.model == "local-active-model"
-    assert probe.call_count == 2
+    assert probe.call_count == 1
     assert all(
         call.args[0].get_header("Authorization") == "Bearer local-key"
         for call in probe.call_args_list
     )
+
+
+@pytest.mark.parametrize(
+    ("provider", "base_url_env", "key_env"),
+    [
+        ("local", "LOCAL_LLM_BASE_URL", "LOCAL_LLM_API_KEY"),
+        ("lmstudio", "LLM_STUDIO_BASE_URL", "LLM_STUDIO_API_KEY"),
+    ],
+)
+def test_explicit_model_must_be_advertised(monkeypatch, provider, base_url_env, key_env) -> None:
+    monkeypatch.delenv("SKIP_LLM_VALIDATION", raising=False)
+    monkeypatch.setenv(base_url_env, "http://localhost:1234/v1")
+    monkeypatch.setenv(key_env, "local-key")
+    response = MagicMock()
+    response.__enter__.return_value.read.return_value = json.dumps(
+        {"data": [{"id": "first-model"}, {"id": "selected-model"}]}
+    ).encode()
+    probe = MagicMock(return_value=response)
+    monkeypatch.setattr("urllib.request.urlopen", probe)
+
+    llm = LLMClient(provider, model="selected-model")
+
+    assert llm.model == "selected-model"
+    assert probe.call_count == 1
+    llm.close()
+
+
+@pytest.mark.parametrize(
+    ("provider", "base_url_env", "key_env"),
+    [
+        ("local", "LOCAL_LLM_BASE_URL", "LOCAL_LLM_API_KEY"),
+        ("lmstudio", "LLM_STUDIO_BASE_URL", "LLM_STUDIO_API_KEY"),
+    ],
+)
+def test_explicit_model_rejects_unadvertised_id(
+    monkeypatch, provider, base_url_env, key_env
+) -> None:
+    monkeypatch.delenv("SKIP_LLM_VALIDATION", raising=False)
+    monkeypatch.setenv(base_url_env, "http://localhost:1234/v1")
+    monkeypatch.setenv(key_env, "local-key")
+    response = MagicMock()
+    response.__enter__.return_value.read.return_value = json.dumps(
+        {"data": [{"id": "available-model"}]}
+    ).encode()
+    monkeypatch.setattr("urllib.request.urlopen", MagicMock(return_value=response))
+
+    with pytest.raises(ValueError, match="not advertised"):
+        LLMClient(provider, model="selected-model")
+
+
+def test_local_validation_rejects_empty_model_catalog(monkeypatch) -> None:
+    monkeypatch.delenv("SKIP_LLM_VALIDATION", raising=False)
+    monkeypatch.delenv("LOCAL_LLM_MODEL", raising=False)
+    monkeypatch.setenv("LOCAL_LLM_API_KEY", "local-key")
+    response = MagicMock()
+    response.__enter__.return_value.read.return_value = json.dumps({"data": []}).encode()
+    monkeypatch.setattr("urllib.request.urlopen", MagicMock(return_value=response))
+
+    with pytest.raises(RuntimeError, match="No models found"):
+        LLMClient("local")
 
 
 def test_gateway_worker_pickle_restores_model_and_endpoint_without_embedding_key(
@@ -169,38 +229,6 @@ def test_ping_rejects_empty_text(gateway_env, monkeypatch, response):
         llm.close()
 
 
-@pytest.mark.parametrize("enabled", [False, True])
-def test_provider_probe_is_explicit_and_runs_once_before_injection(monkeypatch, enabled):
-    from evolution.infra.di import EvolutionProvider
-    from shared.infra.di import container_scope
-
-    probe = MagicMock(return_value="OK")
-    monkeypatch.setattr(LLMClient, "ping", probe)
-    with container_scope(
-        EvolutionProvider(test_generation_on_startup=enabled), context={}, request_context={}
-    ) as container:
-        llm = container.get(LLMClient)
-        assert container.get(LLMClient) is llm
-        assert probe.call_count == int(enabled)
-
-
-def test_provider_probe_failure_closes_client_and_prevents_injection(monkeypatch):
-    from evolution.infra.di import EvolutionProvider
-    from shared.infra.di import container_scope
-
-    probe = MagicMock(side_effect=ProviderError("unavailable", "test-model", "probe failed"))
-    close = MagicMock()
-    monkeypatch.setattr(LLMClient, "ping", probe)
-    monkeypatch.setattr(LLMClient, "close", close)
-    with container_scope(
-        EvolutionProvider(test_generation_on_startup=True), context={}, request_context={}
-    ) as container:
-        with pytest.raises(ProviderError, match="probe failed"):
-            container.get(LLMClient)
-    probe.assert_called_once()
-    close.assert_called_once()
-
-
 def test_ping_rate_limit_is_not_retried(gateway_env, monkeypatch):
     llm = LLMClient("upb")
     probe = MagicMock(return_value=httpx.Response(429, json={"error": {"message": "limited"}}))
@@ -215,8 +243,8 @@ def test_ping_rate_limit_is_not_retried(gateway_env, monkeypatch):
 
 
 def test_qwen_synthesis_and_ping_omit_temperature_by_default(gateway_env, monkeypatch):
-    monkeypatch.setenv("UPB_MODEL", "gwdg.qwen3-coder-next")
-    llm = LLMClient("upb")
+    monkeypatch.setenv("UPB_MODEL", "environment-model-must-not-win")
+    llm = LLMClient("upb", model="gwdg.qwen3-coder-next")
     requests = []
 
     def handle(transport, request):
