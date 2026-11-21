@@ -358,81 +358,86 @@ Unlike EvoLLM, these systems evolve heuristic implementations rather than
 numerical updates. Their evaluation results influence subsequent generations,
 although feedback is incorporated differently across methods.
 
-Table~\ref{tab:llm_aad_comparison} summarizes the main LLM-driven AAD
-approaches considered in this work.
+Table~\ref{tab:llm_aad_comparison} compares selected LLM-based
+optimization and algorithm-design systems in terms of their
+generated outputs, information used, and evaluated tasks.
 
 \begin{table}[htbp]
     \centering
-    \caption{Objects generated and feedback reported by related LLM systems.
-    Descriptions summarize the cited papers; evaluation settings are
-    restricted to those reports.}
+    \caption{Comparison of selected LLM-based optimization
+    and algorithm-design systems.}
     \label{tab:llm_aad_comparison}
     \footnotesize
     \setlength{\tabcolsep}{3pt}
+    \renewcommand{\arraystretch}{1.15}
+
     \begin{tabularx}{\textwidth}{
-        \>{\raggedright\arraybackslash}p{2.0cm}
-        \>{\raggedright\arraybackslash}p{2.5cm}
-        \>{\raggedright\arraybackslash}X
-        \>{\raggedright\arraybackslash}p{3.0cm}
+        >{\raggedright\arraybackslash}p{2.0cm}
+        >{\raggedright\arraybackslash}p{2.4cm}
+        >{\raggedright\arraybackslash}X
+        >{\raggedright\arraybackslash}p{2.6cm}
     }
         \toprule
         \textbf{System} &
-        \textbf{Generated object} &
-        \textbf{Feedback used in the reported method} &
-        \textbf{Reported setting} \\
+        \textbf{LLM output} &
+        \textbf{Information used} &
+        \textbf{Evaluated tasks} \\
         \midrule
+
         FunSearch \cite{Romera2023} &
-        Functions within a program skeleton &
-        Automated evaluation scores &
-        Mathematical and algorithmic search \\
+        Program functions &
+        Program scores &
+        Cap sets; bin packing \\
 
         EvoLLM \cite{Lange2024} &
-        Numerical distribution-mean updates &
-        Ranked, discretized population &
-        BBOB and neuroevolution tasks \\
+        Mean updates &
+        Ranked candidate solutions &
+        BBOB; neuroevolution \\
 
         EvoPrompt \cite{Guo2023} &
-        Prompt strings &
-        Task evaluation scores &
-        Prompt optimization \\
+        Prompts &
+        Prompt performance &
+        Language tasks \\
 
         EoH \cite{Liu2024} &
-        Heuristic ideas and code &
-        Evaluated heuristic performance and evolutionary prompts &
-        Combinatorial tasks \\
+        Heuristic ideas; code &
+        Heuristic performance &
+        Combinatorial problems \\
 
         AEL \cite{AEL2024} &
-        Heuristic algorithm code &
-        Evaluated heuristic scores &
-        Traveling-salesman problems \\
+        Heuristic code &
+        Algorithm performance &
+        Traveling salesman \\
 
         ReEvo \cite{ReEvo2024} &
         Heuristic code &
-        Evaluations and verbal reflection &
-        Combinatorial tasks \\
+        Performance; reflections &
+        Combinatorial problems \\
 
         AutoEP \cite{AutoEP2026} &
-        Hyperparameter control &
-        Online landscape analysis and evaluation feedback &
-        Combinatorial tasks \\
+        Parameter adjustments &
+        Current search statistics &
+        Combinatorial problems \\
 
         LLaMEA-SAGE \cite{LLaMEASAGE2026} &
         Optimizer code &
-        Performance and structural features of source code &
-        Automated optimizer design \\
+        Code structure; performance &
+        MA-BBOB \\
 
         LLaMEA-BO \cite{LLaMEABO2025} &
         Bayesian optimizer code &
-        Benchmark scores &
-        Bayesian optimization benchmarks \\
+        Optimizer performance &
+        BBOB; Bayesmark \\
 
         LLaMEA \cite{LLaMEA2024} &
         Optimizer code &
-        Benchmark scores and execution feedback &
-        Noiseless BBOB functions \\
+        Performance; execution errors &
+        Noiseless BBOB \\
+
         \bottomrule
     \end{tabularx}
 \end{table}
+
 
 The literature also differs in the information provided to the LLM before
 generation. AutoEP uses online exploratory landscape analysis to inform
@@ -603,44 +608,30 @@ Execution errors and variability across repeated runs can also inform the
 feedback presented to the LLM. In the original scoring formulation, a failed
 evaluation receives the worst score \cite{LLaMEA2024}.
 
-Noisy objective observations can change the search trajectory and returned
-solution of a generated optimizer. Depending on the evaluation protocol,
-these changes may also affect the algorithm-level score used for selection.
-Such scores can vary even without objective noise because optimizer runs
-may be stochastic. A favorable but unrepresentative score can therefore
-cause a child with worse expected performance to replace its parent,
-altering later program generations. The Methodology chapter specifies
-how this thesis assesses generated algorithms and uses their scores
-for selection.
+Noisy objective observations can alter the search trajectory
+and returned solution of a generated optimizer. These changes
+may also affect its assessed performance, depending on the
+evaluation protocol. The Methodology chapter specifies how
+generated algorithms are evaluated in this thesis.
 
-%------------------------------------------------------------------------------
-\section{Research Gap}
-\label{sec:research_gap}
-%------------------------------------------------------------------------------
+%---------------------------------------------------------------
+\section{Discussion of Related Work}
+\label{sec:related_work_discussion}
+%---------------------------------------------------------------
 
-Research on noisy continuous optimization has shown that uncertain fitness
-observations can reverse candidate rankings, interfere with search directions,
-and affect adaptation mechanisms \cite{Jin2005,Arnold2003,Hansen2009,Spall2003}.
-Repeated evaluation and sample averaging can reduce these effects, but consume
-additional objective evaluations and require explicit noise-handling choices.
+The reviewed approaches differ in what the LLM generates and
+how evaluation feedback is used. Some methods produce numerical
+updates or optimize prompts and hyperparameters, while others
+generate executable heuristics. Their evaluation settings also
+differ, making direct comparisons between the reported results
+difficult.
 
-In parallel, Automated Algorithm Design has progressed from approaches based
-on predefined components to LLM-driven synthesis of executable algorithms
-\cite{Burke2013,vanRijn2016,deNobel2021,Romera2023,AEL2024,
-Liu2024,ReEvo2024,LLaMEA2024}. LLaMEA is particularly relevant because
-its elitist $(1+1)$ variant uses measured algorithm performance and
-execution feedback to guide subsequent program generations \cite{LLaMEA2024}.
-
-
-
-The reviewed systems use benchmark scores and other forms of
-feedback, but their reported evaluations provide limited
-evidence on the performance of LLM-generated continuous
-optimization heuristics under noisy objective evaluations.
-It therefore remains insufficiently characterized how LLM-generated continuous
-optimization heuristics perform across different levels of controlled fitness
-noise and how their robustness compares with established methods under the
-same conditions. This thesis investigates these questions using selected
-BBOB functions, locally executed LLMs, and a LLaMEA-based synthesis process.
-The Methodology and Experimental Design chapters specify the controlled noise
-model, bounded evaluation protocol, and performance measures.
+LLaMEA is the main reference for this thesis because it generates
+executable continuous optimization algorithms and evaluates
+them on BBOB benchmarks. Its original evaluation uses the
+noiseless BBOB suite \cite{LLaMEA2024}. Together with the
+challenges of noisy optimization discussed earlier, this
+provides the basis for investigating LLM-generated heuristics
+under controlled stochastic fitness evaluation. The following
+chapters describe the experimental setup and comparisons with
+established optimization methods.

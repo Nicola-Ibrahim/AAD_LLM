@@ -116,11 +116,9 @@ search and evaluation processes for automated algorithm discovery.
 In this setting, algorithm generation becomes a feedback-driven process. A model
 proposes an algorithm, the generated program is executed and evaluated, and
 information about its performance can be used to guide subsequent generations.
-The reliability of this evaluation therefore matters for the algorithms selected
-during synthesis. Even with deterministic objective evaluations, the measured
-performance of an algorithm may vary across independent runs. Noisy fitness
-evaluations introduce further uncertainty, which can affect how generated
-algorithms are compared and selected during synthesis.
+Because generated algorithms are assessed through benchmark runs,
+stochastic objective evaluations may also introduce uncertainty
+into the performance information available during synthesis.
 
 This raises an important question for LLM-based AAD: whether the ability to
 generate executable optimization heuristics also allows the synthesis process to
@@ -131,25 +129,20 @@ produce heuristics that can operate effectively under noisy fitness evaluation.
 \label{sec:intro_gap}
 %-------------------------------------------------------------------------------
 
-Recent work has shown that LLMs can be incorporated into automated search
-processes to generate and refine executable algorithms. LLaMEA, for example,
-evaluates generated metaheuristics on the noiseless BBOB suite
-\cite{LLaMEA2024}. The effects of stochastic fitness evaluation on such
-synthesis processes remain less well understood.
 
-Under noisy objective evaluation, the measured performance of a generated
-algorithm may reflect both its search behavior and random variation in the
-observed fitness. This uncertainty can influence which candidate is retained and
-which algorithmic ideas are presented to the LLM in later iterations.
+Recent work has shown that LLMs can be incorporated into automated
+search processes to generate and refine executable algorithms.
+LLaMEA, for example, evaluates generated metaheuristics on the
+noiseless BBOB suite \cite{LLaMEA2024}. However, the performance
+of LLM-generated continuous optimization heuristics under noisy
+objective evaluations remains less well characterized,
+particularly across different noise levels and in comparison
+with established optimization methods.
 
-It also remains unclear how LLM-generated continuous optimization heuristics
-perform across different levels of controlled fitness noise and how their
-robustness compares with established optimization methods under the same
-conditions.
-
-To investigate these questions, this thesis uses the LLaMEA framework with
-locally executed models. Different model scales and prompt configurations are
-examined under controlled stochastic fitness evaluation.
+To address this gap, this thesis uses the LLaMEA framework with
+locally executed models. Different model scales and prompt
+configurations are examined under controlled stochastic fitness
+evaluation.
 
 Figure~\ref{fig:intro_paradigm} summarizes the synthesis process. An LLM
 generates candidate optimizers that are executed on benchmark functions with
