@@ -489,7 +489,6 @@ def test_previous_snapshot_folder_aliases_are_ignored_without_changing_statistic
     assert_saved_equal(result, store.load(directory))
 
 
-
 @pytest.mark.parametrize("malformation", ["metadata_shape", "npz_archive"])
 def test_snapshot_malformed_parser_input_has_artifact_cause(
     inputs, tmp_path, monkeypatch, malformation

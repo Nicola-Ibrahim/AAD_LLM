@@ -225,7 +225,13 @@ def test_every_http_retry_is_paced_and_does_not_consume_optimizer_rng(
     assert starts == [1_000_000, 1_000_020]
     assert payloads[0] == payloads[1]
     assert llm.client.max_retries == 0
-    assert not any(record.name == "evolution.infra.llm.gateway" for record in caplog.records)
+    gateway_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name == "evolution.infra.llm.gateway"
+    ]
+    assert len(gateway_messages) == 1
+    assert "input=None" in gateway_messages[0]
     assert "test-key" not in caplog.text
     assert "same prompt" not in caplog.text
     llm.client.close()
@@ -281,7 +287,7 @@ def test_local_provider_does_not_create_gateway_gate(tmp_path, monkeypatch):
     client._client.client.close()
 
 
-def test_generation_keeps_provider_output_defaults(tmp_path, monkeypatch):
+def test_generation_keeps_provider_output_defaults(tmp_path, monkeypatch, caplog):
     import json
 
     limiter = GatewayRequestLimiter(tmp_path / "limits.sqlite3", "shared", 8.0)
@@ -294,13 +300,26 @@ def test_generation_keeps_provider_output_defaults(tmp_path, monkeypatch):
         assert "max_tokens" not in json.loads(request.content)
         return httpx.Response(
             200,
-            json={"choices": [{"finish_reason": "length", "message": {"content": "partial code"}}]},
+            json={
+                "choices": [{"finish_reason": "length", "message": {"content": "partial code"}}],
+                "usage": {
+                    "prompt_tokens": 900,
+                    "prompt_tokens_details": {"cached_tokens": 120},
+                    "completion_tokens": 1600,
+                    "completion_tokens_details": {"reasoning_tokens": 400},
+                    "total_tokens": 2500,
+                },
+            },
         )
 
     monkeypatch.setattr(httpx.HTTPTransport, "handle_request", handle)
     try:
-        assert llm.query([{"role": "user", "content": "generate code"}]) == "partial code"
+        with caplog.at_level("INFO", logger="evolution.infra.llm.gateway"):
+            assert llm.query([{"role": "user", "content": "generate code"}]) == "partial code"
         assert len(requests) == 1
+        assert "input=900 cached_input=120 output=1600 reasoning=400 total=2500" in caplog.text
+        assert "finish=length" in caplog.text
+        assert "partial code" not in caplog.text
     finally:
         llm.client.close()
 

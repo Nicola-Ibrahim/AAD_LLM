@@ -223,7 +223,7 @@ class LLMClient:
             raise ValueError("Set UPB_MODEL or pass model= with an exact gateway model ID.")
 
         if self.provider == Provider.UPB:
-            if model == "gwdg.qwen3-coder-next":
+            if model in {"gwdg.qwen3-coder-next", "openai.gpt-6-luna"}:
                 self.kwargs.setdefault("temperature", None)
             llm = GatewayLLM(
                 api_key=api_key,

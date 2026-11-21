@@ -286,7 +286,8 @@ class SQLiteSynthesisRepository(SynthesisRepository):
         )
 
         iterations = [
-            self._to_iteration_metadata(it, idx) for idx, it in enumerate(exp.iterations, start=1)
+            self._to_iteration_metadata(it, idx)
+            for idx, it in enumerate(sorted(exp.iterations, key=lambda row: row.id), start=1)
         ]
 
         return Experiment(

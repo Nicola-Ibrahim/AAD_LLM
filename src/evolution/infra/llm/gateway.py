@@ -1,5 +1,6 @@
 """OpenAI-compatible gateway client with bounded, paced retries."""
 
+import logging
 import math
 import time
 from email.utils import parsedate_to_datetime
@@ -12,6 +13,8 @@ from llamea import OpenAI_LLM
 from evolution.application.exceptions import ProviderError
 from evolution.infra.llm.provider_errors import provider_error
 from evolution.infra.llm.request_limiter import GatewayRequestLimiter
+
+logger = logging.getLogger(__name__)
 
 # Preserve the former class lookup path for checkpoints or user-created pickles
 # that serialized GatewayRequestLimiter before it moved to request_limiter.py.
@@ -75,7 +78,23 @@ class GatewayLLM(OpenAI_LLM):
                     if self.temperature is not None
                     else openai.NOT_GIVEN,
                 )
-                content = response.choices[0].message.content if response.choices else None
+                choice = response.choices[0] if response.choices else None
+                usage = response.usage
+                logger.info(
+                    "Gateway token usage for %s: input=%s cached_input=%s output=%s "
+                    "reasoning=%s total=%s finish=%s",
+                    self.model,
+                    usage.prompt_tokens if usage else None,
+                    getattr(usage.prompt_tokens_details, "cached_tokens", None) if usage else None,
+                    usage.completion_tokens if usage else None,
+                    getattr(usage.completion_tokens_details, "reasoning_tokens", None)
+                    if usage
+                    else None,
+                    usage.total_tokens if usage else None,
+                    choice.finish_reason if choice else None,
+                    extra={"progress": True},
+                )
+                content = choice.message.content if choice else None
                 if not content:
                     raise ProviderError("invalid_response", self.model, "the API returned no text")
                 return content
