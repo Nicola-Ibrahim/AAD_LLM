@@ -21,7 +21,9 @@ from shared.infra.database.tables import ErrorLogORM, ExperimentORM, IterationOR
 from shared.infra.problems.bbob import BBOBProblem
 
 
-def add_completed(repository: SQLiteSynthesisRepository, problem: ProblemProfile) -> int:
+def add_experiment(
+    repository: SQLiteSynthesisRepository, problem: ProblemProfile, *, completed: bool = True
+) -> int:
     identifier = repository.create_experiment(
         problem,
         SynthesisMode.EXPLICIT,
@@ -32,11 +34,12 @@ def add_completed(repository: SQLiteSynthesisRepository, problem: ProblemProfile
     )
     with repository.SessionLocal.begin() as session:
         row = session.get(ExperimentORM, identifier)
-        row.status = "completed"
-        row.best_algorithm = "old-optimizer"
-        row.best_iteration = 1
-        row.best_final_error = 0.5
-        row.finished_at = "previous-finish"
+        if completed:
+            row.status = "completed"
+            row.best_algorithm = "old-optimizer"
+            row.best_iteration = 1
+            row.best_final_error = 0.5
+            row.finished_at = "previous-finish"
         iteration = IterationORM(
             experiment_id=identifier,
             algorithm_name="old-optimizer",
@@ -65,8 +68,8 @@ def test_reset_retains_id_and_condition_and_preserves_other_experiments() -> Non
         Base.metadata.create_all(database.engine)
         repository = SQLiteSynthesisRepository(database.session_factory)
         profile = ProblemProfile(problem_id=1, dim=2, noise_std=0.0)
-        selected = add_completed(repository, profile)
-        untouched = add_completed(repository, profile)
+        selected = add_experiment(repository, profile)
+        untouched = add_experiment(repository, profile)
         repository.reset_experiment(selected)
         summaries = {row.id: row for row in repository.load()}
         assert set(summaries) == {selected, untouched}
@@ -99,7 +102,7 @@ def test_execution_clears_old_state_only_for_explicit_replacement(
         Base.metadata.create_all(database.engine)
         repository = SQLiteSynthesisRepository(database.session_factory)
         problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
-        identifier = add_completed(
+        identifier = add_experiment(
             repository,
             ProblemProfile(
                 problem_id=1,
@@ -107,6 +110,7 @@ def test_execution_clears_old_state_only_for_explicit_replacement(
                 noise_std=0.0,
                 noise_model=problem.noise_model,
             ),
+            completed=restart,
         )
         code_store = FileCodeRepository(base_dir=tmp_path / "code")
         old_code = code_store.save_code("old optimizer", 1, identifier)
@@ -120,7 +124,7 @@ def test_execution_clears_old_state_only_for_explicit_replacement(
             db_repo=repository,
             code_repo=code_store,
             config=SynthesisSettings(budget=1_000_000),
-            initial_iteration=5,
+            initial_iteration=1,
             restart=restart,
             checkpoint_root=shared_config.DATA_DIR / "evolution_state",
         )
@@ -135,13 +139,13 @@ def test_execution_clears_old_state_only_for_explicit_replacement(
         )
 
         def fake_loop() -> tuple[object, object]:
-            assert session._initial_iteration == (0 if restart else 5)
+            assert session._initial_iteration == (0 if restart else 1)
             assert checkpoint.exists() is not restart
             assert Path(old_code).exists() is not restart
             assert Path(trailing_code).exists() is not restart
             assert Path(other_code).exists()
             assert repository.get_experiment_status(identifier) == (
-                ("running", 0) if restart else ("completed", 1)
+                ("running", 0) if restart else ("running", 1)
             )
             return object(), object()
 

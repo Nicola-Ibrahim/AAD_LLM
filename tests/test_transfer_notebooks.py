@@ -178,7 +178,7 @@ def png_exports(tmp_path: Path, monkeypatch) -> list[tuple[go.Figure, str]]:
 
 
 def test_modified_notebook_cells_compile() -> None:
-    for name in ["03_benchmark.ipynb"] + NOTEBOOKS:
+    for name in ["03_benchmark.ipynb", "04_audit.ipynb"] + NOTEBOOKS:
         for index, cell in enumerate(notebook_cells(name)):
             if cell["cell_type"] == "code":
                 source = "".join(
@@ -188,7 +188,7 @@ def test_modified_notebook_cells_compile() -> None:
 
 
 def test_notebooks_call_use_cases_directly_and_resolve_only_during_setup() -> None:
-    for name in ["02_synthesis.ipynb", "03_benchmark.ipynb", "04_audit.ipynb", *NOTEBOOKS]:
+    for name in ["02_synthesis.ipynb", "03_benchmark.ipynb", *NOTEBOOKS]:
         source = "\n".join(
             "".join(cell["source"]) for cell in notebook_cells(name) if cell["cell_type"] == "code"
         )

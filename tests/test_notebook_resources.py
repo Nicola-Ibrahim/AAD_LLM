@@ -16,7 +16,6 @@ ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOKS = [
     ("02_synthesis.ipynb", "synthesis", "campaign"),
     ("03_benchmark.ipynb", "benchmark", "benchmark_coordinator"),
-    ("04_audit.ipynb", "audit", "coverage_audit"),
     ("analysis/05_reliability_summary.ipynb", "analysis", "reliability_analysis"),
     ("analysis/06_convergence_ecdf_and_ablations.ipynb", "analysis", "profile_analysis"),
     ("analysis/07_noise_robustness.ipynb", "analysis", "noise_analysis"),

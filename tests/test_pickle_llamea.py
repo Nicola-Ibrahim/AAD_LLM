@@ -35,7 +35,9 @@ def build_candidate_evaluation_service(*, problem, **kwargs):
     )
 
 
-@pytest.mark.parametrize("mismatch", ["none", "budget", "iterations", "execution_contract"])
+@pytest.mark.parametrize(
+    "mismatch", ["none", "budget", "iterations", "execution_contract", "engine_history", "missing"]
+)
 def test_checkpoint_compatibility_does_not_silently_cold_restart(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mismatch: str
 ) -> None:
@@ -46,10 +48,19 @@ def test_checkpoint_compatibility_does_not_silently_cold_restart(
     saved._current_iteration = 1 if mismatch != "iterations" else 0
     if mismatch != "execution_contract":
         saved._execution_contract = CANDIDATE_EXECUTION_VERSION
-    engine = SimpleNamespace(f=saved, generation=1)
-    monkeypatch.setattr(module, "load_synthesis_checkpoint", lambda path: engine)
+    saved._experiment_id = 1
+    engine = SimpleNamespace(
+        f=saved,
+        generation=1,
+        budget=saved._config.iterations,
+        run_history=[object()] if mismatch != "engine_history" else [object(), object()],
+        population=[object()],
+    )
+    if mismatch != "missing":
+        monkeypatch.setattr(module, "load_synthesis_checkpoint", lambda path: engine)
+        (tmp_path / "llamea_config.pkl").write_bytes(b"fixture")
     fresh_engine = MagicMock()
-    monkeypatch.setattr(module, "LLaMEA", fresh_engine)
+    monkeypatch.setattr(module, "FailureAwareLLaMEA", fresh_engine)
     session = object.__new__(LLaMEASession)
     session._archive_dir = tmp_path
     session._experiment_id = 1
@@ -57,16 +68,40 @@ def test_checkpoint_compatibility_does_not_silently_cold_restart(
     session._config = SynthesisSettings(budget=100)
     session._llm_client = MagicMock()
     session._logger = MagicMock()
-    (tmp_path / "llamea_config.pkl").write_bytes(b"fixture")
     evaluator = MagicMock()
     prompts = SynthesisPrompts(task="task", example="example", format="format")
     if mismatch == "none":
         assert session._create_synthesis_engine(evaluator, prompts) is engine
         assert engine.f is evaluator
+        assert engine._restored_population
     else:
         with pytest.raises(ValueError, match="Cannot safely restore"):
             session._create_synthesis_engine(evaluator, prompts)
     fresh_engine.assert_not_called()
+
+
+def test_zero_iteration_resume_refuses_advanced_checkpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import evolution.infra.engines.llamea.runner as module
+
+    checkpoint = tmp_path / "llamea_config.pkl"
+    checkpoint.write_bytes(b"fixture")
+    saved_engine = SimpleNamespace(generation=1, run_history=[object()])
+    monkeypatch.setattr(module, "load_synthesis_checkpoint", lambda path: saved_engine)
+    fresh_engine = MagicMock()
+    monkeypatch.setattr(module, "FailureAwareLLaMEA", fresh_engine)
+    session = object.__new__(LLaMEASession)
+    session._archive_dir = tmp_path
+    session._experiment_id = 1
+    session._initial_iteration = 0
+    prompts = SynthesisPrompts(task="task", example="example", format="format")
+
+    with pytest.raises(SynthesisResumeError, match="without matching database records"):
+        session._create_synthesis_engine(MagicMock(), prompts)
+
+    fresh_engine.assert_not_called()
+    assert checkpoint.read_bytes() == b"fixture"
 
 
 def test_incompatible_resume_does_not_mark_experiment_failed(
@@ -88,6 +123,31 @@ def test_incompatible_resume_does_not_mark_experiment_failed(
     with pytest.raises(SynthesisResumeError, match="incompatible"):
         session._execute_loop()
     session._experiment.fail.assert_not_called()
+    session._db_repo.mark_failed.assert_not_called()
+
+
+def test_short_synthesis_cannot_be_saved_as_completed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import evolution.infra.engines.llamea.runner as module
+
+    session = object.__new__(LLaMEASession)
+    session._problem = MagicMock()
+    session._synthesis_mode = SynthesisMode.EXPLICIT
+    session._prompt_strategy = "baseline"
+    session._config = SynthesisSettings(budget=100, iterations=10)
+    session._experiment = MagicMock()
+    session._experiment_id = 1
+    session._db_repo = MagicMock()
+    session._db_repo.get_experiment_status.return_value = ("running", 9)
+    session._setup_evaluator = MagicMock()
+    session._create_synthesis_engine = MagicMock()
+    monkeypatch.setattr(module, "build_synthesis_prompts", MagicMock())
+
+    with pytest.raises(SynthesisResumeError, match="expected 10 persisted generations, found 9"):
+        session._execute_loop()
+    session._experiment.complete.assert_not_called()
+    session._db_repo.save_experiment.assert_not_called()
     session._db_repo.mark_failed.assert_not_called()
 
 

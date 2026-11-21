@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pandas as pd
 import pytest
+from sqlalchemy import create_engine
 from study_fixtures import run_parameters
 
 from benchmark.application.benchmark_config import BenchmarkConfig
@@ -25,6 +26,7 @@ from benchmark.domain.services.transfer import TransferAnalysisEngine
 from benchmark.infra.io.trace_repository import IOHTraceReader
 from benchmark.infra.logging import BenchmarkLogger
 from shared.domain.problem import ObservationSample
+from shared.infra.database.tables import Base, ExperimentORM, IterationORM
 
 
 def audit_for(service: BenchmarkCoordinator) -> BenchmarkAuditService:
@@ -103,39 +105,79 @@ def test_audit_excludes_missing_code_and_keeps_baselines_without_models(
 
 
 def test_audit_notebook_runs_without_campaign(
-    transfer_service: BenchmarkCoordinator,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import plotly.graph_objects as go
+    from plotly.graph_objects import Figure
 
-    import shared.config
-    import shared.infra.di as composition
-
-    monkeypatch.setattr(
-        composition,
-        "container_scope",
-        lambda *args, **kwargs: nullcontext(
-            SimpleNamespace(get=lambda cls: audit_for(transfer_service))
-        ),
-    )
-    monkeypatch.setattr(shared.config, "RESULTS_DIR", tmp_path)
-    monkeypatch.setattr(go.Figure, "show", lambda self: None)
+    database = tmp_path / "audit.sqlite3"
+    engine = create_engine(f"sqlite:///{database}")
+    Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        for experiment_id, configured, recorded, status in (
+            (1, 10, 10, "completed"),
+            (2, 20, 20, "completed"),
+            (3, 10, 9, "running"),
+        ):
+            connection.execute(
+                ExperimentORM.__table__.insert().values(
+                    id=experiment_id,
+                    problem_id=1,
+                    dim=10,
+                    mode="explicit",
+                    llm_name="openai.gpt-6-luna",
+                    noise_std=0.0,
+                    status=status,
+                    max_iterations=configured,
+                )
+            )
+            connection.execute(
+                IterationORM.__table__.insert(),
+                [
+                    {
+                        "experiment_id": experiment_id,
+                        "algorithm_name": "candidate",
+                        "final_error": 21 - generation,
+                        "evaluations_used": 100,
+                        "runtime_seconds": 0.1,
+                        "budget_consumed_pct": 1.0,
+                        "evals_per_second": 1000.0,
+                        "code_lines": 1,
+                        "code_length": 10,
+                        "code_path": str(tmp_path / "unavailable_candidate.py"),
+                        "convergence_threshold": 1e-6,
+                    }
+                    for generation in range(1, recorded + 1)
+                ],
+            )
+    engine.dispose()
+    original_database = database.read_bytes()
+    checkpoint = tmp_path / "evolution_state/10D/std_0.0/f1/experiment_3/llamea_config.pkl"
+    checkpoint.parent.mkdir(parents=True)
+    checkpoint.write_bytes(b"checkpoint existence only")
+    monkeypatch.setenv("AAD_SYNTHESIS_DB", str(database))
     notebook = json.loads(
         (Path(__file__).resolve().parents[1] / "notebooks/04_audit.ipynb").read_text()
     )
-    namespace = {"display": lambda value: None}
-    try:
-        for cell in notebook["cells"]:
-            if cell["cell_type"] == "code":
-                code = "".join(cell["source"])
-                exec(compile(code, "04_audit.ipynb", "exec"), namespace)
-    finally:
-        if "services" in namespace:
-            namespace["services"].close()
-    assert (tmp_path / "reports/benchmark_coverage_v2.csv").is_file()
-    assert (tmp_path / "reports/synthesis_gaps_v1.csv").is_file()
-    assert transfer_service.trials.state_repo.records == {}
+    namespace = {}
+    displayed = []
+    for cell in notebook["cells"]:
+        if cell["cell_type"] == "code":
+            code = "".join(cell["source"])
+            exec(compile(code, "04_audit.ipynb", "exec"), namespace)
+            namespace.update(display=displayed.append, RESULTS_PATH=tmp_path)
+
+    audit = namespace["audit"]
+    assert sorted(audit.coverage_by_model["planned_cells"]) == [60, 60, 80, 480, 480, 480]
+    assert audit.coverage_by_model["benchmark_completed_cells"].sum() == 0
+    assert len(audit.synthesis_gaps) == 1519
+    assert namespace["incomplete_histories"]["experiment_id"].tolist() == [3]
+    assert namespace["incomplete_histories"]["checkpoint"].tolist() == ["Present"]
+    assert namespace["analysis"].pairs["absolute_improvement"].tolist() == [10]
+    assert len([figure for figure in displayed if isinstance(figure, Figure)]) == 3
+    assert not (tmp_path / "reports").exists()
+    assert database.read_bytes() == original_database
+    assert checkpoint.read_bytes() == b"checkpoint existence only"
 
 
 class MemoryState:

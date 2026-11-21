@@ -1,6 +1,7 @@
 """Discover executable conditions and project the same work into audit tables."""
 
 import hashlib
+from collections.abc import Sequence
 from pathlib import Path
 
 import pandas as pd
@@ -236,6 +237,21 @@ class BenchmarkWorkload:
     def audit_workload(self, solver_type: str = "all", *, config: BenchmarkConfig) -> pd.DataFrame:
         """Read-only presentation of the same tasks used for execution."""
         return pd.DataFrame(task.audit_row() for task in self.discover(solver_type, config=config))
+
+    def audit_planned_native_workload(
+        self,
+        champions: dict[str, Champion],
+        target_conditions: Sequence[tuple[int, float, int]],
+        *,
+        config: BenchmarkConfig,
+    ) -> pd.DataFrame:
+        """Inspect native trial provenance only for the supplied study plan."""
+        tasks = [
+            self._champion_task(key, candidate, candidate["noise_std"], config=config)
+            for key, candidate in champions.items()
+        ]
+        tasks.extend(self._baseline_tasks(list(target_conditions), config=config))
+        return pd.DataFrame(task.audit_row() for task in tasks)
 
     def audit_champions_workload(
         self, include_noise_robustness: bool = False, *, config: BenchmarkConfig

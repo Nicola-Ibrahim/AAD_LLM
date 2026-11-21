@@ -198,6 +198,17 @@ class LLaMEASession:
             evaluator = self._setup_evaluator()
             synthesis_engine = self._create_synthesis_engine(evaluator, prompts)
             synthesis_engine.run()
+            status, recorded = self._db_repo.get_experiment_status(self._experiment_id)
+            if (
+                status != "running"
+                or recorded != self._config.iterations
+                or len(self._experiment.iterations) != recorded
+            ):
+                raise SynthesisResumeError(
+                    f"Experiment #{self._experiment_id} did not finish cleanly: "
+                    f"expected {self._config.iterations} persisted generations, found {recorded} "
+                    f"with status {status!r}. Existing results were kept."
+                )
         except SynthesisResumeError:
             raise
         except Exception as e:
@@ -216,14 +227,26 @@ class LLaMEASession:
             records = self._db_repo.load_by_ids([self._experiment_id])
             if not records or records[0].llm_name != self._model_name:
                 raise ValueError(f"Cannot resume experiment #{self._experiment_id} for this model")
-            if records[0].budget != self._config.budget:
+            recorded = records[0]
+            if recorded.status != "running" or len(recorded.iterations) != self._initial_iteration:
+                raise SynthesisResumeError(
+                    f"Experiment #{self._experiment_id} changed since its resume was planned. "
+                    "Existing results were kept."
+                )
+            if recorded.budget != self._config.budget:
                 raise ValueError("Cannot resume with a changed or unknown synthesis budget.")
             if not (self._archive_dir / "llamea_config.pkl").is_file():
                 raise ValueError(
                     "Cannot resume without a synthesis checkpoint. Explicitly replace the "
                     "experiment instead; existing results were not removed."
                 )
-            self._experiment = records[0]
+            self._experiment = recorded
+            # A running row has no saved champion summary. Rebuild it from the
+            # persisted prefix before scoring any subsequent candidates.
+            if incumbent := recorded.incumbent:
+                recorded.best_iteration = incumbent.iteration
+                recorded.best_algorithm = incumbent.algorithm_name
+                recorded.best_final_error = incumbent.fitness.final_error
         if self._restart:
             records = self._db_repo.load_by_ids([self._experiment_id])
             if not records or records[0].llm_name != self._model_name:
@@ -275,9 +298,16 @@ class LLaMEASession:
         """Creates a new LLaMEA synthesis engine or resumes from a warm-start session state if it exists."""
         state_file = self._archive_dir / "llamea_config.pkl"
 
-        if state_file.exists():
+        if self._initial_iteration > 0 or state_file.exists():
             try:
                 synthesis_engine = load_synthesis_checkpoint(state_file)
+                if self._initial_iteration == 0 and (
+                    synthesis_engine.generation or synthesis_engine.run_history
+                ):
+                    raise SynthesisResumeError(
+                        f"Checkpoint for experiment #{self._experiment_id} has generations "
+                        "without matching database records. Existing results were kept."
+                    )
                 saved_evaluator = synthesis_engine.f
                 saved_experiment = getattr(saved_evaluator, "_experiment", None)
                 saved_model_name = getattr(saved_experiment, "llm_name", None)
@@ -289,12 +319,18 @@ class LLaMEASession:
                         not isinstance(saved, Evaluator)
                         or saved._config != self._config
                         or saved._current_iteration != self._initial_iteration
+                        or saved._experiment_id != self._experiment_id
+                        or synthesis_engine.budget != self._config.iterations
+                        or synthesis_engine.generation != self._initial_iteration
+                        or len(synthesis_engine.run_history) != self._initial_iteration
+                        or not synthesis_engine.population
                         or getattr(saved, "_execution_contract", None)
                         != CANDIDATE_EXECUTION_VERSION
                     ):
                         raise ValueError(
                             "Saved synthesis settings or iteration count do not match."
                         )
+                    synthesis_engine._restored_population = True
                 synthesis_engine.f = evaluator
                 synthesis_engine.llm = self._llm_client
                 self._logger.resuming(
@@ -304,6 +340,8 @@ class LLaMEASession:
                 )
                 synthesis_engine.logger = SimpleNamespace(dirname=str(self._archive_dir))
                 return synthesis_engine
+            except SynthesisResumeError:
+                raise
             except Exception as e:
                 if self._initial_iteration > 0:
                     raise SynthesisResumeError(

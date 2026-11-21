@@ -77,6 +77,17 @@ class DummyLLM:
         return sol
 
 
+class InterruptedLLM(DummyLLM):
+    def __init__(self, stop_after: int) -> None:
+        super().__init__()
+        self.stop_after = stop_after
+
+    def sample_solution(self, prompt, parent_ids=None, **kwargs):
+        if self.calls == self.stop_after:
+            raise KeyboardInterrupt
+        return super().sample_solution(prompt, parent_ids, **kwargs)
+
+
 class FailingProblem(BBOBProblem):
     @property
     def lower_bound(self):
@@ -541,6 +552,51 @@ def test_checkpoint_logger_and_resumption(temp_dir, db_session_factory):
     loaded_runs = repo.load(problem_id=1, mode=SynthesisMode.EXPLICIT)
     assert len(loaded_runs) == 1
     assert loaded_runs[0].experiment_id == res1.experiment_id
+
+
+@pytest.mark.parametrize("stop_after", [1, 9])
+def test_resume_evaluates_remaining_candidates_and_keeps_existing_incumbent(
+    tmp_path, db_session_factory, stop_after: int
+) -> None:
+    repository = SQLiteSynthesisRepository(db_session_factory)
+    problem = BBOBProblem(problem_id=1, dim=2, noise_strategy=NoNoiseStrategy(), instance_id=1)
+    config = SynthesisSettings(iterations=10, budget=1)
+    experiment_id = repository.create_experiment(
+        problem=ProblemProfile(
+            problem_id=1, dim=2, noise_std=0.0, true_optimum=problem.true_optimum
+        ),
+        mode=SynthesisMode.EXPLICIT,
+        llm_name=TEST_MODEL.model_id,
+        budget=config.budget,
+        max_iterations=config.iterations,
+    )
+    session_args = dict(
+        problem=problem,
+        experiment_id=experiment_id,
+        prompt_strategy=PromptStrategy.BASELINE,
+        db_repo=repository,
+        code_repo=FileCodeRepository(tmp_path / "code"),
+        config=config,
+        checkpoint_root=tmp_path / "checkpoints",
+    )
+    first = LLaMEASession(**session_args, llm_client=InterruptedLLM(stop_after))
+    with pytest.raises(KeyboardInterrupt):
+        first.run()
+
+    assert repository.get_experiment_status(experiment_id) == ("running", stop_after)
+    assert (first._archive_dir / "llamea_config.pkl").is_file()
+
+    resumed_llm = DummyLLM()
+    resumed = LLaMEASession(**session_args, llm_client=resumed_llm, initial_iteration=stop_after)
+    result = resumed.run()
+
+    assert resumed_llm.calls == config.iterations - stop_after
+    assert len(result.run_history) == config.iterations
+    assert repository.get_experiment_status(experiment_id) == ("completed", config.iterations)
+    (stored,) = repository.load_by_ids([experiment_id])
+    assert stored.best_iteration == 1
+    assert stored.best_final_error == stored.iterations[0].fitness.final_error
+    assert not resumed._archive_dir.exists()
 
 
 def test_auto_experiment_id_and_session_persistence(temp_dir, db_session_factory):
