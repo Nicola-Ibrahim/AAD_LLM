@@ -4,63 +4,167 @@
 
 \chapter{Introduction}\label{chap:intro}
 
-Continuous optimization is used in many scientific and engineering applications, including numerical physical modeling, parameter estimation, robotic control, and systems engineering. In many of these problems, the relationship between the parameters and the objective value is not available in a form that can be analyzed directly. Instead, candidate solutions must be evaluated through simulations, measurements, or other computational procedures. This motivates the use of continuous black-box optimization, where an optimization algorithm searches for good solutions using only evaluations of the objective function.
+Continuous optimization is used in many scientific and engineering applications,
+including numerical modeling, parameter estimation, robotic control, and systems
+engineering. In many of these problems, the relationship between the parameters
+and the objective value is not available in a form that can be analyzed
+directly. Instead, candidate solutions must be evaluated through simulations,
+measurements, or other computational procedures. This motivates the use of
+continuous black-box optimization, where an optimization algorithm searches for
+good solutions using only evaluations of the objective function.
 
-In practical settings, these evaluations are not always deterministic. Measurements can be affected by sensor uncertainty, while simulations may contain stochastic components or numerical effects. As a result, repeated evaluations of the same candidate solution can produce different objective values. This fitness noise can make it difficult for an optimization algorithm to distinguish genuine improvements from variations caused by the evaluation process. The problem becomes particularly relevant when the differences between competing candidate solutions are small, since an optimizer may make search decisions based on unreliable fitness comparisons.
+In practical settings, these evaluations are not always deterministic.
+Measurements can be affected by sensor uncertainty, while simulations may
+contain stochastic components or numerical effects. As a result, repeated
+evaluations of the same candidate solution can produce different objective
+values. This fitness noise can make it difficult for an optimization algorithm
+to distinguish genuine improvements from variations caused by the evaluation
+process. The problem becomes particularly relevant when the differences between
+competing candidate solutions are small, since an optimizer may make search
+decisions based on unreliable fitness comparisons.
 
-At the same time, the design of optimization algorithms remains a largely expert-driven process. Developing a suitable search heuristic requires decisions about how candidate solutions are generated, how information from previous evaluations is used, and how the search is adapted to different problem characteristics. Automated Algorithm Design (AAD) aims to reduce this manual effort by allowing computational systems to construct and modify algorithms automatically. Recent advances in Large Language Models (LLMs) have made this direction particularly interesting because language models can generate executable algorithmic code and use feedback from previous evaluations to propose new variants.
+At the same time, the design of optimization algorithms remains a largely
+expert-driven process. Developing a suitable search heuristic requires decisions
+about how candidate solutions are generated, how information from previous
+evaluations is used, and how the search is adapted to different problem
+characteristics. Automated Algorithm Design (AAD) aims to reduce this manual
+effort by allowing computational systems to construct and modify algorithms
+automatically. Recent advances in Large Language Models (LLMs) have made this
+direction particularly interesting because language models can generate
+executable algorithmic code and use feedback from previous evaluations to
+propose new variants.
 
-This thesis investigates the combination of these two challenges: continuous black-box optimization under stochastic fitness evaluation and LLM-based automated algorithm design. The central question is whether an LLM can generate useful continuous optimization heuristics when the feedback used during algorithm synthesis is affected by controlled fitness noise.
+This thesis investigates LLM-based automated algorithm design for continuous
+black-box optimization under stochastic fitness evaluation. The central question
+is whether this synthesis process can produce useful optimization heuristics
+when candidate algorithms operate with controlled fitness noise.
 
 %-------------------------------------------------------------------------------
 \section{Continuous Black-Box Optimization and Noisy Evaluation}
 \label{sec:intro_optimization}
 %-------------------------------------------------------------------------------
 
-Continuous black-box optimization considers problems in which an algorithm searches a continuous domain without access to analytical gradients or an explicit mathematical representation of the objective function. The optimizer instead relies on point evaluations to determine how the search should proceed. General-purpose derivative-free methods such as Nelder-Mead \cite{Nelder1965}, Differential Evolution (DE) \cite{Storn1997}, Particle Swarm Optimization (PSO) \cite{Kennedy1995}, and Covariance Matrix Adaptation Evolution Strategy (CMA-ES) \cite{Hansen2001} have been developed to address different classes of continuous optimization problems.
+Continuous black-box optimization considers problems in which an algorithm
+searches a continuous domain without access to analytical gradients or an
+explicit mathematical representation of the objective function. The optimizer
+instead relies on point evaluations to determine how the search should proceed.
+General-purpose derivative-free methods such as Nelder-Mead \cite{Nelder1965},
+Differential Evolution (DE) \cite{Storn1997}, Particle Swarm Optimization (PSO)
+\cite{Kennedy1995}, and Covariance Matrix Adaptation Evolution Strategy (CMA-ES)
+\cite{Hansen2001} have been developed to address different classes of continuous
+optimization problems.
 
-The difficulty of such problems depends on the structure of the underlying objective function. Continuous search spaces can contain ill-conditioned regions, non-separable variables, or multiple local optima, making the choice of an effective search strategy problem-dependent. The No Free Lunch theorem further illustrates that no single optimization method can be expected to perform best across all possible problem classes without making assumptions about the problem domain \cite{Burke2013}. Consequently, selecting and adapting an optimization strategy remains an important part of practical optimization.
+The difficulty of such problems depends on the structure of the underlying
+objective function. Continuous search spaces can contain ill-conditioned
+regions, non-separable variables, or multiple local optima, making the choice of
+an effective search strategy problem-dependent. The No Free Lunch theorem
+further illustrates that no single optimization method can be expected to
+perform best across all possible problem classes without making assumptions
+about the problem domain \cite{Burke2013}. Consequently, selecting and adapting
+an optimization strategy remains an important part of practical optimization.
 
-The situation becomes more difficult when objective evaluations are stochastic. In a deterministic setting, evaluating the same candidate under identical conditions produces the same objective value. With noisy evaluation, however, the observed fitness contains an additional random component. An optimizer may therefore select a candidate because it received a favorable noise realization rather than because it has a genuinely better underlying objective value.
+The situation becomes more difficult when objective evaluations are stochastic.
+In a deterministic setting, evaluating the same candidate under identical
+conditions produces the same objective value. With noisy evaluation, however,
+the observed fitness contains an additional random component. An optimizer may
+therefore select a candidate because it received a favorable noise realization
+rather than because it has a genuinely better underlying objective value.
 
-This issue is relevant to practical engineering problems where objective values may be obtained from physical measurements or simulation procedures. For example, parameter identification for electric vehicle batteries, finite-element model updating, robotic calibration, and power-system monitoring can involve measurements affected by environmental conditions, sensor uncertainty, or other sources of variation. In such settings, treating every observed fitness difference as an exact indication of solution quality can lead to unreliable search decisions.
+This issue is relevant to practical engineering problems where objective values
+may be obtained from physical measurements or simulation procedures. For
+example, parameter identification for electric vehicle batteries, finite-element
+model updating, robotic calibration, and power-system monitoring can involve
+measurements affected by environmental conditions, sensor uncertainty, or other
+sources of variation. In such settings, treating every observed fitness
+difference as an exact indication of solution quality can lead to unreliable
+search decisions.
 
-Common approaches to noisy optimization include repeated evaluations, sample averaging, larger populations, or modifications to the selection mechanism. These approaches can reduce the influence of individual noisy observations, but they may also increase the number of objective evaluations required. This motivates investigating whether optimization heuristics can instead be designed or adapted to account for uncertain fitness information as part of their search behavior.
+Common approaches to noisy optimization include repeated evaluations, sample
+averaging, larger populations, or modifications to the selection mechanism.
+These approaches can reduce the influence of individual noisy observations, but
+they may also increase the number of objective evaluations required. This
+motivates the study of optimization heuristics that account for uncertain
+fitness information in their search behavior.
 
 %-------------------------------------------------------------------------------
 \section{Automated Algorithm Design with Large Language Models}
 \label{sec:intro_aad}
 %-------------------------------------------------------------------------------
 
-The development of effective optimization heuristics traditionally relies on expert knowledge and repeated experimentation. An algorithm designer must determine which search mechanisms are appropriate, combine them into a working procedure, and evaluate the resulting algorithm on representative problems. When the characteristics of the target problem change, these decisions may need to be revisited. Automated Algorithm Design seeks to automate parts of this process by allowing algorithms or algorithmic components to be constructed through computational search \cite{Burke2013, vanRijn2016}.
+Developing optimization heuristics involves selecting suitable search
+mechanisms, combining them into a working procedure, and evaluating the
+resulting algorithm on representative problems. These decisions may need to be
+revisited when the problem characteristics change. Automated Algorithm Design
+seeks to automate parts of this process by allowing algorithms or algorithmic
+components to be constructed through computational search
+\cite{Burke2013, vanRijn2016}.
 
-Early AAD and hyper-heuristic approaches often relied on predefined components or grammar-based representations from which candidate algorithms could be assembled. While such approaches can explore large spaces of algorithmic configurations, the search space is ultimately constrained by the components and representations provided by the designer.
+Early AAD and hyper-heuristic approaches often relied on predefined components
+or grammar-based representations from which candidate algorithms could be
+assembled. While such approaches can explore large spaces of algorithmic
+configurations, the search space is ultimately constrained by the components and
+representations provided by the designer.
 
-Large Language Models provide an alternative way of generating algorithmic candidates. Because LLMs can generate source code, they can be used to propose complete executable heuristics rather than selecting only from a fixed collection of predefined components. Recent systems such as FunSearch \cite{Romera2023}, Evolution of Heuristics (EoH) \cite{Liu2024}, and LLaMEA \cite{LLaMEA2024} have demonstrated the use of language models within iterative search and evaluation processes for automated algorithm discovery.
+Large Language Models provide an alternative way of generating algorithmic
+candidates. Because LLMs can generate source code, they can be used to propose
+complete executable heuristics rather than selecting only from a fixed
+collection of predefined components. Recent systems such as FunSearch
+\cite{Romera2023}, Evolution of Heuristics (EoH) \cite{Liu2024}, and LLaMEA
+\cite{LLaMEA2024} have demonstrated the use of language models within iterative
+search and evaluation processes for automated algorithm discovery.
 
-In this setting, algorithm generation becomes a feedback-driven process. A model proposes an algorithm, the generated program is executed and evaluated, and information about its performance can be used to guide subsequent generations. This creates a connection between the reliability of the evaluation process and the algorithms discovered by the model. If the feedback is deterministic, a candidate can be evaluated consistently. If the feedback is stochastic, however, the model and the surrounding search process must operate with uncertain performance information.
+In this setting, algorithm generation becomes a feedback-driven process. A model
+proposes an algorithm, the generated program is executed and evaluated, and
+information about its performance can be used to guide subsequent generations.
+The reliability of this evaluation therefore matters for the algorithms selected
+during synthesis. Even with deterministic objective evaluations, the measured
+performance of an algorithm may vary across independent runs. Noisy fitness
+evaluations introduce further uncertainty, which can affect how generated
+algorithms are compared and selected during synthesis.
 
-This raises an important question for LLM-based AAD: whether the ability to generate executable optimization heuristics also allows the synthesis process to produce heuristics that can operate effectively under noisy fitness evaluation.
+This raises an important question for LLM-based AAD: whether the ability to
+generate executable optimization heuristics also allows the synthesis process to
+produce heuristics that can operate effectively under noisy fitness evaluation.
 
 %-------------------------------------------------------------------------------
 \section{Research Gap}
 \label{sec:intro_gap}
 %-------------------------------------------------------------------------------
 
-Recent work has shown that LLMs can be incorporated into automated search processes to generate and refine executable algorithms. However, existing studies of LLM-based algorithm synthesis have primarily considered deterministic evaluation settings. Candidate algorithms are commonly assessed on objective functions or problem instances for which the same candidate produces consistent feedback across evaluations.
+Recent work has shown that LLMs can be incorporated into automated search
+processes to generate and refine executable algorithms. LLaMEA, for example,
+evaluates generated metaheuristics on the noiseless BBOB suite
+\cite{LLaMEA2024}. The effects of stochastic fitness evaluation on such
+synthesis processes remain less well understood.
 
-This leaves an important aspect of automated algorithm design less understood. In a stochastic optimization environment, the performance observed by the synthesis process is itself uncertain. A candidate may appear better because of a favorable noise realization or worse because of an unfavorable one. Such variation can influence which candidate is retained and consequently which algorithmic ideas are presented to the LLM in later iterations.
+Under noisy objective evaluation, the measured performance of a generated
+algorithm may reflect both its search behavior and random variation in the
+observed fitness. This uncertainty can influence which candidate is retained and
+which algorithmic ideas are presented to the LLM in later iterations.
 
-The question is therefore not only whether LLMs can generate effective optimization algorithms, but also whether the resulting synthesis process can produce heuristics that remain effective when the fitness information used to guide the search is noisy. In particular, there is limited empirical understanding of how LLM-generated continuous optimization heuristics behave across different levels of controlled fitness noise and how their performance compares with established optimization methods under the same conditions.
+It also remains unclear how LLM-generated continuous optimization heuristics
+perform across different levels of controlled fitness noise and how their
+robustness compares with established optimization methods under the same
+conditions.
 
-This thesis addresses this gap by studying LLM-based automated algorithm design for continuous black-box optimization under controlled stochastic fitness evaluation. The study uses the LLaMEA framework with locally executed models. Different model scales and prompt configurations are considered to investigate how the synthesis process behaves when candidate algorithms are evaluated under stochastic fitness.
+To investigate these questions, this thesis uses the LLaMEA framework with
+locally executed models. Different model scales and prompt configurations are
+examined under controlled stochastic fitness evaluation.
 
-Figure~\ref{fig:intro_paradigm} provides a high-level view of the research setting. An LLM generates candidate optimization algorithms, the candidates are executed against a benchmark environment, and their observed performance is used as feedback for subsequent algorithm generation. In this thesis, the evaluation environment is extended so that the feedback available to the optimization process can be affected by controlled fitness noise.
+Figure~\ref{fig:intro_paradigm} summarizes the synthesis process. An LLM
+generates candidate optimizers that are executed on benchmark functions with
+controlled fitness noise. Their assessed performance and execution feedback are
+then used to guide subsequent generations.
 
 \begin{figure}[htbp]
     \centering
     \input{figures/paradigm_figure}
-    \caption[Closed-loop automated algorithm design]{\textbf{Closed-loop automated algorithm design.} High-level view of the process investigated in this thesis. The LLM generates optimization algorithms that are evaluated on target functions, and the resulting performance and execution feedback is used to guide subsequent generations.}
+    \caption[Closed-loop automated algorithm design]{
+        \textbf{Closed-loop automated algorithm design.}
+        An LLM generates candidate optimizers that are executed using noisy
+        objective evaluations. Their assessed performance and execution
+        feedback guide subsequent generations.
+    }
     \label{fig:intro_paradigm}
 \end{figure}
 
@@ -69,7 +173,10 @@ Figure~\ref{fig:intro_paradigm} provides a high-level view of the research setti
 \label{sec:intro_objectives}
 %-------------------------------------------------------------------------------
 
-The overall objective of this thesis is to investigate whether LLM-generated continuous optimization heuristics can operate effectively when the fitness evaluations used during optimization are stochastic. Three research questions structure the investigation.
+The overall objective of this thesis is to investigate whether LLM-generated
+continuous optimization heuristics can operate effectively when the fitness
+evaluations used during optimization are stochastic. Three research questions
+structure the investigation.
 
 \subsection*{Research Question 1}
 
@@ -77,22 +184,33 @@ The overall objective of this thesis is to investigate whether LLM-generated con
 extended with controlled stochastic evaluation to study optimization
 under fitness noise?}
 
-The first objective is to establish an evaluation setting in which the effect of fitness noise can be studied in a controlled manner. The evaluation environment should introduce different levels of stochasticity while retaining access to the underlying clean objective for diagnostic analysis. This provides a common basis for evaluating both generated heuristics and established optimization methods.
+The first objective is to establish an evaluation setting in which the effect of
+fitness noise can be studied in a controlled manner. The evaluation environment
+should introduce different levels of stochasticity while retaining access to the
+underlying clean objective for diagnostic analysis. This provides a common basis
+for evaluating both generated heuristics and established optimization methods.
 
 \subsection*{Research Question 2}
 
 \textit{Can Large Language Models autonomously synthesize continuous
 optimization heuristics that are resilient to noise?}
 
-
-The second objective is to investigate whether LLM-based algorithm synthesis can produce heuristics that perform effectively when fitness evaluations are noisy. Rather than manually introducing noise-specific mechanisms into an optimizer, the study examines whether useful search behavior can emerge through the automated synthesis process.
+The second objective is to investigate whether LLM-based algorithm synthesis can
+produce heuristics that perform effectively when fitness evaluations are noisy.
+Rather than manually introducing noise-specific mechanisms into an optimizer,
+the study examines whether useful search behavior can emerge through the
+automated synthesis process.
 
 \subsection*{Research Question 3}
 
 \textit{How robust are LLM-generated heuristics across different noise
 conditions compared with established optimization methods?}
 
-The third objective is to evaluate the generated heuristics relative to established continuous optimization methods. The comparison considers different problem dimensions and noise conditions in order to characterize how the performance of generated and conventional algorithms changes as the evaluation becomes increasingly uncertain.
+The third objective is to evaluate the generated heuristics relative to
+established continuous optimization methods. The comparison considers different
+problem dimensions and noise conditions in order to characterize how the
+performance of generated and conventional algorithms changes as the evaluation
+becomes increasingly uncertain.
 
 %-------------------------------------------------------------------------------
 \section{Contributions}
@@ -104,13 +222,23 @@ This thesis makes three main contributions.
 \begin{enumerate}
 
     \item \textbf{Controlled stochastic evaluation framework:}
-    A controlled evaluation framework is developed for studying continuous black-box optimization under stochastic fitness. The framework introduces controlled fitness noise into benchmark evaluations while retaining the clean objective information required for diagnostic analysis.
+    A controlled evaluation framework is developed for studying continuous
+    black-box optimization under stochastic fitness. The framework introduces
+    controlled fitness noise into benchmark evaluations while retaining the
+    clean objective information required for diagnostic analysis.
 
     \item \textbf{LLM-based algorithm synthesis under stochastic evaluation:}
-    An empirical study is conducted using the LLaMEA automated algorithm-design framework with locally executed models. Different model scales and prompt configurations are investigated to examine the behavior of the synthesis process under noisy fitness evaluation.
+    An empirical study is conducted using the LLaMEA automated algorithm-design
+    framework with locally executed models. Different model scales and prompt
+    configurations are investigated to examine the behavior of the synthesis
+    process under noisy fitness evaluation.
 
     \item \textbf{Comparative evaluation of generated heuristics:}
-    The generated heuristics are evaluated alongside established optimization methods across different continuous benchmark problems, dimensions, and noise conditions. The resulting measurements provide an empirical basis for assessing the behavior of LLM-generated heuristics relative to conventional optimization approaches.
+    The generated heuristics are evaluated alongside established optimization
+    methods across different continuous benchmark problems, dimensions, and
+    noise conditions. The resulting measurements provide an empirical basis for
+    assessing the behavior of LLM-generated heuristics relative to conventional
+    optimization approaches.
 
 \end{enumerate}
 
@@ -119,11 +247,25 @@ This thesis makes three main contributions.
 \label{sec:intro_scope}
 %-------------------------------------------------------------------------------
 
-The experimental scope of this thesis is limited to single-objective, unconstrained continuous black-box optimization. The evaluation uses selected functions from the continuous BBOB benchmark suite and considers problem dimensions of $D \in \{2,5,10\}$. Fitness noise is introduced at the objective-evaluation level in a controlled manner to study the behavior of optimization methods under different levels of stochastic evaluation.
+The experimental scope of this thesis is limited to single-objective
+continuous black-box optimization with enforced box bounds. The evaluation
+uses selected functions from the continuous BBOB benchmark suite and considers
+problem dimensions of $D \in \{2,10,50\}$. Fitness noise is introduced at
+the objective-evaluation level in a controlled manner to study the behavior
+of optimization methods under different levels of stochastic evaluation.
 
-The automated algorithm-design experiments use the LLaMEA framework with locally executed models. The study focuses on the selected model configurations, benchmark problems, and noise conditions rather than attempting to characterize all LLMs or all forms of automated algorithm design.
+The automated algorithm-design experiments use the LLaMEA framework with locally
+executed models. The study focuses on the selected model configurations,
+benchmark problems, and noise conditions rather than attempting to characterize
+all LLMs or all forms of automated algorithm design.
 
-Other settings, including discrete optimization, constrained optimization, multi-objective optimization, alternative classes of evaluation noise, and other LLM families, are outside the scope of this work. The selected benchmark functions and experimental conditions are intended to provide a controlled basis for comparison and do not represent the full range of practical optimization problems.
+Other settings, including discrete optimization, additional constraints
+beyond the enforced box bounds, multi-objective optimization, alternative
+classes of evaluation noise, and other LLM families, are outside the scope
+of this work. The selected benchmark
+functions and experimental conditions are intended to provide a controlled basis
+for comparison and do not represent the full range of practical optimization
+problems.
 
 % %-------------------------------------------------------------------------------
 % \section{Thesis Outline}
@@ -132,12 +274,30 @@ Other settings, including discrete optimization, constrained optimization, multi
 
 % The remainder of this thesis is structured as follows.
 
-% \textbf{Chapter~\ref{chap:background} (Background and Related Work)} introduces the concepts required for the study. It covers continuous black-box optimization, benchmark functions, fitness noise, classical optimization methods, Automated Algorithm Design, evolutionary search, and LLM-based algorithm synthesis.
+% \textbf{Chapter~\ref{chap:background} (Background and Related Work)}
+% introduces the concepts required for the study. It covers continuous black-box
+% optimization, benchmark functions, fitness noise, classical optimization
+% methods, Automated Algorithm Design, evolutionary search, and LLM-based
+% algorithm synthesis.
 
-% \textbf{Chapter~\ref{chap:methodology} (Methodology)} describes the methodology developed for evaluating and synthesizing optimization heuristics under stochastic fitness. It presents the evaluation framework, noise model, execution environment, evolutionary synthesis process, and prompt configurations.
+% \textbf{Chapter~\ref{chap:methodology} (Methodology)} describes the
+% methodology developed for evaluating and synthesizing optimization heuristics
+% under stochastic fitness. It presents the evaluation framework, noise model,
+% execution environment, evolutionary synthesis process, and prompt
+% configurations.
 
-% \textbf{Chapter~\ref{chap:setup} (Experimental Design)} defines the experimental configuration used to answer the research questions. It describes the benchmark functions, model configurations, problem dimensions, noise levels, evaluation budgets, independent runs, baseline algorithms, and performance measures.
+% \textbf{Chapter~\ref{chap:setup} (Experimental Design)} defines the
+% experimental configuration used to answer the research questions. It describes
+% the benchmark functions, model configurations, problem dimensions, noise
+% levels, evaluation budgets, independent runs, baseline algorithms, and
+% performance measures.
 
-% \textbf{Chapter~\ref{chap:results} (Results)} presents the experimental results. The analysis examines the performance of LLM-generated heuristics across prompt configurations, problem dimensions, and noise conditions and compares them with established optimization methods.
+% \textbf{Chapter~\ref{chap:results} (Results)} presents the experimental
+% results. The analysis examines the performance of LLM-generated heuristics
+% across prompt configurations, problem dimensions, and noise conditions and
+% compares them with established optimization methods.
 
-% \textbf{Chapter~\ref{chap:discussion} (Discussion and Conclusion)} interprets the results in relation to the research questions, discusses the limitations of the study, and summarizes the main conclusions and directions for future work.
+% \textbf{Chapter~\ref{chap:discussion} (Discussion and Conclusion)} interprets
+% the results in relation to the research questions, discusses the limitations
+% of the study, and summarizes the main conclusions and directions for future
+% work.
