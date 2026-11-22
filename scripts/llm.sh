@@ -441,6 +441,7 @@ start_server() {
 
     "${PYTHON_CMD[@]}" -m llama_cpp.server \
         --model "$MODEL_PATH" \
+        --model_alias "${MODEL_PATH##*/}" \
         --host "$HOST" \
         --port "$PORT" \
         --n_ctx "$N_CTX" \
