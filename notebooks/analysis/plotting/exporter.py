@@ -8,7 +8,6 @@ from typing import Literal
 import plotly.graph_objects as go
 
 from benchmark.application.analysis.results import (
-    NoiseRobustnessResult,
     PerformanceAnalysisResult,
     ProfileAnalysisResult,
     ReliabilityAnalysisResult,
@@ -16,7 +15,7 @@ from benchmark.application.analysis.results import (
 from shared.application.diagnostics import report_operation
 from shared.application.errors import StorageError
 
-from . import generalization, performance, profiles, summary
+from . import performance, profiles, summary
 
 PROFILE_DIRECTORIES = {
     "explicit": "02_explicit",
@@ -105,16 +104,6 @@ class AnalysisFigureExporter:
             ) / "fig_10b_fixed_target_attainment.png"
             self.export_figure(summary.build_attainment_figure(results), path)
             return ExportSummary((path,), ())
-
-    def export_noise_robustness(self, results: NoiseRobustnessResult) -> ExportSummary:
-        with report_operation(logging.getLogger("benchmark.exports"), "export noise robustness"):
-            if results.diagnostics:
-                return ExportSummary((), results.diagnostics)
-            target = (
-                self.results_dir / "figures" / "05_noise_robustness" / "success_rate_vs_noise.png"
-            )
-            self.export_figure(generalization.build_noise_success_figure(results), target)
-            return ExportSummary((target,), ())
 
     def export_model_scale(self, results: PerformanceAnalysisResult) -> ExportSummary:
         with report_operation(logging.getLogger("benchmark.exports"), "export model scale"):

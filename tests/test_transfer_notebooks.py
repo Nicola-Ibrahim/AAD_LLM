@@ -14,7 +14,6 @@ import pytest
 from notebooks.analysis.plotting.exporter import AnalysisFigureExporter
 
 from benchmark.application.analysis.analyze_ecdf_and_convergence import AnalyzeEcdfAndConvergence
-from benchmark.application.analysis.analyze_noise_robustness import AnalyzeNoiseRobustness
 from benchmark.application.analysis.analyze_performance import AnalyzePerformance
 from benchmark.application.analysis.analyze_reliability import AnalyzeReliability
 from benchmark.application.analysis.data_loader import AnalysisDataLoader, AnalysisSnapshot
@@ -37,7 +36,6 @@ ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOKS = [
     "analysis/05_reliability_summary.ipynb",
     "analysis/06_convergence_ecdf_and_ablations.ipynb",
-    "analysis/07_noise_robustness.ipynb",
 ]
 
 
@@ -80,7 +78,6 @@ def inputs(tmp_path: Path) -> AnalysisSnapshot:
         solver_folder="qwen_14b_baseline",
         evaluation_kind="native",
     )
-    noise_record = dict(native, noise_std=0.05, evaluation_kind="noise_robustness")
     baseline = dict(
         evaluation_schema_version=BENCHMARK_SCHEMA_VERSION,
         budget=100_000,
@@ -98,7 +95,7 @@ def inputs(tmp_path: Path) -> AnalysisSnapshot:
     baseline_noise = dict(baseline, noise_std=0.05)
     reader = MagicMock()
     reader.load_benchmark_traces.return_value = dataset
-    reader.load_provenance_records.return_value = [native, noise_record, baseline, baseline_noise]
+    reader.load_provenance_records.return_value = [native, baseline, baseline_noise]
     repository = MagicMock()
     repository.get_synthesis_dataframes.return_value = (
         pd.DataFrame([dict(status="completed", llm_name=model)]),
@@ -132,7 +129,6 @@ def inputs(tmp_path: Path) -> AnalysisSnapshot:
         code_reader,
         champions,
         BenchmarkConfig(cross_function_problem_ids=[1, 8]),
-        TransferAnalysisEngine(),
     )
     return loader.load(dims=None, problems=None, noise_stds=None, include_transfer=True)
 
@@ -143,7 +139,6 @@ class AnalysisUseCases:
 
     ecdf_and_convergence: AnalyzeEcdfAndConvergence
     reliability: AnalyzeReliability
-    noise_robustness: AnalyzeNoiseRobustness
     performance: AnalyzePerformance
 
 
@@ -155,7 +150,6 @@ def use_cases(snapshot: AnalysisSnapshot) -> AnalysisUseCases:
         AnalyzeReliability(
             loader, TransferAnalysisEngine(), ReliabilityEngine(), logger=BenchmarkLogger()
         ),
-        AnalyzeNoiseRobustness(loader, TransferAnalysisEngine(), logger=BenchmarkLogger()),
         AnalyzePerformance(
             loader, EcdfConvergenceEngine(), PerformanceMetricsEngine(), logger=BenchmarkLogger()
         ),
@@ -294,7 +288,6 @@ def test_notebooks_run_independently(
     dependencies = {
         AnalyzeEcdfAndConvergence: analysis.ecdf_and_convergence,
         AnalyzeReliability: analysis.reliability,
-        AnalyzeNoiseRobustness: analysis.noise_robustness,
         AnalyzePerformance: analysis.performance,
         AnalysisResultsStore: AnalysisResultsStore(tmp_path / "analysis"),
     }
@@ -317,35 +310,6 @@ def test_notebooks_run_independently(
             scope["services"].close()
     assert png_exports
     assert all(path.endswith(".png") for _, path in png_exports)
-
-
-def test_noise_success_rates_export(inputs: AnalysisSnapshot, png_exports) -> None:
-    from shared.config import RESULTS_DIR
-
-    result = (
-        use_cases(inputs).noise_robustness.execute(dims=None, problems=None, noise_stds=None).value
-    )
-    AnalysisFigureExporter(RESULTS_DIR).export_noise_robustness(result)
-    table = result.aggregate
-    assert len(png_exports) == 1
-    figure, path = png_exports[0]
-    assert path.endswith("success_rate_vs_noise.png")
-    assert {trace.line.dash for trace in figure.data} == {"dash", "solid"}
-    assert set(table["Noise Std"]) == {0.0, 0.05}
-    assert all(trace.error_y.symmetric is False for trace in figure.data)
-
-
-def test_noise_success_rates_do_not_plot_clean_only(inputs: AnalysisSnapshot, png_exports) -> None:
-    from shared.config import RESULTS_DIR
-
-    clean = replace(
-        inputs, noise_records=[r for r in inputs.noise_records if r["noise_std"] == 0.0]
-    )
-    result = (
-        use_cases(clean).noise_robustness.execute(dims=None, problems=None, noise_stds=None).value
-    )
-    AnalysisFigureExporter(RESULTS_DIR).export_noise_robustness(result)
-    assert not png_exports
 
 
 def assert_saved_equal(expected: object, actual: object) -> None:
@@ -373,9 +337,7 @@ def assert_saved_equal(expected: object, actual: object) -> None:
         assert expected == actual
 
 
-@pytest.mark.parametrize(
-    "workflow", ["ecdf_and_convergence", "reliability", "noise_robustness", "performance"]
-)
+@pytest.mark.parametrize("workflow", ["ecdf_and_convergence", "reliability", "performance"])
 def test_analysis_snapshots_round_trip(inputs, tmp_path, workflow):
     options = dict(dims=None, problems=None, noise_stds=None)
     if workflow == "ecdf_and_convergence":
@@ -440,9 +402,9 @@ def test_snapshot_preserves_missing_values_empty_strings_and_table_index(inputs,
     assert_saved_equal(result, store.load(store.save(result)))
 
 
-@pytest.mark.parametrize("workflow", ["reliability", "noise_robustness", "performance"])
+@pytest.mark.parametrize("workflow", ["reliability", "performance"])
 def test_snapshot_preserves_empty_workflow_results(inputs, tmp_path, workflow):
-    empty = replace(inputs, dataset=BenchmarkDataset(), native_records=[], noise_records=[])
+    empty = replace(inputs, dataset=BenchmarkDataset(), native_records=[])
     result = (
         getattr(use_cases(empty), workflow).execute(dims=None, problems=None, noise_stds=None).value
     )

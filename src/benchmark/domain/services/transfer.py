@@ -12,31 +12,6 @@ class TransferAnalysisEngine:
     """Keep transfer results separate from native champion rankings."""
 
     @staticmethod
-    def frozen_noise_records(
-        records: Iterable[dict[str, object]],
-    ) -> list[dict[str, object]]:
-        """Only compare the same clean champion's code across noise levels."""
-        records = list(records)
-        clean_hashes = {
-            (r.get("model"), r.get("strategy"), r["dim"], r["problem_id"]): r.get("code_hash")
-            for r in records
-            if float(r["noise_std"]) == 0.0
-            and r.get("code_hash")
-            and not str(r.get("solver_folder", "")).endswith(("_implicit", "_noisy"))
-        }
-        return [
-            r
-            for r in records
-            if not str(r.get("solver_folder", "")).endswith(("_implicit", "_noisy"))
-            and (
-                "baseline" in r  # Classical reference across noise levels.
-                or r.get("code_hash")
-                == clean_hashes.get((r.get("model"), r.get("strategy"), r["dim"], r["problem_id"]))
-                and bool(r.get("code_hash"))
-            )
-        ]
-
-    @staticmethod
     def condition_table(
         records: Iterable[dict[str, object]],
         threshold: float = 1e-8,
@@ -93,37 +68,6 @@ class TransferAnalysisEngine:
                 "Median Terminal Error",
             ],
         )
-
-    @staticmethod
-    def aggregate_noise(
-        table: pd.DataFrame,
-        primary_strategy: str = "baseline",
-        bootstrap_samples: int = 1000,
-        bootstrap_seed: int = 20260923,
-    ) -> pd.DataFrame:
-        """Equal-weight complete function conditions at each noise level and dimension."""
-        columns = [
-            "Model",
-            "Dim",
-            "Noise Std",
-            "Conditions",
-            "Trials",
-            "Primary Success Rate",
-            "Bootstrap CI Lower",
-            "Bootstrap CI Upper",
-        ]
-        rows = []
-        if table.empty:
-            return pd.DataFrame(columns=columns)
-        for (dim, noise), group in table.groupby(["Dim", "Noise Std"], sort=True):
-            rates = group.rename(columns={"Success Rate": "Primary Success Rate"}).copy()
-            rates.loc[rates["Strategy"] == "classical", "Strategy"] = primary_strategy
-            aggregate = ReliabilityEngine().compute_aggregate_reliability(
-                rates, primary_strategy, bootstrap_samples, bootstrap_seed
-            )
-            for row in aggregate.to_dict("records"):
-                rows.append({**row, "Dim": dim, "Noise Std": noise})
-        return pd.DataFrame(rows, columns=columns)
 
     @staticmethod
     def aggregate_transfer(

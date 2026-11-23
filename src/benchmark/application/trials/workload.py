@@ -91,10 +91,8 @@ class BenchmarkWorkload:
         self,
         key: str,
         champion: Champion,
-        noise_std: float,
         *,
         config: BenchmarkConfig,
-        noise_robustness: bool = False,
         target_problem_id: int | None = None,
     ) -> BenchmarkTask:
         source_problem = champion["problem_id"]
@@ -102,12 +100,12 @@ class BenchmarkWorkload:
         dim = champion["dim"]
         strategy = champion.get("prompt_strategy", "baseline")
         model = champion.get("llm_name", "llamea")
-        native_noise = champion.get("noise_std", 0.0)
+        noise_std = champion.get("noise_std", 0.0)
         mode = GenerationMode(
             champion.get("mode") or ("implicit" if "_implicit" in key else "explicit")
         )
         suffix = (
-            "_implicit" if mode == GenerationMode.IMPLICIT else "_noisy" if native_noise else ""
+            "_implicit" if mode == GenerationMode.IMPLICIT else "_noisy" if noise_std else ""
         )
         solver = f"{model}_{strategy}{suffix}"
         code_path = Path(champion["code_path"])
@@ -122,9 +120,9 @@ class BenchmarkWorkload:
             directory = self.state_repo.transfer_directory(
                 source_problem, dim, noise_std, problem, solver, code_hash or "missing"
             )
-        solver_type = "noise_robustness" if noise_robustness else "champion"
-        row_key = f"{key}_eval_std{noise_std}" if noise_robustness else key
-        display_suffix = " (noise robustness)" if noise_robustness else ""
+        solver_type = "champion"
+        row_key = key
+        display_suffix = ""
         if target_problem_id is not None:
             solver_type = "cross_function"
             row_key = f"{key}_target_f{problem}"
@@ -140,7 +138,7 @@ class BenchmarkWorkload:
             problem_id=problem,
             dim=dim,
             noise_std=noise_std,
-            mode=GenerationMode.EXPLICIT if noise_robustness else mode,
+            mode=mode,
             target_dir=directory,
             inspection=self.inspect_status(
                 directory, code_hash, code_available, champion=True, config=config
@@ -180,32 +178,19 @@ class BenchmarkWorkload:
 
     def discover(self, solver_type: str = "all", *, config: BenchmarkConfig) -> list[BenchmarkTask]:
         """Return typed tasks with exact candidates, in the existing execution order."""
-        allowed = {"all", "champions", "noise_robustness", "cross_function", "baselines"}
+        allowed = {"all", "champions", "cross_function", "baselines"}
         if solver_type not in allowed:
             raise ValueError(f"Unknown benchmark workflow: {solver_type}")
         champions = self.champion_selection.flatten_champions()
         tasks = []
         if solver_type in {"all", "champions"}:
             tasks.extend(
-                self._champion_task(key, c, c.get("noise_std", 0.0), config=config)
+                self._champion_task(key, c, config=config)
                 for key, c in champions.items()
-            )
-        if solver_type in {"all", "noise_robustness"} and config.noise_robustness_enabled:
-            conditions = self._discover_target_conditions(champions, config=config)
-            levels = sorted(
-                {n for n in config.target_noise_stds if n > 0.0}
-                if config.target_noise_stds
-                else {n for _, n, _ in conditions if n > 0.0}
-            )
-            tasks.extend(
-                self._champion_task(key, c, noise, noise_robustness=True, config=config)
-                for key, c in champions.items()
-                if c.get("noise_std", 0.0) == 0.0 and c.get("mode") == GenerationMode.EXPLICIT
-                for noise in levels
             )
         if solver_type in {"all", "cross_function"} and config.cross_function_enabled:
             transfer = [
-                self._champion_task(key, c, 0.0, target_problem_id=target, config=config)
+                self._champion_task(key, c, target_problem_id=target, config=config)
                 for key, c in champions.items()
                 if c.get("noise_std", 0.0) == 0.0
                 and c.get("mode") == GenerationMode.EXPLICIT
@@ -247,22 +232,14 @@ class BenchmarkWorkload:
     ) -> pd.DataFrame:
         """Inspect native trial provenance only for the supplied study plan."""
         tasks = [
-            self._champion_task(key, candidate, candidate["noise_std"], config=config)
+            self._champion_task(key, candidate, config=config)
             for key, candidate in champions.items()
         ]
         tasks.extend(self._baseline_tasks(list(target_conditions), config=config))
         return pd.DataFrame(task.audit_row() for task in tasks)
 
-    def audit_champions_workload(
-        self, include_noise_robustness: bool = False, *, config: BenchmarkConfig
-    ) -> pd.DataFrame:
-        tasks = self.discover("champions", config=config)
-        if include_noise_robustness:
-            tasks.extend(self.discover("noise_robustness", config=config))
-        return pd.DataFrame(task.audit_row() for task in tasks)
-
-    def audit_noise_robustness_workload(self, *, config: BenchmarkConfig) -> pd.DataFrame:
-        return self.audit_workload("noise_robustness", config=config)
+    def audit_champions_workload(self, *, config: BenchmarkConfig) -> pd.DataFrame:
+        return self.audit_workload("champions", config=config)
 
     def audit_cross_function_workload(self, *, config: BenchmarkConfig) -> pd.DataFrame:
         return pd.DataFrame(

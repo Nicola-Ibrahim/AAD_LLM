@@ -18,7 +18,6 @@ NOTEBOOKS = [
     ("03_benchmark.ipynb", "benchmark", "benchmark_coordinator"),
     ("analysis/05_reliability_summary.ipynb", "analysis", "reliability_analysis"),
     ("analysis/06_convergence_ecdf_and_ablations.ipynb", "analysis", "profile_analysis"),
-    ("analysis/07_noise_robustness.ipynb", "analysis", "noise_analysis"),
 ]
 
 
@@ -57,7 +56,6 @@ def setup_namespace() -> dict[str, object]:
         "AnalyzeReliability",
         "AnalyzeEcdfAndConvergence",
         "AnalyzePerformance",
-        "AnalyzeNoiseRobustness",
         "AnalysisResultsStore",
     ):
         namespace[symbol] = type(symbol, (), {})

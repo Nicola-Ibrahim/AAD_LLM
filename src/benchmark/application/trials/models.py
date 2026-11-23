@@ -12,7 +12,7 @@ from benchmark.domain.trial_schedule import TrialIdentity
 from shared.application.interfaces.candidate_executor import CandidateExecutor
 from shared.domain.problem import BaseProblem
 
-SolverType = Literal["champion", "noise_robustness", "cross_function", "baseline"]
+SolverType = Literal["champion", "cross_function", "baseline"]
 BaselineRunner = Callable[[BaseProblem, int], tuple[float, float, int]]
 BaselineRunnerResolver = Callable[[str], BaselineRunner]
 ExecutorBuilder = Callable[[float], CandidateExecutor]

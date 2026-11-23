@@ -29,7 +29,6 @@ def run_parameters(config: CampaignSettings | BenchmarkConfig) -> dict[str, obje
             "observation_trace_points",
             "force_rerun",
             "classical_baselines",
-            "noise_robustness_enabled",
             "cross_function_enabled",
             "cross_function_problem_ids",
         }

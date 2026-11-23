@@ -6,7 +6,6 @@ from dishka import AnyOf, Provider, Scope, from_context, provide
 from sqlalchemy.orm import Session, sessionmaker
 
 from benchmark.application.analysis.analyze_ecdf_and_convergence import AnalyzeEcdfAndConvergence
-from benchmark.application.analysis.analyze_noise_robustness import AnalyzeNoiseRobustness
 from benchmark.application.analysis.analyze_performance import AnalyzePerformance
 from benchmark.application.analysis.analyze_reliability import AnalyzeReliability
 from benchmark.application.analysis.data_loader import AnalysisDataLoader
@@ -46,7 +45,6 @@ class BenchmarkProvider(Provider):
     conditions = provide(TransferAnalysisEngine)
     profiles = provide(AnalyzeEcdfAndConvergence)
     reliability_analysis = provide(AnalyzeReliability)
-    noise_analysis = provide(AnalyzeNoiseRobustness)
     performance_analysis = provide(AnalyzePerformance)
     synthesis_reader = provide(
         SQLiteSynthesisReadRepository,
@@ -157,7 +155,6 @@ class BenchmarkProvider(Provider):
         code: CandidateCodeReader,
         selection: ChampionSelectionService,
         config: BenchmarkConfig,
-        classifier: TransferAnalysisEngine,
     ) -> AnalysisDataLoader:
         return AnalysisDataLoader(
             repository,
@@ -166,7 +163,6 @@ class BenchmarkProvider(Provider):
             code,
             selection,
             config,
-            classifier,
         )
 
     @provide

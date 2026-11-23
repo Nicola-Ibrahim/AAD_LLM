@@ -94,10 +94,6 @@ class BenchmarkConfig(BaseModel):
         },
         description="Mapping of baseline slugs to display labels.",
     )
-    noise_robustness_enabled: bool = Field(
-        default=True,
-        description="Whether to evaluate clean champions under noisy conditions.",
-    )
     cross_function_enabled: bool = False
     cross_function_problem_ids: list[int] = Field(default_factory=lambda: [1, 8, 11, 15, 21])
 

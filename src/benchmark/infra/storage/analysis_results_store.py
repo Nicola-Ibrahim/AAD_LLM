@@ -15,7 +15,6 @@ from benchmark.application.analysis.results import (
     AttainmentSeries,
     ConditionProfile,
     HardnessSummary,
-    NoiseRobustnessResult,
     PerformanceAnalysisResult,
     ProfileAnalysisResult,
     ProfileSeries,
@@ -27,7 +26,6 @@ from shared.infra.artifacts import atomic_write, read_json_object
 AnalysisResult = (
     ProfileAnalysisResult
     | ReliabilityAnalysisResult
-    | NoiseRobustnessResult
     | PerformanceAnalysisResult
 )
 
@@ -84,7 +82,6 @@ class AnalysisResultsStore:
             metadata.update(kind="reliability", model_order=result.model_order)
             tables.update(
                 native=result.native,
-                noise_terminal=result.noise_terminal,
                 primary=result.primary,
             )
             arrays["evaluations"] = result.evaluations
@@ -102,13 +99,6 @@ class AnalysisResultsStore:
                     )
                 )
             metadata["attainment"] = series
-        elif isinstance(result, NoiseRobustnessResult):
-            namespace = Path("noise_robustness")
-            metadata.update(
-                kind="noise_robustness",
-                primary_target=result.primary_target,
-            )
-            tables.update(conditions=result.conditions, aggregate=result.aggregate)
         elif isinstance(result, PerformanceAnalysisResult):
             namespace = Path("performance")
             metadata.update(
@@ -273,19 +263,10 @@ class AnalysisResultsStore:
                 ]
                 return ReliabilityAnalysisResult(
                     tables["native"],
-                    tables["noise_terminal"],
                     tables["primary"],
                     arrays["evaluations"],
                     curves,
                     metadata["model_order"],
-                    provenance,
-                    diagnostics,
-                )
-            if kind == "noise_robustness":
-                return NoiseRobustnessResult(
-                    tables["conditions"],
-                    tables["aggregate"],
-                    metadata["primary_target"],
                     provenance,
                     diagnostics,
                 )

@@ -11,7 +11,6 @@ import pandas as pd
 import pytest
 
 from benchmark.application.analysis.analyze_ecdf_and_convergence import AnalyzeEcdfAndConvergence
-from benchmark.application.analysis.analyze_noise_robustness import AnalyzeNoiseRobustness
 from benchmark.application.analysis.analyze_performance import AnalyzePerformance
 from benchmark.application.analysis.analyze_reliability import AnalyzeReliability
 from benchmark.application.analysis.data_loader import AnalysisDataLoader, AnalysisSnapshot
@@ -66,7 +65,7 @@ def snapshot() -> AnalysisSnapshot:
                 n_runs=2,
                 code_hash="same",
                 solver_folder="model_baseline",
-                evaluation_kind="native" if noise == 0 else "noise_robustness",
+                evaluation_kind="native",
             )
         )
     return AnalysisSnapshot(
@@ -80,7 +79,6 @@ def snapshot() -> AnalysisSnapshot:
         records,
         [],
         [],
-        records,
         {"dims": None, "problems": None, "noise_stds": None},
     )
 
@@ -273,28 +271,8 @@ def test_reliability_matches_bootstrap_and_preserves_raw_csv_identifiers(snapsho
             np.testing.assert_array_equal(actual, expected_values)
 
 
-def test_noise_and_performance_match_domain_services(snapshot):
+def test_performance_matches_domain_services(snapshot):
     filters = dict(dims=None, problems=None, noise_stds=None)
-    transfer = TransferAnalysisEngine()
-    noise = (
-        AnalyzeNoiseRobustness(loader_for(snapshot), transfer, logger=BenchmarkLogger())
-        .execute(**filters)
-        .value
-    )
-    rel = snapshot.config.reliability
-    expected = transfer.condition_table(
-        transfer.frozen_noise_records(snapshot.noise_records),
-        rel.primary_target,
-        rel.secondary_target,
-        snapshot.config.trials_per_condition,
-    )
-    pd.testing.assert_frame_equal(noise.conditions, expected)
-    pd.testing.assert_frame_equal(
-        noise.aggregate,
-        transfer.aggregate_noise(
-            expected, rel.primary_prompt_strategy, rel.bootstrap_samples, rel.bootstrap_seed
-        ),
-    )
     performance = (
         AnalyzePerformance(
             loader_for(snapshot),
@@ -465,7 +443,6 @@ def test_empty_inputs_return_explicit_empty_results(snapshot):
         snapshot,
         dataset=BenchmarkDataset(),
         native_records=[],
-        noise_records=[],
         models_to_solvers={},
     )
     filters = dict(dims=None, problems=None, noise_stds=None)
@@ -487,14 +464,6 @@ def test_empty_inputs_return_explicit_empty_results(snapshot):
         .value
     )
     assert not reliability.attainment and reliability.diagnostics
-    noise = (
-        AnalyzeNoiseRobustness(
-            loader_for(empty), TransferAnalysisEngine(), logger=BenchmarkLogger()
-        )
-        .execute(**filters)
-        .value
-    )
-    assert noise.aggregate.empty and noise.diagnostics
     performance = (
         AnalyzePerformance(
             loader_for(empty),
@@ -512,7 +481,6 @@ def test_dependencies_are_required_and_mode_validated_before_loading():
     for cls in [
         AnalyzeEcdfAndConvergence,
         AnalyzeReliability,
-        AnalyzeNoiseRobustness,
         AnalyzePerformance,
     ]:
         for name, param in inspect.signature(cls.__init__).parameters.items():
@@ -650,19 +618,16 @@ def test_loader_eligibility_and_dynamic_models(state, expected_native, fixed_bud
     code_reader = MagicMock()
     code_reader.exists.return_value = state != "missing_code"
     code_reader.read.return_value = code
-    loader = AnalysisDataLoader(
-        repository, reader, MagicMock(), code_reader, candidates, config, TransferAnalysisEngine()
-    )
+    loader = AnalysisDataLoader(repository, reader, MagicMock(), code_reader, candidates, config)
     result = loader.load(dims=None, problems=None, noise_stds=None)
     assert len(result.native_records) == expected_native
     assert (label in result.models_to_solvers) == bool(expected_native)
     assert result.dataset.get_runs(2, 0.0, 1, "PSO")
     assert result.dataset.get_runs(50, 0.2, 15, "PSO")
-    for records in [result.reference_records, result.noise_records]:
-        assert any(
-            (r["dim"], r["noise_std"], r["problem_id"], r.get("baseline")) == (50, 0.2, 15, "pso")
-            for r in records
-        )
+    assert any(
+        (r["dim"], r["noise_std"], r["problem_id"], r.get("baseline")) == (50, 0.2, 15, "pso")
+        for r in result.reference_records
+    )
     assert bool(result.dataset.get_runs(2, 0.0, 1, solver)) == bool(expected_native)
 
 
@@ -681,9 +646,6 @@ def test_calculation_never_exports_or_creates_directories(snapshot, monkeypatch)
         TransferAnalysisEngine(),
         ReliabilityEngine(),
         logger=BenchmarkLogger(),
-    ).execute(**filters).value
-    AnalyzeNoiseRobustness(
-        loader_for(snapshot), TransferAnalysisEngine(), logger=BenchmarkLogger()
     ).execute(**filters).value
     AnalyzePerformance(
         loader_for(snapshot),

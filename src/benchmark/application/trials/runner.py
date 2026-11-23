@@ -296,7 +296,6 @@ class BenchmarkTrialRunner:
     def run_champion_trials(
         self,
         champion_info: Champion,
-        target_noise_std: float | None = None,
         solver_folder: str | None = None,
         verbose: bool = True,
         target_problem_id: int | None = None,
@@ -309,11 +308,7 @@ class BenchmarkTrialRunner:
         source_problem_id = champion_info["problem_id"]
         p_id = source_problem_id if target_problem_id is None else target_problem_id
         dim = champion_info["dim"]
-        noise_std = (
-            float(target_noise_std)
-            if target_noise_std is not None
-            else float(champion_info.get("noise_std", 0.0))
-        )
+        noise_std = float(champion_info.get("noise_std", 0.0))
         strat = champion_info.get("prompt_strategy", "baseline")
         llm_name = champion_info.get("llm_name", "llamea")
         algo_name = champion_info.get("algorithm_name", "ChampionAlgorithm")
@@ -367,15 +362,13 @@ class BenchmarkTrialRunner:
             "code_hash": code_hash,
             "source_problem_id": source_problem_id,
             "target_problem_id": p_id,
-            "source_noise_std": float(champion_info.get("noise_std", 0.0)),
+            "source_noise_std": noise_std,
             "target_noise_std": noise_std,
             "experiment_id": champion_info.get("experiment_id"),
             "iteration_id": champion_info.get("iteration_id"),
             "evaluation_kind": (
                 "cross_function"
                 if target_problem_id is not None and p_id != source_problem_id
-                else "noise_robustness"
-                if noise_std != float(champion_info.get("noise_std", 0.0))
                 else "native"
             ),
         }

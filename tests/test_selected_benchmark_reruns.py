@@ -151,7 +151,6 @@ def coordinator_fixture():
         task,
         SimpleNamespace(**(vars(task) | {"champion": {"problem_id": 15, "experiment_id": 22}})),
         SimpleNamespace(**(vars(task) | {"champion": None, "solver_type": "baseline"})),
-        SimpleNamespace(**(vars(task) | {"solver_type": "noise_robustness"})),
     ]
     workload.state_repo.read_provenance.return_value = condition_record()
     runner.run_champion_trials.return_value = {"status": "SUCCESS", "n_runs": 5}
@@ -211,7 +210,7 @@ def test_explicit_rerun_refuses_incompatible_results(reason):
 
 def test_other_workflows_are_skipped_during_selected_native_reruns():
     coordinator, _ = coordinator_fixture()
-    for solver_type in ("baselines", "noise_robustness", "cross_function"):
+    for solver_type in ("baselines", "cross_function"):
         result = coordinator.run_benchmarks(
             **run_parameters(BenchmarkConfig()),
             rerun_experiment_ids=[11],

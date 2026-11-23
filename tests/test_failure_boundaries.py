@@ -355,7 +355,7 @@ def test_worker_initialization_drops_inherited_operation_buffer():
 
 
 def test_public_application_returns_error_data_and_preserves_original_cause(tmp_path):
-    from benchmark.application.analysis.analyze_noise_robustness import AnalyzeNoiseRobustness
+    from benchmark.application.analysis.analyze_performance import AnalyzePerformance
     from benchmark.infra.logging import BenchmarkLogger
     from shared.infra.logging.runtime import LoggingRuntime
 
@@ -366,8 +366,8 @@ def test_public_application_returns_error_data_and_preserves_original_cause(tmp_
     try:
         with runtime.operation("setup"):
             logger = BenchmarkLogger()
-        service = AnalyzeNoiseRobustness(
-            MagicMock(load=MagicMock(side_effect=primary)), MagicMock(), logger
+        service = AnalyzePerformance(
+            MagicMock(load=MagicMock(side_effect=primary)), MagicMock(), MagicMock(), logger
         )
         outcome = service.execute(dims=None, problems=None, noise_stds=None)
         assert not outcome.is_success
@@ -385,62 +385,30 @@ def test_public_application_returns_error_data_and_preserves_original_cause(tmp_
 
 
 def test_application_cancellation_is_not_an_error_result():
-    from benchmark.application.analysis.analyze_noise_robustness import AnalyzeNoiseRobustness
+    from benchmark.application.analysis.analyze_performance import AnalyzePerformance
     from benchmark.infra.logging import BenchmarkLogger
 
-    service = AnalyzeNoiseRobustness(
-        MagicMock(load=MagicMock(side_effect=KeyboardInterrupt)), MagicMock(), BenchmarkLogger()
+    service = AnalyzePerformance(
+        MagicMock(load=MagicMock(side_effect=KeyboardInterrupt)),
+        MagicMock(),
+        MagicMock(),
+        BenchmarkLogger(),
     )
     with pytest.raises(KeyboardInterrupt):
         service.execute(dims=None, problems=None, noise_stds=None)
 
 
-def test_failed_notebook_calculation_does_not_export_stale_data(capsys):
-    import json
-
-    from shared.application.result import Result
-
-    notebook = Path(__file__).resolve().parents[1] / "notebooks/analysis/07_noise_robustness.ipynb"
-    cells = json.loads(notebook.read_text())["cells"]
-    namespace = {
-        "noise_analysis": MagicMock(
-            execute=MagicMock(
-                return_value=Result.failure("noise analysis", StorageError("unreadable inputs"))
-            )
-        ),
-        "FILTER_DIMS": None,
-        "FILTER_PROBLEMS": None,
-        "FILTER_NOISE_STDS": None,
-        "results_store": MagicMock(),
-        "figure_exporter": MagicMock(),
-        "noise": object(),
-        "display": MagicMock(),
-    }
-    for cell in cells:
-        if cell["cell_type"] != "code":
-            continue
-        source = "".join(cell["source"])
-        if (
-            "noise_result = noise_analysis.execute(" in source
-            or "figure_exporter.export_noise_robustness(" in source
-        ):
-            exec(compile(source, str(notebook), "exec"), namespace)
-    assert namespace["noise"] is None
-    namespace["results_store"].save.assert_not_called()
-    namespace["figure_exporter"].export_noise_robustness.assert_not_called()
-    assert "unreadable inputs" in capsys.readouterr().out
-
-
 def test_nested_result_failure_is_reported_once_with_diagnostic_path(tmp_path):
-    from benchmark.application.analysis.analyze_noise_robustness import AnalyzeNoiseRobustness
+    from benchmark.application.analysis.analyze_performance import AnalyzePerformance
     from benchmark.infra.logging import BenchmarkLogger
     from shared.infra.logging.runtime import LoggingRuntime
 
     runtime = LoggingRuntime("benchmark", tmp_path, io.StringIO())
     try:
         with runtime.operation("host request"):
-            service = AnalyzeNoiseRobustness(
+            service = AnalyzePerformance(
                 MagicMock(load=MagicMock(side_effect=StorageError("unreadable inputs"))),
+                MagicMock(),
                 MagicMock(),
                 BenchmarkLogger(),
             )

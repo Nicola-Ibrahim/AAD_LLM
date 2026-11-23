@@ -250,7 +250,6 @@ class BenchmarkAuditService:
         observation_trace_points: int = 64,
         force_rerun: bool = False,
         classical_baselines: Sequence[str] = ("cmaes", "de", "pso"),
-        noise_robustness_enabled: bool = True,
         cross_function_enabled: bool = False,
         cross_function_problem_ids: Sequence[int] = (1, 8, 11, 15, 21),
         planned_models: Mapping[str, Sequence[SynthesisConditionSpec]] | None = None,
@@ -266,7 +265,6 @@ class BenchmarkAuditService:
                     observation_trace_points=observation_trace_points,
                     force_rerun=force_rerun,
                     classical_baselines=list(classical_baselines),
-                    noise_robustness_enabled=noise_robustness_enabled,
                     cross_function_enabled=cross_function_enabled,
                     cross_function_problem_ids=list(cross_function_problem_ids),
                 )

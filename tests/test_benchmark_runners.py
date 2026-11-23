@@ -470,75 +470,6 @@ def test_benchmark_service_run_verbose_control(tmp_path: Path, make_progress_log
     assert "CMA-ES" in buf.getvalue()
 
 
-def test_noise_robustness_workload_audit(tmp_path: Path):
-    """Verify that clean champions are audited across multiple target noise levels when cross_eval is enabled."""
-    benchmark_dir = tmp_path / "benchmarks"
-    project_root = tmp_path / "project"
-    project_root.mkdir()
-
-    code_file = project_root / "champ.py"
-    code_file.write_text("class DummyOpt: pass", encoding="utf-8")
-
-    champions_json = tmp_path / "champions.json"
-    champions_json.write_text(
-        json.dumps(
-            {
-                "qwen": {
-                    "f1_2D_clean_baseline": {
-                        "problem_id": 1,
-                        "dim": 2,
-                        "mode": "explicit",
-                        "noise_std": 0.0,
-                        "prompt_strategy": "baseline",
-                        "llm_name": "qwen_14b",
-                        "algorithm_name": "DummyOpt",
-                        "code_path": "champ.py",
-                    }
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    sqlite_repo = EmptyConditionsRepository()
-    champions_repo = FixtureChampionsRepository(champions_json)
-    state_repo = BenchmarkStateRepository(benchmark_dir=benchmark_dir)
-    config = BenchmarkConfig(
-        trials_per_condition=2,
-        budget=100,
-        trial_timeout_seconds=5.0,
-        classical_baselines=["cmaes"],
-        noise_robustness_enabled=True,
-        target_noise_stds=[0.0, 0.05, 0.1],
-    )
-    logger = BenchmarkLogger()
-
-    service = build_benchmark_service(
-        sqlite_repo=sqlite_repo,
-        champions_repo=champions_repo,
-        state_repo=state_repo,
-        config=config,
-        logger=logger,
-        project_root=project_root,
-    )
-
-    df_native = service.workload.audit_champions_workload(config=service.config)
-    assert len(df_native) == 1
-    assert df_native.iloc[0]["noise_std"] == 0.0
-    assert df_native.iloc[0]["solver_type"] == "champion"
-
-    df_cross = service.workload.audit_noise_robustness_workload(config=service.config)
-    assert len(df_cross) == 2
-    assert set(df_cross["noise_std"]) == {0.05, 0.1}
-    assert all(df_cross["solver_type"] == "noise_robustness")
-    assert all(df_cross["solver"] == "qwen_14b_baseline")
-
-    df_all = service.workload.audit_workload(solver_type="all", config=service.config)
-    # 1 native champion + 2 cross-evals + 3 baselines (dim 2, 3 noises = 3 runs)
-    assert len(df_all[df_all["solver_type"] == "champion"]) == 1
-    assert len(df_all[df_all["solver_type"] == "noise_robustness"]) == 2
-
-
 def test_cross_eval_default_behavior_with_default_settings(tmp_path: Path):
     """Verify that cross-eval is enabled by default even with the default explicit settings."""
     benchmark_dir = tmp_path / "benchmarks"
@@ -596,9 +527,6 @@ def test_cross_eval_default_behavior_with_default_settings(tmp_path: Path):
         project_root=project_root,
     )
 
-    # Defaults to True for noise_robustness_enabled
-    assert service.config.noise_robustness_enabled is True
-
     df_native = service.workload.audit_champions_workload(config=service.config)
     assert len(df_native) == 2  # clean champion and noisy champion
     assert any(
@@ -609,12 +537,6 @@ def test_cross_eval_default_behavior_with_default_settings(tmp_path: Path):
         row["noise_std"] == 0.05 and row["solver"] == "qwen_14b_baseline_noisy"
         for _, row in df_native.iterrows()
     )
-
-    df_cross = service.workload.audit_noise_robustness_workload(config=service.config)
-    assert len(df_cross) >= 1
-    assert 0.05 in df_cross["noise_std"].values
-    assert all(df_cross["solver"] == "qwen_14b_baseline")
-    assert all(df_cross["solver_type"] == "noise_robustness")
 
 
 def test_evaluation_service_seeds_trials_independently(tmp_path: Path):

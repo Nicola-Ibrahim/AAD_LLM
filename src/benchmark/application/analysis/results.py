@@ -61,20 +61,10 @@ class AttainmentSeries:
 @dataclass(frozen=True)
 class ReliabilityAnalysisResult:
     native: pd.DataFrame
-    noise_terminal: pd.DataFrame
     primary: pd.DataFrame
     evaluations: np.ndarray
     attainment: list[AttainmentSeries]
     model_order: list[str]
-    provenance: AnalysisProvenance
-    diagnostics: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class NoiseRobustnessResult:
-    conditions: pd.DataFrame
-    aggregate: pd.DataFrame
-    primary_target: float
     provenance: AnalysisProvenance
     diagnostics: tuple[str, ...]
 

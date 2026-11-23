@@ -14,7 +14,6 @@ from benchmark.application.interfaces.synthesis_read_repository import Synthesis
 from benchmark.application.model_names import folder_solver_name, record_solver_name
 from benchmark.application.select_champions import ChampionSelectionService
 from benchmark.domain.services.condition_status import inspect_condition
-from benchmark.domain.services.transfer import TransferAnalysisEngine
 from benchmark.domain.trial_schedule import select_scheduled_trials
 from benchmark.domain.vos import BenchmarkDataset
 
@@ -30,7 +29,6 @@ class AnalysisSnapshot:
     solver_order: list[str]
     classical_solvers: list[str]
     native_records: list[dict[str, object]]
-    noise_records: list[dict[str, object]]
     transfer_records: list[dict[str, object]]
     reference_records: list[dict[str, object]]
     profile_records: list[dict[str, object]]
@@ -45,12 +43,11 @@ class AnalysisSnapshot:
         return next((n for n in self.dataset.noise_stds if n > 0.0), 0.0)
 
     def provenance(
-        self, workflow: Literal["summary", "profiles", "noise", "transfer"]
+        self, workflow: Literal["summary", "profiles", "transfer"]
     ) -> AnalysisProvenance:
         groups = {
-            "summary": self.native_records + self.noise_records + self.reference_records,
+            "summary": self.native_records + self.reference_records,
             "profiles": self.profile_records,
-            "noise": self.noise_records,
             "transfer": self.transfer_records
             + [r for r in self.reference_records if float(r["noise_std"]) == 0.0],
         }
@@ -59,7 +56,6 @@ class AnalysisSnapshot:
             exclude={
                 "cross_function_enabled",
                 "cross_function_problem_ids",
-                "noise_robustness_enabled",
             }
         )
         if workflow == "transfer":
@@ -89,7 +85,6 @@ class AnalysisDataLoader:
         code_reader: CandidateCodeReader,
         champion_selection: ChampionSelectionService,
         config: BenchmarkConfig,
-        classifier: TransferAnalysisEngine,
     ) -> None:
         self.synthesis_repo = synthesis_repo
         self.trace_reader = trace_reader
@@ -97,7 +92,6 @@ class AnalysisDataLoader:
         self.code_reader = code_reader
         self.champion_selection = champion_selection
         self.config = config
-        self.classifier = classifier
 
     def load(
         self,
@@ -183,12 +177,6 @@ class AnalysisDataLoader:
                 )
             )
         ]
-        noise = [
-            r
-            for r in self.classifier.frozen_noise_records(records)
-            if "baseline" in r
-            or (r.get("model"), r["problem_id"], r["dim"], r.get("code_hash")) in active
-        ]
         transfer: list[dict[str, object]] = []
         if include_transfer:
             diagonals = [
@@ -211,7 +199,7 @@ class AnalysisDataLoader:
                 in clean_baseline
             ]
         profile_records: list[dict[str, object]] = []
-        for record in native + noise + references:
+        for record in native + references:
             if record not in profile_records:
                 profile_records.append(record)
         valid_traces = {
@@ -255,7 +243,6 @@ class AnalysisDataLoader:
             solver_order=llms + classical,
             classical_solvers=classical,
             native_records=native,
-            noise_records=noise,
             transfer_records=transfer,
             reference_records=references,
             profile_records=profile_records,

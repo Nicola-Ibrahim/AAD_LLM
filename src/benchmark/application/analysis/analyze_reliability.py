@@ -50,12 +50,6 @@ class AnalyzeReliability:
                         "Success Rate": "Primary Success Rate",
                     }
                 )
-                noise = self.conditions.condition_table(
-                    snapshot.noise_records,
-                    config.primary_target,
-                    config.secondary_target,
-                    snapshot.config.trials_per_condition,
-                )
                 display = native.copy()
                 if not display.empty:
                     display["Solver"] = display["Solver"].map(snapshot.solver_labels)
@@ -119,7 +113,6 @@ class AnalyzeReliability:
                 return Result.success(
                     ReliabilityAnalysisResult(
                         native,
-                        noise,
                         primary,
                         grid,
                         series,

@@ -44,7 +44,6 @@ class BenchmarkCoordinator:
         observation_trace_points: int,
         force_rerun: bool,
         classical_baselines: list[str],
-        noise_robustness_enabled: bool,
         cross_function_enabled: bool,
         cross_function_problem_ids: list[int],
         primary_target: float,
@@ -62,7 +61,6 @@ class BenchmarkCoordinator:
                     observation_trace_points=observation_trace_points,
                     force_rerun=force_rerun,
                     classical_baselines=classical_baselines,
-                    noise_robustness_enabled=noise_robustness_enabled,
                     cross_function_enabled=cross_function_enabled,
                     cross_function_problem_ids=cross_function_problem_ids,
                     baseline_labels=self.baseline_labels,
@@ -88,12 +86,9 @@ class BenchmarkCoordinator:
         observation_trace_points: int,
         force_rerun: bool,
         classical_baselines: list[str],
-        noise_robustness_enabled: bool,
         cross_function_enabled: bool,
         cross_function_problem_ids: list[int],
-        solver_type: Literal[
-            "all", "champions", "baselines", "noise_robustness", "cross_function"
-        ] = "all",
+        solver_type: Literal["all", "champions", "baselines", "cross_function"] = "all",
     ) -> Result[pd.DataFrame]:
         """Inspect the same protocol as execution without modifying stored results."""
         try:
@@ -107,7 +102,6 @@ class BenchmarkCoordinator:
                     observation_trace_points=observation_trace_points,
                     force_rerun=force_rerun,
                     classical_baselines=classical_baselines,
-                    noise_robustness_enabled=noise_robustness_enabled,
                     cross_function_enabled=cross_function_enabled,
                     cross_function_problem_ids=cross_function_problem_ids,
                     baseline_labels=self.baseline_labels,
@@ -128,12 +122,9 @@ class BenchmarkCoordinator:
         observation_trace_points: int,
         force_rerun: bool,
         classical_baselines: list[str],
-        noise_robustness_enabled: bool,
         cross_function_enabled: bool,
         cross_function_problem_ids: list[int],
-        solver_type: Literal[
-            "all", "champions", "baselines", "noise_robustness", "cross_function"
-        ] = "all",
+        solver_type: Literal["all", "champions", "baselines", "cross_function"] = "all",
         verbose: bool = True,
         rerun_experiment_ids: Sequence[int] = (),
     ) -> Result[pd.DataFrame]:
@@ -153,7 +144,6 @@ class BenchmarkCoordinator:
                     observation_trace_points=observation_trace_points,
                     force_rerun=force_rerun,
                     classical_baselines=classical_baselines,
-                    noise_robustness_enabled=noise_robustness_enabled,
                     cross_function_enabled=cross_function_enabled,
                     cross_function_problem_ids=cross_function_problem_ids,
                     baseline_labels=self.baseline_labels,
@@ -242,7 +232,6 @@ class BenchmarkCoordinator:
                             res = self.trials.run_champion_trials(
                                 task.champion,
                                 config=config,
-                                target_noise_std=noise_std,
                                 solver_folder=task.solver,
                                 verbose=verbose,
                                 target_problem_id=p_id if stype == "cross_function" else None,

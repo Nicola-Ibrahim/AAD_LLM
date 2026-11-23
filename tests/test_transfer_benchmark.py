@@ -515,8 +515,6 @@ def test_historical_skipped_tail_resumes(transfer_service: BenchmarkCoordinator)
 
 def test_workflow_flags_and_baseline_targets(transfer_service: BenchmarkCoordinator) -> None:
     service = transfer_service
-    service.config.noise_robustness_enabled = False
-    assert service.workload.audit_noise_robustness_workload(config=service.config).empty
     service.config.cross_function_enabled = False
     assert service.workload.audit_cross_function_workload(config=service.config).empty
     assert service.service.run_benchmarks(
@@ -559,25 +557,6 @@ def test_transfer_aggregation_missing_and_reproducibility() -> None:
     assert aggregate.iloc[0]["Success Rate"] == 0.5
     pd.testing.assert_frame_equal(aggregate, engine.aggregate_transfer(table))
     assert not table.iloc[3]["Complete"]
-
-
-def test_noise_records_require_identical_champion_code() -> None:
-    common = dict(
-        model="new-model",
-        strategy="baseline",
-        dim=2,
-        problem_id=1,
-        solver_folder="new_model_baseline",
-        code_hash="same",
-    )
-    clean = dict(common, noise_std=0.0)
-    matched = dict(common, noise_std=0.05)
-    changed = dict(common, noise_std=0.1, code_hash="different")
-    adapted = dict(common, noise_std=0.2, solver_folder="new_model_baseline_noisy")
-    assert TransferAnalysisEngine.frozen_noise_records([clean, matched, changed, adapted]) == [
-        clean,
-        matched,
-    ]
 
 
 def test_invalid_transfer_targets_rejected() -> None:
