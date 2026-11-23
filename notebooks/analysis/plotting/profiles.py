@@ -61,7 +61,7 @@ def build_profile(
         ],
         subplot_titles=titles,
         horizontal_spacing=0.08,
-        vertical_spacing=0.22 if rows > 1 else 0.0,
+        vertical_spacing=0.44 / rows if rows > 1 else 0.0,
     )
     grid = profile.evaluations
     max_evaluations = float(grid[-1])
