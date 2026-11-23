@@ -34,7 +34,6 @@ from shared.application.errors import ArtifactError, StorageError
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOKS = [
-    "analysis/05_reliability_summary.ipynb",
     "analysis/06_convergence_ecdf_and_ablations.ipynb",
 ]
 
